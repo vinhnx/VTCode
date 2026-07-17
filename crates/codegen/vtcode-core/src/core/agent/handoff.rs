@@ -139,10 +139,7 @@ impl HandoffRequest {
         }
 
         if !self.modified_files.is_empty() {
-            parts.push(format!(
-                "### Modified Files\n{}",
-                self.modified_files.join("\n")
-            ));
+            parts.push(format!("### Modified Files\n{}", self.modified_files.join("\n")));
         }
 
         if let Some(test_results) = &self.test_results {
@@ -150,10 +147,7 @@ impl HandoffRequest {
         }
 
         if !self.open_decisions.is_empty() {
-            parts.push(format!(
-                "### Open Decisions\n{}",
-                self.open_decisions.join("\n")
-            ));
+            parts.push(format!("### Open Decisions\n{}", self.open_decisions.join("\n")));
         }
 
         if !self.known_issues.is_empty() {
@@ -248,16 +242,10 @@ mod tests {
         let json = serde_json::to_string(&request).expect("serialize");
         let deserialized: HandoffRequest = serde_json::from_str(&json).expect("deserialize");
 
-        assert_eq!(
-            deserialized.test_results.as_deref(),
-            Some("12 passed, 0 failed")
-        );
+        assert_eq!(deserialized.test_results.as_deref(), Some("12 passed, 0 failed"));
         assert_eq!(deserialized.boundary_status.len(), 2);
         assert_eq!(deserialized.boundary_status[0].status, BoundaryStatus::Done);
-        assert_eq!(
-            deserialized.boundary_status[1].status,
-            BoundaryStatus::InProgress
-        );
+        assert_eq!(deserialized.boundary_status[1].status, BoundaryStatus::InProgress);
         assert_eq!(deserialized.known_issues.len(), 1);
         assert_eq!(deserialized.next_actions.len(), 2);
     }

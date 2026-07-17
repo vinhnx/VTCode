@@ -5,11 +5,8 @@ use super::*;
 #[tokio::test]
 async fn new_with_preloaded_config_uses_override_snapshot() {
     let temp = TempDir::new().expect("tempdir");
-    fs::write(
-        temp.path().join("vtcode.toml"),
-        "[agent]\nprovider = \"openai\"\n",
-    )
-    .expect("workspace config");
+    fs::write(temp.path().join("vtcode.toml"), "[agent]\nprovider = \"openai\"\n")
+        .expect("workspace config");
 
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.provider = "anthropic".to_string();
@@ -20,10 +17,7 @@ async fn new_with_preloaded_config_uses_override_snapshot() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-test".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(vt_cfg),
@@ -51,10 +45,7 @@ async fn core_agent_config_normalizes_api_key_env_and_checkpoint_dir() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-test-normalized-config".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(vt_cfg),
@@ -65,10 +56,7 @@ async fn core_agent_config_normalizes_api_key_env_and_checkpoint_dir() {
 
     let config = runner.core_agent_config();
     assert_eq!(config.api_key_env, "MINIMAX_API_KEY");
-    assert_eq!(
-        config.checkpointing_storage_dir,
-        Some(absolute_checkpoint_dir)
-    );
+    assert_eq!(config.checkpointing_storage_dir, Some(absolute_checkpoint_dir));
 }
 
 #[tokio::test]
@@ -86,10 +74,7 @@ async fn runner_uses_configured_provider_for_huggingface_repo_models() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-huggingface-provider".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(vt_cfg),

@@ -108,12 +108,10 @@ impl TelemetryManager {
             model_stats.api_time = model_stats.api_time.saturating_add(duration);
 
             if let Some(usage) = usage {
-                model_stats.prompt_tokens = model_stats
-                    .prompt_tokens
-                    .saturating_add(usage.prompt_tokens as u64);
-                model_stats.completion_tokens = model_stats
-                    .completion_tokens
-                    .saturating_add(usage.completion_tokens as u64);
+                model_stats.prompt_tokens =
+                    model_stats.prompt_tokens.saturating_add(usage.prompt_tokens as u64);
+                model_stats.completion_tokens =
+                    model_stats.completion_tokens.saturating_add(usage.completion_tokens as u64);
                 model_stats.cached_prompt_tokens = model_stats
                     .cached_prompt_tokens
                     .saturating_add(usage.cached_prompt_tokens.unwrap_or(0) as u64);
@@ -232,17 +230,7 @@ mod tests {
         assert_eq!(snapshot.tool_counts.get("code_search"), Some(&1));
         assert_eq!(snapshot.tool_counts.get("file_operation"), Some(&1));
         assert!(snapshot.tool_errors.get("code_search").is_none());
-        assert!(
-            !snapshot
-                .tool_counts
-                .keys()
-                .any(|label| label.contains("unified_"))
-        );
-        assert!(
-            !snapshot
-                .tool_errors
-                .keys()
-                .any(|label| label.contains("unified_"))
-        );
+        assert!(!snapshot.tool_counts.keys().any(|label| label.contains("unified_")));
+        assert!(!snapshot.tool_errors.keys().any(|label| label.contains("unified_")));
     }
 }

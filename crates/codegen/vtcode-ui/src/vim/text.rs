@@ -24,26 +24,17 @@ pub fn prev_char_boundary(content: &str, mut pos: usize) -> usize {
 
 pub(crate) fn vim_current_line_bounds(content: &str, cursor: usize) -> (usize, usize) {
     let start = vim_line_start(content, cursor);
-    let end = content[start..]
-        .find('\n')
-        .map(|idx| start + idx)
-        .unwrap_or(content.len());
+    let end = content[start..].find('\n').map(|idx| start + idx).unwrap_or(content.len());
     (start, end)
 }
 
 pub(crate) fn vim_line_start(content: &str, cursor: usize) -> usize {
-    content[..cursor.min(content.len())]
-        .rfind('\n')
-        .map(|idx| idx + 1)
-        .unwrap_or(0)
+    content[..cursor.min(content.len())].rfind('\n').map(|idx| idx + 1).unwrap_or(0)
 }
 
 pub(crate) fn vim_line_end(content: &str, cursor: usize) -> usize {
     let start = vim_line_start(content, cursor);
-    content[start..]
-        .find('\n')
-        .map(|idx| start + idx)
-        .unwrap_or(content.len())
+    content[start..].find('\n').map(|idx| start + idx).unwrap_or(content.len())
 }
 
 pub(crate) fn vim_line_first_non_ws(content: &str, cursor: usize) -> usize {
@@ -106,12 +97,7 @@ pub(crate) fn vim_end_word(content: &str, cursor: usize) -> usize {
         Some(ch) if vim_is_word_char(ch) => cursor,
         _ => vim_next_word_start(content, cursor),
     };
-    if start >= content.len()
-        || !content[start..]
-            .chars()
-            .next()
-            .is_some_and(vim_is_word_char)
-    {
+    if start >= content.len() || !content[start..].chars().next().is_some_and(vim_is_word_char) {
         return content.len();
     }
     let mut last = start;
@@ -260,11 +246,7 @@ pub(crate) fn vim_text_object_range(
 
             Some((byte_start, byte_end))
         }
-        TextObjectSpec::Delimited {
-            around,
-            open,
-            close,
-        } => {
+        TextObjectSpec::Delimited { around, open, close } => {
             let left = content[..cursor].rfind(open)?;
             let right = content[cursor..].find(close).map(|idx| cursor + idx)?;
             if left >= right {

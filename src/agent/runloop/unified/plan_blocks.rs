@@ -129,10 +129,7 @@ pub(crate) fn extract_any_plan(text: &str) -> ProposedPlanExtraction {
 
 fn extract_tagged_plan(text: &str, open_tag: &str, close_tag: &str) -> ProposedPlanExtraction {
     let Some(start) = text.find(open_tag) else {
-        return ProposedPlanExtraction {
-            stripped_text: text.to_string(),
-            plan_text: None,
-        };
+        return ProposedPlanExtraction { stripped_text: text.to_string(), plan_text: None };
     };
 
     let after_open = start + open_tag.len();

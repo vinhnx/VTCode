@@ -23,11 +23,8 @@ pub(super) fn resolve_question_options(
             Some(provided_options) => {
                 let sanitized = sanitize_provided_options(&provided_options);
                 let signature = options_signature(&sanitized);
-                let repeated_signature = provided_signature_counts
-                    .get(&signature)
-                    .copied()
-                    .unwrap_or(0)
-                    > 1;
+                let repeated_signature =
+                    provided_signature_counts.get(&signature).copied().unwrap_or(0) > 1;
                 if should_regenerate_provided_options(question, &sanitized, repeated_signature) {
                     generate_suggested_options(question)
                         .or_else(|| Some(generic_planning_options()))
@@ -114,12 +111,7 @@ fn options_signature(options: &[RequestUserInputOption]) -> String {
 
 fn normalize_option_text(text: &str) -> String {
     let lowered = text.to_lowercase().replace("(recommended)", "");
-    lowered
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_string()
+    lowered.split_whitespace().collect::<Vec<_>>().join(" ").trim().to_string()
 }
 
 fn is_generic_planning_option_label(label: &str) -> bool {

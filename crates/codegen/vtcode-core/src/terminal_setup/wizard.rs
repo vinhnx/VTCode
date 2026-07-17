@@ -20,10 +20,7 @@ pub async fn run_terminal_setup_wizard(
 
     let terminal_type = TerminalType::detect()?;
 
-    renderer.line(
-        MessageStyle::Status,
-        &format!("Detected terminal: {}", terminal_type.name()),
-    )?;
+    renderer.line(MessageStyle::Status, &format!("Detected terminal: {}", terminal_type.name()))?;
 
     // Step 2: Feature Selection (for now, show what will be configured)
     renderer.line_if_not_empty(MessageStyle::Info)?;
@@ -69,17 +66,11 @@ pub async fn run_terminal_setup_wizard(
     // Get config path
     let config_path = match terminal_type.config_path() {
         Ok(path) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Config file: {}", path.display()),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("Config file: {}", path.display()))?;
             path
         }
         Err(e) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to determine config path: {e}"),
-            )?;
+            renderer.line(MessageStyle::Error, &format!("Failed to determine config path: {e}"))?;
             return Ok(());
         }
     };
@@ -102,10 +93,7 @@ pub async fn run_terminal_setup_wizard(
                 )?;
             }
             Err(e) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to create backup: {e}"),
-                )?;
+                renderer.line(MessageStyle::Error, &format!("Failed to create backup: {e}"))?;
                 return Ok(());
             }
         }
@@ -185,20 +173,11 @@ pub async fn run_terminal_setup_wizard(
 
     // Step 5: Show completion message
     renderer.line_if_not_empty(MessageStyle::Info)?;
-    renderer.line(
-        MessageStyle::Status,
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    )?;
+    renderer.line(MessageStyle::Status, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
     renderer.line(MessageStyle::Status, "  Setup Complete!")?;
-    renderer.line(
-        MessageStyle::Status,
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    )?;
+    renderer.line(MessageStyle::Status, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
-    renderer.line(
-        MessageStyle::Info,
-        "Restart your terminal for changes to take effect.",
-    )?;
+    renderer.line(MessageStyle::Info, "Restart your terminal for changes to take effect.")?;
 
     if config_path.exists() {
         let backup_manager = ConfigBackupManager::new(terminal_type);
@@ -217,15 +196,9 @@ pub async fn run_terminal_setup_wizard(
 
 /// Display welcome message
 fn display_welcome(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    )?;
+    renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
     renderer.line(MessageStyle::Info, "  VT Code Terminal Setup Wizard")?;
-    renderer.line(
-        MessageStyle::Info,
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    )?;
+    renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
     renderer.line(
         MessageStyle::Info,
@@ -235,10 +208,8 @@ fn display_welcome(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(MessageStyle::Info, "Features:")?;
     renderer.line(MessageStyle::Info, "  • Shift+Enter for multiline input")?;
     renderer.line(MessageStyle::Info, "  • Enhanced copy/paste integration")?;
-    renderer.line(
-        MessageStyle::Info,
-        "  • Shell integration (working directory, command status)",
-    )?;
+    renderer
+        .line(MessageStyle::Info, "  • Shell integration (working directory, command status)")?;
     renderer.line(MessageStyle::Info, "  • Theme synchronization")?;
     renderer.line_if_not_empty(MessageStyle::Info)?;
 
@@ -344,26 +315,14 @@ mod tests {
     #[test]
     fn native_setup_messages_are_noop_guidance() {
         let lines = native_terminal_setup_messages(TerminalType::WezTerm);
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("already supports multiline"))
-        );
+        assert!(lines.iter().any(|line| line.contains("already supports multiline")));
         assert!(lines.iter().any(|line| line.contains("Shift+Enter")));
     }
 
     #[test]
     fn guidance_only_messages_cover_terminal_app() {
         let lines = guidance_only_messages(TerminalType::TerminalApp);
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("does not auto-configure"))
-        );
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("Use Option as Meta Key"))
-        );
+        assert!(lines.iter().any(|line| line.contains("does not auto-configure")));
+        assert!(lines.iter().any(|line| line.contains("Use Option as Meta Key")));
     }
 }

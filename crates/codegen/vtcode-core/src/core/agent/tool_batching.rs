@@ -135,10 +135,7 @@ impl PreparedToolBatch {
         allow_parallel: bool,
     ) -> Vec<(PreparedToolBatchKind, usize)> {
         if !allow_parallel {
-            return calls
-                .into_iter()
-                .map(|_| (PreparedToolBatchKind::Sequential, 1))
-                .collect();
+            return calls.into_iter().map(|_| (PreparedToolBatchKind::Sequential, 1)).collect();
         }
 
         let mut layout = Vec::new();
@@ -171,19 +168,14 @@ impl PreparedToolBatch {
     ) -> Vec<Self> {
         let calls: Vec<_> = calls.into_iter().collect();
         let layout = Self::plan_layout_with_names(
-            calls
-                .iter()
-                .map(|call| (call.can_parallelize(), call.canonical_name.as_str())),
+            calls.iter().map(|call| (call.can_parallelize(), call.canonical_name.as_str())),
             allow_parallel,
         );
         let mut calls = calls.into_iter();
 
         layout
             .into_iter()
-            .map(|(kind, len)| Self {
-                kind,
-                calls: calls.by_ref().take(len).collect(),
-            })
+            .map(|(kind, len)| Self { kind, calls: calls.by_ref().take(len).collect() })
             .collect()
     }
 }

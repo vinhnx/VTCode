@@ -11,36 +11,22 @@ pub(crate) fn parse_chat_response(
     model: String,
     include_cached_prompt_tokens: bool,
 ) -> Result<provider::LLMResponse, provider::LLMError> {
-    let choices = response_json
-        .get("choices")
-        .and_then(|c| c.as_array())
-        .ok_or_else(|| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                "Invalid response format: missing choices",
-            );
-            provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+    let choices = response_json.get("choices").and_then(|c| c.as_array()).ok_or_else(|| {
+        let formatted_error =
+            error_display::format_llm_error("OpenAI", "Invalid response format: missing choices");
+        provider::LLMError::Provider { message: formatted_error, metadata: None }
+    })?;
 
     if choices.is_empty() {
         let formatted_error = error_display::format_llm_error("OpenAI", "No choices in response");
-        return Err(provider::LLMError::Provider {
-            message: formatted_error,
-            metadata: None,
-        });
+        return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
     }
 
     let choice = &choices[0];
     let message = choice.get("message").ok_or_else(|| {
         let formatted_error =
             error_display::format_llm_error("OpenAI", "Invalid response format: missing message");
-        provider::LLMError::Provider {
-            message: formatted_error,
-            metadata: None,
-        }
+        provider::LLMError::Provider { message: formatted_error, metadata: None }
     })?;
 
     let content = match message.get("content") {
@@ -66,11 +52,7 @@ pub(crate) fn parse_chat_response(
         .get("reasoning_content")
         .and_then(extract_reasoning_trace)
         .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
-        .or_else(|| {
-            choice
-                .get("reasoning_content")
-                .and_then(extract_reasoning_trace)
-        })
+        .or_else(|| choice.get("reasoning_content").and_then(extract_reasoning_trace))
         .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
         .or_else(|| {
             content.as_ref().and_then(|c| {

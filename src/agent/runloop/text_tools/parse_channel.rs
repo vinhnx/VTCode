@@ -37,10 +37,8 @@ pub(super) fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
             let content_raw = segment[m_idx + "<|message|>".len()..stop_idx].trim();
 
             let after_to = &header[to_pos + 3..];
-            let tool_ref = after_to
-                .split(|c: char| c.is_whitespace() || c == '<')
-                .next()
-                .unwrap_or("");
+            let tool_ref =
+                after_to.split(|c: char| c.is_whitespace() || c == '<').next().unwrap_or("");
             let tool_name = parse_tool_name_from_reference(tool_ref);
             if tool_name.is_empty() {
                 continue;
@@ -152,11 +150,7 @@ fn normalize_harmony_command_value(command: &Value) -> Result<Value, String> {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            if command
-                .first()
-                .map(|part| part.trim().is_empty())
-                .unwrap_or(true)
-            {
+            if command.first().map(|part| part.trim().is_empty()).unwrap_or(true) {
                 Err("command executable cannot be empty".to_string())
             } else {
                 Ok(serde_json::json!(command))
@@ -175,14 +169,8 @@ pub(super) fn collect_channel_regions(text: &str, regions: &mut Vec<(usize, usiz
         let end = tail
             .find("<|call|>")
             .map(|idx| start + idx + "<|call|>".len())
-            .or_else(|| {
-                tail.find("<|end|>")
-                    .map(|idx| start + idx + "<|end|>".len())
-            })
-            .or_else(|| {
-                tail.find("<|return|>")
-                    .map(|idx| start + idx + "<|return|>".len())
-            })
+            .or_else(|| tail.find("<|end|>").map(|idx| start + idx + "<|end|>".len()))
+            .or_else(|| tail.find("<|return|>").map(|idx| start + idx + "<|return|>".len()))
             .unwrap_or(text.len());
         if start < end && end <= text.len() {
             regions.push((start, end));

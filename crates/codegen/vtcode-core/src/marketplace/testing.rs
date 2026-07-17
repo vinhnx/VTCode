@@ -37,10 +37,7 @@ pub async fn test_marketplace_system() -> Result<()> {
         refspec: Some("main".to_string()),
     };
 
-    marketplace_system
-        .registry
-        .add_marketplace(test_marketplace)
-        .await?;
+    marketplace_system.registry.add_marketplace(test_marketplace).await?;
     tracing::info!("test marketplace added");
 
     // Test creating and installing a sample plugin
@@ -61,32 +58,20 @@ pub async fn test_marketplace_system() -> Result<()> {
     };
 
     // Install the plugin
-    marketplace_system
-        .installer
-        .install_plugin(&sample_plugin)
-        .await?;
+    marketplace_system.installer.install_plugin(&sample_plugin).await?;
     tracing::info!("sample plugin installed");
 
     // Verify the plugin is installed
-    let is_installed = marketplace_system
-        .installer
-        .is_installed("test-plugin")
-        .await;
+    let is_installed = marketplace_system.installer.is_installed("test-plugin").await;
     assert!(is_installed, "Plugin should be installed");
     tracing::info!("plugin installation verified");
 
     // Test uninstalling the plugin
-    marketplace_system
-        .installer
-        .uninstall_plugin("test-plugin")
-        .await?;
+    marketplace_system.installer.uninstall_plugin("test-plugin").await?;
     tracing::info!("sample plugin uninstalled");
 
     // Verify the plugin is uninstalled
-    let is_installed_after = marketplace_system
-        .installer
-        .is_installed("test-plugin")
-        .await;
+    let is_installed_after = marketplace_system.installer.is_installed("test-plugin").await;
     assert!(!is_installed_after, "Plugin should be uninstalled");
     tracing::info!("plugin uninstallation verified");
 
@@ -138,22 +123,10 @@ pub async fn test_marketplace_config() -> Result<()> {
     tracing::info!("marketplace settings loaded from file");
 
     // Verify loaded settings
-    assert_eq!(
-        settings.auto_update.marketplaces,
-        loaded_settings.auto_update.marketplaces
-    );
-    assert_eq!(
-        settings.security.default_trust_level,
-        loaded_settings.security.default_trust_level
-    );
-    assert_eq!(
-        settings.marketplaces.len(),
-        loaded_settings.marketplaces.len()
-    );
-    assert_eq!(
-        settings.installed_plugins.len(),
-        loaded_settings.installed_plugins.len()
-    );
+    assert_eq!(settings.auto_update.marketplaces, loaded_settings.auto_update.marketplaces);
+    assert_eq!(settings.security.default_trust_level, loaded_settings.security.default_trust_level);
+    assert_eq!(settings.marketplaces.len(), loaded_settings.marketplaces.len());
+    assert_eq!(settings.installed_plugins.len(), loaded_settings.installed_plugins.len());
 
     tracing::info!("configuration system tests passed");
     Ok(())

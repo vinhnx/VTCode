@@ -170,10 +170,7 @@ impl HistoryFileManager {
 
         // Ensure directory exists
         fs::create_dir_all(&self.history_dir).with_context(|| {
-            format!(
-                "Failed to create history directory: {}",
-                self.history_dir.display()
-            )
+            format!("Failed to create history directory: {}", self.history_dir.display())
         })?;
 
         // Generate filename
@@ -219,10 +216,8 @@ impl HistoryFileManager {
             .with_context(|| format!("Failed to write history file: {}", file_path.display()))?;
 
         // Calculate relative path
-        let relative_path = file_path
-            .strip_prefix(&self.workspace_root)
-            .unwrap_or(&file_path)
-            .to_path_buf();
+        let relative_path =
+            file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
 
         info!(
             session = %self.session_id,
@@ -235,10 +230,7 @@ impl HistoryFileManager {
         // Cleanup old files synchronously
         self.cleanup_old_files_sync();
 
-        Ok(HistoryWriteResult {
-            file_path: relative_path,
-            metadata,
-        })
+        Ok(HistoryWriteResult { file_path: relative_path, metadata })
     }
 
     /// Write conversation history to a file (async version)
@@ -261,14 +253,9 @@ impl HistoryFileManager {
         }
 
         // Ensure directory exists
-        async_fs::create_dir_all(&self.history_dir)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to create history directory: {}",
-                    self.history_dir.display()
-                )
-            })?;
+        async_fs::create_dir_all(&self.history_dir).await.with_context(|| {
+            format!("Failed to create history directory: {}", self.history_dir.display())
+        })?;
 
         // Generate filename
         self.file_counter += 1;
@@ -314,10 +301,8 @@ impl HistoryFileManager {
             .with_context(|| format!("Failed to write history file: {}", file_path.display()))?;
 
         // Calculate relative path
-        let relative_path = file_path
-            .strip_prefix(&self.workspace_root)
-            .unwrap_or(&file_path)
-            .to_path_buf();
+        let relative_path =
+            file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
 
         info!(
             session = %self.session_id,
@@ -330,10 +315,7 @@ impl HistoryFileManager {
         // Cleanup old files if needed
         self.cleanup_old_files().await?;
 
-        Ok(HistoryWriteResult {
-            file_path: relative_path,
-            metadata,
-        })
+        Ok(HistoryWriteResult { file_path: relative_path, metadata })
     }
 
     /// Generate a summary message with file reference
@@ -368,9 +350,7 @@ impl HistoryFileManager {
 
         // Sort by name (which includes timestamp) and remove oldest
         files.sort();
-        let excess = files
-            .len()
-            .saturating_sub(self.config.max_files_per_session);
+        let excess = files.len().saturating_sub(self.config.max_files_per_session);
 
         for old_file in files.into_iter().take(excess) {
             if fs::remove_file(&old_file).is_ok() {
@@ -401,9 +381,7 @@ impl HistoryFileManager {
 
         // Sort by name (which includes timestamp) and remove oldest
         files.sort();
-        let excess = files
-            .len()
-            .saturating_sub(self.config.max_files_per_session);
+        let excess = files.len().saturating_sub(self.config.max_files_per_session);
 
         for old_file in files.into_iter().take(excess) {
             if async_fs::remove_file(&old_file).await.is_ok() {
@@ -442,12 +420,7 @@ fn history_text_from_message_content(content: &MessageContent) -> String {
             .map(|part| match part {
                 ContentPart::Text { text } => text.clone(),
                 ContentPart::Image { .. } => "[Image]".to_string(),
-                ContentPart::File {
-                    filename,
-                    file_id,
-                    file_url,
-                    ..
-                } => filename
+                ContentPart::File { filename, file_id, file_url, .. } => filename
                     .clone()
                     .or_else(|| file_id.clone())
                     .or_else(|| file_url.clone())
@@ -608,16 +581,9 @@ mod tests {
             timestamp: Utc::now(),
         }];
 
-        let result = manager
-            .write_history_sync(&messages, 3, "test", &[], &[])
-            .unwrap();
+        let result = manager.write_history_sync(&messages, 3, "test", &[], &[]).unwrap();
 
-        assert!(
-            result
-                .file_path
-                .to_string_lossy()
-                .contains("test_session_sync")
-        );
+        assert!(result.file_path.to_string_lossy().contains("test_session_sync"));
         assert_eq!(result.metadata.message_count, 1);
     }
 

@@ -17,16 +17,12 @@ pub(crate) async fn persist_theme_preference(
     theme_id: &str,
 ) -> Result<()> {
     if let Err(err) = update_theme_preference(theme_id).await {
-        renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to persist theme preference: {err}"),
-        )?;
+        renderer
+            .line(MessageStyle::Error, &format!("Failed to persist theme preference: {err}"))?;
     }
     if let Err(err) = persist_theme_config(workspace, theme_id) {
-        renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to persist theme in vtcode.toml: {err}"),
-        )?;
+        renderer
+            .line(MessageStyle::Error, &format!("Failed to persist theme in vtcode.toml: {err}"))?;
     }
     Ok(())
 }
@@ -48,9 +44,7 @@ fn persist_theme_config(workspace: &Path, theme_id: &str) -> Result<()> {
     let mut config = manager.config().clone();
     if config.agent.theme != theme_id {
         config.agent.theme = theme_id.to_string();
-        manager
-            .save_config(&config)
-            .context("Failed to save theme to configuration")?;
+        manager.save_config(&config).context("Failed to save theme to configuration")?;
     }
     Ok(())
 }
@@ -255,13 +249,8 @@ fn highlight_shell_user_input(message: &str) -> Option<String> {
         let prefix_style = AnsiStyle::new()
             .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::White)))
             .effects(Effects::DIMMED);
-        let prefix_rendered = format!(
-            "{}{}{}{}",
-            prefix_style,
-            &message[..leading_ws_bytes],
-            prefix,
-            Reset
-        );
+        let prefix_rendered =
+            format!("{}{}{}{}", prefix_style, &message[..leading_ws_bytes], prefix, Reset);
         return Some(format!(
             "{}{}",
             prefix_rendered,
@@ -331,12 +320,7 @@ fn highlight_shell_command_preserve_text(command: &str) -> String {
         let leading = &command[..leading_len];
         let trailing = &command[command.len() - trailing_len..];
         let inner = &trimmed[1..trimmed.len() - 1];
-        return format!(
-            "{}`{}`{}",
-            leading,
-            highlight_shell_command(inner),
-            trailing
-        );
+        return format!("{}`{}`{}", leading, highlight_shell_command(inner), trailing);
     }
     highlight_shell_command(command)
 }

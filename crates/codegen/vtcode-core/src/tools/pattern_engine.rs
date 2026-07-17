@@ -98,13 +98,8 @@ impl PatternEngine {
 
         // We only need the tool names for prediction.
         let mut recent_tools = SmallVec::<[&str; 32]>::new();
-        recent_tools.extend(
-            events
-                .iter()
-                .rev()
-                .take(self.sequence_window)
-                .map(|e| e.tool_name.as_str()),
-        );
+        recent_tools
+            .extend(events.iter().rev().take(self.sequence_window).map(|e| e.tool_name.as_str()));
 
         if recent_tools.is_empty() {
             return None;

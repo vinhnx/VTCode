@@ -55,13 +55,7 @@ pub(super) fn summarize_verification_output(result: &serde_json::Value) -> Strin
         .map(str::trim)
         .filter(|text| !text.is_empty())
         .map(|text| {
-            let truncated = text
-                .lines()
-                .take(20)
-                .collect::<Vec<_>>()
-                .join("\n")
-                .trim()
-                .to_string();
+            let truncated = text.lines().take(20).collect::<Vec<_>>().join("\n").trim().to_string();
             if truncated.len() < text.len() {
                 format!("{truncated}\n...")
             } else {

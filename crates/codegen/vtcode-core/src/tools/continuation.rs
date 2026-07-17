@@ -22,9 +22,7 @@ pub struct PtyContinuationArgs {
 
 impl PtyContinuationArgs {
     pub fn new(session_id: impl Into<String>) -> Self {
-        Self {
-            session_id: session_id.into(),
-        }
+        Self { session_id: session_id.into() }
     }
 
     pub fn from_value(value: &Value) -> Option<Self> {

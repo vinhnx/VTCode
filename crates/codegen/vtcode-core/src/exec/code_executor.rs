@@ -234,10 +234,7 @@ impl CodeExecutor {
         ensure_dir_exists(&ipc_dir).await?;
 
         // Generate the SDK wrapper
-        let sdk = self
-            .generate_sdk()
-            .await
-            .context("failed to generate SDK")?;
+        let sdk = self.generate_sdk().await.context("failed to generate SDK")?;
 
         // Prepare the complete code with SDK
         let complete_code = match self.language {
@@ -273,10 +270,7 @@ impl CodeExecutor {
         let mut env = HashMap::new();
 
         // Set IPC directory for tool invocation
-        env.insert(
-            OsString::from("VTCODE_IPC_DIR"),
-            OsString::from(&*ipc_dir.to_string_lossy()),
-        );
+        env.insert(OsString::from("VTCODE_IPC_DIR"), OsString::from(&*ipc_dir.to_string_lossy()));
 
         // Spawn IPC handler task that will process tool requests from code
         let mut ipc_handler = ToolIpcHandler::new(ipc_dir.clone());
@@ -287,10 +281,7 @@ impl CodeExecutor {
         let builtin_executor = self.builtin_executor.clone();
         let builtin_names = match &builtin_executor {
             Some(exec) => exec.list_builtin_tools().ok().map(|tools| {
-                tools
-                    .iter()
-                    .map(|t| t.name.clone())
-                    .collect::<std::collections::HashSet<_>>()
+                tools.iter().map(|t| t.name.clone()).collect::<std::collections::HashSet<_>>()
             }),
             None => None,
         };
@@ -367,10 +358,7 @@ impl CodeExecutor {
                         }
                     }
                 } else {
-                    match mcp_client
-                        .execute_mcp_tool(&request.tool_name, &request.args)
-                        .await
-                    {
+                    match mcp_client.execute_mcp_tool(&request.tool_name, &request.args).await {
                         Ok(result) => {
                             debug!(tool_name = %request.tool_name, "Tool executed successfully");
                             ToolResponse {
@@ -448,9 +436,8 @@ impl CodeExecutor {
             },
         };
 
-        let process_output = AsyncProcessRunner::run(options)
-            .await
-            .context("failed to execute code")?;
+        let process_output =
+            AsyncProcessRunner::run(options).await.context("failed to execute code")?;
 
         let duration_ms = start.elapsed().as_millis();
 
@@ -548,11 +535,7 @@ impl CodeExecutor {
     async fn generate_python_sdk(&self) -> Result<String> {
         debug!("Generating Python SDK for MCP tools");
 
-        let tools = self
-            .mcp_client
-            .list_mcp_tools()
-            .await
-            .context("failed to list MCP tools")?;
+        let tools = self.mcp_client.list_mcp_tools().await.context("failed to list MCP tools")?;
 
         let mut sdk = String::from(
             r#"# MCP Tools SDK - Auto-generated
@@ -648,11 +631,7 @@ mcp = MCPTools()
     async fn generate_javascript_sdk(&self) -> Result<String> {
         debug!("Generating JavaScript SDK for MCP tools");
 
-        let tools = self
-            .mcp_client
-            .list_mcp_tools()
-            .await
-            .context("failed to list MCP tools")?;
+        let tools = self.mcp_client.list_mcp_tools().await.context("failed to list MCP tools")?;
 
         let mut sdk = String::from(
             r#"// MCP Tools SDK - Auto-generated
@@ -817,11 +796,7 @@ mod tests {
     }
 
     fn test_executor(language: Language) -> CodeExecutor {
-        CodeExecutor::new(
-            language,
-            Arc::new(MockMcpToolExecutor),
-            PathBuf::from("/workspace"),
-        )
+        CodeExecutor::new(language, Arc::new(MockMcpToolExecutor), PathBuf::from("/workspace"))
     }
 
     struct MockBuiltinExecutor;

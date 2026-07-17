@@ -137,10 +137,7 @@ struct ThreadEventStore {
 
 impl ThreadEventStore {
     fn with_capacity(capacity: usize) -> Self {
-        Self {
-            capacity: capacity.max(1),
-            ..Self::default()
-        }
+        Self { capacity: capacity.max(1), ..Self::default() }
     }
 
     fn push(
@@ -256,10 +253,7 @@ impl ThreadRuntimeHandle {
     pub fn begin_turn(&self) -> Result<SubmissionId> {
         let mut session = self.inner.session.lock();
         if session.turn_in_flight {
-            return Err(anyhow!(
-                "thread '{}' already has an in-flight turn",
-                session.thread_id
-            ));
+            return Err(anyhow!("thread '{}' already has an in-flight turn", session.thread_id));
         }
 
         session.turn_in_flight = true;
@@ -277,10 +271,7 @@ impl ThreadRuntimeHandle {
         event: ThreadEvent,
     ) {
         let thread_id = self.thread_id();
-        self.inner
-            .event_store
-            .lock()
-            .push(&thread_id, submission_id, turn_id, event);
+        self.inner.event_store.lock().push(&thread_id, submission_id, turn_id, event);
     }
 
     pub fn replay_recent(&self) -> Vec<ThreadEventRecord> {
@@ -288,10 +279,7 @@ impl ThreadRuntimeHandle {
     }
 
     pub fn recent_events(&self) -> Vec<ThreadEvent> {
-        self.replay_recent()
-            .into_iter()
-            .map(|record| record.event)
-            .collect()
+        self.replay_recent().into_iter().map(|record| record.event).collect()
     }
 }
 
@@ -425,13 +413,7 @@ pub async fn prepare_archived_session(
         }
     };
 
-    Ok(PreparedArchivedSession {
-        source,
-        workspace,
-        bootstrap,
-        thread_id,
-        archive,
-    })
+    Ok(PreparedArchivedSession { source, workspace, bootstrap, thread_id, archive })
 }
 
 fn preserve_prompt_cache_lineage_if_compatible(
@@ -449,12 +431,7 @@ fn preserve_prompt_cache_lineage_if_compatible(
 
 pub fn messages_from_session_listing(listing: &SessionListing) -> Vec<Message> {
     if !listing.snapshot.messages.is_empty() {
-        listing
-            .snapshot
-            .messages
-            .iter()
-            .map(Message::from)
-            .collect()
+        listing.snapshot.messages.iter().map(Message::from).collect()
     } else if let Some(progress) = &listing.snapshot.progress
         && !progress.recent_messages.is_empty()
     {
@@ -481,10 +458,8 @@ pub fn build_thread_archive_metadata(
     theme: &str,
     reasoning_effort: &str,
 ) -> SessionArchiveMetadata {
-    let workspace_label = workspace
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or("workspace");
+    let workspace_label =
+        workspace.file_name().and_then(|value| value.to_str()).unwrap_or("workspace");
 
     SessionArchiveMetadata::new(
         workspace_label,
@@ -520,9 +495,7 @@ mod tests {
         handle.record_event(
             None,
             None,
-            ThreadEvent::ThreadStarted(ThreadStartedEvent {
-                thread_id: "thread-1".to_string(),
-            }),
+            ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-1".to_string() }),
         );
         handle.record_event(
             None,
@@ -574,9 +547,7 @@ mod tests {
     #[test]
     #[serial_test::serial(session_dir_override)]
     fn list_recent_sessions_in_scope_filters_by_workspace() {
-        let _guard = SESSION_DIR_TEST_GUARD
-            .lock()
-            .expect("session dir test guard");
+        let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -627,9 +598,7 @@ mod tests {
     #[test]
     #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_resume_reuses_source_identifier_and_archive() {
-        let _guard = SESSION_DIR_TEST_GUARD
-            .lock()
-            .expect("session dir test guard");
+        let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -686,28 +655,11 @@ mod tests {
         assert_eq!(prepared.thread_id, listing.identifier());
         assert_eq!(prepared.archive.path(), listing.path.as_path());
         assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "hello");
-        assert_eq!(
-            prepared.bootstrap.loaded_skills,
-            vec!["skill_a".to_string()]
-        );
-        assert_eq!(
-            prepared
-                .bootstrap
-                .metadata
-                .as_ref()
-                .expect("metadata")
-                .model,
-            "new-model"
-        );
+        assert_eq!(prepared.bootstrap.loaded_skills, vec!["skill_a".to_string()]);
+        assert_eq!(prepared.bootstrap.metadata.as_ref().expect("metadata").model, "new-model");
         // Resume preserves the source session's primary agent ("mode").
         assert_eq!(
-            prepared
-                .bootstrap
-                .metadata
-                .as_ref()
-                .expect("metadata")
-                .primary_agent
-                .as_deref(),
+            prepared.bootstrap.metadata.as_ref().expect("metadata").primary_agent.as_deref(),
             Some("plan")
         );
     }
@@ -715,9 +667,7 @@ mod tests {
     #[test]
     #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_fork_uses_new_identifier_and_preserves_history() {
-        let _guard = SESSION_DIR_TEST_GUARD
-            .lock()
-            .expect("session dir test guard");
+        let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -768,12 +718,7 @@ mod tests {
 
         assert_eq!(prepared.thread_id, "session-forked");
         assert_ne!(prepared.archive.path(), listing.path.as_path());
-        assert!(
-            prepared
-                .archive
-                .path()
-                .ends_with(Path::new("session-forked.json"))
-        );
+        assert!(prepared.archive.path().ends_with(Path::new("session-forked.json")));
         assert_eq!(prepared.bootstrap.messages[0].content.as_text(), "hello");
         assert_eq!(
             prepared
@@ -784,11 +729,7 @@ mod tests {
             Some("session-source")
         );
         assert_eq!(
-            prepared
-                .bootstrap
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.fork_mode),
+            prepared.bootstrap.metadata.as_ref().and_then(|metadata| metadata.fork_mode),
             Some(SessionForkMode::FullCopy)
         );
     }
@@ -796,9 +737,7 @@ mod tests {
     #[test]
     #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_preserves_prompt_cache_lineage_when_compatible() {
-        let _guard = SESSION_DIR_TEST_GUARD
-            .lock()
-            .expect("session dir test guard");
+        let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -859,9 +798,7 @@ mod tests {
     #[test]
     #[serial_test::serial(session_dir_override)]
     fn prepare_archived_session_resets_prompt_cache_lineage_on_model_change() {
-        let _guard = SESSION_DIR_TEST_GUARD
-            .lock()
-            .expect("session dir test guard");
+        let _guard = SESSION_DIR_TEST_GUARD.lock().expect("session dir test guard");
         let tmp = TempDir::new().expect("temp dir");
         override_sessions_dir_for_tests(tmp.path());
 
@@ -957,10 +894,7 @@ mod tests {
 
         let messages = messages_from_session_listing(&listing);
         assert_eq!(
-            messages
-                .iter()
-                .map(|message| message.phase)
-                .collect::<Vec<_>>(),
+            messages.iter().map(|message| message.phase).collect::<Vec<_>>(),
             vec![
                 Some(crate::llm::provider::AssistantPhase::Commentary),
                 Some(crate::llm::provider::AssistantPhase::FinalAnswer),

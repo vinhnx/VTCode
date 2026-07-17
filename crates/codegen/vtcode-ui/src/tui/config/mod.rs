@@ -280,9 +280,7 @@ pub struct ToolsConfig {
 
 impl Default for ToolsConfig {
     fn default() -> Self {
-        Self {
-            default_policy: ToolPolicy::Prompt,
-        }
+        Self { default_policy: ToolPolicy::Prompt }
     }
 }
 
@@ -294,9 +292,7 @@ pub struct SecurityConfig {
 
 impl Default for SecurityConfig {
     fn default() -> Self {
-        Self {
-            human_in_the_loop: true,
-        }
+        Self { human_in_the_loop: true }
     }
 }
 
@@ -309,10 +305,7 @@ pub struct ContextConfig {
 
 impl Default for ContextConfig {
     fn default() -> Self {
-        Self {
-            max_context_tokens: 128_000,
-            trim_to_percent: 80,
-        }
+        Self { max_context_tokens: 128_000, trim_to_percent: 80 }
     }
 }
 

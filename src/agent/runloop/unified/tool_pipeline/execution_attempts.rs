@@ -322,23 +322,17 @@ async fn run_single_tool_attempt(
         Some(progress_reporter.clone()),
     );
 
-    progress_reporter
-        .set_message(format!("Preparing {name}..."))
-        .await;
+    progress_reporter.set_message(format!("Preparing {name}...")).await;
     progress_reporter.set_progress(5).await;
 
     if let Err(_e) = tokens.state.check_cancellation() {
-        progress_reporter
-            .set_message(format!("{name} cancelled"))
-            .await;
+        progress_reporter.set_message(format!("{name} cancelled")).await;
         progress_reporter.set_progress(100).await;
         warning_guard.cancel().await;
         return ToolExecutionStatus::Cancelled;
     }
 
-    progress_reporter
-        .set_message(format!("Setting up {name} execution..."))
-        .await;
+    progress_reporter.set_message(format!("Setting up {name} execution...")).await;
     progress_reporter.set_progress(20).await;
 
     let _progress_update_guard = {
@@ -351,17 +345,13 @@ async fn run_single_tool_attempt(
 
     let status = loop {
         if let Err(_e) = tokens.state.check_cancellation() {
-            progress_reporter
-                .set_message(format!("{name} cancelled"))
-                .await;
+            progress_reporter.set_message(format!("{name} cancelled")).await;
             progress_reporter.set_progress(100).await;
             warning_guard.cancel().await;
             break ToolExecutionStatus::Cancelled;
         }
 
-        progress_reporter
-            .set_message(format!("Executing {name}..."))
-            .await;
+        progress_reporter.set_message(format!("Executing {name}...")).await;
 
         let token = CancellationToken::new();
         let exec_future = cancellation::with_tool_cancellation(token.clone(), async {
@@ -385,14 +375,10 @@ async fn run_single_tool_attempt(
             } else if let Some(error) = outcome.error {
                 Ok(error.to_json_value())
             } else {
-                Err(anyhow::anyhow!(
-                    "tool execution failed without output or error"
-                ))
+                Err(anyhow::anyhow!("tool execution failed without output or error"))
             };
 
-            progress_reporter
-                .set_message(format!("Processing {name} results..."))
-                .await;
+            progress_reporter.set_message(format!("Processing {name} results...")).await;
             progress_reporter.set_progress(90).await;
             result
         });
@@ -453,25 +439,19 @@ async fn run_single_tool_attempt(
             ExecutionControl::Continue => continue,
             ExecutionControl::Cancelled => {
                 terminate_active_exec_sessions(registry, name, "cancelled").await;
-                progress_reporter
-                    .set_message(format!("{name} cancelled"))
-                    .await;
+                progress_reporter.set_message(format!("{name} cancelled")).await;
                 progress_reporter.set_progress(100).await;
                 break ToolExecutionStatus::Cancelled;
             }
             ExecutionControl::Completed(result) => {
                 break match result {
                     Ok(output) => {
-                        progress_reporter
-                            .set_message(format!("{name} completed"))
-                            .await;
+                        progress_reporter.set_message(format!("{name} completed")).await;
                         progress_reporter.set_progress(100).await;
                         process_llm_tool_output(output)
                     }
                     Err(error) => {
-                        progress_reporter
-                            .set_message(format!("{name} failed"))
-                            .await;
+                        progress_reporter.set_message(format!("{name} failed")).await;
                         ToolExecutionStatus::Failure {
                             error: ToolExecutionError::from_anyhow(
                                 name,
@@ -489,9 +469,7 @@ async fn run_single_tool_attempt(
             ExecutionControl::TimedOut => {
                 token.cancel();
                 terminate_active_exec_sessions(registry, name, "timed out").await;
-                progress_reporter
-                    .set_message(format!("{name} timed out"))
-                    .await;
+                progress_reporter.set_message(format!("{name} timed out")).await;
                 let timeout_category = registry.timeout_category_for(name).await;
                 break create_timeout_error(name, timeout_category, Some(tool_timeout));
             }
@@ -531,9 +509,7 @@ fn retry_delay_for_status(
 
     match status {
         ToolExecutionStatus::Timeout { error } | ToolExecutionStatus::Failure { error } => {
-            retry_policy
-                .decision_for_tool_execution_error(error, attempt as u32)
-                .delay
+            retry_policy.decision_for_tool_execution_error(error, attempt as u32).delay
         }
         _ => None,
     }
@@ -688,9 +664,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("temp dir");
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         let read_path = temp_dir.path().join("README.md");
-        tokio::fs::write(&read_path, "hello")
-            .await
-            .expect("write file");
+        tokio::fs::write(&read_path, "hello").await.expect("write file");
 
         let gateway = registry.safety_gateway();
         gateway.set_limits(1, 10);

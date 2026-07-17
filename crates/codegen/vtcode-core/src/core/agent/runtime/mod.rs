@@ -112,9 +112,7 @@ impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
             match tokio::time::timeout(duration, self.provider.stream_normalized(request)).await {
                 Ok(result) => result?,
                 Err(_) => {
-                    return Err(anyhow::anyhow!(
-                        "Stream request timed out after {duration:?}"
-                    ));
+                    return Err(anyhow::anyhow!("Stream request timed out after {duration:?}"));
                 }
             }
         } else {
@@ -124,10 +122,7 @@ impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
         let mut final_usage = ProviderUsage::default();
         let mut completed_response: Option<LLMResponse> = None;
         while let Some(event_result) = stream.next().await {
-            if matches!(
-                self.steering.poll_turn_control().await,
-                RuntimeControl::StopRequested
-            ) {
+            if matches!(self.steering.poll_turn_control().await, RuntimeControl::StopRequested) {
                 let mut response = LLMResponse {
                     model: request_model.clone(),
                     finish_reason: FinishReason::Error("Cancelled".to_string()),
@@ -368,8 +363,7 @@ impl StreamingLifecycleBridge {
     /// Abort the streaming turn, marking all open items as failed and flushing events.
     pub fn abort(&mut self) {
         self.lifecycle.complete_open_text_items();
-        self.lifecycle
-            .complete_open_tool_calls_with_status(ToolCallStatus::Failed);
+        self.lifecycle.complete_open_tool_calls_with_status(ToolCallStatus::Failed);
         self.emit_pending_events();
     }
 
@@ -394,10 +388,7 @@ impl StreamingLifecycleBridge {
             return;
         }
 
-        if self
-            .lifecycle
-            .emit_assistant_snapshot(Some(self.assistant_item_id.clone()))
-        {
+        if self.lifecycle.emit_assistant_snapshot(Some(self.assistant_item_id.clone())) {
             self.output_update_events += 1;
             self.last_output_emit_len = self.lifecycle.assistant_len();
             self.emit_pending_events();
@@ -410,10 +401,7 @@ impl StreamingLifecycleBridge {
         }
 
         if !self.lifecycle.reasoning_started() {
-            if self
-                .lifecycle
-                .emit_reasoning_snapshot(Some(self.reasoning_item_id.clone()))
-            {
+            if self.lifecycle.emit_reasoning_snapshot(Some(self.reasoning_item_id.clone())) {
                 self.last_reasoning_emit_len = self.lifecycle.reasoning_len();
                 self.emit_pending_events();
             }
@@ -424,10 +412,7 @@ impl StreamingLifecycleBridge {
             return;
         }
 
-        if self
-            .lifecycle
-            .emit_reasoning_snapshot(Some(self.reasoning_item_id.clone()))
-        {
+        if self.lifecycle.emit_reasoning_snapshot(Some(self.reasoning_item_id.clone())) {
             self.record_reasoning_update();
             self.emit_pending_events();
         }
@@ -436,11 +421,7 @@ impl StreamingLifecycleBridge {
     fn update_reasoning_stage(&mut self, stage: String) {
         let stage_changed = self.reasoning_stage.as_deref() != Some(stage.as_str());
         self.reasoning_stage = Some(stage);
-        if !stage_changed
-            || !self
-                .lifecycle
-                .set_reasoning_stage(self.reasoning_stage.clone())
-        {
+        if !stage_changed || !self.lifecycle.set_reasoning_stage(self.reasoning_stage.clone()) {
             return;
         }
 
@@ -460,10 +441,7 @@ impl StreamingLifecycleBridge {
         }
 
         stage_changed
-            || self
-                .lifecycle
-                .reasoning_len()
-                .saturating_sub(self.last_reasoning_emit_len)
+            || self.lifecycle.reasoning_len().saturating_sub(self.last_reasoning_emit_len)
                 >= MIN_REASONING_UPDATE_BYTES
     }
 
@@ -478,20 +456,14 @@ impl StreamingLifecycleBridge {
         }
 
         self.output_update_events == 0
-            || self
-                .lifecycle
-                .assistant_len()
-                .saturating_sub(self.last_output_emit_len)
+            || self.lifecycle.assistant_len().saturating_sub(self.last_output_emit_len)
                 >= MIN_OUTPUT_UPDATE_BYTES
     }
 
     fn start_tool_call(&mut self, call_id: String, name: Option<String>) {
         let item_id = format!("{}-tool-call-{call_id}", self.assistant_item_id);
-        self.tool_call_item_ids
-            .insert(call_id.clone(), item_id.clone());
-        let _ = self
-            .lifecycle
-            .start_tool_call(&call_id, name, Some(item_id));
+        self.tool_call_item_ids.insert(call_id.clone(), item_id.clone());
+        let _ = self.lifecycle.start_tool_call(&call_id, name, Some(item_id));
         self.emit_pending_events();
     }
 
@@ -605,9 +577,7 @@ impl AgentRuntime {
     /// Look up the lifecycle item ID for a given tool call identifier.
     #[must_use]
     pub fn tool_call_item_id(&self, call_id: &str) -> Option<String> {
-        self.lifecycle
-            .tool_call_item_id(call_id)
-            .map(str::to_string)
+        self.lifecycle.tool_call_item_id(call_id).map(str::to_string)
     }
 
     /// Mark a specific tool call as completed with the given status and emit lifecycle events.
@@ -636,10 +606,7 @@ impl AgentRuntime {
         }
 
         self.output_update_events == 0
-            || self
-                .lifecycle
-                .assistant_len()
-                .saturating_sub(self.last_output_emit_len)
+            || self.lifecycle.assistant_len().saturating_sub(self.last_output_emit_len)
                 >= MIN_OUTPUT_UPDATE_BYTES
     }
 
@@ -649,10 +616,7 @@ impl AgentRuntime {
         }
 
         self.reasoning_update_events == 0
-            || self
-                .lifecycle
-                .reasoning_len()
-                .saturating_sub(self.last_reasoning_emit_len)
+            || self.lifecycle.reasoning_len().saturating_sub(self.last_reasoning_emit_len)
                 >= MIN_REASONING_UPDATE_BYTES
     }
 
@@ -696,9 +660,7 @@ impl AgentRuntime {
         if let Some(tool_calls) = tool_calls {
             for call in tool_calls {
                 let tool_name = call.function.as_ref().map(|function| function.name.clone());
-                let _ = self
-                    .lifecycle
-                    .start_tool_call(&call.id, tool_name.clone(), None);
+                let _ = self.lifecycle.start_tool_call(&call.id, tool_name.clone(), None);
                 if let Some(function) = call.function.as_ref() {
                     let _ = self.lifecycle.sync_tool_call_arguments(
                         &call.id,
@@ -711,8 +673,7 @@ impl AgentRuntime {
             return;
         }
 
-        self.lifecycle
-            .complete_open_tool_calls_with_status(ToolCallStatus::Failed);
+        self.lifecycle.complete_open_tool_calls_with_status(ToolCallStatus::Failed);
     }
 
     fn record_model_progress(
@@ -754,10 +715,7 @@ impl AgentRuntime {
                 self.emit_pending_lifecycle_events();
             }
             RuntimeModelProgress::ToolCallDelta { call_id, delta } => {
-                if self
-                    .lifecycle
-                    .append_tool_call_delta(&call_id, &delta, None, None)
-                {
+                if self.lifecycle.append_tool_call_delta(&call_id, &delta, None, None) {
                     self.emit_pending_lifecycle_events();
                 }
             }
@@ -815,10 +773,8 @@ impl AgentRuntime {
             assistant_message = assistant_message.with_reasoning(Some(full_reasoning.clone()));
         }
         if let Some(details) = &response.reasoning_details {
-            let values: Vec<serde_json::Value> = details
-                .iter()
-                .map(|s| serde_json::Value::String(s.clone()))
-                .collect();
+            let values: Vec<serde_json::Value> =
+                details.iter().map(|s| serde_json::Value::String(s.clone())).collect();
             assistant_message = assistant_message.with_reasoning_details(Some(values));
         }
 
@@ -833,16 +789,12 @@ impl AgentRuntime {
             }
         }
 
-        self.state
-            .adjust_token_count(assistant_message.estimate_tokens() as isize);
+        self.state.adjust_token_count(assistant_message.estimate_tokens() as isize);
         self.state.messages_mut().push(assistant_message);
 
         self.state.conversation.push(Content {
             role: "model".to_string(),
-            parts: vec![Part::Text {
-                text: full_text.clone(),
-                thought_signature: None,
-            }],
+            parts: vec![Part::Text { text: full_text.clone(), thought_signature: None }],
         });
         self.state.last_processed_message_idx = self.state.conversation.len();
 
@@ -885,9 +837,7 @@ impl AgentRuntime {
     ) -> Result<TurnExecution> {
         let mut steering = std::mem::take(&mut self.steering);
         let mut adapter = ProviderRuntimeModelAdapter::new(provider, &mut steering);
-        let result = self
-            .run_turn_once_with_adapter(&mut adapter, request, timeout)
-            .await;
+        let result = self.run_turn_once_with_adapter(&mut adapter, request, timeout).await;
         self.steering = steering;
         result
     }
@@ -930,22 +880,18 @@ mod tests {
         }
 
         async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
-            Ok(Box::pin(stream::iter(vec![Ok(
-                LLMStreamEvent::Completed {
-                    response: Box::new(self.response.clone()),
-                },
-            )])))
+            Ok(Box::pin(stream::iter(vec![Ok(LLMStreamEvent::Completed {
+                response: Box::new(self.response.clone()),
+            })])))
         }
 
         async fn stream_normalized(
             &self,
             _request: LLMRequest,
         ) -> Result<LLMNormalizedStream, LLMError> {
-            Ok(Box::pin(stream::iter(vec![Ok(
-                NormalizedStreamEvent::Done {
-                    response: Box::new(self.response.clone()),
-                },
-            )])))
+            Ok(Box::pin(stream::iter(vec![Ok(NormalizedStreamEvent::Done {
+                response: Box::new(self.response.clone()),
+            })])))
         }
 
         fn supported_models(&self) -> Vec<String> {
@@ -972,11 +918,9 @@ mod tests {
         }
 
         async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
-            Ok(Box::pin(stream::iter(vec![Ok(
-                LLMStreamEvent::Completed {
-                    response: Box::new(self.response.clone()),
-                },
-            )])))
+            Ok(Box::pin(stream::iter(vec![Ok(LLMStreamEvent::Completed {
+                response: Box::new(self.response.clone()),
+            })])))
         }
 
         async fn stream_normalized(
@@ -984,15 +928,9 @@ mod tests {
             _request: LLMRequest,
         ) -> Result<LLMNormalizedStream, LLMError> {
             Ok(Box::pin(stream::iter(vec![
-                Ok(NormalizedStreamEvent::ReasoningDelta {
-                    delta: self.reasoning_delta.clone(),
-                }),
-                Ok(NormalizedStreamEvent::TextDelta {
-                    delta: self.text_delta.clone(),
-                }),
-                Ok(NormalizedStreamEvent::Done {
-                    response: Box::new(self.response.clone()),
-                }),
+                Ok(NormalizedStreamEvent::ReasoningDelta { delta: self.reasoning_delta.clone() }),
+                Ok(NormalizedStreamEvent::TextDelta { delta: self.text_delta.clone() }),
+                Ok(NormalizedStreamEvent::Done { response: Box::new(self.response.clone()) }),
             ])))
         }
 
@@ -1051,24 +989,15 @@ mod tests {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut runtime = AgentRuntime::new(state, None, Some(receiver));
 
+        sender.send(SteeringMessage::Pause).expect("pause should send");
         sender
-            .send(SteeringMessage::Pause)
-            .expect("pause should send");
-        sender
-            .send(SteeringMessage::FollowUpInput(
-                "queued while paused".to_string(),
-            ))
+            .send(SteeringMessage::FollowUpInput("queued while paused".to_string()))
             .expect("follow-up should send");
-        sender
-            .send(SteeringMessage::Resume)
-            .expect("resume should send");
+        sender.send(SteeringMessage::Resume).expect("resume should send");
 
         assert_eq!(runtime.poll_turn_control().await, RuntimeControl::Resumed);
         assert!(runtime.has_pending_follow_up_inputs());
-        assert_eq!(
-            runtime.run_until_idle().as_deref(),
-            Some("queued while paused")
-        );
+        assert_eq!(runtime.run_until_idle().as_deref(), Some("queued while paused"));
     }
 
     #[tokio::test]
@@ -1077,17 +1006,10 @@ mod tests {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut runtime = AgentRuntime::new(state, None, Some(receiver));
 
-        sender
-            .send(SteeringMessage::Pause)
-            .expect("pause should send");
-        sender
-            .send(SteeringMessage::SteerStop)
-            .expect("stop should send");
+        sender.send(SteeringMessage::Pause).expect("pause should send");
+        sender.send(SteeringMessage::SteerStop).expect("stop should send");
 
-        assert_eq!(
-            runtime.poll_turn_control().await,
-            RuntimeControl::StopRequested
-        );
+        assert_eq!(runtime.poll_turn_control().await, RuntimeControl::StopRequested);
         assert!(!runtime.has_pending_follow_up_inputs());
     }
 
@@ -1100,9 +1022,7 @@ mod tests {
             reasoning: Some("**why** this works".to_string()),
             ..Default::default()
         };
-        let provider = CompletedOnlyStreamProvider {
-            response: response.clone(),
-        };
+        let provider = CompletedOnlyStreamProvider { response: response.clone() };
         let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
         let mut runtime = AgentRuntime::new(state, None, None);
         let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
@@ -1119,10 +1039,7 @@ mod tests {
         assert_eq!(turn.content, "### Header\n- item");
         assert_eq!(turn.reasoning.as_deref(), Some("**why** this works"));
         assert_eq!(turn.response.content.as_deref(), Some("### Header\n- item"));
-        assert_eq!(
-            turn.response.reasoning.as_deref(),
-            Some("**why** this works")
-        );
+        assert_eq!(turn.response.reasoning.as_deref(), Some("**why** this works"));
     }
 
     #[tokio::test]

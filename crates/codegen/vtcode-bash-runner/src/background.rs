@@ -63,8 +63,7 @@ impl<E: CommandExecutor + 'static> BackgroundCommandManager<E> {
         }
 
         // Update status to running
-        self.update_task_status(&task_id, BackgroundTaskStatus::Running)
-            .await;
+        self.update_task_status(&task_id, BackgroundTaskStatus::Running).await;
 
         // Spawn the background task
         let executor = self.executor.clone();

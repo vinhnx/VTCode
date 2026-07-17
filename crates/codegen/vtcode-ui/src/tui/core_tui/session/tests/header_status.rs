@@ -15,19 +15,12 @@ fn fresh_session() -> Session {
 fn header_line_text(session: &mut Session) -> String {
     let lines = session.header_lines();
     assert_eq!(lines.len(), 1, "expected single-line header");
-    lines[0]
-        .spans
-        .iter()
-        .map(|span| span.content.clone().into_owned())
-        .collect()
+    lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect()
 }
 
 fn assert_header_contains_badge(session: &mut Session, badge_text: &str) {
     let text = header_line_text(session);
-    assert!(
-        text.contains(badge_text),
-        "header should contain badge '{badge_text}', got: {text}"
-    );
+    assert!(text.contains(badge_text), "header should contain badge '{badge_text}', got: {text}");
 }
 
 fn setup_shimmer_session(session: &mut Session, left_status: &str) {
@@ -38,10 +31,7 @@ fn setup_shimmer_session(session: &mut Session, left_status: &str) {
 }
 
 fn clear_shimmer_session(session: &mut Session) {
-    session.handle_command(InlineCommand::SetInputStatus {
-        left: None,
-        right: None,
-    });
+    session.handle_command(InlineCommand::SetInputStatus { left: None, right: None });
 }
 
 fn input_data(session: &mut Session) -> input::InputWidgetData {
@@ -52,9 +42,7 @@ fn session_with_highlights(highlights: Vec<InlineHeaderHighlight>) -> Session {
     let mut session = fresh_session();
     session.header_context.highlights = highlights;
     session.input_manager.set_content("notes".to_string());
-    session
-        .input_manager
-        .set_cursor(session.input_manager.content().len());
+    session.input_manager.set_cursor(session.input_manager.content().len());
     session
 }
 
@@ -84,12 +72,7 @@ fn copy_notification_expires_after_five_seconds() {
 
     let rendered = session
         .render_input_status_line(VIEW_WIDTH)
-        .map(|line| {
-            line.spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect::<String>()
-        })
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect::<String>())
         .unwrap_or_default();
 
     assert!(!rendered.contains("Copied to clipboard"));
@@ -106,11 +89,8 @@ fn cursor_visible_while_scrolling() {
     assert!(during_scroll.cursor_should_be_visible);
     assert!(session.use_steady_cursor());
 
-    session.scroll_cursor_steady_until = Some(
-        Instant::now()
-            .checked_sub(Duration::from_millis(1))
-            .unwrap(),
-    );
+    session.scroll_cursor_steady_until =
+        Some(Instant::now().checked_sub(Duration::from_millis(1)).unwrap());
     session.handle_tick();
 
     assert!(!session.use_steady_cursor());
@@ -205,10 +185,7 @@ fn set_primary_agent_command_updates_header_badge() {
     });
     assert_header_contains_badge(&mut session, "Reviewer");
 
-    session.handle_command(InlineCommand::SetPrimaryAgent {
-        name: None,
-        color: None,
-    });
+    session.handle_command(InlineCommand::SetPrimaryAgent { name: None, color: None });
     let text = header_line_text(&mut session);
     assert!(text.contains("Duck"));
     assert!(!text.contains("Reviewer"));
@@ -229,10 +206,7 @@ fn bottom_status_excludes_primary_agent() {
         color: None,
     });
 
-    assert_eq!(
-        session.status_right_text(),
-        Some("gpt-5.5 | 98% context left")
-    );
+    assert_eq!(session.status_right_text(), Some("gpt-5.5 | 98% context left"));
 }
 
 #[test]
@@ -246,9 +220,7 @@ fn header_context_updates_preserve_active_primary_agent() {
     let mut replacement = session.header_context.clone();
     replacement.primary_agent = None;
     replacement.model = "Model: replacement".to_string();
-    session.handle_command(InlineCommand::SetHeaderContext {
-        context: Box::new(replacement),
-    });
+    session.handle_command(InlineCommand::SetHeaderContext { context: Box::new(replacement) });
 
     assert_header_contains_badge(&mut session, "Planner");
 }
@@ -301,10 +273,7 @@ fn bang_prefix_input_shows_shell_mode_status_hint() {
     let spans = session
         .build_input_status_widget_data(VIEW_WIDTH)
         .expect("expected shell mode status hint");
-    let rendered: String = spans
-        .iter()
-        .map(|span| span.content.clone().into_owned())
-        .collect();
+    let rendered: String = spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
     assert!(rendered.contains("Shell mode (!):"));
 }
@@ -322,10 +291,7 @@ fn bang_prefix_input_uses_zero_padding_for_visible_input_area() {
     let mut session = fresh_session();
     session.set_input("!echo hello".to_string());
 
-    assert_eq!(
-        session.input_block_padding(),
-        ratatui::widgets::Padding::new(0, 0, 0, 0)
-    );
+    assert_eq!(session.input_block_padding(), ratatui::widgets::Padding::new(0, 0, 0, 0));
 }
 
 #[test]
@@ -381,9 +347,7 @@ fn header_shows_safe_badge_for_tools_policy_trust() {
     let mut session = fresh_session();
     session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);
     session.input_manager.set_content("test".to_string());
-    session
-        .input_manager
-        .set_cursor(session.input_manager.content().len());
+    session.input_manager.set_cursor(session.input_manager.content().len());
 
     assert_header_contains_badge(&mut session, "Safe");
 }
@@ -393,9 +357,7 @@ fn header_shows_full_auto_trust_badge_for_full_auto_trust() {
     let mut session = fresh_session();
     session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
     session.input_manager.set_content("test".to_string());
-    session
-        .input_manager
-        .set_cursor(session.input_manager.content().len());
+    session.input_manager.set_cursor(session.input_manager.content().len());
 
     assert_header_contains_badge(&mut session, "Full-auto");
 }
@@ -405,9 +367,7 @@ fn header_omits_auto_permission_badge() {
     let mut session = fresh_session();
     session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);
     session.input_manager.set_content("test".to_string());
-    session
-        .input_manager
-        .set_cursor(session.input_manager.content().len());
+    session.input_manager.set_cursor(session.input_manager.content().len());
 
     let text = header_line_text(&mut session);
     assert!(text.contains("Safe"));
@@ -478,9 +438,7 @@ fn hidden_header_summary_live_reloads_model_changes() {
     next_context.provider = format!("{}moonshot", ui::HEADER_PROVIDER_PREFIX);
     next_context.model = format!("{}kimi-k2.6", ui::HEADER_MODEL_PREFIX);
     next_context.reasoning = format!("{}high", ui::HEADER_REASONING_PREFIX);
-    session.handle_command(InlineCommand::SetHeaderContext {
-        context: Box::new(next_context),
-    });
+    session.handle_command(InlineCommand::SetHeaderContext { context: Box::new(next_context) });
 
     let updated = header_line_text(&mut session);
     assert!(updated.contains("Moonshot Kimi-K2"));
@@ -514,9 +472,7 @@ fn header_context_updates_preserve_active_primary_agent_without_mode_badges() {
     replacement.provider = format!("{}mimo", ui::HEADER_PROVIDER_PREFIX);
     replacement.model = format!("{}mimo-v2.5", ui::HEADER_MODEL_PREFIX);
     replacement.reasoning = format!("{}low", ui::HEADER_REASONING_PREFIX);
-    session.handle_command(InlineCommand::SetHeaderContext {
-        context: Box::new(replacement),
-    });
+    session.handle_command(InlineCommand::SetHeaderContext { context: Box::new(replacement) });
 
     let line = header_line_text(&mut session);
     assert!(line.contains("Duck"));
@@ -544,11 +500,8 @@ fn header_highlights_collapse_to_single_line() {
     let lines = session.header_lines();
     assert_eq!(lines.len(), 1);
 
-    let summary: String = lines[0]
-        .spans
-        .iter()
-        .map(|span| span.content.clone().into_owned())
-        .collect();
+    let summary: String =
+        lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
     assert!(summary.contains("Keyboard Shortcuts"));
     assert!(summary.contains("/help Show help"));
@@ -570,17 +523,11 @@ fn header_highlight_summary_truncates_long_entries() {
     let lines = session.header_lines();
     assert_eq!(lines.len(), 1);
 
-    let summary: String = lines[0]
-        .spans
-        .iter()
-        .map(|span| span.content.clone().into_owned())
-        .collect();
+    let summary: String =
+        lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
-    let expected_preview = format!(
-        "{}{}",
-        "A".repeat(limit.saturating_sub(1)),
-        ui::INLINE_PREVIEW_ELLIPSIS
-    );
+    let expected_preview =
+        format!("{}{}", "A".repeat(limit.saturating_sub(1)), ui::INLINE_PREVIEW_ELLIPSIS);
 
     assert!(summary.contains("Details"));
     assert!(summary.contains(&expected_preview));
@@ -602,11 +549,8 @@ fn header_highlight_summary_hides_truncated_command_segments() {
     let lines = session.header_lines();
     assert_eq!(lines.len(), 1);
 
-    let summary: String = lines[0]
-        .spans
-        .iter()
-        .map(|span| span.content.clone().into_owned())
-        .collect();
+    let summary: String =
+        lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
     assert!(summary.contains("/{command}"));
     assert!(summary.contains("(+3 more)"));
@@ -617,20 +561,14 @@ fn header_highlight_summary_hides_truncated_command_segments() {
 #[test]
 fn header_height_expands_when_wrapping_required() {
     let mut session = fresh_session();
-    session.header_context.provider = format!(
-        "{}Example Provider With Extended Label",
-        ui::HEADER_PROVIDER_PREFIX
-    );
-    session.header_context.model = format!(
-        "{}ExampleModelIdentifierWithDetail",
-        ui::HEADER_MODEL_PREFIX
-    );
+    session.header_context.provider =
+        format!("{}Example Provider With Extended Label", ui::HEADER_PROVIDER_PREFIX);
+    session.header_context.model =
+        format!("{}ExampleModelIdentifierWithDetail", ui::HEADER_MODEL_PREFIX);
     session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
     session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
-    session.header_context.tools = format!(
-        "{}allow 11 · prompt 7 · deny 0 · extras extras extras",
-        ui::HEADER_TOOLS_PREFIX
-    );
+    session.header_context.tools =
+        format!("{}allow 11 · prompt 7 · deny 0 · extras extras extras", ui::HEADER_TOOLS_PREFIX);
     session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
     session.header_context.highlights = vec![InlineHeaderHighlight {
         title: "Tips".to_string(),
@@ -640,17 +578,12 @@ fn header_height_expands_when_wrapping_required() {
         ],
     }];
     session.input_manager.set_content("notes".to_string());
-    session
-        .input_manager
-        .set_cursor(session.input_manager.content().len());
+    session.input_manager.set_cursor(session.input_manager.content().len());
 
     let wide = session.header_height_for_width(120);
     let narrow = session.header_height_for_width(40);
 
-    assert!(
-        narrow >= wide,
-        "expected narrower width to require at least as many header rows"
-    );
+    assert!(narrow >= wide, "expected narrower width to require at least as many header rows");
     assert!(
         wide >= ui::INLINE_HEADER_HEIGHT && narrow >= ui::INLINE_HEADER_HEIGHT,
         "expected header rows to meet minimum height"
@@ -660,34 +593,21 @@ fn header_height_expands_when_wrapping_required() {
 #[test]
 fn agent_label_uses_accent_color_without_border() {
     let accent = AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56));
-    let theme = InlineTheme {
-        primary: Some(accent),
-        ..Default::default()
-    };
+    let theme = InlineTheme { primary: Some(accent), ..Default::default() };
 
     let mut session = Session::new(theme, None, VIEW_ROWS);
     session.labels.agent = Some("Agent".to_string());
     let mut segment = make_segment("Response");
-    segment.style = Arc::new(InlineTextStyle {
-        color: Some(accent),
-        ..InlineTextStyle::default()
-    });
+    segment.style = Arc::new(InlineTextStyle { color: Some(accent), ..InlineTextStyle::default() });
     session.push_line(InlineMessageKind::Agent, vec![segment]);
 
-    let index = session
-        .lines
-        .len()
-        .checked_sub(1)
-        .expect("agent message should be available");
+    let index = session.lines.len().checked_sub(1).expect("agent message should be available");
     let spans = session.render_message_spans(index);
 
     assert!(!spans.is_empty());
 
     let prefix_span = &spans[0];
-    assert_eq!(
-        prefix_span.content.clone().into_owned(),
-        ui::INLINE_AGENT_QUOTE_PREFIX
-    );
+    assert_eq!(prefix_span.content.clone().into_owned(), ui::INLINE_AGENT_QUOTE_PREFIX);
 
     let label_index = spans
         .iter()
@@ -696,24 +616,16 @@ fn agent_label_uses_accent_color_without_border() {
     let label_span = &spans[label_index];
     assert_eq!(label_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
 
-    let padding_span = spans
-        .get(label_index + 1)
-        .expect("agent label should be followed by padding");
-    assert_eq!(
-        padding_span.content.clone().into_owned(),
-        ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
-    );
+    let padding_span =
+        spans.get(label_index + 1).expect("agent label should be followed by padding");
+    assert_eq!(padding_span.content.clone().into_owned(), ui::INLINE_AGENT_MESSAGE_LEFT_PADDING);
 
     assert!(
-        !spans
-            .iter()
-            .any(|span| span.content.clone().into_owned().contains('│')),
+        !spans.iter().any(|span| span.content.clone().into_owned().contains('│')),
         "agent prefix should not render a left border",
     );
     assert!(
-        !spans
-            .iter()
-            .any(|span| span.content.clone().into_owned().contains('✦')),
+        !spans.iter().any(|span| span.content.clone().into_owned().contains('✦')),
         "agent prefix should not include decorative symbols",
     );
 }

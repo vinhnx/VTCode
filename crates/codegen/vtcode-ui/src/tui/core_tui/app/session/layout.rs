@@ -35,16 +35,10 @@ pub(super) fn resolve_bottom_panel_spec(
         .saturating_sub(input_reserved_height)
         .saturating_sub(1);
     if max_panel_height == 0 || viewport.width == 0 {
-        return BottomPanelSpec {
-            kind: BottomPanelKind::None,
-            height: 0,
-        };
+        return BottomPanelSpec { kind: BottomPanelKind::None, height: 0 };
     }
 
-    let split_context = SplitContext {
-        width: viewport.width,
-        max_panel_height,
-    };
+    let split_context = SplitContext { width: viewport.width, max_panel_height };
 
     let visible_surface = session.visible_bottom_docked_surface();
     let panel = match visible_surface {
@@ -96,10 +90,7 @@ pub(super) fn resolve_bottom_panel_spec(
         return panel;
     }
 
-    BottomPanelSpec {
-        kind: BottomPanelKind::None,
-        height: 0,
-    }
+    BottomPanelSpec { kind: BottomPanelKind::None, height: 0 }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -130,9 +121,7 @@ fn normalize_panel_height(raw_height: u16, max_panel_height: u16) -> u16 {
         return 0;
     }
 
-    let min_floor = ui::INLINE_LIST_PANEL_MIN_HEIGHT
-        .min(max_panel_height)
-        .max(1);
+    let min_floor = ui::INLINE_LIST_PANEL_MIN_HEIGHT.min(max_panel_height).max(1);
     raw_height.max(min_floor).min(max_panel_height)
 }
 

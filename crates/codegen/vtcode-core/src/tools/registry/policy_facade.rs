@@ -108,19 +108,14 @@ impl ToolRegistry {
             .iter()
             .map(|tool| self.resolve_runtime_policy_name(tool))
             .collect();
-        let visible_policy_names = self
-            .visible_policy_names(session_tools_config.clone())
-            .await;
+        let visible_policy_names = self.visible_policy_names(session_tools_config.clone()).await;
         #[cfg(test)]
         test_hooks.pause_after_enable_snapshot().await;
-        self.policy_gateway
-            .lock()
-            .await
-            .enable_full_auto_permission(
-                &normalized_allowed_tools,
-                &visible_policy_names,
-                session_tools_config,
-            );
+        self.policy_gateway.lock().await.enable_full_auto_permission(
+            &normalized_allowed_tools,
+            &visible_policy_names,
+            session_tools_config,
+        );
     }
 
     pub async fn disable_full_auto_permission(&self) {
@@ -136,24 +131,15 @@ impl ToolRegistry {
             policy_gateway.full_auto_catalogue_lifecycle()
         };
         let _lifecycle_guard = lifecycle.lock().await;
-        self.policy_gateway
-            .lock()
-            .await
-            .disable_full_auto_permission();
+        self.policy_gateway.lock().await.disable_full_auto_permission();
     }
 
     pub async fn set_enforce_safe_mode_prompts(&self, enabled: bool) {
-        self.policy_gateway
-            .lock()
-            .await
-            .set_enforce_safe_mode_prompts(enabled);
+        self.policy_gateway.lock().await.set_enforce_safe_mode_prompts(enabled);
     }
 
     pub async fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
-        self.policy_gateway
-            .lock()
-            .await
-            .current_full_auto_allowlist()
+        self.policy_gateway.lock().await.current_full_auto_allowlist()
     }
 
     pub async fn is_allowed_in_full_auto(&self, tool_name: &str) -> bool {
@@ -173,34 +159,19 @@ impl ToolRegistry {
 
     pub async fn set_tool_policy(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let normalized_name = self.resolve_runtime_policy_name(tool_name);
-        self.policy_gateway
-            .lock()
-            .await
-            .set_tool_policy(&normalized_name, policy)
-            .await
+        self.policy_gateway.lock().await.set_tool_policy(&normalized_name, policy).await
     }
 
     pub async fn persist_approval_cache_key(&self, approval_key: &str) -> Result<()> {
-        self.policy_gateway
-            .lock()
-            .await
-            .add_approval_cache_key(approval_key)
-            .await
+        self.policy_gateway.lock().await.add_approval_cache_key(approval_key).await
     }
 
     pub async fn persist_approval_cache_prefix(&self, prefix_entry: &str) -> Result<()> {
-        self.policy_gateway
-            .lock()
-            .await
-            .add_approval_cache_prefix(prefix_entry)
-            .await
+        self.policy_gateway.lock().await.add_approval_cache_prefix(prefix_entry).await
     }
 
     pub async fn has_persisted_approval(&self, approval_key: &str) -> bool {
-        self.policy_gateway
-            .lock()
-            .await
-            .has_approval_cache_key(approval_key)
+        self.policy_gateway.lock().await.has_approval_cache_key(approval_key)
     }
 
     pub async fn find_persisted_shell_approval_prefix(
@@ -283,11 +254,7 @@ impl ToolRegistry {
         self.policy_gateway.lock().await.set_policy_manager(manager);
 
         let detect_window = super::DEFAULT_LOOP_DETECT_WINDOW
-            .max(
-                normalized_tools_config
-                    .max_repeated_tool_calls
-                    .saturating_mul(2),
-            )
+            .max(normalized_tools_config.max_repeated_tool_calls.saturating_mul(2))
             .max(1);
         self.execution_history.set_loop_detection_limits(
             detect_window,
@@ -325,9 +292,7 @@ impl ToolRegistry {
             && let Some((_, tool_name)) =
                 parse_canonical_mcp_tool_name(resolution.registration_name())
         {
-            return self
-                .evaluate_mcp_tool_policy(resolution.registration_name(), tool_name)
-                .await;
+            return self.evaluate_mcp_tool_policy(resolution.registration_name(), tool_name).await;
         }
 
         let (default_permission, safe_mode_prompt) = self
@@ -335,10 +300,7 @@ impl ToolRegistry {
             .get_registration(&resolved_name)
             .map(|registration| {
                 (
-                    registration
-                        .metadata()
-                        .default_permission()
-                        .unwrap_or(ToolPolicy::Prompt),
+                    registration.metadata().default_permission().unwrap_or(ToolPolicy::Prompt),
                     registration
                         .metadata()
                         .behavior()

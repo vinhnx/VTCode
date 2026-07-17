@@ -10,13 +10,11 @@ impl ToolRegistry {
 
     /// Get total tool calls made in current session (for observability).
     pub fn tool_call_count(&self) -> u64 {
-        self.tool_call_counter
-            .load(std::sync::atomic::Ordering::Relaxed)
+        self.tool_call_counter.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Get total PTY poll iterations (for CPU monitoring).
     pub fn pty_poll_count(&self) -> u64 {
-        self.pty_poll_counter
-            .load(std::sync::atomic::Ordering::Relaxed)
+        self.pty_poll_counter.load(std::sync::atomic::Ordering::Relaxed)
     }
 }

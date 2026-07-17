@@ -165,10 +165,7 @@ mod tests {
             r#"[tool: read_file] {"path":"docs/notes})].md","note":"escaped quote: \"}\""}"#;
         let parsed = parse_bracketed_tool_call(message).expect("should parse");
         assert_eq!(parsed.0, "read_file");
-        assert_eq!(
-            parsed.1["path"],
-            Value::String("docs/notes})].md".to_string())
-        );
+        assert_eq!(parsed.1["path"], Value::String("docs/notes})].md".to_string()));
     }
 
     #[test]
@@ -176,9 +173,6 @@ mod tests {
         let message = "[tool: read_file] (path='docs/notes})].md')";
         let parsed = parse_bracketed_tool_call(message).expect("should parse");
         assert_eq!(parsed.0, "read_file");
-        assert_eq!(
-            parsed.1["path"],
-            Value::String("docs/notes})].md".to_string())
-        );
+        assert_eq!(parsed.1["path"], Value::String("docs/notes})].md".to_string()));
     }
 }

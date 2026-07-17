@@ -211,11 +211,7 @@ impl NativeAgentDraft {
         insert_yaml_string(&mut frontmatter, "description", self.description.as_str());
         insert_yaml_string_list(&mut frontmatter, "tools", &self.tools);
         insert_yaml_string(&mut frontmatter, "model", self.model.as_str());
-        if let Some(color) = self
-            .color
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
+        if let Some(color) = self.color.as_deref().map(str::trim).filter(|value| !value.is_empty())
         {
             insert_yaml_string(&mut frontmatter, "color", color);
         }
@@ -265,10 +261,8 @@ pub(super) async fn handle_create_agent(
             return Ok(SlashCommandControl::Continue);
         };
         let Some(name) = name else {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Provide an agent name when inline UI is unavailable.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Provide an agent name when inline UI is unavailable.")?;
             return Ok(SlashCommandControl::Continue);
         };
         return super::legacy_create_agent_scaffold(&mut ctx, scope, name).await;
@@ -417,21 +411,19 @@ async fn edit_native_agent_draft(
                 }
             }
             "agents:author:model" => {
-                if let Some(SubagentModelSelection {
-                    model,
-                    reasoning_effort,
-                }) = pick_subagent_model(
-                    ctx.renderer,
-                    ctx.handle,
-                    ctx.session,
-                    ctx.ctrl_c_state,
-                    ctx.ctrl_c_notify,
-                    ctx.vt_cfg.as_ref(),
-                    Some(ctx.config.workspace.as_path()),
-                    draft.model.as_str(),
-                    draft.reasoning_effort.as_deref(),
-                )
-                .await?
+                if let Some(SubagentModelSelection { model, reasoning_effort }) =
+                    pick_subagent_model(
+                        ctx.renderer,
+                        ctx.handle,
+                        ctx.session,
+                        ctx.ctrl_c_state,
+                        ctx.ctrl_c_notify,
+                        ctx.vt_cfg.as_ref(),
+                        Some(ctx.config.workspace.as_path()),
+                        draft.model.as_str(),
+                        draft.reasoning_effort.as_deref(),
+                    )
+                    .await?
                 {
                     draft.model = model;
                     draft.reasoning_effort = reasoning_effort;
@@ -517,12 +509,7 @@ fn show_authoring_menu(
             Some("Required"),
             "scope",
         ));
-        items.push(author_action_item(
-            "Name",
-            draft.name.as_str(),
-            Some("Required"),
-            "name",
-        ));
+        items.push(author_action_item("Name", draft.name.as_str(), Some("Required"), "name"));
     }
     items.push(author_action_item(
         "Description",
@@ -729,9 +716,8 @@ async fn prompt_background_mode(
             search_value: Some("background enabled".to_string()),
         },
     ];
-    let selected = Some(InlineListSelection::ConfigAction(format!(
-        "agents:author:background:{current}"
-    )));
+    let selected =
+        Some(InlineListSelection::ConfigAction(format!("agents:author:background:{current}")));
     ctx.handle.show_list_modal(
         "Background mode".to_string(),
         vec!["Choose whether this agent should default to background execution.".to_string()],
@@ -776,9 +762,7 @@ async fn prompt_memory_scope(
             Some(SubagentMemoryScope::User),
         ),
     ];
-    let selected = Some(InlineListSelection::ConfigAction(memory_action_key(
-        current,
-    )));
+    let selected = Some(InlineListSelection::ConfigAction(memory_action_key(current)));
     ctx.handle.show_list_modal(
         "Memory scope".to_string(),
         vec!["Choose the persistent memory scope for this agent.".to_string()],
@@ -848,9 +832,7 @@ async fn prompt_text_value(
                 subtitle: Some("Leave this field unchanged.".to_string()),
                 badge: Some("Current".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    KEEP_CURRENT_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(KEEP_CURRENT_ACTION.to_string())),
                 search_value: Some(format!("keep {current_trimmed}")),
             });
         }
@@ -860,9 +842,7 @@ async fn prompt_text_value(
                 subtitle: Some("Remove the current override.".to_string()),
                 badge: Some("Unset".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    CLEAR_VALUE_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(CLEAR_VALUE_ACTION.to_string())),
                 search_value: Some("clear unset remove".to_string()),
             });
         }
@@ -916,9 +896,7 @@ async fn prompt_text_value(
             InlineListSelection::ConfigAction(action) if action == CLEAR_VALUE_ACTION => {
                 return Ok(Some(PromptTextResult::Clear));
             }
-            InlineListSelection::RequestUserInputAnswer {
-                other, selected, ..
-            } => {
+            InlineListSelection::RequestUserInputAnswer { other, selected, .. } => {
                 let value = other
                     .or_else(|| selected.first().cloned())
                     .unwrap_or_default()
@@ -972,9 +950,7 @@ async fn edit_tools_checklist(
             ),
             badge: Some("Custom".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                TOOL_ADD_CUSTOM_ACTION.to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction(TOOL_ADD_CUSTOM_ACTION.to_string())),
             search_value: Some("add custom tool id".to_string()),
         });
         items.push(InlineListItem {
@@ -982,9 +958,7 @@ async fn edit_tools_checklist(
             subtitle: Some("Use the currently checked tool list.".to_string()),
             badge: Some("Action".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                TOOL_SAVE_ACTION.to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction(TOOL_SAVE_ACTION.to_string())),
             search_value: Some("save tools".to_string()),
         });
         items.push(InlineListItem {
@@ -992,9 +966,7 @@ async fn edit_tools_checklist(
             subtitle: Some("Keep the previous tool selection.".to_string()),
             badge: Some("Cancel".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                TOOL_CANCEL_ACTION.to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction(TOOL_CANCEL_ACTION.to_string())),
             search_value: Some("cancel".to_string()),
         });
 
@@ -1058,31 +1030,19 @@ fn tool_catalog(
     let extra_tools = initial_tools
         .iter()
         .chain(selected.iter())
-        .filter(|tool_id| {
-            TOOL_OPTIONS
-                .iter()
-                .all(|entry| entry.id != tool_id.as_str())
-        })
+        .filter(|tool_id| TOOL_OPTIONS.iter().all(|entry| entry.id != tool_id.as_str()))
         .cloned()
         .collect::<BTreeSet<_>>();
 
     let mut catalog = TOOL_OPTIONS
         .iter()
-        .map(|entry| {
-            (
-                entry.id.to_string(),
-                entry.description.to_string(),
-                entry.badge.to_string(),
-            )
-        })
+        .map(|entry| (entry.id.to_string(), entry.description.to_string(), entry.badge.to_string()))
         .collect::<Vec<_>>();
-    catalog.extend(extra_tools.into_iter().map(|tool_id| {
-        (
-            tool_id,
-            "Existing custom tool id.".to_string(),
-            "Custom".to_string(),
-        )
-    }));
+    catalog.extend(
+        extra_tools
+            .into_iter()
+            .map(|tool_id| (tool_id, "Existing custom tool id.".to_string(), "Custom".to_string())),
+    );
     catalog
 }
 
@@ -1142,9 +1102,7 @@ async fn select_native_agent_name(ctx: &mut SlashCommandContext<'_>) -> Result<O
     let InlineListSelection::ConfigAction(action) = selection else {
         return Ok(None);
     };
-    Ok(action
-        .strip_prefix(AUTHOR_ACTION_PREFIX)
-        .map(ToString::to_string))
+    Ok(action.strip_prefix(AUTHOR_ACTION_PREFIX).map(ToString::to_string))
 }
 
 async fn resolve_named_custom_agent(
@@ -1164,10 +1122,8 @@ async fn resolve_named_custom_agent(
 }
 
 fn is_native_vtcode_spec(spec: &SubagentSpec) -> bool {
-    matches!(
-        spec.source,
-        SubagentSource::ProjectVtcode | SubagentSource::UserVtcode
-    ) && spec.file_path.is_some()
+    matches!(spec.source, SubagentSource::ProjectVtcode | SubagentSource::UserVtcode)
+        && spec.file_path.is_some()
 }
 
 fn scope_from_source(source: &SubagentSource) -> Result<AgentDefinitionScope> {
@@ -1213,12 +1169,7 @@ fn split_frontmatter(contents: &str) -> Option<(&str, &str)> {
 }
 
 fn default_agent_tools() -> Vec<String> {
-    ordered_tools(
-        super::DEFAULT_AGENT_TOOL_IDS
-            .iter()
-            .map(|tool| (*tool).to_string())
-            .collect(),
-    )
+    ordered_tools(super::DEFAULT_AGENT_TOOL_IDS.iter().map(|tool| (*tool).to_string()).collect())
 }
 
 fn ordered_tools(tools: Vec<String>) -> Vec<String> {
@@ -1234,14 +1185,8 @@ fn ordered_tools(tools: Vec<String>) -> Vec<String> {
         .filter(|tool_id| seen.insert(tool_id.to_ascii_lowercase()))
         .collect::<Vec<_>>();
     deduped.sort_by(|left, right| {
-        let left_key = known_order
-            .get(left.as_str())
-            .copied()
-            .unwrap_or(usize::MAX);
-        let right_key = known_order
-            .get(right.as_str())
-            .copied()
-            .unwrap_or(usize::MAX);
+        let left_key = known_order.get(left.as_str()).copied().unwrap_or(usize::MAX);
+        let right_key = known_order.get(right.as_str()).copied().unwrap_or(usize::MAX);
         left_key
             .cmp(&right_key)
             .then_with(|| left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()))
@@ -1250,9 +1195,7 @@ fn ordered_tools(tools: Vec<String>) -> Vec<String> {
 }
 
 fn workspace_agent_path(workspace_root: &Path, name: &str) -> PathBuf {
-    workspace_root
-        .join(".vtcode/agents")
-        .join(format!("{name}.md"))
+    workspace_root.join(".vtcode/agents").join(format!("{name}.md"))
 }
 
 fn user_agent_path(name: &str) -> Result<PathBuf> {
@@ -1271,21 +1214,13 @@ fn insert_yaml_bool(mapping: &mut YamlMapping, key: &str, value: bool) {
 }
 
 fn insert_yaml_u64(mapping: &mut YamlMapping, key: &str, value: u64) {
-    mapping.insert(
-        key.to_string(),
-        YamlValue::Number(serde_json::Number::from(value)),
-    );
+    mapping.insert(key.to_string(), YamlValue::Number(serde_json::Number::from(value)));
 }
 
 fn insert_yaml_string_list(mapping: &mut YamlMapping, key: &str, values: &[String]) {
     mapping.insert(
         key.to_string(),
-        YamlValue::Array(
-            values
-                .iter()
-                .map(|value| YamlValue::String(value.clone()))
-                .collect(),
-        ),
+        YamlValue::Array(values.iter().map(|value| YamlValue::String(value.clone())).collect()),
     );
 }
 
@@ -1326,11 +1261,7 @@ fn permission_default_label(default: PermissionDefault) -> &'static str {
 }
 
 fn availability_summary(draft: &NativeAgentDraft) -> &'static str {
-    match draft
-        .extra_frontmatter
-        .get("mode")
-        .and_then(YamlValue::as_str)
-    {
+    match draft.extra_frontmatter.get("mode").and_then(YamlValue::as_str) {
         Some("primary") => "primary",
         Some("all") => "primary and subagent",
         _ => "subagent",
@@ -1355,9 +1286,7 @@ fn memory_item(title: &str, subtitle: &str, scope: Option<SubagentMemoryScope>) 
         subtitle: Some(subtitle.to_string()),
         badge: None,
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(memory_action_key(
-            scope.as_ref(),
-        ))),
+        selection: Some(InlineListSelection::ConfigAction(memory_action_key(scope.as_ref()))),
         search_value: Some(format!("{title} {subtitle}")),
     }
 }
@@ -1380,10 +1309,7 @@ fn memory_scope_from_action(action: &str) -> Option<Option<SubagentMemoryScope>>
 }
 
 fn normalized_optional_string(value: Option<&str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
+    value.map(str::trim).filter(|value| !value.is_empty()).map(ToString::to_string)
 }
 
 fn author_action_item(
@@ -1422,9 +1348,7 @@ fn model_summary(draft: &NativeAgentDraft) -> String {
 }
 
 fn max_turns_summary(max_turns: Option<usize>) -> String {
-    max_turns
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| "unset".to_string())
+    max_turns.map(|value| value.to_string()).unwrap_or_else(|| "unset".to_string())
 }
 
 #[cfg(test)]
@@ -1488,14 +1412,8 @@ Review the target changes."#,
         fs::write(&path, rendered).expect("write rendered file");
         let rendered_spec =
             load_subagent_from_file(&path, SubagentSource::ProjectVtcode).expect("reload rendered");
-        assert_eq!(
-            rendered_spec.permissions.allow,
-            vec!["code_search".to_string()]
-        );
-        assert_eq!(
-            rendered_spec.permissions.ask,
-            vec!["exec_command".to_string()]
-        );
+        assert_eq!(rendered_spec.permissions.allow, vec!["code_search".to_string()]);
+        assert_eq!(rendered_spec.permissions.ask, vec!["exec_command".to_string()]);
     }
 
     #[test]
@@ -1610,9 +1528,7 @@ Review the target changes."#,
         let rendered = draft.render_markdown().expect("render");
         let model_index = rendered.find("model: inherit").expect("model key");
         let color_index = rendered.find("color: teal").expect("color key");
-        let reasoning_index = rendered
-            .find("reasoning_effort: high")
-            .expect("reasoning key");
+        let reasoning_index = rendered.find("reasoning_effort: high").expect("reasoning key");
         let permissions_index = rendered.find("permissions:").expect("permission key");
         let permissions_default_index = rendered.find("default: deny").expect("permission default");
         let background_index = rendered.find("background: true").expect("background key");
@@ -1699,10 +1615,7 @@ Review the target changes."#,
         };
         assert!(!is_native_vtcode_spec(&imported_codex));
 
-        let missing_path = SubagentSpec {
-            file_path: None,
-            ..base_spec
-        };
+        let missing_path = SubagentSpec { file_path: None, ..base_spec };
         assert!(!is_native_vtcode_spec(&missing_path));
     }
 }

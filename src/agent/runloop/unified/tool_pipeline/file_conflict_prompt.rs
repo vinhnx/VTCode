@@ -126,9 +126,7 @@ where
             &tokens.state,
             &tokens.notify,
             &conflict,
-            vt_cfg
-                .map(|cfg| cfg.security.hitl_notification_bell)
-                .unwrap_or(true),
+            vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
         )
         .await?
         {
@@ -213,10 +211,8 @@ async fn hydrate_pending_conflict(
     registry: &ToolRegistry,
     conflict: PendingFileConflictStatus,
 ) -> Result<PendingFileConflict> {
-    let absolute_path = registry
-        .file_ops_tool()
-        .normalize_user_path(&conflict.display_path)
-        .await?;
+    let absolute_path =
+        registry.file_ops_tool().normalize_user_path(&conflict.display_path).await?;
 
     Ok(PendingFileConflict {
         output: conflict.output,
@@ -436,11 +432,8 @@ mod tests {
         }
     }
 
-    fn test_session() -> (
-        TestUiSession,
-        UnboundedSender<InlineEvent>,
-        UnboundedReceiver<InlineCommand>,
-    ) {
+    fn test_session()
+    -> (TestUiSession, UnboundedSender<InlineEvent>, UnboundedReceiver<InlineCommand>) {
         let (command_tx, command_rx) = unbounded_channel();
         let (event_tx, event_rx) = unbounded_channel();
         (
@@ -555,11 +548,7 @@ mod tests {
         .await?;
 
         match status {
-            ToolExecutionStatus::Success {
-                output,
-                command_success,
-                ..
-            } => {
+            ToolExecutionStatus::Success { output, command_success, .. } => {
                 assert!(!command_success);
                 assert_eq!(output["resolution"], json!("aborted"));
             }

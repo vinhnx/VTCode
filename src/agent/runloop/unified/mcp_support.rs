@@ -39,25 +39,17 @@ pub(crate) async fn display_mcp_config_summary(
         )?;
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "  max concurrent connections: {}",
-                mcp_cfg.max_concurrent_connections
-            ),
+            &format!("  max concurrent connections: {}", mcp_cfg.max_concurrent_connections),
         )?;
         renderer.line(
             MessageStyle::Info,
             &format!("  request timeout: {}s", mcp_cfg.request_timeout_seconds),
         )?;
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  retry attempts: {}", mcp_cfg.retry_attempts),
-        )?;
+        renderer
+            .line(MessageStyle::Info, &format!("  retry attempts: {}", mcp_cfg.retry_attempts))?;
 
         if let Some(seconds) = mcp_cfg.startup_timeout_seconds {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  startup timeout: {seconds}s"),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("  startup timeout: {seconds}s"))?;
         }
 
         if let Some(seconds) = mcp_cfg.tool_timeout_seconds {
@@ -68,10 +60,7 @@ pub(crate) async fn display_mcp_config_summary(
             renderer.line(MessageStyle::Info, "  MCP server exposure: enabled")?;
             renderer.line(
                 MessageStyle::Info,
-                &format!(
-                    "    bind: {}:{}",
-                    mcp_cfg.server.bind_address, mcp_cfg.server.port
-                ),
+                &format!("    bind: {}:{}", mcp_cfg.server.bind_address, mcp_cfg.server.port),
             )?;
         } else {
             renderer.line(MessageStyle::Info, "  MCP server exposure: disabled")?;
@@ -111,10 +100,8 @@ pub(crate) async fn display_mcp_config_summary(
             Some(false) => {
                 renderer.line(MessageStyle::Info, "  MCP disabled via runtime defaults")?
             }
-            None => renderer.line(
-                MessageStyle::Info,
-                "  No vtcode.toml found; using default MCP settings",
-            )?,
+            None => renderer
+                .line(MessageStyle::Info, "  No vtcode.toml found; using default MCP settings")?,
         }
     }
 
@@ -142,10 +129,7 @@ pub(crate) async fn render_mcp_config_edit_guidance(
     let target_path = config_path.unwrap_or_else(|| workspace_path.join("vtcode.toml"));
     let exists = fs::try_exists(&target_path).await.unwrap_or(false);
 
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  File: {}", target_path.display()),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  File: {}", target_path.display()))?;
 
     if exists {
         renderer.line(
@@ -159,10 +143,8 @@ pub(crate) async fn render_mcp_config_edit_guidance(
         )?;
     }
 
-    renderer.line(
-        MessageStyle::Info,
-        "  Reload providers with /mcp refresh after saving changes.",
-    )?;
+    renderer
+        .line(MessageStyle::Info, "  Reload providers with /mcp refresh after saving changes.")?;
 
     Ok(())
 }
@@ -183,52 +165,32 @@ pub(crate) async fn repair_mcp_runtime(
                     MessageStyle::Error,
                     &format!("  Configuration validation failed: {err}"),
                 )?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "  Update vtcode.toml and rerun /mcp repair.",
-                )?;
+                renderer.line(MessageStyle::Info, "  Update vtcode.toml and rerun /mcp repair.")?;
                 return Ok(false);
             }
         }
     } else {
-        renderer.line(
-            MessageStyle::Info,
-            "  vtcode.toml not detected; using default MCP settings.",
-        )?;
+        renderer
+            .line(MessageStyle::Info, "  vtcode.toml not detected; using default MCP settings.")?;
     }
 
     let Some(manager) = async_mcp_manager else {
-        renderer.line(
-            MessageStyle::Info,
-            "  MCP runtime is not active in this session.",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Enable MCP in vtcode.toml and restart the agent.",
-        )?;
+        renderer.line(MessageStyle::Info, "  MCP runtime is not active in this session.")?;
+        renderer.line(MessageStyle::Info, "  Enable MCP in vtcode.toml and restart the agent.")?;
         return Ok(false);
     };
 
     if let McpInitStatus::Disabled = manager.get_status().await {
-        renderer.line(
-            MessageStyle::Info,
-            "  MCP is disabled; update vtcode.toml to enable it.",
-        )?;
+        renderer.line(MessageStyle::Info, "  MCP is disabled; update vtcode.toml to enable it.")?;
         return Ok(false);
     }
 
-    renderer.line(
-        MessageStyle::Info,
-        "  Shutting down existing MCP connections…",
-    )?;
+    renderer.line(MessageStyle::Info, "  Shutting down existing MCP connections…")?;
     manager.shutdown().await?;
 
     renderer.line(MessageStyle::Info, "  Restarting MCP manager…")?;
     if let Err(err) = manager.start_initialization() {
-        renderer.line(
-            MessageStyle::Error,
-            &format!("  Failed to restart MCP manager: {err}"),
-        )?;
+        renderer.line(MessageStyle::Error, &format!("  Failed to restart MCP manager: {err}"))?;
         return Ok(false);
     }
 
@@ -245,10 +207,7 @@ pub(crate) async fn repair_mcp_runtime(
                 break;
             }
             McpInitStatus::Error { message } => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("  MCP restart error: {message}"),
-                )?;
+                renderer.line(MessageStyle::Error, &format!("  MCP restart error: {message}"))?;
                 return Ok(false);
             }
             McpInitStatus::Disabled => {
@@ -276,10 +235,8 @@ pub(crate) async fn repair_mcp_runtime(
         refreshed = refresh_mcp_tools(renderer, tool_registry).await?;
     }
 
-    renderer.line(
-        MessageStyle::Info,
-        "  Repair complete. Use /mcp diagnose for additional checks.",
-    )?;
+    renderer
+        .line(MessageStyle::Info, "  Repair complete. Use /mcp diagnose for additional checks.")?;
 
     Ok(refreshed)
 }
@@ -297,16 +254,12 @@ pub(crate) async fn diagnose_mcp(
     if let Some(cfg) = vt_cfg {
         match validate_mcp_config(&cfg.mcp) {
             Ok(_) => renderer.line(MessageStyle::Info, "  Configuration validation: ok")?,
-            Err(err) => renderer.line(
-                MessageStyle::Error,
-                &format!("  Configuration validation failed: {err}"),
-            )?,
+            Err(err) => renderer
+                .line(MessageStyle::Error, &format!("  Configuration validation failed: {err}"))?,
         }
     } else {
-        renderer.line(
-            MessageStyle::Info,
-            "  vtcode.toml not detected; using default MCP settings.",
-        )?;
+        renderer
+            .line(MessageStyle::Info, "  vtcode.toml not detected; using default MCP settings.")?;
     }
 
     display_mcp_status(
@@ -346,14 +299,8 @@ pub(crate) fn render_mcp_login_guidance(
         MessageStyle::Status,
         &format!("OAuth {action} flow requested for provider '{trimmed}'."),
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "VT Code delegates OAuth to the CLI today.",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Run: vtcode mcp {action} {trimmed}"),
-    )?;
+    renderer.line(MessageStyle::Info, "VT Code delegates OAuth to the CLI today.")?;
+    renderer.line(MessageStyle::Info, &format!("Run: vtcode mcp {action} {trimmed}"))?;
     renderer.line(
         MessageStyle::Info,
         "This command will walk you through the authentication flow in your shell.",

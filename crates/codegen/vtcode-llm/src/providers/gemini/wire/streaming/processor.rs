@@ -123,10 +123,8 @@ impl StreamingProcessor {
         // Get the response stream
         let mut stream = response.bytes_stream();
 
-        let mut accumulated_response = StreamingResponse {
-            candidates: Vec::new(),
-            usage_metadata: None,
-        };
+        let mut accumulated_response =
+            StreamingResponse { candidates: Vec::new(), usage_metadata: None };
 
         let mut _has_valid_content = false;
         // Optimize: Pre-allocate buffer with typical SSE line size to reduce reallocations
@@ -497,10 +495,7 @@ impl StreamingProcessor {
         if let Some(last_candidate) = accumulated_response.candidates.last_mut() {
             Self::merge_parts(
                 &mut last_candidate.content.parts,
-                vec![Part::Text {
-                    text: text.to_owned(),
-                    thought_signature: None,
-                }],
+                vec![Part::Text { text: text.to_owned(), thought_signature: None }],
             );
             return;
         }
@@ -510,10 +505,7 @@ impl StreamingProcessor {
         accumulated_response.candidates.push(StreamingCandidate {
             content: Content {
                 role: "model".to_owned(),
-                parts: vec![Part::Text {
-                    text: text.to_owned(),
-                    thought_signature: None,
-                }],
+                parts: vec![Part::Text { text: text.to_owned(), thought_signature: None }],
             },
             finish_reason: None,
             index: Some(index),
@@ -594,10 +586,8 @@ impl StreamingProcessor {
                         .unwrap_or("Gemini streaming error")
                         .to_owned();
                     #[allow(clippy::cast_sign_loss)]
-                    let code = error_value
-                        .get("code")
-                        .and_then(Value::as_i64)
-                        .unwrap_or(500) as u16;
+                    let code =
+                        error_value.get("code").and_then(Value::as_i64).unwrap_or(500) as u16;
                     return Err(StreamingError::ApiError {
                         status_code: code,
                         message,
@@ -646,9 +636,8 @@ impl StreamingProcessor {
                     }
                 }
 
-                if let Some(text_value) = map
-                    .remove("text")
-                    .and_then(|v| v.as_str().map(|s| s.to_owned()))
+                if let Some(text_value) =
+                    map.remove("text").and_then(|v| v.as_str().map(|s| s.to_owned()))
                     && !text_value.trim().is_empty()
                 {
                     on_chunk(&text_value)?;
@@ -676,9 +665,7 @@ impl StreamingProcessor {
         accumulated_response: &mut StreamingResponse,
         mut candidate: StreamingCandidate,
     ) {
-        let index = candidate
-            .index
-            .unwrap_or(accumulated_response.candidates.len());
+        let index = candidate.index.unwrap_or(accumulated_response.candidates.len());
 
         if let Some(existing) = accumulated_response
             .candidates
@@ -709,14 +696,8 @@ impl StreamingProcessor {
         for part in source_parts {
             match (target.last_mut(), &part) {
                 (
-                    Some(Part::Text {
-                        text: existing,
-                        thought_signature: existing_sig,
-                    }),
-                    Part::Text {
-                        text: new_text,
-                        thought_signature: new_sig,
-                    },
+                    Some(Part::Text { text: existing, thought_signature: existing_sig }),
+                    Part::Text { text: new_text, thought_signature: new_sig },
                 ) => {
                     existing.push_str(new_text);
                     // Preserve thought signature if it arrives in a later chunk
@@ -868,10 +849,7 @@ mod tests {
     #[test]
     fn test_handles_back_to_back_data_lines_without_blank_lines() {
         let mut processor = StreamingProcessor::new();
-        let mut accumulated = StreamingResponse {
-            candidates: Vec::new(),
-            usage_metadata: None,
-        };
+        let mut accumulated = StreamingResponse { candidates: Vec::new(), usage_metadata: None };
         let mut received_chunks: Vec<String> = Vec::new();
         let mut buffer = String::from(
             "data: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]}}]}\n",

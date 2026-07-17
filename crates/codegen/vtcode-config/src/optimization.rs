@@ -391,10 +391,7 @@ impl OptimizationConfig {
     /// Get optimized configuration for development
     pub fn development() -> Self {
         Self {
-            memory_pool: MemoryPoolConfig {
-                enabled: true,
-                ..Default::default()
-            },
+            memory_pool: MemoryPoolConfig { enabled: true, ..Default::default() },
             tool_registry: ToolRegistryConfig {
                 use_optimized_registry: true,
                 max_concurrent_tools: 2,

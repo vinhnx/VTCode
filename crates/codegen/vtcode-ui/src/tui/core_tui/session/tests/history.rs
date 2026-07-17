@@ -82,23 +82,13 @@ fn history_picker_restores_base_input_and_draft_on_cancel() {
 
     assert!(session.history_picker_state.active);
     assert!(!session.core.input_enabled());
-    assert!(
-        !session
-            .core
-            .build_input_widget_data(VIEW_WIDTH, 1)
-            .cursor_should_be_visible
-    );
+    assert!(!session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
 
     let _ = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     assert!(!session.history_picker_state.active);
     assert!(session.core.input_enabled());
-    assert!(
-        session
-            .core
-            .build_input_widget_data(VIEW_WIDTH, 1)
-            .cursor_should_be_visible
-    );
+    assert!(session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
     assert_eq!(session.core.input_manager.content(), "draft command");
 }
 

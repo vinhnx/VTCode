@@ -97,21 +97,14 @@ impl ProgressMonitor {
     /// Create an in-memory monitor (no persistence) for `session_id`.
     #[must_use]
     pub fn new(session_id: &str, goal: &str) -> Self {
-        Self::with_sink(
-            ProgressLedger::new(session_id, goal),
-            Box::new(NullProgressSink),
-        )
+        Self::with_sink(ProgressLedger::new(session_id, goal), Box::new(NullProgressSink))
     }
 
     /// Create a monitor from an explicit ledger and sink (primary constructor
     /// for testing and custom persistence backends).
     #[must_use]
     pub fn with_sink(ledger: ProgressLedger, sink: Box<dyn ProgressLedgerSink>) -> Self {
-        Self {
-            ledger,
-            sink,
-            consecutive_stalls: 0,
-        }
+        Self { ledger, sink, consecutive_stalls: 0 }
     }
 
     /// Create a monitor bound to a workspace, loading any previously persisted

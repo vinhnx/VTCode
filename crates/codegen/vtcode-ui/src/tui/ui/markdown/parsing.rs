@@ -124,9 +124,7 @@ impl MarkdownContext<'_> {
     }
 
     pub(crate) fn active_link_target(&self) -> Option<String> {
-        self.link_state
-            .as_ref()
-            .map(|link| link.destination.clone())
+        self.link_state.as_ref().map(|link| link.destination.clone())
     }
 }
 
@@ -142,15 +140,9 @@ pub(crate) fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
         Tag::List(start) => {
             let depth = ctx.list_stack.len();
             let kind = start
-                .map(|v| ListKind::Ordered {
-                    next: max(1, v as usize),
-                })
+                .map(|v| ListKind::Ordered { next: max(1, v as usize) })
                 .unwrap_or(ListKind::Unordered);
-            ctx.list_stack.push(ListState {
-                kind,
-                depth,
-                continuation: String::new(),
-            });
+            ctx.list_stack.push(ListState { kind, depth, continuation: String::new() });
             ctx.refresh_list_continuation_prefix();
         }
         Tag::Item => {
@@ -206,10 +198,7 @@ pub(crate) fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
                     .map(|lang| lang.to_string()),
                 CodeBlockKind::Indented => None,
             };
-            *ctx.code_block = Some(CodeBlockState {
-                language,
-                buffer: String::new(),
-            });
+            *ctx.code_block = Some(CodeBlockState { language, buffer: String::new() });
         }
         Tag::Table(_) => {
             ctx.flush_paragraph();
@@ -469,10 +458,7 @@ fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
         let Some(ch) = token[start..end].chars().next_back() else {
             break;
         };
-        if matches!(
-            ch,
-            ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?'
-        ) {
+        if matches!(ch, ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?') {
             // Preserve trailing ')' when it looks like a location suffix e.g. file.rs(10,5)
             if ch == ')' && location_paren_suffix_start(&token[start..end]).is_some() {
                 break;
@@ -534,9 +520,7 @@ fn looks_like_markdown_path(token: &str) -> bool {
         && ext.chars().all(|c| c.is_ascii_alphanumeric())
     {
         let ext_lower = ext.to_ascii_lowercase();
-        return COMMON_FILE_EXTENSIONS
-            .iter()
-            .any(|candidate| *candidate == ext_lower);
+        return COMMON_FILE_EXTENSIONS.iter().any(|candidate| *candidate == ext_lower);
     }
 
     false
@@ -565,15 +549,13 @@ fn append_text_segment(
     }
     ctx.ensure_prefix();
     if let Some(target) = link_target {
-        ctx.current_line
-            .push_segment_with_link(style, segment, Some(target));
+        ctx.current_line.push_segment_with_link(style, segment, Some(target));
         return;
     }
 
     let matches = detect_file_link_matches(segment);
     if matches.is_empty() {
-        ctx.current_line
-            .push_segment_with_link(style, segment, None);
+        ctx.current_line.push_segment_with_link(style, segment, None);
         return;
     }
 
@@ -597,8 +579,7 @@ fn append_text_segment(
         cursor = link_match.end;
     }
     if cursor < segment.len() {
-        ctx.current_line
-            .push_segment_with_link(style, &segment[cursor..], None);
+        ctx.current_line.push_segment_with_link(style, &segment[cursor..], None);
     }
 }
 
@@ -626,22 +607,14 @@ pub(crate) fn flush_current_line(
 }
 
 pub(crate) fn push_blank_line(lines: &mut Vec<MarkdownLine>) {
-    if lines
-        .last()
-        .map(|line| line.segments.is_empty())
-        .unwrap_or(false)
-    {
+    if lines.last().map(|line| line.segments.is_empty()).unwrap_or(false) {
         return;
     }
     lines.push(MarkdownLine::default());
 }
 
 pub(crate) fn trim_trailing_blank_lines(lines: &mut Vec<MarkdownLine>) {
-    while lines
-        .last()
-        .map(|line| line.segments.is_empty())
-        .unwrap_or(false)
-    {
+    while lines.last().map(|line| line.segments.is_empty()).unwrap_or(false) {
         lines.pop();
     }
 }
@@ -741,11 +714,9 @@ fn should_apply_markdown_accent(base_style: Style, theme_styles: &ThemeStyles) -
 
 fn choose_markdown_accent(base_style: Style, candidates: &[Style]) -> Option<anstyle::Color> {
     let base_fg = base_style.get_fg_color();
-    candidates.iter().find_map(|candidate| {
-        candidate
-            .get_fg_color()
-            .filter(|color| base_fg != Some(*color))
-    })
+    candidates
+        .iter()
+        .find_map(|candidate| candidate.get_fg_color().filter(|color| base_fg != Some(*color)))
 }
 
 fn rebuild_list_continuation_prefix(

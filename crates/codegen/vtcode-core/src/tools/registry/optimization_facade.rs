@@ -9,9 +9,7 @@ use super::ToolRegistry;
 impl ToolRegistry {
     /// Check if optimizations are enabled.
     pub fn has_optimizations_enabled(&self) -> bool {
-        self.optimization_config
-            .tool_registry
-            .use_optimized_registry
+        self.optimization_config.tool_registry.use_optimized_registry
             || self.optimization_config.memory_pool.enabled
     }
 
@@ -27,11 +25,7 @@ impl ToolRegistry {
 
     /// Clear the hot tool cache (useful for testing or memory management).
     pub fn clear_hot_cache(&self) {
-        if self
-            .optimization_config
-            .tool_registry
-            .use_optimized_registry
-        {
+        if self.optimization_config.tool_registry.use_optimized_registry {
             self.hot_tool_cache.write().clear();
         }
     }
@@ -47,11 +41,7 @@ impl ToolRegistry {
         self.optimization_config = config;
 
         // Resize hot cache if needed
-        if self
-            .optimization_config
-            .tool_registry
-            .use_optimized_registry
-        {
+        if self.optimization_config.tool_registry.use_optimized_registry {
             let new_size = self.optimization_config.tool_registry.hot_cache_size;
             if let Some(new_cache_size) = std::num::NonZeroUsize::new(new_size) {
                 *self.hot_tool_cache.write() = lru::LruCache::new(new_cache_size);

@@ -8,7 +8,7 @@ This document summarizes the implementation of the Native Plugin System for VT C
 
 ### 1. Core Infrastructure
 
-#### New Module: `vtcode-core/src/skills/native_plugin.rs`
+#### New Module: `crates/codegen/vtcode-core/src/skills/native_plugin.rs`
 
 **Key Components:**
 
@@ -317,7 +317,7 @@ cargo check
 
 ### New Files
 
-1. `vtcode-core/src/skills/native_plugin.rs` - Core implementation
+1. `crates/codegen/vtcode-core/src/skills/native_plugin.rs` - Core implementation
 2. `docs/skills/NATIVE_PLUGIN_GUIDE.md` - User documentation
 3. `examples/plugins/hello-world/Cargo.toml` - Example config
 4. `examples/plugins/hello-world/src/lib.rs` - Example implementation
@@ -329,8 +329,8 @@ cargo check
 
 1. `Cargo.toml` - Added libloading dependency
 2. `vtcode-core/Cargo.toml` - Added libloading dependency
-3. `vtcode-core/src/skills/mod.rs` - Exported native_plugin module
-4. `vtcode-core/src/skills/loader.rs` - Plugin discovery and loading
+3. `crates/codegen/vtcode-core/src/skills/mod.rs` - Exported native_plugin module
+4. `crates/codegen/vtcode-core/src/skills/loader.rs` - Plugin discovery and loading
 
 ## Architecture Decisions
 

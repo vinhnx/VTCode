@@ -36,17 +36,12 @@ pub(crate) async fn prepare_session_bootstrap(
     vt_cfg: Option<&VTCodeConfig>,
     mcp_error: Option<String>,
 ) -> SessionBootstrap {
-    let onboarding_cfg = vt_cfg
-        .map(|cfg| cfg.agent.onboarding.clone())
-        .unwrap_or_default();
-    let todo_planning_enabled = vt_cfg
-        .map(|cfg| cfg.agent.todo_planning_mode)
-        .unwrap_or(true);
+    let onboarding_cfg = vt_cfg.map(|cfg| cfg.agent.onboarding.clone()).unwrap_or_default();
+    let todo_planning_enabled = vt_cfg.map(|cfg| cfg.agent.todo_planning_mode).unwrap_or(true);
 
     let language_summary = summarize_workspace_languages(&runtime_cfg.workspace);
-    let extra_instruction_files = vt_cfg
-        .map(|cfg| cfg.agent.instruction_files.clone())
-        .unwrap_or_default();
+    let extra_instruction_files =
+        vt_cfg.map(|cfg| cfg.agent.instruction_files.clone()).unwrap_or_default();
     let instruction_budget = vt_cfg
         .map(|cfg| cfg.agent.instruction_max_bytes)
         .unwrap_or(prompt_budget_constants::DEFAULT_MAX_BYTES);
@@ -181,10 +176,7 @@ fn terminal_info_highlight() -> InlineHeaderHighlight {
 
             ("Terminal Environment".to_string(), lines)
         }
-        _ => (
-            "Terminal Environment".to_string(),
-            vec!["Detected: Generic / Unknown".to_string()],
-        ),
+        _ => ("Terminal Environment".to_string(), vec!["Detected: Generic / Unknown".to_string()]),
     };
 
     InlineHeaderHighlight { title, lines }
@@ -198,10 +190,7 @@ fn usage_tips_highlight(tips: &[String]) -> Option<InlineHeaderHighlight> {
 
     let lines = entries.into_iter().map(|tip| format!("- {tip}")).collect();
 
-    Some(InlineHeaderHighlight {
-        title: "Usage Tips".to_string(),
-        lines,
-    })
+    Some(InlineHeaderHighlight { title: "Usage Tips".to_string(), lines })
 }
 
 fn recommended_actions_highlight(actions: &[String]) -> Option<InlineHeaderHighlight> {
@@ -210,15 +199,9 @@ fn recommended_actions_highlight(actions: &[String]) -> Option<InlineHeaderHighl
         return None;
     }
 
-    let lines = entries
-        .into_iter()
-        .map(|action| format!("- {action}"))
-        .collect();
+    let lines = entries.into_iter().map(|action| format!("- {action}")).collect();
 
-    Some(InlineHeaderHighlight {
-        title: "Suggested Next Actions".to_string(),
-        lines,
-    })
+    Some(InlineHeaderHighlight { title: "Suggested Next Actions".to_string(), lines })
 }
 
 fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
@@ -276,10 +259,7 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
         lines.push(format!("{indent}- {segment}"));
     }
 
-    Some(InlineHeaderHighlight {
-        title: String::new(),
-        lines,
-    })
+    Some(InlineHeaderHighlight { title: String::new(), lines })
 }
 
 async fn extract_guideline_highlights(
@@ -406,9 +386,5 @@ fn push_prompt_recommended_actions(lines: &mut Vec<String>, actions: &[String]) 
 }
 
 fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
-    items
-        .iter()
-        .map(|item| item.trim())
-        .filter(|item| !item.is_empty())
-        .collect()
+    items.iter().map(|item| item.trim()).filter(|item| !item.is_empty()).collect()
 }

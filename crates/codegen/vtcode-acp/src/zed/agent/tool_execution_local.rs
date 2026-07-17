@@ -44,10 +44,7 @@ impl ZedAgent {
         let policy =
             ExecutionPolicySnapshot::default().with_invocation_id(Some(call_id.to_string()));
         let request = ToolExecutionRequest::new(tool_name, args.clone()).with_policy(policy);
-        let outcome = self
-            .local_tool_registry
-            .execute_public_tool_request(request)
-            .await;
+        let outcome = self.local_tool_registry.execute_public_tool_request(request).await;
         match (outcome.output, outcome.error) {
             (Some(output), None) => {
                 let content = self.render_local_tool_content(tool_name, &output);
@@ -101,10 +98,8 @@ impl ZedAgent {
 
         let mut sections = Vec::with_capacity(10);
 
-        if let Some(stdout) = output
-            .get("stdout")
-            .and_then(Value::as_str)
-            .filter(|value| !value.is_empty())
+        if let Some(stdout) =
+            output.get("stdout").and_then(Value::as_str).filter(|value| !value.is_empty())
         {
             let plain = strip_ansi(stdout);
             let (rendered, truncated) = self.truncate_text(&plain);
@@ -114,10 +109,8 @@ impl ZedAgent {
             }
         }
 
-        if let Some(stderr) = output
-            .get("stderr")
-            .and_then(Value::as_str)
-            .filter(|value| !value.is_empty())
+        if let Some(stderr) =
+            output.get("stderr").and_then(Value::as_str).filter(|value| !value.is_empty())
         {
             let plain = strip_ansi(stderr);
             let (rendered, truncated) = self.truncate_text(&plain);
@@ -128,10 +121,8 @@ impl ZedAgent {
         }
 
         if sections.is_empty() {
-            if let Some(message) = output
-                .get("message")
-                .and_then(Value::as_str)
-                .filter(|value| !value.is_empty())
+            if let Some(message) =
+                output.get("message").and_then(Value::as_str).filter(|value| !value.is_empty())
             {
                 let plain = strip_ansi(message);
                 let (rendered, truncated) = self.truncate_text(&plain);
@@ -206,18 +197,13 @@ impl ZedAgent {
             return Err("List files tool is unavailable".to_string());
         };
 
-        let resolved_path = self
-            .resolve_list_files_path(args)?
-            .unwrap_or_else(|| ".".into());
+        let resolved_path = self.resolve_list_files_path(args)?.unwrap_or_else(|| ".".into());
 
         let mut normalized_args = match args.clone() {
             Value::Object(map) => map,
             _ => serde_json::Map::new(),
         };
-        normalized_args.insert(
-            TOOL_LIST_FILES_PATH_ARG.to_string(),
-            Value::String(resolved_path),
-        );
+        normalized_args.insert(TOOL_LIST_FILES_PATH_ARG.to_string(), Value::String(resolved_path));
         let normalized_args = Value::Object(normalized_args);
 
         let listing = tool.execute(normalized_args).await.map_err(|error| {
@@ -283,10 +269,7 @@ impl ZedAgent {
             lines.push(format!("Showing {count} of {total} items"));
         }
 
-        if let Some(items) = output
-            .get(TOOL_LIST_FILES_ITEMS_KEY)
-            .and_then(Value::as_array)
-        {
+        if let Some(items) = output.get(TOOL_LIST_FILES_ITEMS_KEY).and_then(Value::as_array) {
             if items.is_empty() {
                 lines.push("No items found.".to_string());
             } else {
@@ -338,10 +321,7 @@ impl ZedAgent {
     }
 
     fn list_files_locations(output: &Value) -> Vec<acp::ToolCallLocation> {
-        let Some(items) = output
-            .get(TOOL_LIST_FILES_ITEMS_KEY)
-            .and_then(Value::as_array)
-        else {
+        let Some(items) = output.get(TOOL_LIST_FILES_ITEMS_KEY).and_then(Value::as_array) else {
             return Vec::new();
         };
 

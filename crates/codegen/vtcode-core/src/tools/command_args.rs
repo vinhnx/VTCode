@@ -26,9 +26,7 @@ impl WriteStdinDispatch {
 }
 
 pub(crate) fn write_stdin_dispatch(args: &Value) -> Result<WriteStdinDispatch, &'static str> {
-    let payload = args
-        .as_object()
-        .ok_or("write_stdin requires a JSON object")?;
+    let payload = args.as_object().ok_or("write_stdin requires a JSON object")?;
     let chars = payload
         .get("chars")
         .and_then(Value::as_str)
@@ -125,12 +123,7 @@ pub fn command_words(args: &Value) -> Result<Option<Vec<String>>, &'static str> 
         }
         Value::Array(values) => values
             .iter()
-            .map(|value| {
-                value
-                    .as_str()
-                    .map(ToOwned::to_owned)
-                    .ok_or(COMMAND_VALUE_TYPE_ERROR)
-            })
+            .map(|value| value.as_str().map(ToOwned::to_owned).ok_or(COMMAND_VALUE_TYPE_ERROR))
             .collect::<Result<Vec<_>, _>>()?,
         _ => return Err(COMMAND_VALUE_TYPE_ERROR),
     };
@@ -530,14 +523,8 @@ mod tests {
         .expect("valid indexed args")
         .expect("normalized payload");
 
-        assert_eq!(
-            normalized.get("command").and_then(Value::as_str),
-            Some("ls -a")
-        );
-        assert_eq!(
-            normalized.get("working_dir").and_then(Value::as_str),
-            Some(".")
-        );
+        assert_eq!(normalized.get("command").and_then(Value::as_str), Some("ls -a"));
+        assert_eq!(normalized.get("working_dir").and_then(Value::as_str), Some("."));
     }
 
     #[test]
@@ -572,18 +559,12 @@ mod tests {
 
     #[test]
     fn interactive_input_text_preserves_whitespace() {
-        assert_eq!(
-            interactive_input_text(&json!({"chars": "  echo hi\n"})),
-            Some("  echo hi\n")
-        );
+        assert_eq!(interactive_input_text(&json!({"chars": "  echo hi\n"})), Some("  echo hi\n"));
     }
 
     #[test]
     fn write_stdin_dispatch_distinguishes_write_from_poll() {
-        assert_eq!(
-            write_stdin_dispatch(&json!({"chars": ""})),
-            Ok(WriteStdinDispatch::Poll)
-        );
+        assert_eq!(write_stdin_dispatch(&json!({"chars": ""})), Ok(WriteStdinDispatch::Poll));
         assert_eq!(
             write_stdin_dispatch(&json!({"chars": "  status\n"})),
             Ok(WriteStdinDispatch::Write)
@@ -604,10 +585,7 @@ mod tests {
 
     #[test]
     fn session_id_text_trims_whitespace() {
-        assert_eq!(
-            session_id_text(&json!({"session_id": " run-1 "})),
-            Some("run-1")
-        );
+        assert_eq!(session_id_text(&json!({"session_id": " run-1 "})), Some("run-1"));
     }
 
     #[test]
@@ -643,14 +621,8 @@ mod tests {
         }))
         .expect("valid shell args");
 
-        assert_eq!(
-            normalized.get("command").and_then(Value::as_str),
-            Some("echo hi")
-        );
-        assert_eq!(
-            normalized.get("input").and_then(Value::as_str),
-            Some("status\n")
-        );
+        assert_eq!(normalized.get("command").and_then(Value::as_str), Some("echo hi"));
+        assert_eq!(normalized.get("input").and_then(Value::as_str), Some("status\n"));
     }
 
     #[test]
@@ -660,10 +632,7 @@ mod tests {
         }))
         .expect("valid shell args");
 
-        assert_eq!(
-            normalized.get("session_id").and_then(Value::as_str),
-            Some("run-1")
-        );
+        assert_eq!(normalized.get("session_id").and_then(Value::as_str), Some("run-1"));
     }
 
     #[test]
@@ -674,14 +643,8 @@ mod tests {
         }))
         .expect("valid shell args");
 
-        assert_eq!(
-            normalized.get("max_output_tokens").and_then(Value::as_u64),
-            Some(42)
-        );
-        assert_eq!(
-            normalized.get("max_tokens").and_then(Value::as_u64),
-            Some(42)
-        );
+        assert_eq!(normalized.get("max_output_tokens").and_then(Value::as_u64), Some(42));
+        assert_eq!(normalized.get("max_tokens").and_then(Value::as_u64), Some(42));
     }
 
     #[test]
@@ -692,14 +655,8 @@ mod tests {
         }))
         .expect("valid shell args");
 
-        assert_eq!(
-            normalized.get("max_tokens").and_then(Value::as_u64),
-            Some(42)
-        );
-        assert_eq!(
-            normalized.get("max_output_tokens").and_then(Value::as_u64),
-            Some(42)
-        );
+        assert_eq!(normalized.get("max_tokens").and_then(Value::as_u64), Some(42));
+        assert_eq!(normalized.get("max_output_tokens").and_then(Value::as_u64), Some(42));
     }
 
     #[test]
@@ -735,22 +692,13 @@ mod tests {
 
     #[test]
     fn raw_command_text_extracts_command_string() {
-        assert_eq!(
-            raw_command_text(&json!({"command": "rg foo"})),
-            Some("rg foo".to_string())
-        );
-        assert_eq!(
-            raw_command_text(&json!({"cmd": "ls -la"})),
-            Some("ls -la".to_string())
-        );
+        assert_eq!(raw_command_text(&json!({"command": "rg foo"})), Some("rg foo".to_string()));
+        assert_eq!(raw_command_text(&json!({"cmd": "ls -la"})), Some("ls -la".to_string()));
         assert_eq!(
             raw_command_text(&json!({"command.0": "cat", "command.1": "file.txt"})),
             Some("cat file.txt".to_string())
         );
-        assert_eq!(
-            raw_command_text(&json!({"command": ["wc", "-l"]})),
-            Some("wc -l".to_string())
-        );
+        assert_eq!(raw_command_text(&json!({"command": ["wc", "-l"]})), Some("wc -l".to_string()));
         assert!(raw_command_text(&json!({})).is_none());
     }
 
@@ -775,12 +723,8 @@ mod tests {
     fn is_readonly_command_string_allows_pipelines() {
         // Pipelines are allowed here; the caller is responsible for checking each
         // segment against an allow-list of safe commands.
-        assert!(is_readonly_command_string(
-            &json!({"command": "diff a b | wc -l"})
-        ));
-        assert!(is_readonly_command_string(
-            &json!({"command": "grep x src | sort | uniq"})
-        ));
+        assert!(is_readonly_command_string(&json!({"command": "diff a b | wc -l"})));
+        assert!(is_readonly_command_string(&json!({"command": "grep x src | sort | uniq"})));
     }
 
     #[test]

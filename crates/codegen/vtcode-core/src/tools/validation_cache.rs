@@ -30,19 +30,13 @@ impl ValidationCache {
 
     /// Check if a validation result is cached and valid.
     pub fn check(&self, tool: &str, args_hash: u64) -> Option<bool> {
-        let key = ValidationKey {
-            tool: tool.to_string(),
-            args_hash,
-        };
+        let key = ValidationKey { tool: tool.to_string(), args_hash };
         self.cache.get_owned(&key)
     }
 
     /// Insert a validation result into the cache.
     pub fn insert(&self, tool: &str, args_hash: u64, result: bool) {
-        let key = ValidationKey {
-            tool: tool.to_string(),
-            args_hash,
-        };
+        let key = ValidationKey { tool: tool.to_string(), args_hash };
         self.cache.insert(key, result, 1); // bool is tiny
     }
 }

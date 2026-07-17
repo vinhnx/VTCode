@@ -29,9 +29,6 @@ use vtcode_config::ConfigManager;
 pub(crate) fn load_workspace_config(workspace: impl AsRef<Path>) -> Result<ConfigManager> {
     let workspace = workspace.as_ref();
     ConfigManager::load_from_workspace(workspace).with_context(|| {
-        format!(
-            "Failed to load VT Code configuration for workspace '{}'",
-            workspace.display()
-        )
+        format!("Failed to load VT Code configuration for workspace '{}'", workspace.display())
     })
 }

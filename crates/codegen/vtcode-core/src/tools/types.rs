@@ -17,11 +17,7 @@ pub struct EnhancedCacheEntry<T> {
 impl<T> EnhancedCacheEntry<T> {
     #[inline]
     pub fn new(data: T, size_bytes: usize) -> Self {
-        Self {
-            data,
-            timestamp: Instant::now(),
-            size_bytes,
-        }
+        Self { data, timestamp: Instant::now(), size_bytes }
     }
 }
 

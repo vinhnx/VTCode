@@ -50,18 +50,14 @@ pub struct PluginRuntime {
 impl PluginRuntime {
     /// Create a new plugin runtime
     pub fn new(_config: PluginRuntimeConfig, _base_dir: PathBuf) -> Self {
-        Self {
-            plugins: Arc::new(RwLock::new(HashMap::new())),
-        }
+        Self { plugins: Arc::new(RwLock::new(HashMap::new())) }
     }
 
     /// Load a plugin from the specified path
     pub async fn load_plugin(&self, plugin_path: &Path) -> PluginResult<PluginHandle> {
         // Validate plugin path
         if !plugin_path.exists() {
-            return Err(PluginError::NotFound(
-                plugin_path.display().to_string().into(),
-            ));
+            return Err(PluginError::NotFound(plugin_path.display().to_string().into()));
         }
 
         // Load the plugin manifest
@@ -131,8 +127,7 @@ impl PluginRuntime {
     /// Check if plugin name is valid (kebab-case)
     fn is_valid_plugin_name(&self, name: &str) -> bool {
         // Check if name contains only lowercase letters, numbers, and hyphens
-        name.chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
             && !name.starts_with('-')
             && !name.ends_with('-')
             && !name.is_empty()

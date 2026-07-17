@@ -102,11 +102,7 @@ pub(crate) fn check_read_family_cap(
         "Repeated read-only exploration of '{target}' hit the per-turn family cap ({cap}). Scheduling a final recovery pass without more tools."
     );
     let error_content = build_repeated_file_read_family_error_content(&target);
-    ReadFamilyCapDecision::Tripped {
-        target,
-        block_reason,
-        error_content,
-    }
+    ReadFamilyCapDecision::Tripped { target, block_reason, error_content }
 }
 
 /// Get the family key for a read-file call.
@@ -230,16 +226,14 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
         // is delegated to the pure `check_read_family_cap` helper so it can be
         // tested without the full TurnProcessingContext harness.
         let streak = ctx.harness_state.record_file_read_family_call(family_key);
-        if let ReadFamilyCapDecision::Tripped {
-            target: _,
-            block_reason,
-            error_content,
-        } = check_read_family_cap(
-            canonical_tool_name,
-            effective_args,
-            streak,
-            MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
-        ) {
+        if let ReadFamilyCapDecision::Tripped { target: _, block_reason, error_content } =
+            check_read_family_cap(
+                canonical_tool_name,
+                effective_args,
+                streak,
+                MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
+            )
+        {
             ctx.activate_recovery(block_reason.clone());
             push_guard_failure_messages(
                 ctx,
@@ -278,10 +272,7 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     }
 
     let signature = signature_key_for(canonical_tool_name, effective_args);
-    if ctx
-        .harness_state
-        .has_successful_readonly_signature(signature.as_str())
-    {
+    if ctx.harness_state.has_successful_readonly_signature(signature.as_str()) {
         // Same-turn duplicate: use the registry's cached output (has TTL)
         if let Some(mut reused_value) = ctx.tool_registry.find_recent_successful_output(
             canonical_tool_name,
@@ -326,8 +317,7 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
                     Some(canonical_tool_name),
                     maybe_inline_spooled(canonical_tool_name, &reused_value),
                 );
-                ctx.harness_state
-                    .record_successful_readonly_signature(signature);
+                ctx.harness_state.record_successful_readonly_signature(signature);
                 return Some(ValidationResult::Handled);
             }
         }
@@ -347,8 +337,7 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
             Some(canonical_tool_name),
             maybe_inline_spooled(canonical_tool_name, &reused_value),
         );
-        ctx.harness_state
-            .record_successful_readonly_signature(signature);
+        ctx.harness_state.record_successful_readonly_signature(signature);
         return Some(ValidationResult::Handled);
     }
 
@@ -393,10 +382,7 @@ mod tests {
     fn repeated_file_read_family_key_tracks_head_via_unified_exec() {
         let args = serde_json::json!({"command": "head -n 10 file.txt"});
         let key = repeated_file_read_family_key(tool_names::UNIFIED_EXEC, &args);
-        assert_eq!(
-            key,
-            Some("unified_exec::run::head -n 10 file.txt".to_string())
-        );
+        assert_eq!(key, Some("unified_exec::run::head -n 10 file.txt".to_string()));
     }
 
     #[test]
@@ -458,11 +444,7 @@ mod tests {
             MAX_CONSECUTIVE_SAME_FILE_READ_FAMILY_CALLS,
         );
         match decision {
-            ReadFamilyCapDecision::Tripped {
-                target,
-                block_reason,
-                error_content,
-            } => {
+            ReadFamilyCapDecision::Tripped { target, block_reason, error_content } => {
                 assert_eq!(target, "src/lib.rs");
                 assert!(block_reason.contains("per-turn family cap"));
                 assert!(error_content.contains("repeated_read_family"));
@@ -485,10 +467,7 @@ mod tests {
             read_family_target("unified_file::read::src/cli/update.rs"),
             "src/cli/update.rs"
         );
-        assert_eq!(
-            read_family_target("unified_exec::run::cat README.md"),
-            "cat README.md"
-        );
+        assert_eq!(read_family_target("unified_exec::run::cat README.md"), "cat README.md");
         assert_eq!(read_family_target("read_file::src/lib.rs"), "src/lib.rs");
     }
 

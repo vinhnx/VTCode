@@ -246,10 +246,8 @@ impl ToolRegistry {
         let requested_path = PathBuf::from(&input.path);
         let canonical_path = resolve_workspace_path(self.workspace_root(), &requested_path)
             .with_context(|| format!("Failed to resolve path: {}", requested_path.display()))?;
-        let _mutation_lease = self
-            .edited_file_monitor_ref()
-            .acquire_mutation(&canonical_path)
-            .await;
+        let _mutation_lease =
+            self.edited_file_monitor_ref().acquire_mutation(&canonical_path).await;
 
         let metadata = fs::metadata(&canonical_path)
             .await
@@ -302,9 +300,7 @@ impl ToolRegistry {
             write_args[FILE_CONFLICT_OVERRIDE_ARG] = snapshot.clone();
         }
 
-        self.file_ops_tool()
-            .write_file_internal(write_args, false)
-            .await
+        self.file_ops_tool().write_file_internal(write_args, false).await
     }
 
     /// Inline-delegating wrapper. See [`Self::read_file`].
@@ -326,10 +322,7 @@ impl ToolRegistry {
         }
 
         let input = serde_json::from_value(payload)?;
-        self.grep_file_manager()
-            .perform_search(input)
-            .await
-            .map(|result| json!(result))
+        self.grep_file_manager().perform_search(input).await.map(|result| json!(result))
     }
 
     pub fn last_grep_file_result(&self) -> Option<GrepSearchResult> {

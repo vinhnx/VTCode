@@ -85,11 +85,7 @@ pub struct RpcError {
 impl RpcError {
     /// Create a new RPC error
     pub fn new(code: i32, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: None,
-        }
+        Self { code, message: message.into(), data: None }
     }
 
     /// Invalid request error (-32600)

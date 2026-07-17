@@ -7,12 +7,10 @@ use regex::Regex;
 
 /// Regex pattern for Unix-style environment variables: $VAR or ${VAR}
 static UNIX_ENV_PATTERN: Lazy<Regex> =
-    Lazy::new(
-        || match Regex::new(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}") {
-            Ok(regex) => regex,
-            Err(error) => panic!("valid unix env regex must compile: {error}"),
-        },
-    );
+    Lazy::new(|| match Regex::new(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}") {
+        Ok(regex) => regex,
+        Err(error) => panic!("valid unix env regex must compile: {error}"),
+    });
 
 /// Regex pattern for Windows-style environment variables: %VAR%
 static WINDOWS_ENV_PATTERN: Lazy<Regex> =
@@ -47,20 +45,15 @@ fn expand_entry(entry: &str, workspace_root: &Path) -> Option<PathBuf> {
 fn expand_environment_variables(input: &str) -> String {
     let unix_expanded = UNIX_ENV_PATTERN
         .replace_all(input, |caps: &regex::Captures<'_>| {
-            let var_name = caps
-                .get(1)
-                .or_else(|| caps.get(2))
-                .map(|m| m.as_str())
-                .unwrap_or_default();
+            let var_name =
+                caps.get(1).or_else(|| caps.get(2)).map(|m| m.as_str()).unwrap_or_default();
             // Try to get the environment variable, with special handling for HOME
             match var_name {
-                "HOME" => std::env::var("HOME")
-                    .or_else(|_| std::env::var("USERPROFILE"))
-                    .unwrap_or_else(|_| {
-                        dirs::home_dir()
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_default()
-                    }),
+                "HOME" => {
+                    std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap_or_else(
+                        |_| dirs::home_dir().map(|p| p.display().to_string()).unwrap_or_default(),
+                    )
+                }
                 _ => std::env::var(var_name).unwrap_or_default(),
             }
         })
@@ -71,13 +64,11 @@ fn expand_environment_variables(input: &str) -> String {
             let var_name = &caps[1];
             // Try to get the environment variable, with special handling for HOME/USERPROFILE
             match var_name {
-                "HOME" | "USERPROFILE" => std::env::var("USERPROFILE")
-                    .or_else(|_| std::env::var("HOME"))
-                    .unwrap_or_else(|_| {
-                        dirs::home_dir()
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_default()
-                    }),
+                "HOME" | "USERPROFILE" => {
+                    std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_else(
+                        |_| dirs::home_dir().map(|p| p.display().to_string()).unwrap_or_default(),
+                    )
+                }
                 _ => std::env::var(var_name).unwrap_or_default(),
             }
         })
@@ -128,9 +119,8 @@ pub(crate) fn merge_path_env(current: Option<&OsStr>, extra_paths: &[PathBuf]) -
         return None;
     }
 
-    let mut combined: Vec<PathBuf> = current
-        .map(|value| std::env::split_paths(value).collect())
-        .unwrap_or_default();
+    let mut combined: Vec<PathBuf> =
+        current.map(|value| std::env::split_paths(value).collect()).unwrap_or_default();
 
     // Ensure common development tool paths are included for fallback
     // These paths are often added by shell initialization files but we include them

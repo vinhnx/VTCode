@@ -18,10 +18,7 @@ async fn delete_file_tool_removes_file() {
     let args = json!({
         "input": "*** Begin Patch\n*** Delete File: to_delete.txt\n*** End Patch"
     });
-    let val = registry
-        .execute_tool(tools::APPLY_PATCH, args)
-        .await
-        .unwrap();
+    let val = registry.execute_tool(tools::APPLY_PATCH, args).await.unwrap();
     assert_eq!(val.get("success").and_then(|v| v.as_bool()), Some(true));
     // Verify removal
     assert!(!file_path.exists());

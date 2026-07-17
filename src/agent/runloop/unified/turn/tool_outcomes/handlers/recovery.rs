@@ -65,9 +65,7 @@ pub(super) async fn apply_recovery_action(
         }
         RecoveryAction::SaveAndExit => {
             tracing::info!("Recovery: user chose Save & Exit");
-            Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                TurnLoopResult::Exit,
-            ))))
+            Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Exit))))
         }
     }
 }
@@ -94,11 +92,7 @@ pub(crate) async fn try_interactive_circuit_recovery(
 
     let prompt_args = {
         let open_circuits = ctx.circuit_breaker.get_open_circuits();
-        let diagnostics = ctx
-            .error_recovery
-            .read()
-            .await
-            .get_diagnostics(&open_circuits, 10);
+        let diagnostics = ctx.error_recovery.read().await.get_diagnostics(&open_circuits, 10);
         recovery_flow::build_recovery_prompt_from_diagnostics(&diagnostics).build()
     };
     ctx.error_recovery.write().await.mark_prompt_shown();

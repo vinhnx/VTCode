@@ -13,30 +13,19 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
     let search_path = tool.workspace_root.join(&input.path);
 
     if !search_path.exists() {
-        let suggestion = tool
-            .missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any)
-            .await;
-        return Err(anyhow!(
-            "Path '{}' does not exist{}",
-            input.path,
-            suggestion,
-        ));
+        let suggestion =
+            tool.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
+        return Err(anyhow!("Path '{}' does not exist{}", input.path, suggestion,));
     }
 
     if tool.should_exclude(&search_path).await {
-        return Err(anyhow!(
-            "Path '{}' is excluded by .vtcodegitignore",
-            input.path
-        ));
+        return Err(anyhow!("Path '{}' is excluded by .vtcodegitignore", input.path));
     }
 
     let mut dir_contents: HashMap<String, Vec<(String, String)>> = HashMap::new(); // path -> [(name, type)]
 
     // Walk the directory structure up to max_depth
-    for entry in build_default_walker(&search_path)
-        .max_depth(Some(10))
-        .build()
-    {
+    for entry in build_default_walker(&search_path).max_depth(Some(10)).build() {
         let entry = entry.map_err(|e| anyhow!("Walk error: {e}"))?;
         let path = entry.path();
 
@@ -62,16 +51,11 @@ pub(super) async fn execute_tree_view(tool: &FileOpsTool, input: &ListInput) -> 
                     if tool.should_exclude(&file_entry.path()).await {
                         continue;
                     }
-                    let is_dir = file_entry
-                        .file_type()
-                        .await
-                        .map(|ft| ft.is_dir())
-                        .unwrap_or(false);
+                    let is_dir =
+                        file_entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false);
 
-                    entries_list.push((
-                        entry_name,
-                        if is_dir { "directory" } else { "file" }.to_string(),
-                    ));
+                    entries_list
+                        .push((entry_name, if is_dir { "directory" } else { "file" }.to_string()));
                 }
                 children = entries_list;
             }
@@ -110,11 +94,8 @@ async fn build_tree_structure(
         .to_string_lossy()
         .to_string();
 
-    let mut items = Vec::with_capacity(
-        dir_contents
-            .get(&relative_path as &str)
-            .map_or(0, |c| c.len()),
-    );
+    let mut items =
+        Vec::with_capacity(dir_contents.get(&relative_path as &str).map_or(0, |c| c.len()));
 
     if let Some(contents) = dir_contents.get(&relative_path) {
         for (name, entry_type) in contents {

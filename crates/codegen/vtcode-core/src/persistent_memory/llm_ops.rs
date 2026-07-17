@@ -95,9 +95,7 @@ where
 }
 
 fn extract_first_json_block(text: &str) -> Option<&str> {
-    let (start, opening) = text
-        .char_indices()
-        .find(|(_, ch)| matches!(ch, '{' | '['))?;
+    let (start, opening) = text.char_indices().find(|(_, ch)| matches!(ch, '{' | '['))?;
     let mut stack = vec![opening];
     let mut in_string = false;
     let mut escaped = false;
@@ -277,10 +275,7 @@ pub(super) async fn classify_facts_with_provider(
     let mut repository_facts = Vec::new();
     for item in parsed.keep {
         let candidate = candidates.get(item.id).ok_or_else(|| {
-            anyhow!(
-                "memory classification referenced unknown candidate id {}",
-                item.id
-            )
+            anyhow!("memory classification referenced unknown candidate id {}", item.id)
         })?;
         let normalized_fact = normalize_whitespace(item.fact.as_deref().unwrap_or(&candidate.fact));
         if normalized_fact.is_empty() || looks_like_legacy_prompt(&normalized_fact) {
@@ -303,10 +298,7 @@ pub(super) async fn classify_facts_with_provider(
         };
     }
 
-    Ok(ClassifiedFacts {
-        preferences,
-        repository_facts,
-    })
+    Ok(ClassifiedFacts { preferences, repository_facts })
 }
 
 pub(crate) async fn summarize_memory(
@@ -498,9 +490,7 @@ pub(super) async fn plan_memory_operation_with_provider(
     let response = collect_single_response(provider, llm_request)
         .await
         .context("persistent memory planner LLM request failed")?;
-    let content = response
-        .content
-        .context("persistent memory planner returned no content")?;
+    let content = response.content.context("persistent memory planner returned no content")?;
     let plan =
         parse_memory_json_response::<MemoryOpPlan>(content.trim(), "persistent memory planner")?;
     validate_memory_op_plan(&plan, expected_kind, candidates)?;
@@ -520,11 +510,7 @@ fn validate_memory_op_plan(
             if plan.facts.is_empty() {
                 bail!("memory planner returned remember with no facts");
             }
-            if plan
-                .facts
-                .iter()
-                .any(|f| normalize_whitespace(&f.fact).is_empty())
-            {
+            if plan.facts.iter().any(|f| normalize_whitespace(&f.fact).is_empty()) {
                 bail!("memory planner returned an empty fact");
             }
         }
@@ -615,11 +601,7 @@ pub(super) fn resolve_memory_model_routes(
         .fallback
         .as_ref()
         .map(|r| memory_model_route_from_resolution(r, runtime_config, vt_cfg));
-    ResolvedMemoryRoutes {
-        primary,
-        fallback,
-        warning: resolution.warning,
-    }
+    ResolvedMemoryRoutes { primary, fallback, warning: resolution.warning }
 }
 
 fn memory_model_route_from_resolution(
@@ -628,15 +610,11 @@ fn memory_model_route_from_resolution(
     vt_cfg: Option<&VTCodeConfig>,
 ) -> MemoryModelRoute {
     let temperature = if route.model == runtime_config.model
-        && route
-            .provider_name
-            .eq_ignore_ascii_case(&runtime_provider_name(runtime_config))
+        && route.provider_name.eq_ignore_ascii_case(&runtime_provider_name(runtime_config))
     {
         0.0
     } else {
-        vt_cfg
-            .map(|cfg| cfg.agent.small_model.temperature)
-            .unwrap_or(0.0)
+        vt_cfg.map(|cfg| cfg.agent.small_model.temperature).unwrap_or(0.0)
     };
     MemoryModelRoute {
         provider_name: route.provider_name.clone(),

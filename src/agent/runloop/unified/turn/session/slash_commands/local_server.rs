@@ -180,25 +180,17 @@ fn show_local_providers_modal(ctx: &mut SlashCommandContext<'_>, statuses: &[Loc
                 } else {
                     format!("{model_count} models")
                 };
-                (
-                    "Running".to_string(),
-                    format!("{} | {}", status.endpoint, model_text),
-                )
+                ("Running".to_string(), format!("{} | {}", status.endpoint, model_text))
             } else {
                 let err = status.error.as_deref().unwrap_or("Not running");
-                (
-                    "Stopped".to_string(),
-                    format!("{} | {}", status.endpoint, err),
-                )
+                ("Stopped".to_string(), format!("{} | {}", status.endpoint, err))
             };
             InlineListItem {
                 title: status.provider.display_name().to_string(),
                 subtitle: Some(subtitle),
                 badge: Some(badge),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(provider_key(
-                    &status.provider,
-                ))),
+                selection: Some(InlineListSelection::ConfigAction(provider_key(&status.provider))),
                 search_value: Some(format!(
                     "{} {} {}",
                     status.provider.display_name(),
@@ -214,9 +206,7 @@ fn show_local_providers_modal(ctx: &mut SlashCommandContext<'_>, statuses: &[Loc
         subtitle: Some("Close local server manager".to_string()),
         badge: None,
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            LOCAL_ACTION_BACK.to_string(),
-        )),
+        selection: Some(InlineListSelection::ConfigAction(LOCAL_ACTION_BACK.to_string())),
         search_value: Some("back close".to_string()),
     };
     let mut all_items = items;
@@ -245,22 +235,14 @@ fn show_local_actions_modal(
         } else {
             format!("{} model(s)", status.available_models.len())
         };
-        let ver = status
-            .version
-            .as_deref()
-            .map(|v| format!(" v{v}"))
-            .unwrap_or_default();
+        let ver = status.version.as_deref().map(|v| format!(" v{v}")).unwrap_or_default();
         let mut header = format!("{} | {}{}", status.endpoint, model_info, ver);
         if !status.running_models.is_empty() {
             header.push_str(&format!(" | running: {}", status.running_models.join(", ")));
         }
         header
     } else {
-        format!(
-            "{} | {}",
-            status.endpoint,
-            status.error.as_deref().unwrap_or("Not running")
-        )
+        format!("{} | {}", status.endpoint, status.error.as_deref().unwrap_or("Not running"))
     };
 
     let items = vec![
@@ -301,9 +283,7 @@ fn show_local_actions_modal(
             subtitle: Some("Diagnose and fix connection issues".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(action_key(
-                "troubleshoot",
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(action_key("troubleshoot"))),
             search_value: Some("troubleshoot diagnose fix debug".to_string()),
         },
         InlineListItem {
@@ -311,9 +291,7 @@ fn show_local_actions_modal(
             subtitle: Some("Return to provider list".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                LOCAL_ACTION_BACK.to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction(LOCAL_ACTION_BACK.to_string())),
             search_value: Some("back return".to_string()),
         },
     ];
@@ -333,9 +311,7 @@ fn show_local_detail_modal(ctx: &mut SlashCommandContext<'_>, title: &str, lines
         subtitle: Some("Return to actions".to_string()),
         badge: None,
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            LOCAL_DETAIL_BACK.to_string(),
-        )),
+        selection: Some(InlineListSelection::ConfigAction(LOCAL_DETAIL_BACK.to_string())),
         search_value: Some("back return".to_string()),
     }];
 
@@ -343,9 +319,7 @@ fn show_local_detail_modal(ctx: &mut SlashCommandContext<'_>, title: &str, lines
         title,
         lines,
         items,
-        Some(InlineListSelection::ConfigAction(
-            LOCAL_DETAIL_BACK.to_string(),
-        )),
+        Some(InlineListSelection::ConfigAction(LOCAL_DETAIL_BACK.to_string())),
         None,
     );
 }
@@ -402,10 +376,8 @@ async fn execute_start(ctx: &mut SlashCommandContext<'_>, provider: Option<&str>
         return Ok(());
     };
 
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Starting {} server...", p.display_name()),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Starting {} server...", p.display_name()))?;
 
     match local_server::start(p).await {
         Ok(msg) => ctx.renderer.line(MessageStyle::Info, &msg)?,
@@ -481,11 +453,7 @@ fn render_provider_status_text(
 ) -> Result<()> {
     let name = status.provider.display_name();
     if status.running {
-        let ver = status
-            .version
-            .as_deref()
-            .map(|v| format!(" v{v}"))
-            .unwrap_or_default();
+        let ver = status.version.as_deref().map(|v| format!(" v{v}")).unwrap_or_default();
         ctx.renderer.line(
             MessageStyle::Info,
             &format!(
@@ -523,8 +491,7 @@ fn render_provider_config_text(
     ctx.renderer
         .line(MessageStyle::Info, &format!("{}:", provider.display_name()))?;
     for line in format_provider_config(provider) {
-        ctx.renderer
-            .line(MessageStyle::Info, &format!("  {line}"))?;
+        ctx.renderer.line(MessageStyle::Info, &format!("  {line}"))?;
     }
     Ok(())
 }
@@ -558,10 +525,7 @@ fn format_provider_status(status: &LocalServerStatus) -> Vec<String> {
             lines.push(format!("Reason:    {err}"));
         }
         lines.push(String::new());
-        lines.push(format!(
-            "Run /local troubleshoot {} for help.",
-            status.provider.key()
-        ));
+        lines.push(format!("Run /local troubleshoot {} for help.", status.provider.key()));
     }
 
     lines

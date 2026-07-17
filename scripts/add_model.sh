@@ -50,7 +50,7 @@ fi
 
 # 1. Add to constants
 if [ "$PROVIDER" = "openai" ]; then
-    CONST_FILE="vtcode-config/src/constants/models/openai.rs"
+    CONST_FILE="crates/codegen/vtcode-config/src/constants/models/openai.rs"
     echo -e "\n${BLUE}1. Add to $CONST_FILE${NC}"
     echo "   - Add \"$MODEL_ID\" to SUPPORTED_MODELS array"
     echo "   - Add: pub const ${PROVIDER^^}_$CONST_NAME: &str = \"$MODEL_ID\";"
@@ -78,7 +78,7 @@ EOF
 echo "$JSON_TEMPLATE"
 
 # 3. Model ID enum
-echo -e "\n${BLUE}3. Add to vtcode-config/src/models/model_id.rs${NC}"
+echo -e "\n${BLUE}3. Add to crates/codegen/vtcode-config/src/models/model_id.rs${NC}"
 echo "   /// $DESCRIPTION"
 echo "   $ENUM_NAME,"
 

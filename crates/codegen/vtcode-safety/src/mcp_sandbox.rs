@@ -3,8 +3,8 @@
 //! §18.4.4 of *The Hitchhiker's Guide to Agentic AI* calls for per-tool
 //! sandboxing: every code-executing surface needs an isolation profile, an
 //! audit trail, and resource limits. Today, MCP servers run as plain child
-//! processes (`vtcode-mcp/src/provider.rs::connect_stdio`) or as direct HTTP
-//! clients (`vtcode-mcp/src/rmcp_client.rs`) — only the general-purpose
+//! processes (`crates/codegen/vtcode-mcp/src/provider.rs::connect_stdio`) or as direct HTTP
+//! clients (`crates/codegen/vtcode-mcp/src/rmcp_client.rs`) — only the general-purpose
 //! `SandboxPolicy` protects the harness; MCP servers themselves have no
 //! isolation beyond command / endpoint allow-lists.
 //!
@@ -133,10 +133,7 @@ pub fn derive_mcp_sandbox_policy(
                     exclude_slash_tmp,
                 }
             }
-            SandboxPolicy::ReadOnly {
-                mut network_allowlist,
-                ..
-            } => {
+            SandboxPolicy::ReadOnly { mut network_allowlist, .. } => {
                 if !overrides.allowed_endpoints.is_empty() {
                     network_allowlist = overrides.allowed_endpoints.clone();
                 }
@@ -201,14 +198,10 @@ pub fn derive_mcp_sandbox_policy(
         };
     }
 
-    if overrides.enforce_conservative_limits {
-        if let SandboxPolicy::WorkspaceWrite {
-            ref mut resource_limits,
-            ..
-        } = derived
-        {
-            *resource_limits = conservative_resource_limits(overrides);
-        }
+    if overrides.enforce_conservative_limits
+        && let SandboxPolicy::WorkspaceWrite { ref mut resource_limits, .. } = derived
+    {
+        *resource_limits = conservative_resource_limits(overrides);
     }
 
     derived
@@ -244,7 +237,7 @@ impl McpSandboxWrapper {
     ///   helper can apply Landlock + seccomp from the same JSON shape the rest
     ///   of VTCode uses (`ResourceLimits::to_json`).
     /// - **Windows**: returns `None` (sandboxing is stubbed; see
-    ///   `vtcode-safety/src/sandboxing/manager.rs`).
+    ///   `crates/codegen/vtcode-safety/src/sandboxing/manager.rs`).
     #[must_use]
     pub fn for_current_platform(policy: &SandboxPolicy) -> Option<Self> {
         #[cfg(target_os = "macos")]
@@ -255,16 +248,10 @@ impl McpSandboxWrapper {
             // wrapper still functions when the runloop hasn't built the full
             // Seatbelt profile (tests, MCP dry-run mode).
             let summary = match policy {
-                SandboxPolicy::ReadOnly {
-                    network_allowlist, ..
-                } => format!(
+                SandboxPolicy::ReadOnly { network_allowlist, .. } => format!(
                     "(version 1) (allow default) (deny file-write*) (allow network* (remote ip {network_allowlist:?}))",
                 ),
-                SandboxPolicy::WorkspaceWrite {
-                    writable_roots,
-                    network_allowlist,
-                    ..
-                } => format!(
+                SandboxPolicy::WorkspaceWrite { writable_roots, network_allowlist, .. } => format!(
                     "(version 1) (allow default) (allow file-write* (subpath {writable_roots:?})) (allow network* (remote ip {network_allowlist:?}))",
                 ),
                 SandboxPolicy::DangerFullAccess => "(version 1) (allow default)".to_owned(),
@@ -403,9 +390,7 @@ mod tests {
         };
         let derived = derive_mcp_sandbox_policy(&parent, &overrides);
         match derived {
-            SandboxPolicy::WorkspaceWrite {
-                network_allowlist, ..
-            } => {
+            SandboxPolicy::WorkspaceWrite { network_allowlist, .. } => {
                 assert_eq!(network_allowlist.len(), 1);
                 assert_eq!(network_allowlist[0].domain, "mcp.internal");
             }
@@ -419,9 +404,7 @@ mod tests {
         let overrides = McpSandboxOverrides::default();
         let derived = derive_mcp_sandbox_policy(&parent, &overrides);
         match derived {
-            SandboxPolicy::WorkspaceWrite {
-                resource_limits, ..
-            } => {
+            SandboxPolicy::WorkspaceWrite { resource_limits, .. } => {
                 assert_eq!(resource_limits.max_memory_mb, 512);
                 assert_eq!(resource_limits.max_pids, 64);
                 assert_eq!(resource_limits.cpu_time_secs, 60);
@@ -440,9 +423,7 @@ mod tests {
         };
         let derived = derive_mcp_sandbox_policy(&parent, &overrides);
         match derived {
-            SandboxPolicy::WorkspaceWrite {
-                resource_limits, ..
-            } => {
+            SandboxPolicy::WorkspaceWrite { resource_limits, .. } => {
                 // Parent had `ResourceLimits::unlimited()` which is all zeros.
                 assert_eq!(resource_limits.max_memory_mb, 0);
             }
@@ -458,11 +439,7 @@ mod tests {
         };
         let derived = derive_mcp_sandbox_policy(&SandboxPolicy::DangerFullAccess, &overrides);
         match derived {
-            SandboxPolicy::WorkspaceWrite {
-                writable_roots,
-                network_access,
-                ..
-            } => {
+            SandboxPolicy::WorkspaceWrite { writable_roots, network_access, .. } => {
                 assert_eq!(writable_roots.len(), 1);
                 assert!(!network_access);
             }

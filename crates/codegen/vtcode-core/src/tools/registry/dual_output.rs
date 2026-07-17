@@ -191,11 +191,7 @@ impl ToolRegistry {
                             savings_pct = %savings.savings_percent,
                             "Applied read file summarization"
                         );
-                        Ok(SplitToolResult::new(
-                            tool_name.as_str(),
-                            llm_content,
-                            ui_content,
-                        ))
+                        Ok(SplitToolResult::new(tool_name.as_str(), llm_content, ui_content))
                     }
                     Err(e) => {
                         warn!(
@@ -222,11 +218,7 @@ impl ToolRegistry {
                             savings_pct = %savings.savings_percent,
                             "Applied bash summarization"
                         );
-                        Ok(SplitToolResult::new(
-                            tool_name.as_str(),
-                            llm_content,
-                            ui_content,
-                        ))
+                        Ok(SplitToolResult::new(tool_name.as_str(), llm_content, ui_content))
                     }
                     Err(e) => {
                         warn!(
@@ -251,11 +243,7 @@ impl ToolRegistry {
                             savings_pct = %savings.savings_percent,
                             "Applied edit summarization"
                         );
-                        Ok(SplitToolResult::new(
-                            tool_name.as_str(),
-                            llm_content,
-                            ui_content,
-                        ))
+                        Ok(SplitToolResult::new(tool_name.as_str(), llm_content, ui_content))
                     }
                     Err(e) => {
                         warn!(

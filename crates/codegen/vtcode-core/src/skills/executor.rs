@@ -55,10 +55,7 @@ fn should_force_tool_free_synthesis(error: &ToolExecutionError) -> bool {
 
 fn ensure_visible_skill_content(skill: &Skill, content: String) -> Result<String> {
     if content.trim().is_empty() {
-        return Err(anyhow!(
-            "Skill '{}' completed without a visible final response",
-            skill.name()
-        ));
+        return Err(anyhow!("Skill '{}' completed without a visible final response", skill.name()));
     }
 
     Ok(content)
@@ -77,9 +74,7 @@ const NETWORK_TOOLS: &[&str] = &[
 fn is_function_network_tool(tool: &ToolDefinition) -> bool {
     tool.function.as_ref().is_some_and(|function| {
         let name = function.name.to_ascii_lowercase();
-        NETWORK_TOOLS
-            .iter()
-            .any(|candidate| name.contains(candidate))
+        NETWORK_TOOLS.iter().any(|candidate| name.contains(candidate))
     })
 }
 
@@ -124,10 +119,7 @@ fn set_json_string_array(config: &mut Map<String, Value>, key: &str, values: Vec
         return;
     }
 
-    config.insert(
-        key.to_string(),
-        Value::Array(values.into_iter().map(Value::String).collect()),
-    );
+    config.insert(key.to_string(), Value::Array(values.into_iter().map(Value::String).collect()));
 }
 
 fn intersect_domains(existing: Option<Vec<String>>, requested: &[String]) -> Vec<String> {
@@ -419,10 +411,7 @@ pub struct ChildAgentSkillExecutor {
 
 impl ChildAgentSkillExecutor {
     pub fn new(tool_registry: Arc<ToolRegistry>, runtime: ForkSkillRuntimeConfig) -> Self {
-        Self {
-            tool_registry,
-            runtime,
-        }
+        Self { tool_registry, runtime }
     }
 
     async fn build_runner(&self, skill: &Skill, session_id: String) -> Result<AgentRunner> {
@@ -659,14 +648,10 @@ pub async fn execute_skill_with_sub_llm(
                     ));
                 }
 
-                let delay = wait_hint
-                    .max(Duration::from_millis(backoff))
-                    .min(Duration::from_secs(2));
+                let delay =
+                    wait_hint.max(Duration::from_millis(backoff)).min(Duration::from_secs(2));
                 // If rate limited, wait a bit and retry without counting as an iteration
-                warn!(
-                    "Rate limit hit for skill execution – backing off {}ms",
-                    delay.as_millis()
-                );
+                warn!("Rate limit hit for skill execution – backing off {}ms", delay.as_millis());
                 tokio::time::sleep(delay).await;
                 backoff = (backoff * 2).min(2000); // cap back‑off at 2 s
                 continue;
@@ -676,10 +661,7 @@ pub async fn execute_skill_with_sub_llm(
         }
 
         if is_tool_free_synthesis {
-            info!(
-                "Skill '{}' entering tool-free final synthesis",
-                skill.name()
-            );
+            info!("Skill '{}' entering tool-free final synthesis", skill.name());
         } else {
             iterations += 1;
             if iterations > MAX_SKILL_LLM_ITERATIONS {
@@ -707,10 +689,7 @@ pub async fn execute_skill_with_sub_llm(
 
         // Add assistant response to conversation
         if let Some(tool_calls) = &response.tool_calls {
-            messages.push(Message::assistant_with_tools(
-                content.clone(),
-                tool_calls.clone(),
-            ));
+            messages.push(Message::assistant_with_tools(content.clone(), tool_calls.clone()));
         } else {
             messages.push(Message::assistant(content.clone()));
         }
@@ -718,11 +697,7 @@ pub async fn execute_skill_with_sub_llm(
         // Check if there are tool calls to handle
         if let Some(tool_calls) = response.tool_calls {
             if !tool_calls.is_empty() {
-                info!(
-                    "Skill '{}' made {} tool calls",
-                    skill.name(),
-                    tool_calls.len()
-                );
+                info!("Skill '{}' made {} tool calls", skill.name(), tool_calls.len());
                 let mut force_tool_free_synthesis_reason = None;
 
                 // Execute each tool call
@@ -731,11 +706,7 @@ pub async fn execute_skill_with_sub_llm(
                     if let Some(tool_name) = tool_call.tool_name() {
                         let tool_name = tool_name.to_string();
 
-                        debug!(
-                            "Executing tool '{}' for skill '{}'",
-                            tool_name,
-                            skill.name()
-                        );
+                        debug!("Executing tool '{}' for skill '{}'", tool_name, skill.name());
 
                         let tool_args = tool_call
                             .execution_arguments()
@@ -830,10 +801,7 @@ pub async fn execute_skill_with_sub_llm(
                 return ensure_visible_skill_content(skill, content);
             }
             FinishReason::ContentFilter => {
-                warn!(
-                    "Skill '{}' response filtered by content policy",
-                    skill.name()
-                );
+                warn!("Skill '{}' response filtered by content policy", skill.name());
                 return ensure_visible_skill_content(skill, content);
             }
             FinishReason::Error(ref msg) => {
@@ -862,17 +830,11 @@ pub struct SkillToolAdapter {
 impl SkillToolAdapter {
     /// Create a new skill tool adapter
     pub fn new(skill: Skill) -> Self {
-        SkillToolAdapter {
-            skill,
-            fork_executor: None,
-        }
+        SkillToolAdapter { skill, fork_executor: None }
     }
 
     pub fn with_fork_executor(skill: Skill, fork_executor: Arc<dyn ForkSkillExecutor>) -> Self {
-        SkillToolAdapter {
-            skill,
-            fork_executor: Some(fork_executor),
-        }
+        SkillToolAdapter { skill, fork_executor: Some(fork_executor) }
     }
 
     /// Get reference to underlying skill
@@ -1260,12 +1222,8 @@ mod tests {
             *stream_calls += 1;
 
             Ok(Box::pin(stream::iter(vec![
-                Ok(NormalizedStreamEvent::TextDelta {
-                    delta: "streamed ".to_string(),
-                }),
-                Ok(NormalizedStreamEvent::TextDelta {
-                    delta: "skill result".to_string(),
-                }),
+                Ok(NormalizedStreamEvent::TextDelta { delta: "streamed ".to_string() }),
+                Ok(NormalizedStreamEvent::TextDelta { delta: "skill result".to_string() }),
                 Ok(NormalizedStreamEvent::Done {
                     response: Box::new(LLMResponse {
                         content: None,
@@ -1427,12 +1385,8 @@ mod tests {
             ..Default::default()
         };
 
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Instructions".to_string())
+            .expect("failed to create skill");
 
         let adapter = SkillToolAdapter::new(skill);
         assert_eq!(adapter.skill().name(), "test-skill");
@@ -1447,12 +1401,8 @@ mod tests {
             ..Default::default()
         };
 
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
 
         let adapter = SkillToolAdapter::new(skill);
         let args = serde_json::json!({"test": "value"});
@@ -1474,12 +1424,8 @@ mod tests {
             ..Default::default()
         };
 
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
 
         let adapter = SkillToolAdapter::with_fork_executor(skill, Arc::new(FakeForkExecutor));
         let args = serde_json::json!({"task": "value"});
@@ -1498,12 +1444,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
 
@@ -1529,12 +1471,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
 
@@ -1560,17 +1498,11 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
-        let provider = StreamingOnlySkillProvider {
-            stream_calls: Mutex::new(0),
-        };
+        let provider = StreamingOnlySkillProvider { stream_calls: Mutex::new(0) };
 
         let result = execute_skill_with_sub_llm(
             &skill,
@@ -1584,10 +1516,7 @@ mod tests {
         .expect("streaming-only skill execution should succeed");
 
         assert_eq!(result, "streamed skill result");
-        assert_eq!(
-            *provider.stream_calls.lock().expect("stream calls mutex"),
-            1
-        );
+        assert_eq!(*provider.stream_calls.lock().expect("stream calls mutex"), 1);
     }
 
     #[tokio::test]
@@ -1598,12 +1527,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
 
@@ -1618,11 +1543,7 @@ mod tests {
         .await
         .expect_err("empty final response should be visible as an error");
 
-        assert!(
-            error
-                .to_string()
-                .contains("completed without a visible final response")
-        );
+        assert!(error.to_string().contains("completed without a visible final response"));
     }
 
     #[tokio::test]
@@ -1633,12 +1554,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
         let tool_name = "tool_only_skill_test_tool";
@@ -1647,17 +1564,12 @@ mod tests {
             .register_tool(ToolRegistration::from_tool_instance(
                 tool_name,
                 CapabilityLevel::CodeSearch,
-                CountingSkillTool {
-                    calls: Arc::clone(&tool_calls),
-                },
+                CountingSkillTool { calls: Arc::clone(&tool_calls) },
             ))
             .await
             .expect("register tool");
         registry.allow_all_tools().await.expect("allow tools");
-        let provider = ToolOnlyThenFinalizeProvider {
-            tool_name,
-            calls: Mutex::new(0),
-        };
+        let provider = ToolOnlyThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
 
         let result = execute_skill_with_sub_llm(
             &skill,
@@ -1686,12 +1598,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
         let tool_name = "stop_finish_reason_skill_test_tool";
@@ -1700,17 +1608,12 @@ mod tests {
             .register_tool(ToolRegistration::from_tool_instance(
                 tool_name,
                 CapabilityLevel::CodeSearch,
-                CountingSkillTool {
-                    calls: Arc::clone(&tool_calls),
-                },
+                CountingSkillTool { calls: Arc::clone(&tool_calls) },
             ))
             .await
             .expect("register tool");
         registry.allow_all_tools().await.expect("allow tools");
-        let provider = StopWithToolCallsThenFinalizeProvider {
-            tool_name,
-            calls: Mutex::new(0),
-        };
+        let provider = StopWithToolCallsThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
 
         let result = execute_skill_with_sub_llm(
             &skill,
@@ -1740,18 +1643,12 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
         registry.allow_all_tools().await.expect("allow tools");
-        let provider = UnknownToolThenFinalizeProvider {
-            calls: Mutex::new(0),
-        };
+        let provider = UnknownToolThenFinalizeProvider { calls: Mutex::new(0) };
 
         let result = execute_skill_with_sub_llm(
             &skill,
@@ -1779,12 +1676,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
         let tool_name = "skill_loop_test_tool";
@@ -1793,17 +1686,12 @@ mod tests {
             .register_tool(ToolRegistration::from_tool_instance(
                 tool_name,
                 CapabilityLevel::CodeSearch,
-                CountingSkillTool {
-                    calls: Arc::clone(&tool_calls),
-                },
+                CountingSkillTool { calls: Arc::clone(&tool_calls) },
             ))
             .await
             .expect("register tool");
         registry.allow_all_tools().await.expect("allow tools");
-        let provider = RepeatToolThenFinalizeProvider {
-            tool_name,
-            calls: Mutex::new(0),
-        };
+        let provider = RepeatToolThenFinalizeProvider { tool_name, calls: Mutex::new(0) };
 
         let result = execute_skill_with_sub_llm(
             &skill,
@@ -1832,12 +1720,8 @@ mod tests {
             vtcode_native: Some(true),
             ..Default::default()
         };
-        let skill = Skill::new(
-            manifest,
-            PathBuf::from("/tmp"),
-            "# Test Instructions".to_string(),
-        )
-        .expect("failed to create skill");
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
+            .expect("failed to create skill");
         let workspace = tempdir().expect("temp workspace");
         let mut registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
         let tool_calls = Arc::new(Mutex::new(0usize));
@@ -1850,9 +1734,7 @@ mod tests {
                 .register_tool(ToolRegistration::from_tool_instance(
                     tool_name.as_str(),
                     CapabilityLevel::CodeSearch,
-                    CountingSkillTool {
-                        calls: Arc::clone(&tool_calls),
-                    },
+                    CountingSkillTool { calls: Arc::clone(&tool_calls) },
                 ))
                 .await
                 .unwrap_or_else(|error| panic!("register tool {tool_name}: {error}"));
@@ -1865,10 +1747,7 @@ mod tests {
         }
 
         registry.allow_all_tools().await.expect("allow tools");
-        let provider = MaxIterationsThenFinalizeProvider {
-            tool_names,
-            calls: Mutex::new(0),
-        };
+        let provider = MaxIterationsThenFinalizeProvider { tool_names, calls: Mutex::new(0) };
 
         let result = execute_skill_with_sub_llm(
             &skill,
@@ -1882,10 +1761,7 @@ mod tests {
         .expect("max-iteration recovery should force a final synthesis");
 
         assert_eq!(result, "finalized after max iterations");
-        assert_eq!(
-            *tool_calls.lock().expect("tool calls mutex"),
-            MAX_SKILL_LLM_ITERATIONS
-        );
+        assert_eq!(*tool_calls.lock().expect("tool calls mutex"), MAX_SKILL_LLM_ITERATIONS);
     }
 
     #[test]
@@ -2099,12 +1975,8 @@ mod tests {
             ..Default::default()
         };
 
-        Skill::new(
-            manifest,
-            PathBuf::from("/tmp/test-skill"),
-            "Instructions".to_string(),
-        )
-        .expect("failed to create skill")
+        Skill::new(manifest, PathBuf::from("/tmp/test-skill"), "Instructions".to_string())
+            .expect("failed to create skill")
     }
 
     #[test]
@@ -2122,10 +1994,7 @@ mod tests {
         let merged =
             merge_skill_command_permissions(&skill, "shell", serde_json::json!({"command": "pwd"}));
 
-        assert_eq!(
-            merged["sandbox_permissions"],
-            serde_json::json!("with_additional_permissions")
-        );
+        assert_eq!(merged["sandbox_permissions"], serde_json::json!("with_additional_permissions"));
         assert_eq!(
             merged["additional_permissions"]["fs_read"],
             serde_json::json!(["/tmp/test-skill/references"])

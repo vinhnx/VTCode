@@ -9,28 +9,14 @@ pub(crate) fn prompt_reasoning_effort(
     renderer: &mut AnsiRenderer,
     default: ReasoningEffortLevel,
 ) -> Result<ReasoningEffortLevel> {
-    renderer.line(
-        MessageStyle::Status,
-        "Choose reasoning effort level for models that support it:",
-    )?;
+    renderer
+        .line(MessageStyle::Status, "Choose reasoning effort level for models that support it:")?;
 
     let levels = [
-        (
-            ReasoningEffortLevel::None,
-            "None – lowest latency, good default for GPT-5.4",
-        ),
-        (
-            ReasoningEffortLevel::Low,
-            "Low – faster responses, less reasoning",
-        ),
-        (
-            ReasoningEffortLevel::Medium,
-            "Medium – balanced reasoning for harder multi-step work",
-        ),
-        (
-            ReasoningEffortLevel::High,
-            "High – deeper reasoning, slower responses",
-        ),
+        (ReasoningEffortLevel::None, "None – lowest latency, good default for GPT-5.4"),
+        (ReasoningEffortLevel::Low, "Low – faster responses, less reasoning"),
+        (ReasoningEffortLevel::Medium, "Medium – balanced reasoning for harder multi-step work"),
+        (ReasoningEffortLevel::High, "High – deeper reasoning, slower responses"),
         (
             ReasoningEffortLevel::XHigh,
             "Extra High – best default for advanced coding and agentic work",
@@ -44,10 +30,8 @@ pub(crate) fn prompt_reasoning_effort(
     match select_reasoning_with_ratatui(&levels, default) {
         Ok(level) => Ok(level),
         Err(error) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Falling back to manual input ({error})."),
-            )?;
+            renderer
+                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_reasoning_effort_text(renderer, &levels, default)
         }
     }
@@ -66,10 +50,7 @@ fn select_reasoning_with_ratatui(
 ) -> Result<ReasoningEffortLevel> {
     let entries = reasoning_entries(levels);
 
-    let default_index = levels
-        .iter()
-        .position(|(level, _)| *level == default)
-        .unwrap_or(1);
+    let default_index = levels.iter().position(|(level, _)| *level == default).unwrap_or(1);
 
     let instructions = format!(
         "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
@@ -119,20 +100,11 @@ mod tests {
     #[test]
     fn reasoning_entries_keep_labels_without_ordinals() {
         let entries = reasoning_entries(&[
-            (
-                ReasoningEffortLevel::None,
-                "None – lowest latency, good default for GPT-5.4",
-            ),
-            (
-                ReasoningEffortLevel::Low,
-                "Low – faster responses, less reasoning",
-            ),
+            (ReasoningEffortLevel::None, "None – lowest latency, good default for GPT-5.4"),
+            (ReasoningEffortLevel::Low, "Low – faster responses, less reasoning"),
         ]);
 
-        assert_eq!(
-            entries[0].title,
-            "None – lowest latency, good default for GPT-5.4"
-        );
+        assert_eq!(entries[0].title, "None – lowest latency, good default for GPT-5.4");
         assert_eq!(entries[1].title, "Low – faster responses, less reasoning");
     }
 }

@@ -258,10 +258,7 @@ mod tests {
     #[test]
     fn approval_required_for_high_risk() {
         let gate = HitlGate::new(true, true);
-        assert_eq!(
-            gate.decide(RiskLevel::High),
-            OversightDecision::RequireApproval
-        );
+        assert_eq!(gate.decide(RiskLevel::High), OversightDecision::RequireApproval);
     }
 
     #[test]
@@ -270,10 +267,7 @@ mod tests {
         policy.whitelist_tool("read_file");
 
         assert_eq!(policy.check_tool("read_file"), OversightDecision::Allow);
-        assert_eq!(
-            policy.check_tool("write_file"),
-            OversightDecision::RequireApproval
-        );
+        assert_eq!(policy.check_tool("write_file"), OversightDecision::RequireApproval);
     }
 
     #[test]
@@ -300,10 +294,7 @@ mod tests {
         let gate = HitlGate::with_policy(policy);
 
         // Whitelisted tool is allowed even with high risk
-        assert_eq!(
-            gate.decide_for_tool("read_file", RiskLevel::High),
-            OversightDecision::Allow
-        );
+        assert_eq!(gate.decide_for_tool("read_file", RiskLevel::High), OversightDecision::Allow);
     }
 
     #[test]

@@ -351,9 +351,7 @@ fn build_agent_palette_rows(
     }
 
     if palette.has_more_items() {
-        let remaining = palette
-            .total_items()
-            .saturating_sub(palette.current_page_number() * 20);
+        let remaining = palette.total_items().saturating_sub(palette.current_page_number() * 20);
         rows.push(AgentPaletteRenderRow {
             text: format!("... ({remaining} more items)"),
             subtitle: None,

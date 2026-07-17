@@ -437,10 +437,7 @@ pub struct SequencedEvent<'a> {
 impl<'a> SequencedEvent<'a> {
     /// Creates a new sequenced event.
     pub fn new(sequence_number: u64, event: &'a ResponseStreamEvent) -> Self {
-        Self {
-            sequence_number,
-            event,
-        }
+        Self { sequence_number, event }
     }
 }
 
@@ -458,9 +455,7 @@ mod tests {
     #[test]
     fn test_terminal_events() {
         let response = Response::new("resp_1", "gpt-5");
-        let created = ResponseStreamEvent::ResponseCreated {
-            response: response.clone(),
-        };
+        let created = ResponseStreamEvent::ResponseCreated { response: response.clone() };
         let completed = ResponseStreamEvent::ResponseCompleted { response };
         assert!(!created.is_terminal());
         assert!(completed.is_terminal());

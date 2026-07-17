@@ -141,10 +141,7 @@ pub(crate) fn normalize_request_user_input_fallback_args(args_val: &Value) -> Op
             "header".to_string(),
             Value::String(normalize_fallback_header(header_source, "Question")),
         );
-        question.insert(
-            "question".to_string(),
-            Value::String(question_text.to_string()),
-        );
+        question.insert("question".to_string(), Value::String(question_text.to_string()));
         if let Some(items) = find_case_insensitive_field(tab_obj, "items")
             && let Some(options) = normalize_fallback_options(items)
         {
@@ -170,10 +167,7 @@ pub(crate) fn normalize_request_user_input_fallback_args(args_val: &Value) -> Op
             "header".to_string(),
             Value::String(normalize_fallback_header(header_source, "Question")),
         );
-        question.insert(
-            "question".to_string(),
-            Value::String(question_text.to_string()),
-        );
+        question.insert("question".to_string(), Value::String(question_text.to_string()));
         if let Some(options_value) = find_case_insensitive_field(args_obj, "options")
             && let Some(options) = normalize_fallback_options(options_value)
         {
@@ -193,10 +187,7 @@ pub(super) fn validate_questions(questions: &[RequestUserInputQuestion]) -> Resu
 
     for question in questions {
         if !is_snake_case(&question.id) {
-            bail!(
-                "question id '{}' must be snake_case (letters, digits, underscore)",
-                question.id
-            );
+            bail!("question id '{}' must be snake_case (letters, digits, underscore)", question.id);
         }
 
         let header = question.header.trim();
@@ -212,10 +203,7 @@ pub(super) fn validate_questions(questions: &[RequestUserInputQuestion]) -> Resu
             bail!("question prompt cannot be empty");
         }
         if prompt.contains('\n') {
-            bail!(
-                "question '{}' must be a single sentence on one line",
-                question.id
-            );
+            bail!("question '{}' must be a single sentence on one line", question.id);
         }
     }
 
@@ -254,22 +242,14 @@ fn normalize_fallback_question_id(raw: Option<&str>, index: usize) -> String {
     if out.is_empty() {
         return format!("question_{}", index + 1);
     }
-    if !out
-        .chars()
-        .next()
-        .map(|ch| ch.is_ascii_lowercase())
-        .unwrap_or(false)
-    {
+    if !out.chars().next().map(|ch| ch.is_ascii_lowercase()).unwrap_or(false) {
         out.insert(0, 'q');
     }
     out
 }
 
 fn normalize_fallback_header(raw: Option<&str>, fallback: &str) -> String {
-    let candidate = raw
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(fallback);
+    let candidate = raw.map(str::trim).filter(|value| !value.is_empty()).unwrap_or(fallback);
     truncate_chars(candidate, 12)
 }
 
@@ -362,10 +342,7 @@ fn normalize_fallback_question(
         "header".to_string(),
         Value::String(normalize_fallback_header(header_source, "Question")),
     );
-    question.insert(
-        "question".to_string(),
-        Value::String(question_text.to_string()),
-    );
+    question.insert("question".to_string(), Value::String(question_text.to_string()));
 
     if let Some(options_value) = find_case_insensitive_field(obj, "options")
         .or_else(|| find_case_insensitive_field(obj, "items"))

@@ -33,11 +33,8 @@ impl ToolRegistry {
                 .map(|registration| registration.name().to_string()),
         );
         let mcp_keys = self.mcp_policy_keys().await;
-        let full_auto_catalogue_config = self
-            .policy_gateway
-            .lock()
-            .await
-            .full_auto_catalogue_config();
+        let full_auto_catalogue_config =
+            self.policy_gateway.lock().await.full_auto_catalogue_config();
         let full_auto_visible_policy_names = if let Some(config) = &full_auto_catalogue_config {
             Some(self.visible_policy_names(config.clone()).await)
         } else {
@@ -45,32 +42,23 @@ impl ToolRegistry {
         };
         #[cfg(test)]
         {
-            let test_hooks = self
-                .policy_gateway
-                .lock()
-                .await
-                .full_auto_catalogue_test_hooks();
+            let test_hooks = self.policy_gateway.lock().await.full_auto_catalogue_test_hooks();
             test_hooks.pause_after_refresh_snapshot().await;
         }
         {
             let mut policy_gateway = self.policy_gateway.lock().await;
-            policy_gateway
-                .sync_available_tools(available, &mcp_keys)
-                .await;
-            if let (Some(config), Some(visible_policy_names)) = (
-                full_auto_catalogue_config.as_ref(),
-                full_auto_visible_policy_names.as_ref(),
-            ) {
+            policy_gateway.sync_available_tools(available, &mcp_keys).await;
+            if let (Some(config), Some(visible_policy_names)) =
+                (full_auto_catalogue_config.as_ref(), full_auto_visible_policy_names.as_ref())
+            {
                 policy_gateway.refresh_full_auto_catalogue(config, visible_policy_names);
             }
         }
 
         // Seed default permissions from tool metadata when policy manager is present
         let policy_seeds = {
-            let assembly = self
-                .tool_assembly
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let assembly =
+                self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
             assembly
                 .policy_seed_metadata()
                 .iter()
@@ -84,9 +72,8 @@ impl ToolRegistry {
                 if let Some(default_policy) = metadata.default_permission() {
                     let current = policy.get_policy(&name);
                     if matches!(current, ToolPolicy::Prompt) {
-                        if let Err(err) = policy
-                            .seed_default_policy(&name, default_policy.clone())
-                            .await
+                        if let Err(err) =
+                            policy.seed_default_policy(&name, default_policy.clone()).await
                         {
                             tracing::warn!(
                                 tool = %name,
@@ -116,10 +103,7 @@ impl ToolRegistry {
         for category in categories {
             state.failure_trackers.entry(category).or_default();
             state.success_trackers.entry(category).or_insert(0);
-            state
-                .latency_stats
-                .entry(category)
-                .or_insert_with(|| ToolLatencyStats::new(50));
+            state.latency_stats.entry(category).or_insert_with(|| ToolLatencyStats::new(50));
             state
                 .adaptive_timeout_ceiling
                 .entry(category)
@@ -149,8 +133,7 @@ impl ToolRegistry {
 
         self.prewarm_search_runtime();
         self.sync_policy_catalog().await;
-        self.initialized
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.initialized.store(true, std::sync::atomic::Ordering::Relaxed);
 
         Ok(())
     }

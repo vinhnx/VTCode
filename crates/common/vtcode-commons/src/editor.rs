@@ -20,10 +20,7 @@ pub struct EditorTarget {
 impl EditorTarget {
     #[must_use]
     pub fn new(path: PathBuf, location_suffix: Option<String>) -> Self {
-        Self {
-            path,
-            location_suffix,
-        }
+        Self { path, location_suffix }
     }
 
     #[must_use]
@@ -164,17 +161,13 @@ pub fn resolve_editor_path(path: &Path, base: &Path) -> PathBuf {
 }
 
 fn expand_home_relative_path(path: &str) -> Option<PathBuf> {
-    let remainder = path
-        .strip_prefix("~/")
-        .or_else(|| path.strip_prefix("~\\"))?;
+    let remainder = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"))?;
     let home = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE"))?;
     Some(PathBuf::from(home).join(remainder))
 }
 
 fn decode_bare_local_path(path: &str) -> Cow<'_, str> {
-    percent_decode_str(path)
-        .decode_utf8()
-        .unwrap_or(Cow::Borrowed(path))
+    percent_decode_str(path).decode_utf8().unwrap_or(Cow::Borrowed(path))
 }
 
 fn extract_trailing_location(raw: &str) -> Option<String> {
@@ -285,13 +278,7 @@ mod tests {
         let target = parse_editor_target("/tmp/demo.rs:12:4").expect("target");
         assert_eq!(target.path(), Path::new("/tmp/demo.rs"));
         assert_eq!(target.location_suffix(), Some(":12:4"));
-        assert_eq!(
-            target.point(),
-            Some(EditorPoint {
-                line: 12,
-                column: Some(4)
-            })
-        );
+        assert_eq!(target.point(), Some(EditorPoint { line: 12, column: Some(4) }));
     }
 
     #[test]
@@ -310,14 +297,8 @@ mod tests {
 
     #[test]
     fn normalizes_hash_location_ranges() {
-        assert_eq!(
-            normalize_editor_hash_fragment("L74C3-L76C9"),
-            Some(":74:3-76:9".to_string())
-        );
-        assert_eq!(
-            normalize_editor_hash_fragment("L74-L76"),
-            Some(":74-76".to_string())
-        );
+        assert_eq!(normalize_editor_hash_fragment("L74C3-L76C9"), Some(":74:3-76:9".to_string()));
+        assert_eq!(normalize_editor_hash_fragment("L74-L76"), Some(":74-76".to_string()));
         assert_eq!(normalize_editor_hash_fragment("L"), None);
         assert_eq!(normalize_editor_hash_fragment("L74-"), None);
         assert_eq!(normalize_editor_hash_fragment("L74C"), None);

@@ -319,16 +319,10 @@ pub fn is_claude_model(model: &str, default_model: &str) -> bool {
 }
 
 pub fn supported_models() -> Vec<String> {
-    let mut supported: Vec<String> = models::anthropic::SUPPORTED_MODELS
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let mut supported: Vec<String> =
+        models::anthropic::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect();
 
-    supported.extend(
-        models::minimax::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string()),
-    );
+    supported.extend(models::minimax::SUPPORTED_MODELS.iter().map(|s| s.to_string()));
 
     supported.sort();
     supported.dedup();

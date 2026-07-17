@@ -16,10 +16,7 @@ pub(crate) fn parse_plan_content_from_json(json: &Value) -> PlanContent {
         .unwrap_or("")
         .to_string();
 
-    let file_path = json
-        .get("file_path")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    let file_path = json.get("file_path").and_then(|v| v.as_str()).map(|s| s.to_string());
 
     let raw_content = json
         .get("raw_content")
@@ -31,11 +28,7 @@ pub(crate) fn parse_plan_content_from_json(json: &Value) -> PlanContent {
     let open_questions = json
         .get("open_questions")
         .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|q| q.as_str().map(|s| s.to_string()))
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(|q| q.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_default();
 
     let mut step_number = 0;
@@ -87,11 +80,7 @@ pub(crate) fn parse_plan_content_from_json(json: &Value) -> PlanContent {
                         .unwrap_or_default();
                     let completed = steps.iter().all(|step| step.completed) && !steps.is_empty();
 
-                    Some(PlanPhase {
-                        name,
-                        steps,
-                        completed,
-                    })
+                    Some(PlanPhase { name, steps, completed })
                 })
                 .collect()
         })

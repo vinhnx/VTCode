@@ -109,9 +109,7 @@ impl CodexMcpStartupTracker {
         };
 
         if !expected_servers.is_empty()
-            && !expected_servers
-                .iter()
-                .all(|name| self.current_status.contains_key(name))
+            && !expected_servers.iter().all(|name| self.current_status.contains_key(name))
         {
             return false;
         }
@@ -153,10 +151,7 @@ impl CodexMcpStartupTracker {
             ));
         }
         if !failed.is_empty() {
-            messages.push(format!(
-                "MCP startup incomplete (failed: {})",
-                failed.join(", ")
-            ));
+            messages.push(format!("MCP startup incomplete (failed: {})", failed.join(", ")));
         }
         messages
     }
@@ -214,10 +209,7 @@ pub(crate) async fn handle_codex_ask_command(
     let mut events = client.subscribe();
     let mut mcp_startup = load_mcp_startup_tracker(&client).await;
     let thread = client
-        .thread_start(
-            build_thread_request(&config, true, options.skip_confirmations),
-            true,
-        )
+        .thread_start(build_thread_request(&config, true, options.skip_confirmations), true)
         .await?;
     drain_startup_notifications(&mut events, &mut mcp_startup)?;
     let output = run_turn(
@@ -298,13 +290,8 @@ pub(crate) async fn run_codex_noninteractive_with_instructions(
     run: CodexNonInteractiveRun,
     instructions: Option<String>,
 ) -> Result<CodexCompletedRun> {
-    run_codex_noninteractive_inner(
-        config,
-        vt_cfg,
-        run,
-        normalise_turn_instructions(instructions),
-    )
-    .await
+    run_codex_noninteractive_inner(config, vt_cfg, run, normalise_turn_instructions(instructions))
+        .await
 }
 
 async fn run_codex_noninteractive_inner(
@@ -333,10 +320,7 @@ async fn run_codex_noninteractive_inner(
     let output = if experimental_features && turn_instructions.is_none() {
         if let Some(target) = run.review_target.clone() {
             let review = client
-                .review_start(CodexReviewStartRequest {
-                    thread_id: thread_id.clone(),
-                    target,
-                })
+                .review_start(CodexReviewStartRequest { thread_id: thread_id.clone(), target })
                 .await?;
             collect_turn_output(
                 &client,
@@ -388,11 +372,7 @@ async fn run_codex_noninteractive_inner(
     let mut messages = run.seed_messages;
     messages.push(SessionMessage::new(MessageRole::User, run.prompt));
     messages.push(SessionMessage::new(MessageRole::Assistant, output.clone()));
-    Ok(CodexCompletedRun {
-        output,
-        thread_id,
-        messages,
-    })
+    Ok(CodexCompletedRun { output, thread_id, messages })
 }
 
 fn normalise_turn_instructions(instructions: Option<String>) -> Option<String> {
@@ -507,12 +487,7 @@ async fn prepare_session_state(
     resume: Option<ResumeSession>,
     history_enabled: bool,
     skip_confirmations: bool,
-) -> Result<(
-    CodexThreadEnvelope,
-    Option<SessionArchive>,
-    Vec<SessionMessage>,
-    usize,
-)> {
+) -> Result<(CodexThreadEnvelope, Option<SessionArchive>, Vec<SessionMessage>, usize)> {
     let thread_request = build_thread_request(config, false, skip_confirmations);
 
     let Some(resume) = resume else {
@@ -528,9 +503,7 @@ async fn prepare_session_state(
         .clone()
         .ok_or_else(|| anyhow!("archived session is missing its Codex thread id"))?;
     let thread = if resume.is_fork() {
-        client
-            .thread_fork(&upstream_thread_id, thread_request, false)
-            .await?
+        client.thread_fork(&upstream_thread_id, thread_request, false).await?
     } else {
         client.thread_resume(&upstream_thread_id).await?
     };
@@ -721,17 +694,15 @@ async fn collect_turn_output(
                 }
                 let status = event.params["turn"]["status"].as_str().unwrap_or("unknown");
                 if status != "completed" {
-                    let message = event.params["turn"]["error"]["message"]
-                        .as_str()
-                        .unwrap_or("turn failed");
+                    let message =
+                        event.params["turn"]["error"]["message"].as_str().unwrap_or("turn failed");
                     bail!("Codex turn ended with status '{status}': {message}");
                 }
                 return Ok(output.trim_end().to_string());
             }
             "error" if event.params["threadId"].as_str() == Some(thread_id.as_str()) => {
-                let message = event.params["error"]["message"]
-                    .as_str()
-                    .unwrap_or("Codex turn failed");
+                let message =
+                    event.params["error"]["message"].as_str().unwrap_or("Codex turn failed");
                 bail!(message.to_string());
             }
             _ => {}
@@ -756,9 +727,7 @@ async fn handle_steering_message(
             if input.is_empty() {
                 return Ok(());
             }
-            client
-                .turn_steer(thread_id, turn_id, input.to_string())
-                .await?;
+            client.turn_steer(thread_id, turn_id, input.to_string()).await?;
             Ok(())
         }
         SteeringMessage::Pause | SteeringMessage::Resume => Ok(()),
@@ -791,13 +760,10 @@ async fn handle_approval_request(
 }
 
 async fn load_mcp_startup_tracker(client: &CodexAppServerClient) -> CodexMcpStartupTracker {
-    let expected_servers = client.mcp_server_status_list().await.ok().map(|response| {
-        response
-            .data
-            .into_iter()
-            .map(|server| server.name)
-            .collect::<Vec<_>>()
-    });
+    let expected_servers =
+        client.mcp_server_status_list().await.ok().map(|response| {
+            response.data.into_iter().map(|server| server.name).collect::<Vec<_>>()
+        });
     CodexMcpStartupTracker::new(expected_servers)
 }
 
@@ -875,10 +841,7 @@ fn prompt_for_approval_decision(method: &str, params: &Value) -> Result<Value> {
                 format!("Approve Codex command?\n  {command}\n  cwd: {cwd}"),
                 vec![
                     ("Approve once", json!({ "decision": "accept" })),
-                    (
-                        "Approve for session",
-                        json!({ "decision": "acceptForSession" }),
-                    ),
+                    ("Approve for session", json!({ "decision": "acceptForSession" })),
                     ("Decline", json!({ "decision": "decline" })),
                     ("Cancel turn", json!({ "decision": "cancel" })),
                 ],
@@ -888,10 +851,7 @@ fn prompt_for_approval_decision(method: &str, params: &Value) -> Result<Value> {
             "Approve Codex file changes?".to_string(),
             vec![
                 ("Approve once", json!({ "decision": "accept" })),
-                (
-                    "Approve for session",
-                    json!({ "decision": "acceptForSession" }),
-                ),
+                ("Approve for session", json!({ "decision": "acceptForSession" })),
                 ("Decline", json!({ "decision": "decline" })),
                 ("Cancel turn", json!({ "decision": "cancel" })),
             ],
@@ -931,9 +891,8 @@ fn read_user_prompt() -> Result<Option<String>> {
         print!("> ");
         terminal::flush_stdout();
         let mut buffer = String::new();
-        let bytes_read = std::io::stdin()
-            .read_line(&mut buffer)
-            .context("failed to read user input")?;
+        let bytes_read =
+            std::io::stdin().read_line(&mut buffer).context("failed to read user input")?;
         if bytes_read == 0 {
             Ok(None)
         } else {
@@ -1084,10 +1043,7 @@ mod tests {
         );
 
         let settled = tracker.record_update("beta".to_string(), CodexMcpStartupStatus::Ready);
-        assert_eq!(
-            settled,
-            vec!["MCP startup incomplete (failed: alpha)".to_string()]
-        );
+        assert_eq!(settled, vec!["MCP startup incomplete (failed: alpha)".to_string()]);
     }
 
     #[test]

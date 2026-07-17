@@ -45,10 +45,7 @@ async fn record_circuit_transition(
     };
     let after = breaker.get_diagnostics(tool_name);
     if before.status != after.status || after.denied_requests > before.denied_requests {
-        ctx.error_recovery
-            .write()
-            .await
-            .record_circuit_transition(&before, &after);
+        ctx.error_recovery.write().await.record_circuit_transition(&before, &after);
     }
 }
 
@@ -79,10 +76,7 @@ fn planned_execution_layout(
 ) -> Vec<(PreparedToolBatchKind, usize)> {
     PreparedToolBatch::plan_layout_with_names(
         validated_calls.iter().map(|validated_call| {
-            (
-                validated_call.can_parallelize(),
-                validated_call.prepared.canonical_name.as_str(),
-            )
+            (validated_call.can_parallelize(), validated_call.prepared.canonical_name.as_str())
         }),
         allow_parallel,
     )
@@ -302,10 +296,7 @@ pub(crate) async fn handle_tool_call_batch_prepared<'a, 'b>(
             validation_result,
         ) {
             ValidationTransition::Proceed(prepared) => {
-                validated_calls.push(ValidatedToolCall {
-                    tool_call,
-                    prepared,
-                });
+                validated_calls.push(ValidatedToolCall { tool_call, prepared });
             }
             ValidationTransition::Return(Some(outcome)) => {
                 flush_budget_synthesis_directives(t_ctx.ctx);
@@ -457,18 +448,9 @@ async fn execute_and_handle_tool_call_inner<'a>(
     };
     record_circuit_transition(ctx, tool_name, circuit_before).await;
 
-    update_repetition_tracker(
-        repeated_tool_attempts,
-        &pipeline_outcome,
-        tool_name,
-        &args_val,
-    );
+    update_repetition_tracker(repeated_tool_attempts, &pipeline_outcome, tool_name, &args_val);
 
-    let mut t_ctx = ToolOutcomeContext {
-        ctx,
-        repeated_tool_attempts,
-        turn_modified_files,
-    };
+    let mut t_ctx = ToolOutcomeContext { ctx, repeated_tool_attempts, turn_modified_files };
 
     let outcome = handle_tool_execution_result(
         &mut t_ctx,
@@ -714,10 +696,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)));
         assert_eq!(completions.load(Ordering::SeqCst), 2);
         assert!(futures.is_empty());
     }

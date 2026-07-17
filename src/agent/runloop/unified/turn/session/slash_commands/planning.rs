@@ -42,8 +42,7 @@ pub(crate) async fn handle_toggle_planning_workflow(
         )
         .await;
         sync_workspace_trust_prompt_policy(&mut ctx, false).await?;
-        ctx.renderer
-            .line(MessageStyle::Info, "Planning workflow started")?;
+        ctx.renderer.line(MessageStyle::Info, "Planning workflow started")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  The agent will focus on analysis and planning with a structured plan.",
@@ -69,8 +68,7 @@ pub(crate) async fn handle_toggle_planning_workflow(
         )
         .await;
         sync_workspace_trust_prompt_policy(&mut ctx, false).await?;
-        ctx.renderer
-            .line(MessageStyle::Info, "Planning workflow finished")?;
+        ctx.renderer.line(MessageStyle::Info, "Planning workflow finished")?;
         ctx.renderer.line(
             MessageStyle::Output,
             "  Mutating tools (edits, commands, tests) are now allowed, subject to normal permissions.",
@@ -93,8 +91,6 @@ async fn sync_workspace_trust_prompt_policy(
         auto_permission_review_active,
         workspace_trust_level,
     );
-    ctx.tool_registry
-        .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
-        .await;
+    ctx.tool_registry.set_enforce_safe_mode_prompts(enforce_safe_mode_prompts).await;
     Ok(())
 }

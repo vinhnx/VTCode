@@ -52,10 +52,7 @@ async fn test_adaptive_loop_detection_integration() -> Result<()> {
     executor.record_tool_call(list_tool, &json!({ "path": "/tmp/a" }));
     executor.record_tool_call(list_tool, &json!({ "path": "/tmp/b" }));
     let warning_list = executor.record_tool_call(list_tool, &json!({ "path": "/tmp/c" }));
-    assert!(
-        warning_list.is_none(),
-        "Call 3 for list_files should NOT warn (limit is 5)"
-    );
+    assert!(warning_list.is_none(), "Call 3 for list_files should NOT warn (limit is 5)");
 
     Ok(())
 }

@@ -54,11 +54,7 @@ pub(super) fn draw_selection_ui(
                 .unwrap_or([Rect::ZERO; 3]);
 
             let instructions_widget = Paragraph::new(instructions)
-                .block(
-                    Block::bordered()
-                        .title("Instructions")
-                        .border_type(BorderType::Rounded),
-                )
+                .block(Block::bordered().title("Instructions").border_type(BorderType::Rounded))
                 .wrap(Wrap { trim: true });
             frame.render_widget(instructions_widget, instructions_area);
 
@@ -84,11 +80,7 @@ pub(super) fn draw_selection_ui(
                 .collect();
 
             let list = List::new(items)
-                .block(
-                    Block::bordered()
-                        .title(title)
-                        .border_type(BorderType::Rounded),
-                )
+                .block(Block::bordered().title(title).border_type(BorderType::Rounded))
                 .style(styles::DEFAULT_TEXT)
                 .highlight_style(styles::HIGHLIGHT)
                 .highlight_symbol("→ ")
@@ -121,17 +113,10 @@ pub(super) fn draw_selection_ui(
 
             summary_lines.push(Line::from(""));
             summary_lines.push(Line::from(CONTROLS_HINT));
-            summary_lines.push(Line::from(Span::styled(
-                NUMBER_JUMP_HINT,
-                styles::DESCRIPTION,
-            )));
+            summary_lines.push(Line::from(Span::styled(NUMBER_JUMP_HINT, styles::DESCRIPTION)));
 
             let footer = Paragraph::new(summary_lines)
-                .block(
-                    Block::bordered()
-                        .title("Selection")
-                        .border_type(BorderType::Rounded),
-                )
+                .block(Block::bordered().title("Selection").border_type(BorderType::Rounded))
                 .wrap(Wrap { trim: true });
             frame.render_widget(footer, footer_area);
         })

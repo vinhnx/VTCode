@@ -664,10 +664,10 @@ impl ConfidenceEscalationConfig {
         if self.always_escalate_tools.iter().any(|t| t == tool_name) {
             return true;
         }
-        if let Some(cost) = estimated_cost_usd {
-            if cost > self.cost_threshold_usd {
-                return true;
-            }
+        if let Some(cost) = estimated_cost_usd
+            && cost > self.cost_threshold_usd
+        {
+            return true;
         }
         false
     }
@@ -755,7 +755,7 @@ impl ToolResultClearingConfig {
         }
         if self.clear_at_least_tokens == 0 {
             return Err(
-                "tool_result_clearing.clear_at_least_tokens must be greater than 0".to_string(),
+                "tool_result_clearing.clear_at_least_tokens must be greater than 0".to_string()
             );
         }
         Ok(())
@@ -973,10 +973,8 @@ impl Default for AgentConfig {
 impl AgentConfig {
     /// Determine whether structured reasoning tag instructions should be included.
     pub fn should_include_structured_reasoning_tags(&self) -> bool {
-        self.include_structured_reasoning_tags.unwrap_or(matches!(
-            self.system_prompt_mode,
-            SystemPromptMode::Specialized
-        ))
+        self.include_structured_reasoning_tags
+            .unwrap_or(matches!(self.system_prompt_mode, SystemPromptMode::Specialized))
     }
 
     /// Validate LLM generation parameters
@@ -1521,10 +1519,7 @@ fn default_usage_tips() -> Vec<String> {
 }
 
 fn default_recommended_actions() -> Vec<String> {
-    DEFAULT_RECOMMENDED_ACTIONS
-        .iter()
-        .map(|s| (*s).into())
-        .collect()
+    DEFAULT_RECOMMENDED_ACTIONS.iter().map(|s| (*s).into()).collect()
 }
 
 /// Small/lightweight model configuration for efficient operations
@@ -1854,18 +1849,9 @@ mod tests {
     #[test]
     fn test_continuation_policy_defaults_and_parses() {
         assert_eq!(ContinuationPolicy::default(), ContinuationPolicy::All);
-        assert_eq!(
-            ContinuationPolicy::parse("off"),
-            Some(ContinuationPolicy::Off)
-        );
-        assert_eq!(
-            ContinuationPolicy::parse("exec-only"),
-            Some(ContinuationPolicy::ExecOnly)
-        );
-        assert_eq!(
-            ContinuationPolicy::parse("all"),
-            Some(ContinuationPolicy::All)
-        );
+        assert_eq!(ContinuationPolicy::parse("off"), Some(ContinuationPolicy::Off));
+        assert_eq!(ContinuationPolicy::parse("exec-only"), Some(ContinuationPolicy::ExecOnly));
+        assert_eq!(ContinuationPolicy::parse("all"), Some(ContinuationPolicy::All));
         assert_eq!(ContinuationPolicy::parse("invalid"), None);
     }
 
@@ -1906,18 +1892,12 @@ mod tests {
         let parsed: AgentHarnessConfig =
             toml::from_str("orchestration_mode = \"plan_build_evaluate\"")
                 .expect("valid harness config");
-        assert_eq!(
-            parsed.orchestration_mode,
-            HarnessOrchestrationMode::PlanBuildEvaluate
-        );
+        assert_eq!(parsed.orchestration_mode, HarnessOrchestrationMode::PlanBuildEvaluate);
         assert_eq!(parsed.max_revision_rounds, 2);
 
         let fallback: AgentHarnessConfig =
             toml::from_str("orchestration_mode = \"unexpected\"").expect("fallback config");
-        assert_eq!(
-            fallback.orchestration_mode,
-            HarnessOrchestrationMode::PlanBuildEvaluate
-        );
+        assert_eq!(fallback.orchestration_mode, HarnessOrchestrationMode::PlanBuildEvaluate);
     }
 
     #[test]

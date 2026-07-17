@@ -3,7 +3,7 @@ use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
 
-#[path = "../vtcode-core/tests/support/mod.rs"]
+#[path = "../crates/codegen/vtcode-core/tests/support/mod.rs"]
 mod support;
 
 use support::TestHarness;
@@ -26,9 +26,7 @@ fn print_mode_requires_prompt_or_stdin() {
     let mut cmd = base_command(&harness);
     cmd.arg("--print");
 
-    cmd.assert()
-        .failure()
-        .stderr(predicate::str::contains("No prompt provided"));
+    cmd.assert().failure().stderr(predicate::str::contains("No prompt provided"));
 }
 
 #[test]
@@ -63,9 +61,7 @@ fn unknown_positional_token_fails_without_forwarding_prompt_to_llm() {
 
     cmd.assert().failure().stderr(
         predicate::str::contains("invalid value")
-            .and(predicate::str::contains(
-                "is not a valid workspace path or subcommand",
-            ))
+            .and(predicate::str::contains("is not a valid workspace path or subcommand"))
             .and(predicate::str::contains("try '--help'"))
             .and(predicate::str::contains("Sending prompt to").not()),
     );

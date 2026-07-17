@@ -119,9 +119,8 @@ impl IncrementalSystemPrompt {
         }
 
         // Build the new prompt
-        let new_content = self
-            .build_prompt_content(base_system_prompt, context, agent_config)
-            .await;
+        let new_content =
+            self.build_prompt_content(base_system_prompt, context, agent_config).await;
 
         // Update cache
         write_guard.content = new_content.clone();
@@ -162,10 +161,8 @@ impl IncrementalSystemPrompt {
                 let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{unified}");
             }
         } else if !context.discovered_skills.is_empty() {
-            let _ = writeln!(
-                prompt,
-                "\n# SKILLS\nUse `list_skills` to see available capabilities."
-            );
+            let _ =
+                writeln!(prompt, "\n# SKILLS\nUse `list_skills` to see available capabilities.");
         }
 
         vtcode_core::prompts::append_runtime_mode_sections(

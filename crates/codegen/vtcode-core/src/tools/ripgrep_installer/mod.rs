@@ -59,9 +59,7 @@ impl RipgrepStatus {
                     RipgrepStatus::NotFound
                 } else {
                     debug_log(&format!("ripgrep check error: {err}"));
-                    RipgrepStatus::Error {
-                        reason: err.to_string(),
-                    }
+                    RipgrepStatus::Error { reason: err.to_string() }
                 }
             }
         }

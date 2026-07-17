@@ -68,10 +68,7 @@ fn prompt_file_content_variations() {
             "Multiple lines",
             "You are a helpful assistant.\n\nYou can help with:\n- Code\n- Analysis",
         ),
-        (
-            "With special characters",
-            "You are a helpful assistant! Use tools @mention and #tags.",
-        ),
+        ("With special characters", "You are a helpful assistant! Use tools @mention and #tags."),
         ("Large content", large_content.as_str()),
     ];
 
@@ -98,10 +95,7 @@ fn actual_prompt_file_validation() {
 
         // Basic validation of the system prompt content
         assert!(!content.is_empty(), "System prompt should not be empty");
-        assert!(
-            content.len() > 50,
-            "System prompt should be substantial (>50 chars)"
-        );
+        assert!(content.len() > 50, "System prompt should be substantial (>50 chars)");
 
         // Check for expected content patterns in the VT Code system prompt
         let content_lower = content.to_lowercase();
@@ -110,29 +104,17 @@ fn actual_prompt_file_validation() {
         let has_coding_context = content_lower.contains("coding")
             || content_lower.contains("code")
             || content_lower.contains("programming");
-        assert!(
-            has_coding_context,
-            "System prompt should mention coding/programming context"
-        );
+        assert!(has_coding_context, "System prompt should mention coding/programming context");
 
         // Should mention tools or functionality
         let has_tools_context = content_lower.contains("tool")
             || content_lower.contains("function")
             || content_lower.contains("command");
-        assert!(
-            has_tools_context,
-            "System prompt should mention tools or functions"
-        );
+        assert!(has_tools_context, "System prompt should mention tools or functions");
 
-        println!(
-            "[SUCCESS] System prompt file exists and contains {} characters",
-            content.len()
-        );
+        println!("[SUCCESS] System prompt file exists and contains {} characters", content.len());
     } else {
-        println!(
-            "[INFO] System prompt file does not exist at: {}",
-            prompt_path.display()
-        );
+        println!("[INFO] System prompt file does not exist at: {}", prompt_path.display());
         println!("   This is expected if prompts/system.md hasn't been created yet.");
         println!("   The system should fall back to a hardcoded prompt.");
     }
@@ -144,10 +126,7 @@ fn prompt_directory_structure() {
     let expected_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("prompts");
 
     if expected_dir.exists() {
-        assert!(
-            expected_dir.is_dir(),
-            "prompts should be a directory, not a file"
-        );
+        assert!(expected_dir.is_dir(), "prompts should be a directory, not a file");
 
         // List other prompt files that might exist
         if let Ok(entries) = fs::read_dir(expected_dir) {

@@ -51,11 +51,7 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
         return handle_pin_version(version_str);
     }
 
-    println!(
-        "{} VT Code v{}",
-        "Checking for updates...".cyan(),
-        current_version
-    );
+    println!("{} VT Code v{}", "Checking for updates...".cyan(), current_version);
 
     let mut updater = Updater::new(current_version).context("Failed to initialize updater")?;
 
@@ -71,11 +67,7 @@ pub async fn handle_update_command(options: UpdateCommandOptions) -> Result<()> 
     match updater.check_for_updates().await {
         Ok(Some(update_info)) => handle_update_available(&updater, &update_info, options).await,
         Ok(None) => {
-            println!(
-                "{} You're already on the latest version (v{})",
-                "✓".green(),
-                current_version
-            );
+            println!("{} You're already on the latest version (v{})", "✓".green(), current_version);
             println!("{} vtcode init   # scaffold project if needed", "→".cyan());
 
             if options.force {
@@ -97,17 +89,9 @@ fn handle_show_config() -> Result<()> {
     let config = UpdateConfig::load().unwrap_or_default();
 
     println!("{}", "Update Configuration".bold());
-    println!(
-        "{} Config file: {}",
-        "→".cyan(),
-        UpdateConfig::config_path()?.display()
-    );
+    println!("{} Config file: {}", "→".cyan(), UpdateConfig::config_path()?.display());
     println!();
-    println!(
-        "{} Channel: {}",
-        "→".cyan(),
-        config.channel.to_string().green()
-    );
+    println!("{} Channel: {}", "→".cyan(), config.channel.to_string().green());
     println!(
         "{} Pinned: {}",
         "→".cyan(),
@@ -122,16 +106,8 @@ fn handle_show_config() -> Result<()> {
             "No".to_string()
         }
     );
-    println!(
-        "{} Check interval: {} hours",
-        "→".cyan(),
-        config.check_interval_hours
-    );
-    println!(
-        "{} Download timeout: {} seconds",
-        "→".cyan(),
-        config.download_timeout_secs
-    );
+    println!("{} Check interval: {} hours", "→".cyan(), config.check_interval_hours);
+    println!("{} Download timeout: {} seconds", "→".cyan(), config.download_timeout_secs);
 
     Ok(())
 }
@@ -177,11 +153,7 @@ fn handle_set_channel(channel_str: String) -> Result<()> {
     config.channel = channel.clone();
     config.save()?;
 
-    println!(
-        "{} Release channel set to {}",
-        "✓".green(),
-        channel.to_string().green()
-    );
+    println!("{} Release channel set to {}", "✓".green(), channel.to_string().green());
     println!(
         "{} Future updates will follow the {} channel",
         "→".cyan(),
@@ -238,15 +210,8 @@ async fn handle_list_versions(limit: usize) -> Result<()> {
     }
 
     println!("{}", "─".repeat(60));
-    println!(
-        "{} Current version: v{}",
-        "→".cyan(),
-        current_version.green()
-    );
-    println!(
-        "{} Use --pin VERSION to pin to a specific version",
-        "→".cyan()
-    );
+    println!("{} Current version: v{}", "→".cyan(), current_version.green());
+    println!("{} Use --pin VERSION to pin to a specific version", "→".cyan());
 
     Ok(())
 }
@@ -274,45 +239,27 @@ async fn handle_update_available(
     update: &UpdateInfo,
     options: UpdateCommandOptions,
 ) -> Result<()> {
-    println!(
-        "\n{} New version available: v{}",
-        "●".cyan(),
-        update.version
-    );
+    println!("\n{} New version available: v{}", "●".cyan(), update.version);
 
     println!("\n{}", "Release notes:".bold());
     println!("{}", update.release_notes);
 
     if options.check_only {
         let guidance = updater.update_guidance();
-        println!(
-            "\n{} Update command: {}",
-            "→".cyan(),
-            guidance.command().green()
-        );
-        println!(
-            "{} Release page: {}",
-            "→".cyan(),
-            Updater::release_url(&update.version).cyan()
-        );
+        println!("\n{} Update command: {}", "→".cyan(), guidance.command().green());
+        println!("{} Release page: {}", "→".cyan(), Updater::release_url(&update.version).cyan());
         return Ok(());
     }
 
     let proceed = UserConfirmation::confirm_action(
-        &format!(
-            "Install VT Code v{} now? This will replace the current binary.",
-            update.version
-        ),
+        &format!("Install VT Code v{} now? This will replace the current binary.", update.version),
         true,
     )
     .context("Failed to read confirmation input")?;
 
     if !proceed {
         println!("{} Update canceled.", "✗".yellow());
-        println!(
-            "{} You can run this again with `vtcode update`.",
-            "→".cyan()
-        );
+        println!("{} You can run this again with `vtcode update`.", "→".cyan());
         return Ok(());
     }
 
@@ -322,11 +269,7 @@ async fn handle_update_available(
 async fn install_update(updater: &Updater, force: bool) -> Result<()> {
     let guidance = updater.update_guidance();
     if guidance.source.is_managed() {
-        println!(
-            "{} Managed install detected ({}).",
-            "!".yellow(),
-            guidance.source.label()
-        );
+        println!("{} Managed install detected ({}).", "!".yellow(), guidance.source.label());
         println!("{} Update with: {}", "→".cyan(), guidance.command().green());
         return Ok(());
     }

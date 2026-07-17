@@ -7,9 +7,7 @@ pub(super) struct OperationJournal {
 
 impl OperationJournal {
     pub(super) fn new() -> Self {
-        Self {
-            applied: Vec::new(),
-        }
+        Self { applied: Vec::new() }
     }
 
     pub(super) fn record(&mut self, state: OperationState) {

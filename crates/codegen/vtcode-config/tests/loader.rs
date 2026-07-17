@@ -75,12 +75,10 @@ fn loads_config_from_workspace_root_before_config_dir() -> Result<()> {
     write_config(&config_dir_config, "config-dir")?;
     write_config(&home_config, "home")?;
 
-    let manager = with_test_defaults(
-        workspace_root,
-        config_dir,
-        vec![home_config.clone()],
-        || ConfigManager::load_from_workspace(workspace_root),
-    )?;
+    let manager =
+        with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
+            ConfigManager::load_from_workspace(workspace_root)
+        })?;
     let expected_root_config = fs::canonicalize(&root_config)?;
 
     assert_eq!(manager.config().agent.provider, "workspace-root");
@@ -103,19 +101,14 @@ fn loads_config_from_config_dir_when_root_missing() -> Result<()> {
     write_config(&config_dir_config, "config-dir")?;
     write_config(&home_config, "home")?;
 
-    let manager = with_test_defaults(
-        workspace_root,
-        config_dir,
-        vec![home_config.clone()],
-        || ConfigManager::load_from_workspace(workspace_root),
-    )?;
+    let manager =
+        with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
+            ConfigManager::load_from_workspace(workspace_root)
+        })?;
     let expected_config_dir_config = fs::canonicalize(&config_dir_config)?;
 
     assert_eq!(manager.config().agent.provider, "config-dir");
-    assert_eq!(
-        manager.config_path(),
-        Some(expected_config_dir_config.as_path())
-    );
+    assert_eq!(manager.config_path(), Some(expected_config_dir_config.as_path()));
 
     Ok(())
 }
@@ -131,12 +124,10 @@ fn loads_config_from_home_directory_when_workspace_missing() -> Result<()> {
     let home_config = workspace_root.join("home").join("vtcode.toml");
     write_config(&home_config, "home")?;
 
-    let manager = with_test_defaults(
-        workspace_root,
-        config_dir,
-        vec![home_config.clone()],
-        || ConfigManager::load_from_workspace(workspace_root),
-    )?;
+    let manager =
+        with_test_defaults(workspace_root, config_dir, vec![home_config.clone()], || {
+            ConfigManager::load_from_workspace(workspace_root)
+        })?;
     let expected_home_config = fs::canonicalize(&home_config)?;
 
     assert_eq!(manager.config().agent.provider, "home");
@@ -214,10 +205,7 @@ fn load_canonicalizes_relative_workspace_paths() -> Result<()> {
 
     assert_eq!(manager.config().agent.provider, "workspace-root");
     assert_eq!(manager.config_path(), Some(expected_root_config.as_path()));
-    assert_eq!(
-        manager.workspace_root(),
-        Some(expected_workspace_root.as_path())
-    );
+    assert_eq!(manager.workspace_root(), Some(expected_workspace_root.as_path()));
 
     Ok(())
 }
@@ -302,10 +290,7 @@ fn use_root_config_absent_preserves_normal_layering() -> Result<()> {
     write_config(&home_config, "home")?;
 
     let root_config = workspace_root.join("vtcode.toml");
-    fs::write(
-        &root_config,
-        "[agent]\nprovider = \"root\"\nmax_conversation_turns = 5\n",
-    )?;
+    fs::write(&root_config, "[agent]\nprovider = \"root\"\nmax_conversation_turns = 5\n")?;
 
     let manager = with_test_defaults(workspace_root, config_dir, vec![home_config], || {
         ConfigManager::load_from_workspace(workspace_root)

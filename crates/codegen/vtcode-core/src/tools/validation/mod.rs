@@ -16,19 +16,12 @@ use serde_json::Value;
 /// payloads without bloating the context.
 pub fn condensed_schema_hint(schema: &Value) -> Option<Value> {
     let properties = schema.get("properties").and_then(Value::as_object)?;
-    let required: Vec<Value> = schema
-        .get("required")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let required: Vec<Value> =
+        schema.get("required").and_then(Value::as_array).cloned().unwrap_or_default();
 
     let mut prop_types = serde_json::Map::new();
     for (name, def) in properties {
-        let type_str = def
-            .get("type")
-            .and_then(Value::as_str)
-            .unwrap_or("any")
-            .to_string();
+        let type_str = def.get("type").and_then(Value::as_str).unwrap_or("any").to_string();
         // Surface enum options inline (e.g. "string(grep|glob|list)") so a
         // model that passed an invalid value can self-correct instead of
         // retrying blind with the same malformed arguments.
@@ -136,10 +129,7 @@ mod tests {
         let msg = describe_jsonschema_error(&error);
         assert!(msg.contains("field '/format'"), "msg was: {msg}");
         assert!(msg.contains("\"content\""), "msg was: {msg}");
-        assert!(
-            msg.contains("github, sarif, files_with_matches, count"),
-            "msg was: {msg}"
-        );
+        assert!(msg.contains("github, sarif, files_with_matches, count"), "msg was: {msg}");
     }
 
     #[test]
@@ -164,11 +154,7 @@ mod tests {
             errors.len()
         );
         let messages: Vec<String> = errors.iter().map(describe_jsonschema_error).collect();
-        assert!(
-            messages
-                .iter()
-                .any(|m| m.contains("missing required property 'action'"))
-        );
+        assert!(messages.iter().any(|m| m.contains("missing required property 'action'")));
         assert!(
             messages
                 .iter()
@@ -186,9 +172,6 @@ mod tests {
         let instance = json!({});
         let error = jsonschema::validate(&schema, &instance).unwrap_err();
         let msg = describe_jsonschema_error(&error);
-        assert!(
-            msg.contains("missing required property 'action'"),
-            "msg was: {msg}"
-        );
+        assert!(msg.contains("missing required property 'action'"), "msg was: {msg}");
     }
 }

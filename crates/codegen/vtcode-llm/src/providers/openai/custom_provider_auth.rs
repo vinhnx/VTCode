@@ -51,20 +51,14 @@ impl CustomProviderAuthHandle {
         }
 
         let token = self.fetch_token().await?;
-        state.cached_token = Some(CachedToken {
-            value: token.clone(),
-            fetched_at: Instant::now(),
-        });
+        state.cached_token = Some(CachedToken { value: token.clone(), fetched_at: Instant::now() });
         Ok(token)
     }
 
     pub async fn force_refresh(&self) -> Result<String> {
         let token = self.fetch_token().await?;
         let mut state = self.state.lock().await;
-        state.cached_token = Some(CachedToken {
-            value: token.clone(),
-            fetched_at: Instant::now(),
-        });
+        state.cached_token = Some(CachedToken { value: token.clone(), fetched_at: Instant::now() });
         Ok(token)
     }
 
@@ -85,11 +79,7 @@ impl CustomProviderAuthHandle {
         self.workspace_root
             .as_ref()
             .map(|workspace_root| workspace_root.join(cwd))
-            .or_else(|| {
-                std::env::current_dir()
-                    .ok()
-                    .map(|cwd_root| cwd_root.join(cwd))
-            })
+            .or_else(|| std::env::current_dir().ok().map(|cwd_root| cwd_root.join(cwd)))
     }
 
     async fn fetch_token(&self) -> Result<String> {
@@ -107,16 +97,10 @@ impl CustomProviderAuthHandle {
         let output = timeout(self.timeout(), command.output())
             .await
             .with_context(|| {
-                format!(
-                    "provider auth command timed out after {}ms",
-                    self.config.timeout_ms
-                )
+                format!("provider auth command timed out after {}ms", self.config.timeout_ms)
             })?
             .with_context(|| {
-                format!(
-                    "failed to execute provider auth command `{}`",
-                    self.config.command
-                )
+                format!("failed to execute provider auth command `{}`", self.config.command)
             })?;
 
         if !output.status.success() {
@@ -145,10 +129,7 @@ impl CustomProviderAuthHandle {
         })?;
         let token = stdout.trim();
         if token.is_empty() {
-            bail!(
-                "provider auth command `{}` returned an empty token",
-                self.config.command
-            );
+            bail!("provider auth command `{}` returned an empty token", self.config.command);
         }
 
         Ok(token.to_string())
@@ -182,9 +163,8 @@ mv tokens.next tokens.txt
 "#,
         )
         .expect("write script");
-        let mut permissions = std::fs::metadata(&script_path)
-            .expect("script metadata")
-            .permissions();
+        let mut permissions =
+            std::fs::metadata(&script_path).expect("script metadata").permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(&script_path, permissions).expect("set permissions");
 

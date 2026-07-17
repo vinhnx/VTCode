@@ -79,11 +79,7 @@ fn parse_struct_style_block(trimmed: &str) -> Option<(String, Value, Vec<Value>)
         raw_name[..pos].trim().to_string()
     } else {
         // Normal case - trim end of colons and equals
-        raw_name
-            .trim()
-            .trim_end_matches([':', '='])
-            .trim()
-            .to_string()
+        raw_name.trim().trim_end_matches([':', '=']).trim().to_string()
     };
 
     if name.is_empty() {
@@ -198,11 +194,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value, Vec<Value>)>
 
         if let Some((key_raw, value_raw)) = entry.split_once('=').or_else(|| entry.split_once(':'))
         {
-            let key = key_raw
-                .trim()
-                .trim_matches('"')
-                .trim_matches('\'')
-                .to_string();
+            let key = key_raw.trim().trim_matches('"').trim_matches('\'').to_string();
             let value = parse_scalar_value(value_raw.trim());
             object.insert(key, value);
         } else {

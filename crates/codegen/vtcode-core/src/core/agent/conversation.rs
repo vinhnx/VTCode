@@ -15,11 +15,7 @@ const GEMINI_PRESERVED_PARTS_PREFIX: &str = "__vtcode_gemini_parts__:";
 pub fn build_conversation(task: &Task, contexts: &[ContextItem]) -> Vec<Content> {
     let mut conversation = Vec::with_capacity(3);
     let mut task_content = String::with_capacity(task.title.len() + task.description.len() + 20);
-    let _ = write!(
-        task_content,
-        "Task: {}\nDescription: {}",
-        task.title, task.description
-    );
+    let _ = write!(task_content, "Task: {}\nDescription: {}", task.title, task.description);
     conversation.push(Content::user_text(task_content));
 
     if let Some(instructions) = task.instructions.as_ref() {
@@ -48,9 +44,7 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
 
         for part in &content.parts {
             match part {
-                Part::Text {
-                    text: part_text, ..
-                } => {
+                Part::Text { text: part_text, .. } => {
                     if let Some(ContentPart::Text { text }) = content_parts.last_mut() {
                         if !text.is_empty() {
                             text.push('\n');
@@ -66,10 +60,7 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
                         inline_data.mime_type.clone(),
                     ));
                 }
-                Part::FunctionCall {
-                    function_call,
-                    thought_signature,
-                } => {
+                Part::FunctionCall { function_call, thought_signature } => {
                     let mut tool_call = ToolCall::function(
                         function_call.id.clone().unwrap_or_default(),
                         function_call.name.clone(),
@@ -78,13 +69,8 @@ pub fn messages_from_conversation(conversation: &[Content]) -> Vec<Message> {
                     tool_call.thought_signature = thought_signature.clone();
                     tool_calls.push(tool_call);
                 }
-                Part::FunctionResponse {
-                    function_response, ..
-                } => {
-                    let id = function_response
-                        .id
-                        .clone()
-                        .unwrap_or_else(|| "unknown".to_string());
+                Part::FunctionResponse { function_response, .. } => {
+                    let id = function_response.id.clone().unwrap_or_else(|| "unknown".to_string());
                     let response_str = function_response.response.to_string();
                     tool_responses.push(Message::tool_response(id, response_str));
                 }
@@ -148,10 +134,7 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
             if text.is_empty() {
                 Vec::new()
             } else {
-                vec![Part::Text {
-                    text: text.clone(),
-                    thought_signature: None,
-                }]
+                vec![Part::Text { text: text.clone(), thought_signature: None }]
             }
         }
         MessageContent::Parts(parts) => {
@@ -160,15 +143,11 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                 match part {
                     ContentPart::Text { text } => {
                         if !text.is_empty() {
-                            converted.push(Part::Text {
-                                text: text.clone(),
-                                thought_signature: None,
-                            });
+                            converted
+                                .push(Part::Text { text: text.clone(), thought_signature: None });
                         }
                     }
-                    ContentPart::Image {
-                        data, mime_type, ..
-                    } => {
+                    ContentPart::Image { data, mime_type, .. } => {
                         converted.push(Part::InlineData {
                             inline_data: InlineData {
                                 mime_type: mime_type.clone(),
@@ -176,12 +155,7 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                             },
                         });
                     }
-                    ContentPart::File {
-                        filename,
-                        file_id,
-                        file_url,
-                        ..
-                    } => {
+                    ContentPart::File { filename, file_id, file_url, .. } => {
                         let fallback = filename
                             .clone()
                             .or_else(|| file_id.clone())
@@ -221,10 +195,7 @@ pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
             MessageRole::User => {
                 let parts = parts_from_message_content(&message.content);
                 if !parts.is_empty() {
-                    conversation.push(Content {
-                        role: "user".to_string(),
-                        parts,
-                    });
+                    conversation.push(Content { role: "user".to_string(), parts });
                 }
             }
             MessageRole::Assistant => {
@@ -264,25 +235,16 @@ pub fn conversation_from_messages(messages: &[Message]) -> Vec<Content> {
                 }
 
                 if !parts.is_empty() {
-                    conversation.push(Content {
-                        role: "model".to_string(),
-                        parts,
-                    });
+                    conversation.push(Content { role: "model".to_string(), parts });
                 }
             }
             MessageRole::Tool => {
-                let Some(call_id) = message
-                    .tool_call_id
-                    .as_ref()
-                    .filter(|value| !value.is_empty())
-                    .cloned()
+                let Some(call_id) =
+                    message.tool_call_id.as_ref().filter(|value| !value.is_empty()).cloned()
                 else {
                     let parts = parts_from_message_content(&message.content);
                     if !parts.is_empty() {
-                        conversation.push(Content {
-                            role: "user".to_string(),
-                            parts,
-                        });
+                        conversation.push(Content { role: "user".to_string(), parts });
                     }
                     continue;
                 };
@@ -366,10 +328,7 @@ mod tests {
     #[test]
     fn conversation_builds_expected_steps() {
         let task = sample_task();
-        let contexts = vec![ContextItem {
-            id: "ctx1".into(),
-            content: "Data".into(),
-        }];
+        let contexts = vec![ContextItem { id: "ctx1".into(), content: "Data".into() }];
         let conversation = build_conversation(&task, &contexts);
         assert_eq!(conversation.len(), 3);
     }
@@ -380,11 +339,7 @@ mod tests {
         let conversation = build_conversation(&task, &[]);
         let messages = build_messages_from_conversation(&conversation);
         assert_eq!(messages.len(), conversation.len());
-        assert!(
-            messages
-                .iter()
-                .all(|message| message.role != MessageRole::System)
-        );
+        assert!(messages.iter().all(|message| message.role != MessageRole::System));
     }
 
     #[test]

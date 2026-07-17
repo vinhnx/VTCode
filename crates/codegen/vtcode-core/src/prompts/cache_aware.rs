@@ -17,16 +17,8 @@ const PRIORITY_TOOLS: &[&str] = &[
 /// This can save ~50-100 tokens per request via improved LLM focus.
 pub fn sort_tool_definitions(mut tools: Vec<ToolDefinition>) -> Vec<ToolDefinition> {
     tools.sort_by(|a, b| {
-        let a_name = a
-            .function
-            .as_ref()
-            .map(|func| func.name.as_str())
-            .unwrap_or("");
-        let b_name = b
-            .function
-            .as_ref()
-            .map(|func| func.name.as_str())
-            .unwrap_or("");
+        let a_name = a.function.as_ref().map(|func| func.name.as_str()).unwrap_or("");
+        let b_name = b.function.as_ref().map(|func| func.name.as_str()).unwrap_or("");
 
         // Find priority positions (None = not priority = end of list)
         let a_priority = PRIORITY_TOOLS.iter().position(|&p| p == a_name);

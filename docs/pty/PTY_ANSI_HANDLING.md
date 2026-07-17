@@ -8,7 +8,7 @@ VT Code implements comprehensive ANSI code stripping for PTY command output to e
 
 ### 1. Prevention at Source (Preferred)
 
-Environment variables set in `vtcode-core/src/tools/pty.rs::set_command_environment()`:
+Environment variables set in `crates/codegen/vtcode-core/src/tools/pty.rs::set_command_environment()`:
 
 ```rust
 // Disable automatic color output from build tools
@@ -26,7 +26,7 @@ builder.env("RUSTFLAGS", "-C color=never");      // Disable rustc colors
 
 ### 2. Capture-Time Stripping
 
-`PtyScrollback::push_text()` in `vtcode-core/src/tools/pty.rs:206-209`:
+`PtyScrollback::push_text()` in `crates/codegen/vtcode-core/src/tools/pty.rs:206-209`:
 
 ```rust
 fn push_text(&mut self, text: &str) {
@@ -41,7 +41,7 @@ fn push_text(&mut self, text: &str) {
 
 ### 3. Return-Path Stripping
 
-Multiple locations in `vtcode-core/src/tools/registry/executors.rs`:
+Multiple locations in `crates/codegen/vtcode-core/src/tools/registry/executors.rs`:
 
 | Function                     | Lines      | Output Field                    |
 | ---------------------------- | ---------- | ------------------------------- |
@@ -80,7 +80,7 @@ Handles:
 -   **2-char escapes**: `ESC[`, `ESC]`, etc.
 -   **Incomplete sequences**: Gracefully handles partial ANSI at EOF
 
-Tests in `vtcode-core/src/utils/ansi_parser.rs` verify:
+Tests in `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` verify:
 
 -   Basic colors: `\x1b[31mRed\x1b[0m` → `Red`
 -   Bold: `\x1b[1;32mbold\x1b[0m` → `bold`
@@ -120,8 +120,8 @@ Clean, machine-readable output to agent
 
 ### Existing Tests
 
--   `vtcode-core/src/utils/ansi_parser.rs`: 10+ tests covering CSI, OSC, edge cases
--   `vtcode-core/src/tools/pty.rs`: Scrollback size, overflow, metrics tests
+-   `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`: 10+ tests covering CSI, OSC, edge cases
+-   `crates/codegen/vtcode-core/src/tools/pty.rs`: Scrollback size, overflow, metrics tests
 -   Implicit: Every `strip_ansi()` call prevents malformed output
 
 ### Manual Verification
@@ -153,9 +153,9 @@ Both commands should produce **zero matches** after these changes.
 
 ## Related Files
 
--   `vtcode-core/src/tools/pty.rs` - PTY management and ANSI prevention
--   `vtcode-core/src/utils/ansi_parser.rs` - Core stripping logic
--   `vtcode-core/src/tools/registry/executors.rs` - Return-path stripping
+-   `crates/codegen/vtcode-core/src/tools/pty.rs` - PTY management and ANSI prevention
+-   `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` - Core stripping logic
+-   `crates/codegen/vtcode-core/src/tools/registry/executors.rs` - Return-path stripping
 -   `src/agent/runloop/tool_output/streams.rs` - Render-time stripping
 -   `src/acp/zed.rs` - ACP integration with stripping
 

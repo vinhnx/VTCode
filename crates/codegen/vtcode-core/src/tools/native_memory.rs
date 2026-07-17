@@ -183,19 +183,15 @@ async fn execute_request(
         }
         NativeMemoryCommand::Insert => {
             let path = required_text(request.path.as_deref(), "path")?;
-            let insert_line = request
-                .insert_line
-                .ok_or_else(|| anyhow!("insert_line is required"))?;
+            let insert_line =
+                request.insert_line.ok_or_else(|| anyhow!("insert_line is required"))?;
             let insert_text = required_text(request.insert_text.as_deref(), "insert_text")?;
             let resolved = resolve_virtual_path(root, path)?;
             ensure_writable_path(&resolved.relative, path)?;
             let content = tokio::fs::read_to_string(&resolved.absolute)
                 .await
                 .with_context(|| format!("Failed to read {path}"))?;
-            let mut lines = content
-                .split('\n')
-                .map(ToOwned::to_owned)
-                .collect::<Vec<_>>();
+            let mut lines = content.split('\n').map(ToOwned::to_owned).collect::<Vec<_>>();
             if insert_line > lines.len() {
                 bail!("insert_line {insert_line} is out of bounds for {path}");
             }
@@ -305,10 +301,8 @@ fn resolve_virtual_path(root: &Path, virtual_path: &str) -> Result<ResolvedMemor
         bail!("memory paths must stay under {MEMORIES_ROOT}");
     }
 
-    let relative_raw = trimmed
-        .strip_prefix(MEMORIES_ROOT)
-        .unwrap_or_default()
-        .trim_start_matches('/');
+    let relative_raw =
+        trimmed.strip_prefix(MEMORIES_ROOT).unwrap_or_default().trim_start_matches('/');
     let relative = if relative_raw.is_empty() {
         PathBuf::new()
     } else {

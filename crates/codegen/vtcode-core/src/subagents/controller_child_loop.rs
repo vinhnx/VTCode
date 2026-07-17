@@ -58,24 +58,14 @@ impl SubagentController {
             let worktree_info = {
                 let state = controller.state.read().await;
                 state.children.get(&target).and_then(|record| {
-                    record
-                        .worktree_path
-                        .as_ref()
-                        .map(|p| (p.clone(), record.spec.name.clone()))
+                    record.worktree_path.as_ref().map(|p| (p.clone(), record.spec.name.clone()))
                 })
             };
 
             if let Some((wt_path, wt_name)) = worktree_info
-                && controller
-                    .config
-                    .vt_cfg
-                    .automation
-                    .loop_engine
-                    .reconcile_on_complete
+                && controller.config.vt_cfg.automation.loop_engine.reconcile_on_complete
             {
-                controller
-                    .run_worktree_reconciliation(&target, &wt_path, &wt_name)
-                    .await;
+                controller.run_worktree_reconciliation(&target, &wt_path, &wt_name).await;
             }
         });
 
@@ -197,9 +187,7 @@ impl SubagentController {
 
         // Use the worktree path as the effective workspace root if the
         // subagent was spawned with isolation=worktree.
-        let effective_workspace = worktree_path
-            .as_deref()
-            .unwrap_or(&self.config.workspace_root);
+        let effective_workspace = worktree_path.as_deref().unwrap_or(&self.config.workspace_root);
 
         let (resolved_model, child_reasoning_effort, child_cfg) = prepare_child_runtime_config(
             &self.config.vt_cfg,
@@ -284,11 +272,8 @@ impl SubagentController {
             );
         }
 
-        let filtered_tools = filter_child_tools(
-            &spec,
-            runner.build_universal_tools().await?,
-            spec.is_read_only(),
-        );
+        let filtered_tools =
+            filter_child_tools(&spec, runner.build_universal_tools().await?, spec.is_read_only());
         let allowed_tools = filtered_tools
             .iter()
             .map(|tool| tool.function_name().to_string())
@@ -298,11 +283,8 @@ impl SubagentController {
 
         let memory_appendix =
             load_memory_appendix(&self.config.workspace_root, spec.name.as_str(), spec.memory)?;
-        let mut task = Task::new(
-            format!("subagent-{}", spec.name),
-            format!("Subagent {}", spec.name),
-            prompt,
-        );
+        let mut task =
+            Task::new(format!("subagent-{}", spec.name), format!("Subagent {}", spec.name), prompt);
         task.instructions = Some(compose_subagent_instructions(&spec, memory_appendix));
 
         let results = Box::pin(runner.execute_task(&task, &[])).await?;

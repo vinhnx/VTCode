@@ -118,9 +118,7 @@ impl HistoryPickerState {
 
     /// Get the currently selected match
     pub fn selected_match(&self) -> Option<&HistoryMatch> {
-        self.navigator
-            .selected()
-            .and_then(|index| self.matches.get(index))
+        self.navigator.selected().and_then(|index| self.matches.get(index))
     }
 
     pub fn selected_index(&self) -> Option<usize> {
@@ -202,8 +200,7 @@ impl HistoryPickerState {
         }
 
         // Sort by score (descending) - higher scores first
-        self.matches
-            .sort_by_key(|history_match| std::cmp::Reverse(history_match.score));
+        self.matches.sort_by_key(|history_match| std::cmp::Reverse(history_match.score));
 
         // Deduplicate by content (keep highest scored entry)
         let mut seen = hashbrown::HashSet::new();
@@ -353,18 +350,10 @@ mod tests {
     fn make_history() -> Vec<(String, Vec<ContentPart>, DateTime<Utc>)> {
         let now = Utc::now();
         vec![
-            (
-                "cargo build".to_string(),
-                vec![],
-                now - Duration::minutes(4),
-            ),
+            ("cargo build".to_string(), vec![], now - Duration::minutes(4)),
             ("cargo test".to_string(), vec![], now - Duration::minutes(3)),
             ("git status".to_string(), vec![], now - Duration::minutes(2)),
-            (
-                "cargo clippy".to_string(),
-                vec![],
-                now - Duration::minutes(1),
-            ),
+            ("cargo clippy".to_string(), vec![], now - Duration::minutes(1)),
             ("git diff".to_string(), vec![], now),
         ]
     }
@@ -462,18 +451,10 @@ mod tests {
         let manager = InputManager::new();
         let now = Utc::now();
         let history = vec![
-            (
-                "cargo build".to_string(),
-                vec![],
-                now - Duration::minutes(3),
-            ),
+            ("cargo build".to_string(), vec![], now - Duration::minutes(3)),
             ("cargo test".to_string(), vec![], now - Duration::minutes(2)),
-            (
-                "cargo build".to_string(),
-                vec![],
-                now - Duration::minutes(1),
-            ), // Duplicate
-            ("cargo build".to_string(), vec![], now), // Another duplicate
+            ("cargo build".to_string(), vec![], now - Duration::minutes(1)), // Duplicate
+            ("cargo build".to_string(), vec![], now),                        // Another duplicate
         ];
 
         picker.open(&manager);

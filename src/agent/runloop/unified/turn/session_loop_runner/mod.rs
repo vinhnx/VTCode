@@ -103,12 +103,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let reserved_archive_id = crate::main_helpers::runtime_archive_session_id();
         let history_enabled = session_archive::history_persistence_enabled();
         let summarized_fork_provider = if resume_ref.is_some_and(|resume| resume.summarize_fork()) {
-            Some(
-                crate::agent::runloop::unified::session_setup::create_provider_client(
-                    &config,
-                    vt_cfg.as_ref(),
-                )?,
-            )
+            Some(crate::agent::runloop::unified::session_setup::create_provider_client(
+                &config,
+                vt_cfg.as_ref(),
+            )?)
         } else {
             None
         };
@@ -167,10 +165,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         )
                         .await?;
                 }
-                (
-                    thread_manager.start_thread_with_identifier(thread_id, bootstrap),
-                    None,
-                )
+                (thread_manager.start_thread_with_identifier(thread_id, bootstrap), None)
             }
         } else {
             let thread_id = if let Some(identifier) = reserved_archive_id.clone() {
@@ -197,10 +192,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             } else {
                 None
             };
-            (
-                thread_manager.start_thread_with_identifier(thread_id, bootstrap),
-                archive,
-            )
+            (thread_manager.start_thread_with_identifier(thread_id, bootstrap), archive)
         };
         crate::main_helpers::set_runtime_archive_session_id(Some(
             thread_handle.thread_id().to_string(),
@@ -224,10 +216,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if let Some(archive) = session_archive.as_mut() {
             archive.set_primary_agent(session_state.active_primary_agent.active().name());
         }
-        let harness_config = vt_cfg
-            .as_ref()
-            .map(|cfg| cfg.agent.harness.clone())
-            .unwrap_or_default();
+        let harness_config =
+            vt_cfg.as_ref().map(|cfg| cfg.agent.harness.clone()).unwrap_or_default();
         let turn_run_id = TurnRunId(thread_handle.thread_id().to_string());
         let effective_log_path: Option<String> = harness_config
             .event_log_path
@@ -251,10 +241,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 HarnessEventEmitter::new(resolved).ok()
             });
         if let Some(emitter) = harness_emitter.as_ref() {
-            let open_responses_config = vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.agent.open_responses.clone())
-                .unwrap_or_default();
+            let open_responses_config =
+                vt_cfg.as_ref().map(|cfg| cfg.agent.open_responses.clone()).unwrap_or_default();
             let features = FeatureSet::from_config(vt_cfg.as_ref());
             if features.open_responses.emit_events {
                 let or_path = effective_log_path.as_ref().map(|base| {
@@ -262,29 +250,22 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         .parent()
                         .unwrap_or(std::path::Path::new("."));
                     let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
-                    parent.join(format!(
-                        "open-responses-{}-{}.jsonl",
-                        turn_run_id.0, timestamp
-                    ))
+                    parent.join(format!("open-responses-{}-{}.jsonl", turn_run_id.0, timestamp))
                 });
                 let _ =
                     emitter.enable_open_responses(open_responses_config, &config.model, or_path);
             }
             // Enable ATIF trajectory export if configured
-            let atif_enabled = vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.telemetry.atif_enabled)
-                .unwrap_or(false);
+            let atif_enabled =
+                vt_cfg.as_ref().map(|cfg| cfg.telemetry.atif_enabled).unwrap_or(false);
             if atif_enabled {
                 let dir = effective_log_path
                     .as_ref()
                     .map(|base| std::path::PathBuf::from(base.as_str()))
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
                 let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
-                let atif_path = dir.join(format!(
-                    "atif-trajectory-{}-{}.json",
-                    turn_run_id.0, timestamp
-                ));
+                let atif_path =
+                    dir.join(format!("atif-trajectory-{}-{}.json", turn_run_id.0, timestamp));
                 let _ = emitter.enable_atif(&config.model, atif_path);
             }
             let _ = emitter.emit(ThreadEvent::ThreadStarted(ThreadStartedEvent {
@@ -537,18 +518,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
 
                 if let Some(controller) = tool_registry.subagent_controller() {
-                    controller
-                        .set_parent_messages(&runtime.state.messages)
-                        .await;
+                    controller.set_parent_messages(&runtime.state.messages).await;
                 }
 
                 let interaction_outcome = if let Some(input) = runtime.run_until_idle() {
                     let turn_id = SessionId::generate().into_inner();
-                    InteractionOutcome::Continue {
-                        input,
-                        prompt_message_index: None,
-                        turn_id,
-                    }
+                    InteractionOutcome::Continue { input, prompt_message_index: None, turn_id }
                 } else {
                     let mut interaction_turn_metadata_cache = None;
                     let (session_state, runtime_steering) = runtime.split_mut();
@@ -830,9 +805,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     cross_turn_shell_cmd.as_deref(),
                 ) {
                     tracing::warn!(warning = %cross_turn_warning, "Cross-turn loop detector triggered");
-                    working_history.push(vtcode_core::llm::provider::Message::system(
-                        cross_turn_warning,
-                    ));
+                    working_history
+                        .push(vtcode_core::llm::provider::Message::system(cross_turn_warning));
                 }
 
                 agent_touched_paths.extend(
@@ -846,10 +820,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let outcome_result = outcome.result.clone();
                 let switch_primary_agent = outcome.pending_primary_agent.clone();
                 let turn_elapsed = turn_started_at.elapsed();
-                let show_turn_timer = vt_cfg
-                    .as_ref()
-                    .map(|cfg| cfg.ui.show_turn_timer)
-                    .unwrap_or(true);
+                let show_turn_timer =
+                    vt_cfg.as_ref().map(|cfg| cfg.ui.show_turn_timer).unwrap_or(true);
                 let harness_snapshot = tool_registry.harness_context_snapshot();
                 if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
                     outcome,
@@ -875,10 +847,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 {
                     tracing::error!("Failed to apply turn outcome: {}", err);
                     renderer
-                        .line(
-                            MessageStyle::Error,
-                            &format!("Failed to finalize turn: {err}"),
-                        )
+                        .line(MessageStyle::Error, &format!("Failed to finalize turn: {err}"))
                         .ok();
                 }
                 // Plan-mode "switch to build/auto agent" handoff: perform the
@@ -956,17 +925,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 });
 
                 last_activity_time = Some(Instant::now());
-                vtcode_core::tools::cache::FILE_CACHE
-                    .check_pressure_and_evict()
-                    .await;
+                vtcode_core::tools::cache::FILE_CACHE.check_pressure_and_evict().await;
                 tool_result_cache.write().await.check_pressure_and_evict();
                 if let Some(archive) = session_archive.as_ref() {
-                    let messages: Vec<SessionMessage> = runtime
-                        .state
-                        .messages
-                        .iter()
-                        .map(SessionMessage::from)
-                        .collect();
+                    let messages: Vec<SessionMessage> =
+                        runtime.state.messages.iter().map(SessionMessage::from).collect();
                     let mut recent_messages: Vec<SessionMessage> = runtime
                         .state
                         .messages
@@ -1057,9 +1020,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 .is_success()
                 .then(|| latest_assistant_result_text(&runtime.state.messages))
                 .flatten();
-            let total_cost_usd = session_stats
-                .total_cost_usd()
-                .and_then(serde_json::Number::from_f64);
+            let total_cost_usd =
+                session_stats.total_cost_usd().and_then(serde_json::Number::from_f64);
             let event =
                 crate::agent::runloop::unified::inline_events::harness::thread_completed_event(
                     turn_run_id.0.clone(),
@@ -1130,10 +1092,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             Err(err) => {
                 tracing::error!("Failed to finalize session: {}", err);
                 renderer
-                    .line(
-                        MessageStyle::Error,
-                        &format!("Failed to finalize session: {err}"),
-                    )
+                    .line(MessageStyle::Error, &format!("Failed to finalize session: {err}"))
                     .ok();
                 None
             }
@@ -1222,9 +1181,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .as_ref()
             .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
             .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-        let (code_additions, code_deletions) = code_change_delta
-            .map(|d| (d.additions, d.deletions))
-            .unwrap_or((0, 0));
+        let (code_additions, code_deletions) =
+            code_change_delta.map(|d| (d.additions, d.deletions)).unwrap_or((0, 0));
         if !finalization_succeeded {
             let _ = vtcode_ui::tui::panic_hook::restore_tui();
         }
@@ -1241,9 +1199,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             completion_tokens: session_total_usage.output_tokens,
             cached_tokens: session_total_usage.cached_input_tokens,
             cache_creation_tokens: session_total_usage.cache_creation_tokens,
-            cache_hit_rate_percent: session_total_usage
-                .cache_hit_rate()
-                .map(|rate| rate * 100.0),
+            cache_hit_rate_percent: session_total_usage.cache_hit_rate().map(|rate| rate * 100.0),
             code_additions,
             code_deletions,
             resume_identifier,
@@ -1286,13 +1242,8 @@ async fn load_archived_prompts_for_history(handle: &vtcode_ui::tui::app::InlineH
                 continue;
             }
             // Use first line as the prompt preview
-            let preview = trimmed
-                .lines()
-                .next()
-                .unwrap_or(trimmed)
-                .chars()
-                .take(200)
-                .collect::<String>();
+            let preview =
+                trimmed.lines().next().unwrap_or(trimmed).chars().take(200).collect::<String>();
             // NOTE: `created_at` uses the session start time because per-message
             // timestamps are not stored in the archive format. The time label is
             // therefore an approximation of when the conversation happened.

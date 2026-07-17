@@ -114,9 +114,7 @@ impl FileChange {
     /// Create a new Add change.
     pub fn add(content: impl Into<String>) -> Self {
         Self {
-            kind: FileChangeKind::Add {
-                content: content.into(),
-            },
+            kind: FileChangeKind::Add { content: content.into() },
             attribution: None,
             line_range: None,
         }
@@ -125,9 +123,7 @@ impl FileChange {
     /// Create a new Delete change.
     pub fn delete(original_content: impl Into<String>) -> Self {
         Self {
-            kind: FileChangeKind::Delete {
-                original_content: original_content.into(),
-            },
+            kind: FileChangeKind::Delete { original_content: original_content.into() },
             attribution: None,
             line_range: None,
         }
@@ -152,11 +148,7 @@ impl FileChange {
         new_content: Option<String>,
     ) -> Self {
         Self {
-            kind: FileChangeKind::Rename {
-                new_path,
-                old_content,
-                new_content,
-            },
+            kind: FileChangeKind::Rename { new_path, old_content, new_content },
             attribution: None,
             line_range: None,
         }
@@ -227,19 +219,18 @@ impl FileChange {
         attribution: Option<ChangeAttribution>,
     ) -> Self {
         let kind = match legacy {
-            super::tool_handler::FileChange::Add { content } => FileChangeKind::Add {
-                content: content.clone(),
-            },
+            super::tool_handler::FileChange::Add { content } => {
+                FileChangeKind::Add { content: content.clone() }
+            }
             super::tool_handler::FileChange::Delete => FileChangeKind::Delete {
                 original_content: String::new(), // Legacy doesn't preserve content
             },
-            super::tool_handler::FileChange::Update {
-                old_content,
-                new_content,
-            } => FileChangeKind::Update {
-                old_content: old_content.clone(),
-                new_content: new_content.clone(),
-            },
+            super::tool_handler::FileChange::Update { old_content, new_content } => {
+                FileChangeKind::Update {
+                    old_content: old_content.clone(),
+                    new_content: new_content.clone(),
+                }
+            }
             super::tool_handler::FileChange::Rename { new_path, content } => {
                 FileChangeKind::Rename {
                     new_path: new_path.clone(),
@@ -248,35 +239,28 @@ impl FileChange {
                 }
             }
         };
-        Self {
-            kind,
-            attribution,
-            line_range: None,
-        }
+        Self { kind, attribution, line_range: None }
     }
 
     /// Convert to legacy FileChange enum (for backward compatibility).
     pub fn to_legacy(&self) -> super::tool_handler::FileChange {
         match &self.kind {
-            FileChangeKind::Add { content } => super::tool_handler::FileChange::Add {
-                content: content.clone(),
-            },
+            FileChangeKind::Add { content } => {
+                super::tool_handler::FileChange::Add { content: content.clone() }
+            }
             FileChangeKind::Delete { .. } => super::tool_handler::FileChange::Delete,
-            FileChangeKind::Update {
-                old_content,
-                new_content,
-            } => super::tool_handler::FileChange::Update {
-                old_content: old_content.clone(),
-                new_content: new_content.clone(),
-            },
-            FileChangeKind::Rename {
-                new_path,
-                new_content,
-                ..
-            } => super::tool_handler::FileChange::Rename {
-                new_path: new_path.clone(),
-                content: new_content.clone(),
-            },
+            FileChangeKind::Update { old_content, new_content } => {
+                super::tool_handler::FileChange::Update {
+                    old_content: old_content.clone(),
+                    new_content: new_content.clone(),
+                }
+            }
+            FileChangeKind::Rename { new_path, new_content, .. } => {
+                super::tool_handler::FileChange::Rename {
+                    new_path: new_path.clone(),
+                    content: new_content.clone(),
+                }
+            }
         }
     }
 }
@@ -350,9 +334,7 @@ impl TurnDiffTracker {
                 // Add then Update = Add with new content
                 (FileChangeKind::Add { .. }, FileChangeKind::Update { new_content, .. }) => {
                     FileChange {
-                        kind: FileChangeKind::Add {
-                            content: new_content.clone(),
-                        },
+                        kind: FileChangeKind::Add { content: new_content.clone() },
                         attribution: change.attribution.clone().or(existing.attribution.clone()),
                         line_range: change.line_range,
                     }
@@ -377,9 +359,7 @@ impl TurnDiffTracker {
                 // Update then Delete = Delete with original old content
                 (FileChangeKind::Update { old_content, .. }, FileChangeKind::Delete { .. }) => {
                     FileChange {
-                        kind: FileChangeKind::Delete {
-                            original_content: old_content.clone(),
-                        },
+                        kind: FileChangeKind::Delete { original_content: old_content.clone() },
                         attribution: change.attribution.clone().or(existing.attribution.clone()),
                         line_range: None,
                     }
@@ -444,10 +424,7 @@ impl TurnDiffTracker {
                         "/dev/null",
                     ));
                 }
-                FileChangeKind::Update {
-                    old_content,
-                    new_content,
-                } => {
+                FileChangeKind::Update { old_content, new_content } => {
                     let filename = path_str.to_string();
                     diff.push_str(&compute_unified_diff_with_labels(
                         old_content,
@@ -456,11 +433,7 @@ impl TurnDiffTracker {
                         &filename,
                     ));
                 }
-                FileChangeKind::Rename {
-                    new_path,
-                    old_content,
-                    new_content,
-                } => {
+                FileChangeKind::Rename { new_path, old_content, new_content } => {
                     if let (Some(old), Some(new)) = (old_content, new_content) {
                         let old_label = path_str.to_string();
                         let new_label = new_path.to_string_lossy();
@@ -570,10 +543,7 @@ mod tests {
 
         // Second patch: Update file
         let mut changes2 = HashMap::new();
-        changes2.insert(
-            PathBuf::from("test.txt"),
-            FileChange::update("hello", "world"),
-        );
+        changes2.insert(PathBuf::from("test.txt"), FileChange::update("hello", "world"));
         tracker.on_patch_begin(changes2);
         tracker.on_patch_end(true);
 
@@ -687,16 +657,10 @@ mod tests {
     #[test]
     fn test_normalized_model_id() {
         let attr = ChangeAttribution::ai("claude-opus-4", "anthropic");
-        assert_eq!(
-            attr.normalized_model_id(),
-            Some("anthropic/claude-opus-4".to_string())
-        );
+        assert_eq!(attr.normalized_model_id(), Some("anthropic/claude-opus-4".to_string()));
 
         let attr2 = ChangeAttribution::ai("anthropic/claude-opus-4", "anthropic");
-        assert_eq!(
-            attr2.normalized_model_id(),
-            Some("anthropic/claude-opus-4".to_string())
-        );
+        assert_eq!(attr2.normalized_model_id(), Some("anthropic/claude-opus-4".to_string()));
     }
 
     #[tokio::test]

@@ -47,10 +47,7 @@ impl ZedAgent {
 
     pub(super) fn parse_resource_path(&self, uri: &str) -> Result<PathBuf, String> {
         if uri.is_empty() {
-            return Err(format!(
-                "Unable to resolve URI provided to {}",
-                tools::READ_FILE
-            ));
+            return Err(format!("Unable to resolve URI provided to {}", tools::READ_FILE));
         }
 
         if uri.starts_with('/') {
@@ -68,10 +65,7 @@ impl ZedAgent {
             "zed" | "zed-fs" => {
                 let raw_path = parsed.path();
                 if raw_path.is_empty() {
-                    return Err(format!(
-                        "Unable to resolve URI provided to {}",
-                        tools::READ_FILE
-                    ));
+                    return Err(format!("Unable to resolve URI provided to {}", tools::READ_FILE));
                 }
                 let decoded = percent_decode_str(raw_path).decode_utf8().map_err(|_err| {
                     format!("Unable to resolve URI provided to {}", tools::READ_FILE)
@@ -79,10 +73,7 @@ impl ZedAgent {
                 PathBuf::from(&*decoded)
             }
             _ => {
-                return Err(format!(
-                    "Unable to resolve URI provided to {}",
-                    tools::READ_FILE
-                ));
+                return Err(format!("Unable to resolve URI provided to {}", tools::READ_FILE));
             }
         };
 
@@ -110,10 +101,7 @@ impl ZedAgent {
                         Self::append_segment(&mut aggregated, &rendered);
                     }
                     acp::EmbeddedResourceResource::BlobResourceContents(blob) => {
-                        warn!(
-                            uri = blob.uri,
-                            "Ignoring unsupported embedded blob resource"
-                        );
+                        warn!(uri = blob.uri, "Ignoring unsupported embedded blob resource");
                         let rendered = format!(
                             "{RESOURCE_FAILURE_LABEL} {name} ({uri})",
                             name = blob.uri,
@@ -129,10 +117,8 @@ impl ZedAgent {
                     Self::append_segment(&mut aggregated, &placeholder);
                 }
                 acp::ContentBlock::Audio(audio) => {
-                    let placeholder = format!(
-                        "{RESOURCE_FALLBACK_LABEL} audio ({mime})",
-                        mime = audio.mime_type
-                    );
+                    let placeholder =
+                        format!("{RESOURCE_FALLBACK_LABEL} audio ({mime})", mime = audio.mime_type);
                     Self::append_segment(&mut aggregated, &placeholder);
                 }
                 _ => {}

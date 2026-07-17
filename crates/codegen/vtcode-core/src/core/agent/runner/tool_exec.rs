@@ -50,9 +50,7 @@ fn record_circuit_transition(
     };
     let after = breaker.get_diagnostics(tool_name);
     if before.status != after.status || after.denied_requests > before.denied_requests {
-        error_recovery
-            .lock()
-            .record_circuit_transition(&before, &after);
+        error_recovery.lock().record_circuit_transition(&before, &after);
     }
 }
 
@@ -64,10 +62,7 @@ fn resolve_tool_call_item(
     tool_call_id: &str,
 ) -> ToolCallItemRef {
     if let Some(call_item_id) = runtime.tool_call_item_id(tool_call_id) {
-        return ToolCallItemRef {
-            call_item_id,
-            synthetic_invocation: false,
-        };
+        return ToolCallItemRef { call_item_id, synthetic_invocation: false };
     }
 
     let handle = event_recorder.tool_started(tool_name, Some(args), Some(tool_call_id));
@@ -198,10 +193,7 @@ fn apply_tool_failure_halt_policy(
 ) -> bool {
     match classify_halt_decision(category) {
         ToolHaltDecision::Continue => false,
-        ToolHaltDecision::Halt {
-            warning,
-            mark_loop_limit,
-        } => {
+        ToolHaltDecision::Halt { warning, mark_loop_limit } => {
             session_state.warnings.push(warning.into());
             if mark_loop_limit {
                 session_state.mark_tool_loop_limit_hit();
@@ -216,12 +208,9 @@ fn align_prepared_batches(
     allow_parallel: bool,
 ) -> Vec<PreparedRunnerToolBatch> {
     let layout = PreparedToolBatch::plan_layout_with_names(
-        calls.iter().map(|call| {
-            (
-                call.prepared.can_parallelize(),
-                call.prepared.canonical_name.as_str(),
-            )
-        }),
+        calls
+            .iter()
+            .map(|call| (call.prepared.can_parallelize(), call.prepared.canonical_name.as_str())),
         allow_parallel,
     );
     let mut calls = calls.into_iter();
@@ -289,10 +278,7 @@ impl AgentRunner {
 
             match self.admit_tool_call(&step.tool_name, step.args.clone(), &mut runtime.state) {
                 Ok(fallback_prepared) => {
-                    match self
-                        .execute_prepared_tool_internal(&fallback_prepared)
-                        .await
-                    {
+                    match self.execute_prepared_tool_internal(&fallback_prepared).await {
                         Ok((res, _attempts)) => {
                             info!(
                                 agent = %agent_prefix,
@@ -359,11 +345,7 @@ impl AgentRunner {
                 return Ok(RunnerCallAdmission::Rejected);
             }
         };
-        if self
-            .resolve_executable_tool_name(&requested_name)
-            .await
-            .is_none()
-        {
+        if self.resolve_executable_tool_name(&requested_name).await.is_none() {
             reject_denied_tool(
                 runtime,
                 event_recorder,
@@ -417,12 +399,10 @@ impl AgentRunner {
             return Ok(RunnerCallAdmission::Rejected);
         }
 
-        Ok(RunnerCallAdmission::Prepared(Box::new(
-            PreparedRunnerToolCall {
-                tool_call_id: call.id,
-                prepared,
-            },
-        )))
+        Ok(RunnerCallAdmission::Prepared(Box::new(PreparedRunnerToolCall {
+            tool_call_id: call.id,
+            prepared,
+        })))
     }
 
     async fn execute_prepared_parallel_tool_calls(
@@ -466,10 +446,7 @@ impl AgentRunner {
         // Consume the Vec directly to avoid building an intermediate HashMap
         // and the associated key clones.  Fallback data was extracted above.
         for call in prepared_calls {
-            let PreparedRunnerToolCall {
-                tool_call_id,
-                prepared,
-            } = call;
+            let PreparedRunnerToolCall { tool_call_id, prepared } = call;
             let name = prepared.canonical_name.clone();
             let args = prepared.effective_args.clone();
             let tool_call_item =
@@ -506,25 +483,14 @@ impl AgentRunner {
                 let _start = std::time::Instant::now();
                 let result = runner.execute_prepared_tool_internal(&prepared).await;
                 let duration_ms = _start.elapsed().as_millis() as u64;
-                (
-                    name,
-                    tool_call_id,
-                    args,
-                    tool_call_item,
-                    result,
-                    circuit_before,
-                    duration_ms,
-                )
+                (name, tool_call_id, args, tool_call_item, result, circuit_before, duration_ms)
             });
         }
 
         let results = join_all(futures).await;
         let mut halt_turn = false;
         for (name, call_id, args, tool_call_item, result, circuit_before, duration_ms) in results {
-            runtime
-                .state
-                .turn_tool_latencies
-                .push((name.clone(), duration_ms));
+            runtime.state.turn_tool_latencies.push((name.clone(), duration_ms));
             record_circuit_transition(self, &runtime.state.error_recovery, &name, circuit_before);
             match result {
                 Ok((result, attempts)) => {
@@ -560,8 +526,7 @@ impl AgentRunner {
                     }
                     // Try fallback first before declaring failure.
                     let fallback_outcome = if let Some(fallback) = fallback_map.get(&call_id) {
-                        self.try_execute_fallback(fallback, runtime, agent_prefix, &name)
-                            .await
+                        self.try_execute_fallback(fallback, runtime, agent_prefix, &name).await
                     } else {
                         None
                     };
@@ -695,8 +660,7 @@ impl AgentRunner {
                 // Try fallback first before declaring failure.
                 let fallback_outcome =
                     if let Some(fallback) = &call.prepared.fallback_recommendation {
-                        self.try_execute_fallback(fallback, runtime, agent_prefix, &name)
-                            .await
+                        self.try_execute_fallback(fallback, runtime, agent_prefix, &name).await
                     } else {
                         None
                     };
@@ -776,10 +740,7 @@ impl AgentRunner {
         let mut deferred: Option<PreparedRunnerToolCall> = None;
 
         while deferred.is_some() || !pending.is_empty() {
-            if matches!(
-                runtime.poll_tool_control().await,
-                RuntimeControl::StopRequested
-            ) {
+            if matches!(runtime.poll_tool_control().await, RuntimeControl::StopRequested) {
                 runtime.complete_open_tool_calls(ToolCallStatus::Failed);
                 let lifecycle_events = runtime.take_emitted_events();
                 event_recorder.record_thread_events(lifecycle_events.clone());

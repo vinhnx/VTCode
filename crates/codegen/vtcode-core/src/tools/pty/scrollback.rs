@@ -737,10 +737,7 @@ mod tests {
 
         // Should have warning
         let snapshot = scrollback.snapshot();
-        assert!(
-            snapshot.contains("approaching size limit"),
-            "Should show 80% warning"
-        );
+        assert!(snapshot.contains("approaching size limit"), "Should show 80% warning");
         assert!(scrollback.warning_shown, "Warning flag should be set");
     }
 
@@ -801,14 +798,8 @@ mod tests {
 
         let snapshot = scrollback.snapshot();
         // Verify no ANSI escape sequences remain
-        assert!(
-            !snapshot.contains("\x1b["),
-            "Snapshot contains ESC character (0x1b)"
-        );
-        assert!(
-            !snapshot.contains("\u{001b}"),
-            "Snapshot contains ESC Unicode"
-        );
+        assert!(!snapshot.contains("\x1b["), "Snapshot contains ESC character (0x1b)");
+        assert!(!snapshot.contains("\u{001b}"), "Snapshot contains ESC Unicode");
         // Verify content is preserved
         assert!(snapshot.contains("warning"));
         assert!(snapshot.contains("src/main.rs"));

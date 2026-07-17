@@ -98,12 +98,8 @@ pub(crate) async fn compact_on_model_switch(
         return Ok(ModelSwitchCompactionOutcome::Disabled);
     }
 
-    if !is_real_model_switch(
-        &req.prev_provider,
-        &req.prev_model,
-        &req.new_provider,
-        &req.new_model,
-    ) {
+    if !is_real_model_switch(&req.prev_provider, &req.prev_model, &req.new_provider, &req.new_model)
+    {
         return Ok(ModelSwitchCompactionOutcome::Unchanged);
     }
 
@@ -223,18 +219,8 @@ mod tests {
         // Provider comparison is case-insensitive: a cosmetic case difference
         // alone is not a switch.
         assert!(!is_real_model_switch("OpenAI", "gpt-x", "openai", "gpt-x"));
-        assert!(is_real_model_switch(
-            "openai",
-            "gpt-x",
-            "anthropic",
-            "gpt-x"
-        ));
-        assert!(is_real_model_switch(
-            "anthropic",
-            "gpt-x",
-            "Anthropic",
-            "gpt-y"
-        ));
+        assert!(is_real_model_switch("openai", "gpt-x", "anthropic", "gpt-x"));
+        assert!(is_real_model_switch("anthropic", "gpt-x", "Anthropic", "gpt-y"));
     }
 
     #[tokio::test]
@@ -345,10 +331,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(matches!(
-            outcome,
-            ModelSwitchCompactionOutcome::SkippedNoClient
-        ));
+        assert!(matches!(outcome, ModelSwitchCompactionOutcome::SkippedNoClient));
         assert_eq!(history.len(), original_len);
     }
 

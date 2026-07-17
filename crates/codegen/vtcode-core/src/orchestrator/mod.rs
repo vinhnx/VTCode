@@ -50,12 +50,7 @@ impl ScheduledWork {
         payload: Value,
         metadata: Value,
     ) -> Self {
-        Self {
-            id: id.into(),
-            target,
-            payload,
-            metadata,
-        }
+        Self { id: id.into(), target, payload, metadata }
     }
 }
 
@@ -72,10 +67,7 @@ impl DistributedOrchestrator {
         executors.register("edge", Arc::new(LocalExecutor));
         executors.register("on-prem", Arc::new(LocalExecutor));
 
-        Self {
-            scheduler: Scheduler::new(),
-            executors,
-        }
+        Self { scheduler: Scheduler::new(), executors }
     }
 
     pub fn register_executor(
@@ -94,10 +86,8 @@ impl DistributedOrchestrator {
     pub async fn tick(&self) -> Result<Option<Value>> {
         if let Some(work) = self.scheduler.next().await {
             let target_key = work.target.to_string();
-            let executor = self
-                .executors
-                .get(&target_key)
-                .context("executor not registered for target")?;
+            let executor =
+                self.executors.get(&target_key).context("executor not registered for target")?;
 
             // Prevent long-running executors from blocking the queue forever.
             let exec_deadline = Duration::from_secs(30);

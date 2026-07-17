@@ -200,9 +200,7 @@ fn gather_recent_git_log(workspace_root: &Path) -> Option<String> {
 /// Reads `memories/compaction_summary.md` written by the compaction checkpoint.
 /// This allows later sessions to orient from previous session's compaction summary.
 fn read_compaction_summary(workspace_root: &Path) -> Option<String> {
-    let path = workspace_root
-        .join("memories")
-        .join("compaction_summary.md");
+    let path = workspace_root.join("memories").join("compaction_summary.md");
     let content = std::fs::read_to_string(&path).ok()?;
     if content.trim().is_empty() {
         None

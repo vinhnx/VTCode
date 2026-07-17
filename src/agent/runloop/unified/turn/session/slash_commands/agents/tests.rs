@@ -72,10 +72,7 @@ fn visible_subagent_entries_keep_recent_terminal_runs_inspectable() {
     closed.updated_at = failed.updated_at - chrono::Duration::seconds(1);
 
     let visible = visible_subagent_entries(vec![completed, closed, failed, running]);
-    let visible_ids = visible
-        .into_iter()
-        .map(|entry| entry.id)
-        .collect::<Vec<_>>();
+    let visible_ids = visible.into_iter().map(|entry| entry.id).collect::<Vec<_>>();
 
     assert_eq!(visible_ids, vec!["running", "completed", "failed"]);
 }
@@ -85,10 +82,7 @@ fn subprocess_action_prompt_matches_requested_action() {
     let (graceful_title, graceful_message, graceful_confirm) =
         subprocess_action_prompt("Rust Engineer", false);
     assert_eq!(graceful_title, "Graceful stop subprocess");
-    assert_eq!(
-        graceful_message,
-        "Request a graceful shutdown for `Rust Engineer`?"
-    );
+    assert_eq!(graceful_message, "Request a graceful shutdown for `Rust Engineer`?");
     assert_eq!(graceful_confirm, "Graceful stop");
 
     let (force_title, force_message, force_confirm) =
@@ -163,10 +157,7 @@ fn background_subprocess_summary_reports_waiting_state_without_summary() {
         transcript_path: None,
     };
 
-    assert_eq!(
-        background_subprocess_summary(&entry),
-        "Starting; waiting for subprocess output."
-    );
+    assert_eq!(background_subprocess_summary(&entry), "Starting; waiting for subprocess output.");
 }
 
 #[test]

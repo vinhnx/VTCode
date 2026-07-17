@@ -38,7 +38,7 @@ loop {
 
 **Implementation in VT Code:**
 
-File: `vtcode-core/src/ui/tui/session.rs`
+File: `crates/codegen/vtcode-core/src/ui/tui/session.rs`
 
 The `Session::render()` method orchestrates all UI components:
 - Header (top bar with model/status)
@@ -257,7 +257,7 @@ f.render_widget(
 
 VT Code parses terminal ANSI escape codes and converts them to Ratatui styles:
 
-**File:** `vtcode-core/src/ui/tui/style.rs`
+**File:** `crates/codegen/vtcode-core/src/ui/tui/style.rs`
 
 Converts ANSI SGR codes (like `\x1b[1;31m` for bold red) to Ratatui `Style`.
 
@@ -354,5 +354,5 @@ Use `TestBackend` for offline rendering tests (no terminal needed).
 - [Ratatui: Widgets](https://ratatui.rs/how-to/render/widgets/)
 - [Ratatui: Styling](https://ratatui.rs/how-to/render/styling/)
 - [Ratatui: Custom Widgets](https://ratatui.rs/how-to/render/custom-widgets/)
-- `vtcode-ui/src/tui/core_tui/runner/` - Terminal event handler
-- `vtcode-core/src/ui/tui/session.rs` - Main render orchestration
+- `crates/codegen/vtcode-ui/src/tui/core_tui/runner/` - Terminal event handler
+- `crates/codegen/vtcode-core/src/ui/tui/session.rs` - Main render orchestration

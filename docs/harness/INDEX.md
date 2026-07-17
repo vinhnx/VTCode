@@ -22,12 +22,12 @@ The principle: if an agent cannot complete a task autonomously from information 
 
 | File | Description |
 | --- | --- |
-| `vtcode-core/src/core/agent/evaluator.rs` | Structured evaluator with scoring dimensions and hard thresholds. |
-| `vtcode-core/src/core/agent/handoff.rs` | Enriched handoff protocol with boundary status, test results, known issues. |
-| `vtcode-core/src/core/agent/harness_artifacts.rs` | Sprint contract and outcome verification artifact support. |
-| `vtcode-core/src/core/agent/orient.rs` | Orient phase: gathers orientation context from external artifacts. |
-| `vtcode-core/src/core/agent/progress_monitor.rs` | Monotonic progress monitoring with stall detection. |
-| `vtcode-session-store/src/progress.rs` | Durable progress ledger with handoff metadata. |
+| `crates/codegen/vtcode-core/src/core/agent/evaluator.rs` | Structured evaluator with scoring dimensions and hard thresholds. |
+| `crates/codegen/vtcode-core/src/core/agent/handoff.rs` | Enriched handoff protocol with boundary status, test results, known issues. |
+| `crates/codegen/vtcode-core/src/core/agent/harness_artifacts.rs` | Sprint contract and outcome verification artifact support. |
+| `crates/codegen/vtcode-core/src/core/agent/orient.rs` | Orient phase: gathers orientation context from external artifacts. |
+| `crates/codegen/vtcode-core/src/core/agent/progress_monitor.rs` | Monotonic progress monitoring with stall detection. |
+| `crates/codegen/vtcode-session-store/src/progress.rs` | Durable progress ledger with handoff metadata. |
 
 ### Directories
 

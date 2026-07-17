@@ -73,10 +73,7 @@ pub(super) fn print_cli_tools(rows: &[CliToolRow]) {
     println!("{:-<70}", "");
 
     for row in rows {
-        println!(
-            "⚡ {}\n  {}\n  Path: {}\n",
-            row.name, row.description, row.path
-        );
+        println!("⚡ {}\n  {}\n  Path: {}\n", row.name, row.description, row.path);
     }
 }
 
@@ -89,10 +86,7 @@ pub(super) fn print_built_in_skills(rows: &[BuiltInSkillRow]) {
     println!("{:-<70}", "");
 
     for row in rows {
-        println!(
-            "⌘ {}\n  {}\n  Usage: {}\n",
-            row.name, row.description, row.usage
-        );
+        println!("⌘ {}\n  {}\n  Usage: {}\n", row.name, row.description, row.usage);
     }
 }
 

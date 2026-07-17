@@ -12,9 +12,9 @@ Adding a model requires updates in **three layers**:
 
 ## Quick Checklist
 
-- [ ] Add to OpenAI constants (`vtcode-config/src/constants/models/openai.rs`)
+- [ ] Add to OpenAI constants (`crates/codegen/vtcode-config/src/constants/models/openai.rs`)
 - [ ] Add to model metadata (`docs/models.json`)
-- [ ] Add enum variant (`vtcode-config/src/models/model_id.rs`)
+- [ ] Add enum variant (`crates/codegen/vtcode-config/src/models/model_id.rs`)
 - [ ] Update `as_str.rs` - string mapping
 - [ ] Update `display.rs` - human-readable name
 - [ ] Update `description.rs` - model description
@@ -28,7 +28,7 @@ Adding a model requires updates in **three layers**:
 
 ### Step 1: Add to Constants (openai.rs)
 
-**File:** `vtcode-config/src/constants/models/openai.rs`
+**File:** `crates/codegen/vtcode-config/src/constants/models/openai.rs`
 
 ```rust
 // In SUPPORTED_MODELS array
@@ -86,7 +86,7 @@ Verify JSON: `python3 -m json.tool docs/models.json > /dev/null`
 
 ### Step 3: Add Enum Variant (model_id.rs)
 
-**File:** `vtcode-config/src/models/model_id.rs`
+**File:** `crates/codegen/vtcode-config/src/models/model_id.rs`
 
 Add in the appropriate provider section (OpenAI, Anthropic, etc.):
 
@@ -101,7 +101,7 @@ GPT54Mini,
 
 ### Step 4: Update as_str.rs
 
-**File:** `vtcode-config/src/models/model_id/as_str.rs`
+**File:** `crates/codegen/vtcode-config/src/models/model_id/as_str.rs`
 
 Maps enum to constant string:
 
@@ -112,7 +112,7 @@ ModelId::GPT54Mini => models::openai::GPT_5_4_MINI,
 
 ### Step 5: Update display.rs
 
-**File:** `vtcode-config/src/models/model_id/display.rs`
+**File:** `crates/codegen/vtcode-config/src/models/model_id/display.rs`
 
 Human-readable name for UI:
 
@@ -123,7 +123,7 @@ ModelId::GPT54Mini => "GPT-5.4 Mini",
 
 ### Step 6: Update description.rs
 
-**File:** `vtcode-config/src/models/model_id/description.rs`
+**File:** `crates/codegen/vtcode-config/src/models/model_id/description.rs`
 
 Full description for help/info:
 
@@ -138,7 +138,7 @@ ModelId::GPT54Mini => {
 
 ### Step 7: Update parse.rs
 
-**File:** `vtcode-config/src/models/model_id/parse.rs`
+**File:** `crates/codegen/vtcode-config/src/models/model_id/parse.rs`
 
 String → Enum parsing:
 
@@ -149,7 +149,7 @@ s if s == models::openai::GPT_5_4_MINI => Ok(ModelId::GPT54Mini),
 
 ### Step 8: Update collection.rs
 
-**File:** `vtcode-config/src/models/model_id/collection.rs`
+**File:** `crates/codegen/vtcode-config/src/models/model_id/collection.rs`
 
 Add to `all_models()` vector (keep alphabetically sorted within provider):
 
@@ -163,7 +163,7 @@ ModelId::GPT53Codex,
 
 ### Step 9: Update capabilities.rs
 
-**File:** `vtcode-config/src/models/model_id/capabilities.rs`
+**File:** `crates/codegen/vtcode-config/src/models/model_id/capabilities.rs`
 
 Update methods that match on model families:
 
@@ -184,7 +184,7 @@ ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT54Nano | ModelId::GPT54Mini => 
 
 ### Step 10: Update provider.rs
 
-**File:** `vtcode-config/src/models/model_id/provider.rs`
+**File:** `crates/codegen/vtcode-config/src/models/model_id/provider.rs`
 
 Add to provider match:
 
@@ -300,4 +300,4 @@ v **Do:**
 - Provider setup: `docs/providers/PROVIDER_GUIDES.md`
 - Configuration precedence: `docs/config/CONFIGURATION_PRECEDENCE.md`
 - Model examples: `docs/models.json`
-- Constants reference: `vtcode-config/src/constants/models/`
+- Constants reference: `crates/codegen/vtcode-config/src/constants/models/`

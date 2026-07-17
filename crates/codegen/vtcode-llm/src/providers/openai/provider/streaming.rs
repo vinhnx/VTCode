@@ -139,10 +139,7 @@ impl OpenAIProvider {
                     Some(&client_request_id),
                 ),
             );
-            return Err(provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
     }
 
@@ -247,10 +244,7 @@ impl OpenAIProvider {
                     Some(&client_request_id),
                 ),
             );
-            return Err(provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
     }
 
@@ -302,10 +296,7 @@ impl OpenAIProvider {
                     Some(&client_request_id),
                 ),
             );
-            return Err(provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
 
         Ok(stream_decoder::create_chat_stream(response, model))

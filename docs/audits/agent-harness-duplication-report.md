@@ -1,7 +1,7 @@
 # Agent / Harness Duplication & Optimization Report
 
 **Date:** 2026-06-05 (initial audit) / 2026-06-06 (implementation)
-**Scope:** `vtcode-core/src/core/agent/**`, `vtcode-core/src/prompts/**`, `vtcode-core/src/tools/**`, `src/agent/runloop/unified/**`
+**Scope:** `crates/codegen/vtcode-core/src/core/agent/**`, `crates/codegen/vtcode-core/src/prompts/**`, `crates/codegen/vtcode-core/src/tools/**`, `src/agent/runloop/unified/**`
 **Status:** Implemented — F1 and F4 resolved; F2/F3/F5 verified as non-issues.
 
 All findings below are verified against source and ordered by value-to-risk.
@@ -146,7 +146,7 @@ The original "three fragmented builders" claim does not hold:
   `generate_system_instruction_with_config`) was referenced **only** by the
   re-export at `prompts/mod.rs:25` — zero call sites workspace-wide. The live ACP
   path uses the *async* `prompts::system::generate_system_instruction_with_config`
-  instead (`vtcode-acp/src/zed/session.rs:54`).
+  instead (`crates/codegen/vtcode-acp/src/zed/session.rs:54`).
 
 > **Applied.** Deleted `generator.rs` (260 lines) and its `mod.rs` re-export.
 > No prompt-output change. The two live builders already share the canonical

@@ -63,11 +63,7 @@ impl ContentPart {
     }
 
     pub fn image(data: String, mime_type: String) -> Self {
-        ContentPart::Image {
-            data,
-            mime_type,
-            content_type: "image".to_owned(),
-        }
+        ContentPart::Image { data, mime_type, content_type: "image".to_owned() }
     }
 
     pub fn file_from_id(file_id: String) -> Self {
@@ -265,11 +261,8 @@ impl MessageContent {
                 if !has_image {
                     return None;
                 }
-                let text_parts: Vec<ContentPart> = parts
-                    .iter()
-                    .filter(|part| !part.is_image())
-                    .cloned()
-                    .collect();
+                let text_parts: Vec<ContentPart> =
+                    parts.iter().filter(|part| !part.is_image()).cloned().collect();
                 if text_parts.is_empty() {
                     Some(MessageContent::Text(String::new()))
                 } else if text_parts.len() == 1 {
@@ -563,8 +556,7 @@ impl Message {
     /// Based on official API documentation constraints
     pub fn validate_for_provider(&self, provider: &str) -> Result<(), String> {
         // Check role-specific constraints
-        self.role
-            .validate_for_provider(provider, self.tool_call_id.is_some())?;
+        self.role.validate_for_provider(provider, self.tool_call_id.is_some())?;
 
         // Check tool call constraints
         if let Some(tool_calls) = &self.tool_calls {
@@ -586,9 +578,7 @@ impl Message {
         match provider {
             "openai" | "openrouter" | "zai" | "stepfun" | "evolink" => {
                 if self.role == MessageRole::Tool && self.tool_call_id.is_none() {
-                    return Err(format!(
-                        "{provider} requires tool_call_id for tool messages"
-                    ));
+                    return Err(format!("{provider} requires tool_call_id for tool messages"));
                 }
             }
             "gemini" => {
@@ -615,9 +605,7 @@ impl Message {
 
     /// Check if this message has tool calls
     pub fn has_tool_calls(&self) -> bool {
-        self.tool_calls
-            .as_ref()
-            .is_some_and(|calls| !calls.is_empty())
+        self.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
     }
 
     /// Get the tool calls if present
@@ -774,10 +762,7 @@ mod tests {
     fn message_content_parts_with_single_text_stays_borrowed() {
         let content = MessageContent::Parts(vec![ContentPart::text("borrowed".to_string())]);
 
-        assert!(matches!(
-            content.as_text(),
-            std::borrow::Cow::Borrowed("borrowed")
-        ));
+        assert!(matches!(content.as_text(), std::borrow::Cow::Borrowed("borrowed")));
     }
 
     #[test]
@@ -792,10 +777,7 @@ mod tests {
 
     #[test]
     fn assistant_phase_parses_wire_strings() {
-        assert_eq!(
-            AssistantPhase::from_wire_str("commentary"),
-            Some(AssistantPhase::Commentary)
-        );
+        assert_eq!(AssistantPhase::from_wire_str("commentary"), Some(AssistantPhase::Commentary));
         assert_eq!(
             AssistantPhase::from_wire_str("final_answer"),
             Some(AssistantPhase::FinalAnswer)
@@ -822,7 +804,7 @@ mod tests {
             vec![ToolCall::function(
                 "call_search".to_string(),
                 "code_search".to_string(),
-                "{\"query\": \"persistent_memory\", \"path\": \"vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
+                "{\"query\": \"persistent_memory\", \"path\": \"crates/codegen/vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
             )],
         );
 

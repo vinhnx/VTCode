@@ -17,7 +17,5 @@ pub(super) fn ask_options(
 }
 
 pub(super) fn skills_options(startup: &StartupContext) -> SkillsCommandOptions {
-    SkillsCommandOptions {
-        workspace: startup.workspace.clone(),
-    }
+    SkillsCommandOptions { workspace: startup.workspace.clone() }
 }

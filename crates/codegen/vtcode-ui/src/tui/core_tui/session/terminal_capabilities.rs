@@ -202,9 +202,7 @@ mod tests {
 
     #[test]
     fn test_supports_unicode_box_drawing() {
-        let _guard = TERMINAL_ENV_TEST_LOCK
-            .lock()
-            .expect("terminal env test lock");
+        let _guard = TERMINAL_ENV_TEST_LOCK.lock().expect("terminal env test lock");
         for key in ["TERM", "LANG", "LC_ALL", "LC_CTYPE", "VTCODE_NO_UNICODE"] {
             clear_var(key);
         }
@@ -240,19 +238,14 @@ mod tests {
 
     #[test]
     fn test_get_border_type() {
-        let _guard = TERMINAL_ENV_TEST_LOCK
-            .lock()
-            .expect("terminal env test lock");
+        let _guard = TERMINAL_ENV_TEST_LOCK.lock().expect("terminal env test lock");
         clear_var("TERM");
         clear_var("VTCODE_NO_RICH_UNICODE");
 
         // Test with rich Unicode terminal (Alacritty)
         set_var("TERM", "alacritty");
         let border_type = get_border_type();
-        assert!(matches!(
-            border_type,
-            ratatui::widgets::BorderType::HeavyDoubleDashed
-        ));
+        assert!(matches!(border_type, ratatui::widgets::BorderType::HeavyDoubleDashed));
 
         // Test with Unicode-supporting terminal (xterm-256color) - not in known list
         set_var("TERM", "xterm-256color");
@@ -277,9 +270,7 @@ mod tests {
 
     #[test]
     fn queued_input_edit_binding_switches_for_tmux() {
-        let _guard = TERMINAL_ENV_TEST_LOCK
-            .lock()
-            .expect("terminal env test lock");
+        let _guard = TERMINAL_ENV_TEST_LOCK.lock().expect("terminal env test lock");
         clear_var("TMUX");
         clear_var("TERM");
         set_var("TERM", "xterm-256color");

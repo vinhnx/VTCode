@@ -231,10 +231,7 @@ fn is_dangerous_reg_operation(command: &[String]) -> bool {
     let operation = command[1].to_lowercase();
 
     // Dangerous operations on registry
-    matches!(
-        operation.as_str(),
-        "add" | "delete" | "import" | "export" | "query" | "copy"
-    )
+    matches!(operation.as_str(), "add" | "delete" | "import" | "export" | "query" | "copy")
 }
 
 /// Detects dangerous NET commands

@@ -175,9 +175,7 @@ impl TaskHistoryIndex {
         // Atomic write via temp file + rename
         let temp_path = path.with_file_name(format!(
             ".{}.tmp",
-            path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("task_index")
+            path.file_name().and_then(|n| n.to_str()).unwrap_or("task_index")
         ));
         std::fs::write(&temp_path, &serialized)?;
         std::fs::rename(&temp_path, path)?;
@@ -186,10 +184,7 @@ impl TaskHistoryIndex {
 
     /// Return the default path for the task index file in a workspace.
     pub fn default_path(workspace_root: &Path) -> PathBuf {
-        workspace_root
-            .join(".vtcode")
-            .join("history")
-            .join("task_index.json")
+        workspace_root.join(".vtcode").join("history").join("task_index.json")
     }
 
     /// Return the count of entries in the index.
@@ -290,14 +285,9 @@ mod tests {
         index.push(TaskHistoryEntry::from(sample_results()), None);
         index.save(&path).expect("save");
 
-        let loaded = TaskHistoryIndex::load(&path)
-            .expect("load")
-            .expect("should exist");
+        let loaded = TaskHistoryIndex::load(&path).expect("load").expect("should exist");
         assert_eq!(loaded.len(), 1);
-        assert_eq!(
-            loaded.entries[0].summary,
-            "Refactored the authentication module"
-        );
+        assert_eq!(loaded.entries[0].summary, "Refactored the authentication module");
     }
 
     #[test]
@@ -306,10 +296,7 @@ mod tests {
         assert_eq!(categorize_error("tool execution failed"), "tool_error");
         assert_eq!(categorize_error("file not found"), "file_error");
         assert_eq!(categorize_error("permission denied"), "permission");
-        assert_eq!(
-            categorize_error("parse error at line 42"),
-            "validation_error"
-        );
+        assert_eq!(categorize_error("parse error at line 42"), "validation_error");
         assert_eq!(categorize_error("something unexpected"), "unknown");
     }
 }

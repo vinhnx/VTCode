@@ -127,9 +127,7 @@ fn turn_history_checkpoint_truncates_appended_messages() {
     ];
     let checkpoint = TurnHistoryCheckpoint::capture(&history);
 
-    history.push(vtcode_core::llm::provider::Message::assistant(
-        "during turn".to_string(),
-    ));
+    history.push(vtcode_core::llm::provider::Message::assistant("during turn".to_string()));
     history.push(vtcode_core::llm::provider::Message::tool_response(
         "call-1".to_string(),
         "{\"ok\":true}".to_string(),
@@ -152,9 +150,7 @@ fn turn_history_checkpoint_preserves_preexisting_history_prefix() {
     let expected_prefix = history.clone();
     let checkpoint = TurnHistoryCheckpoint::capture(&history);
 
-    history.push(vtcode_core::llm::provider::Message::assistant(
-        "retryable append".to_string(),
-    ));
+    history.push(vtcode_core::llm::provider::Message::assistant("retryable append".to_string()));
 
     checkpoint.rollback(&mut history);
 
@@ -318,10 +314,7 @@ fn resume_bootstrap_without_archive_reuses_identifier_for_in_place_resume() {
 
     assert_eq!(thread_id, "session-source");
     assert_eq!(
-        bootstrap
-            .metadata
-            .as_ref()
-            .map(|meta| meta.workspace_label.as_str()),
+        bootstrap.metadata.as_ref().map(|meta| meta.workspace_label.as_str()),
         Some("workspace")
     );
 }
@@ -419,10 +412,7 @@ fn thread_completion_status_matches_public_contract() {
     );
     assert_eq!(
         SessionEndReason::Completed.thread_completion_status(true),
-        (
-            "budget_limit_reached",
-            ThreadCompletionSubtype::ErrorMaxBudgetUsd,
-        )
+        ("budget_limit_reached", ThreadCompletionSubtype::ErrorMaxBudgetUsd,)
     );
 }
 
@@ -438,10 +428,7 @@ fn latest_assistant_result_text_uses_latest_nonempty_assistant_message() {
         vtcode_core::llm::provider::Message::assistant(" final answer ".to_string()),
     ];
 
-    assert_eq!(
-        latest_assistant_result_text(&messages),
-        Some("final answer".to_string())
-    );
+    assert_eq!(latest_assistant_result_text(&messages), Some("final answer".to_string()));
 }
 
 #[tokio::test]

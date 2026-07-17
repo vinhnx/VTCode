@@ -262,27 +262,25 @@ pub(super) fn remap_consolidated_action_alias_args(
 
     let action = super::assembly::public_tool_name_candidates(requested_name)
         .into_iter()
-        .find_map(
-            |candidate| match (normalized_tool_name, candidate.as_str()) {
-                (tool_names::MCP, tool_names::MCP_SEARCH_TOOLS) => Some("search_tools"),
-                (tool_names::MCP, tool_names::MCP_GET_TOOL_DETAILS) => Some("get_tool_details"),
-                (tool_names::MCP, tool_names::MCP_LIST_SERVERS) => Some("list_servers"),
-                (tool_names::MCP, tool_names::MCP_CONNECT_SERVER) => Some("connect"),
-                (tool_names::MCP, tool_names::MCP_DISCONNECT_SERVER) => Some("disconnect"),
-                (tool_names::CRON, tool_names::CRON_CREATE) => Some("create"),
-                (tool_names::CRON, tool_names::CRON_LIST) => Some("list"),
-                (tool_names::CRON, tool_names::CRON_DELETE) => Some("delete"),
-                (tool_names::AGENT, tool_names::SPAWN_AGENT) => Some("spawn"),
-                (tool_names::AGENT, tool_names::SPAWN_BACKGROUND_SUBPROCESS) => {
-                    Some("spawn_subprocess")
-                }
-                (tool_names::AGENT, tool_names::SEND_INPUT) => Some("send_input"),
-                (tool_names::AGENT, tool_names::RESUME_AGENT) => Some("resume"),
-                (tool_names::AGENT, tool_names::WAIT_AGENT) => Some("wait"),
-                (tool_names::AGENT, tool_names::CLOSE_AGENT) => Some("close"),
-                _ => None,
-            },
-        )?;
+        .find_map(|candidate| match (normalized_tool_name, candidate.as_str()) {
+            (tool_names::MCP, tool_names::MCP_SEARCH_TOOLS) => Some("search_tools"),
+            (tool_names::MCP, tool_names::MCP_GET_TOOL_DETAILS) => Some("get_tool_details"),
+            (tool_names::MCP, tool_names::MCP_LIST_SERVERS) => Some("list_servers"),
+            (tool_names::MCP, tool_names::MCP_CONNECT_SERVER) => Some("connect"),
+            (tool_names::MCP, tool_names::MCP_DISCONNECT_SERVER) => Some("disconnect"),
+            (tool_names::CRON, tool_names::CRON_CREATE) => Some("create"),
+            (tool_names::CRON, tool_names::CRON_LIST) => Some("list"),
+            (tool_names::CRON, tool_names::CRON_DELETE) => Some("delete"),
+            (tool_names::AGENT, tool_names::SPAWN_AGENT) => Some("spawn"),
+            (tool_names::AGENT, tool_names::SPAWN_BACKGROUND_SUBPROCESS) => {
+                Some("spawn_subprocess")
+            }
+            (tool_names::AGENT, tool_names::SEND_INPUT) => Some("send_input"),
+            (tool_names::AGENT, tool_names::RESUME_AGENT) => Some("resume"),
+            (tool_names::AGENT, tool_names::WAIT_AGENT) => Some("wait"),
+            (tool_names::AGENT, tool_names::CLOSE_AGENT) => Some("close"),
+            _ => None,
+        })?;
 
     let mut mapped = obj.clone();
     mapped.insert("action".to_string(), Value::String(action.to_string()));
@@ -529,30 +527,10 @@ pub(super) fn preflight_validate_resolved_call(
         .as_ref()
         .get("path")
         .and_then(|v| v.as_str())
-        .or_else(|| {
-            validation_args
-                .as_ref()
-                .get("file_path")
-                .and_then(|v| v.as_str())
-        })
-        .or_else(|| {
-            validation_args
-                .as_ref()
-                .get("filepath")
-                .and_then(|v| v.as_str())
-        })
-        .or_else(|| {
-            validation_args
-                .as_ref()
-                .get("target_path")
-                .and_then(|v| v.as_str())
-        })
-        .or_else(|| {
-            validation_args
-                .as_ref()
-                .get("file")
-                .and_then(|v| v.as_str())
-        })
+        .or_else(|| validation_args.as_ref().get("file_path").and_then(|v| v.as_str()))
+        .or_else(|| validation_args.as_ref().get("filepath").and_then(|v| v.as_str()))
+        .or_else(|| validation_args.as_ref().get("target_path").and_then(|v| v.as_str()))
+        .or_else(|| validation_args.as_ref().get("file").and_then(|v| v.as_str()))
         && let Err(err) = paths::validate_path_safety(path)
     {
         failures.push(format!("Path security check failed: {err}"));
@@ -728,21 +706,9 @@ mod tests {
             "new_string": "new"
         });
 
-        assert!(!is_missing_required_arg(
-            tool_names::EDIT_FILE,
-            &args,
-            "path"
-        ));
-        assert!(!is_missing_required_arg(
-            tool_names::EDIT_FILE,
-            &args,
-            "old_str"
-        ));
-        assert!(!is_missing_required_arg(
-            tool_names::EDIT_FILE,
-            &args,
-            "new_str"
-        ));
+        assert!(!is_missing_required_arg(tool_names::EDIT_FILE, &args, "path"));
+        assert!(!is_missing_required_arg(tool_names::EDIT_FILE, &args, "old_str"));
+        assert!(!is_missing_required_arg(tool_names::EDIT_FILE, &args, "new_str"));
     }
 
     #[test]
@@ -771,20 +737,12 @@ mod tests {
 
     #[test]
     fn apply_patch_required_arg_accepts_input_alias() {
-        assert!(!is_missing_required_arg(
-            tool_names::APPLY_PATCH,
-            &json!({"input": ""}),
-            "patch"
-        ));
+        assert!(!is_missing_required_arg(tool_names::APPLY_PATCH, &json!({"input": ""}), "patch"));
     }
 
     #[test]
     fn apply_patch_required_arg_accepts_raw_string_payload() {
-        assert!(!is_missing_required_arg(
-            tool_names::APPLY_PATCH,
-            &json!(""),
-            "patch"
-        ));
+        assert!(!is_missing_required_arg(tool_names::APPLY_PATCH, &json!(""), "patch"));
     }
 
     #[test]
@@ -795,15 +753,8 @@ mod tests {
         });
         let args = normalize_tool_args(tool_names::RUN_PTY_CMD, &input, None)?;
 
-        assert!(!is_missing_required_arg(
-            tool_names::RUN_PTY_CMD,
-            args.as_ref(),
-            "command"
-        ));
-        assert_eq!(
-            args.get("command").and_then(|value| value.as_str()),
-            Some("ls -a")
-        );
+        assert!(!is_missing_required_arg(tool_names::RUN_PTY_CMD, args.as_ref(), "command"));
+        assert_eq!(args.get("command").and_then(|value| value.as_str()), Some("ls -a"));
         Ok(())
     }
 
@@ -815,15 +766,8 @@ mod tests {
         });
         let args = normalize_tool_args(tool_names::RUN_PTY_CMD, &input, None)?;
 
-        assert!(!is_missing_required_arg(
-            tool_names::RUN_PTY_CMD,
-            args.as_ref(),
-            "command"
-        ));
-        assert_eq!(
-            args.get("command").and_then(|value| value.as_str()),
-            Some("ls -a")
-        );
+        assert!(!is_missing_required_arg(tool_names::RUN_PTY_CMD, args.as_ref(), "command"));
+        assert_eq!(args.get("command").and_then(|value| value.as_str()), Some("ls -a"));
         Ok(())
     }
 
@@ -874,9 +818,7 @@ mod tests {
 
     #[test]
     fn request_user_input_args_accept_details_alias() -> Result<()> {
-        let schema = RequestUserInputTool
-            .parameter_schema()
-            .expect("request_user_input schema");
+        let schema = RequestUserInputTool.parameter_schema().expect("request_user_input schema");
         let args = json!({
             "questions": [{
                 "id": "scope",
@@ -961,10 +903,7 @@ mod tests {
         )
         .expect_err("missing command should fail preflight");
 
-        assert!(
-            err.to_string()
-                .contains("Missing required argument: command")
-        );
+        assert!(err.to_string().contains("Missing required argument: command"));
     }
 
     #[tokio::test]
@@ -1079,11 +1018,7 @@ mod tests {
         .expect_err("non-string session id should fail preflight");
 
         assert!(error.to_string().contains("write_stdin"));
-        assert!(
-            error
-                .to_string()
-                .contains("Missing required argument: session_id")
-        );
+        assert!(error.to_string().contains("Missing required argument: session_id"));
     }
 
     #[tokio::test]
@@ -1112,10 +1047,7 @@ mod tests {
         )
         .expect_err("missing input should fail preflight");
 
-        assert!(
-            err.to_string()
-                .contains("Missing required argument: input or chars or text")
-        );
+        assert!(err.to_string().contains("Missing required argument: input or chars or text"));
     }
 
     #[tokio::test]
@@ -1129,10 +1061,7 @@ mod tests {
         )
         .expect_err("missing session_id should fail preflight");
 
-        assert!(
-            err.to_string()
-                .contains("Missing required argument: session_id")
-        );
+        assert!(err.to_string().contains("Missing required argument: session_id"));
     }
 
     #[tokio::test]

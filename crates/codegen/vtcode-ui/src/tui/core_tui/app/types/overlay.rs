@@ -229,10 +229,7 @@ impl From<crate::tui::core_tui::types::OverlaySubmission> for TransientSubmissio
 
 impl From<TransientHotkey> for crate::tui::core_tui::types::OverlayHotkey {
     fn from(value: TransientHotkey) -> Self {
-        Self {
-            key: value.key.into(),
-            action: value.action.into(),
-        }
+        Self { key: value.key.into(), action: value.action.into() }
     }
 }
 

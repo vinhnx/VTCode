@@ -38,10 +38,7 @@ mod tests {
 
     #[test]
     fn cli_arg_defaults_to_full_for_unknown_values() {
-        assert!(matches!(
-            AnalysisType::from_cli_arg("unknown"),
-            AnalysisType::Full
-        ));
+        assert!(matches!(AnalysisType::from_cli_arg("unknown"), AnalysisType::Full));
     }
 
     #[test]

@@ -102,8 +102,7 @@ pub(super) async fn run_interaction_loop_impl(
                 &ctx.config.model,
                 provider_supports_vision,
             );
-            ctx.handle
-                .set_image_input_enabled(model_supports_image_input);
+            ctx.handle.set_image_input_enabled(model_supports_image_input);
 
             let live_ide_context = refresh_live_ide_context_update(ctx.ide_context_bridge);
             if live_ide_context.changed || workspace_config_reloaded {
@@ -139,10 +138,8 @@ pub(super) async fn run_interaction_loop_impl(
                         ctx.handle,
                         &entries,
                     );
-                    let delegated_count = entries
-                        .iter()
-                        .filter(|entry| !entry.status.is_terminal())
-                        .count();
+                    let delegated_count =
+                        entries.iter().filter(|entry| !entry.status.is_terminal()).count();
                     let background_count = controller
                         .background_status_entries()
                         .await
@@ -173,9 +170,8 @@ pub(super) async fn run_interaction_loop_impl(
                 ctx.active_thread_label,
                 local_agent_count,
             );
-            let context_limit_tokens = ctx
-                .provider_client
-                .effective_context_size(&ctx.config.model);
+            let context_limit_tokens =
+                ctx.provider_client.effective_context_size(&ctx.config.model);
             let context_used_tokens = ctx.context_manager.current_token_usage();
             crate::agent::runloop::unified::status_line::update_context_budget(
                 state.input_status_state,
@@ -228,9 +224,7 @@ pub(super) async fn run_interaction_loop_impl(
                 status.last_balance_refresh = None;
             }
             ctx.handle.set_terminal_title_items(
-                ctx.vt_cfg
-                    .as_ref()
-                    .and_then(|cfg| cfg.ui.terminal_title.items.clone()),
+                ctx.vt_cfg.as_ref().and_then(|cfg| cfg.ui.terminal_title.items.clone()),
             );
             ctx.handle
                 .set_terminal_title_thread_label(state.input_status_state.thread_context.clone());
@@ -268,9 +262,7 @@ pub(super) async fn run_interaction_loop_impl(
         } // end should_refresh_status
 
         if ctx.ctrl_c_state.is_exit_requested() {
-            return Ok(InteractionOutcome::Exit {
-                reason: SessionEndReason::Exit,
-            });
+            return Ok(InteractionOutcome::Exit { reason: SessionEndReason::Exit });
         }
 
         let interrupts = InlineInterruptCoordinator::new(ctx.ctrl_c_state.as_ref());
@@ -317,10 +309,7 @@ pub(super) async fn run_interaction_loop_impl(
             last_input_activity_at = Instant::now();
         }
 
-        if durable_scheduler_run
-            .as_ref()
-            .is_some_and(JoinHandle::is_finished)
-        {
+        if durable_scheduler_run.as_ref().is_some_and(JoinHandle::is_finished) {
             let Some(task) = durable_scheduler_run.take() else {
                 tracing::debug!("Durable scheduler task finished but handle was already consumed");
                 continue;
@@ -394,9 +383,7 @@ pub(super) async fn run_interaction_loop_impl(
 
             if let Some(daemon) = durable_scheduler_daemon.clone() {
                 durable_scheduler_run =
-                    Some(tokio::spawn(
-                        async move { daemon.run_due_tasks_once().await },
-                    ));
+                    Some(tokio::spawn(async move { daemon.run_due_tasks_once().await }));
             }
         }
 
@@ -404,10 +391,7 @@ pub(super) async fn run_interaction_loop_impl(
             && state.queued_inputs.is_empty()
             && last_input_activity_at.elapsed() >= SCHEDULED_PROMPT_INACTIVITY_GRACE
         {
-            let due = ctx
-                .tool_registry
-                .collect_due_session_prompts(chrono::Utc::now())
-                .await?;
+            let due = ctx.tool_registry.collect_due_session_prompts(chrono::Utc::now()).await?;
             for task in due {
                 state.queued_inputs.push_back(
                     crate::agent::runloop::unified::inline_events::QueuedInput::new(
@@ -417,10 +401,7 @@ pub(super) async fn run_interaction_loop_impl(
                 );
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    &format!(
-                        "Scheduled task {} ({}) is ready to run.",
-                        task.id, task.name
-                    ),
+                    &format!("Scheduled task {} ({}) is ready to run.", task.id, task.name),
                 )?;
             }
         }
@@ -450,10 +431,8 @@ pub(super) async fn run_interaction_loop_impl(
         .await
         {
             tracing::warn!("Failed to refresh workspace configuration: {}", err);
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to reload configuration: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to reload configuration: {err}"))?;
         }
 
         if let Some(cfg) = ctx.vt_cfg.as_ref()
@@ -472,8 +451,7 @@ pub(super) async fn run_interaction_loop_impl(
             if mcp_status.is_error()
                 && let Some(error_msg) = mcp_status.get_error_message()
             {
-                ctx.renderer
-                    .line(MessageStyle::Error, &format!("MCP Error: {error_msg}"))?;
+                ctx.renderer.line(MessageStyle::Error, &format!("MCP Error: {error_msg}"))?;
                 ctx.renderer.line(
                     MessageStyle::Info,
                     "Use /mcp to check status or update your vtcode.toml configuration.",
@@ -517,10 +495,7 @@ pub(super) async fn run_interaction_loop_impl(
         let turn_id = SessionId::generate().into_inner();
 
         if let Some(hooks) = ctx.lifecycle_hooks.as_ref() {
-            match hooks
-                .run_user_prompt_submit(&turn_id, input_owned.as_str())
-                .await
-            {
+            match hooks.run_user_prompt_submit(&turn_id, input_owned.as_str()).await {
                 Ok(outcome) => {
                     crate::agent::runloop::unified::turn::utils::render_hook_messages(
                         ctx.renderer,
@@ -536,10 +511,8 @@ pub(super) async fn run_interaction_loop_impl(
                     }
                 }
                 Err(err) => {
-                    ctx.renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to run prompt hooks: {err}"),
-                    )?;
+                    ctx.renderer
+                        .line(MessageStyle::Error, &format!("Failed to run prompt hooks: {err}"))?;
                 }
             }
         }
@@ -569,9 +542,7 @@ pub(super) async fn run_interaction_loop_impl(
                 }
                 ModelPickerProgress::Exit => {
                     *state.model_picker_state = None;
-                    return Ok(InteractionOutcome::Exit {
-                        reason: SessionEndReason::Exit,
-                    });
+                    return Ok(InteractionOutcome::Exit { reason: SessionEndReason::Exit });
                 }
                 ModelPickerProgress::Completed(selection) => {
                     let Some(picker_state) = state.model_picker_state.take() else {
@@ -685,9 +656,7 @@ pub(super) async fn run_interaction_loop_impl(
             return Ok(outcome);
         }
 
-        let follow_up_action = ctx
-            .session_stats
-            .register_follow_up_prompt(input_owned.as_str());
+        let follow_up_action = ctx.session_stats.register_follow_up_prompt(input_owned.as_str());
         if follow_up_action.should_force_autonomous_response() {
             if follow_up_action.is_stalled_recovery() {
                 let stall_reason = follow_up_action
@@ -695,9 +664,8 @@ pub(super) async fn run_interaction_loop_impl(
                     .unwrap_or("Previous turn stalled without a detailed reason.")
                     .to_string();
                 let fallback_hint = extract_recent_follow_up_hint(ctx.conversation_history);
-                ctx.conversation_history.push(uni::Message::system(
-                    REPEATED_FOLLOW_UP_STALLED_DIRECTIVE.to_string(),
-                ));
+                ctx.conversation_history
+                    .push(uni::Message::system(REPEATED_FOLLOW_UP_STALLED_DIRECTIVE.to_string()));
                 if let Some((tool, args)) = fallback_hint.as_ref() {
                     let args_preview = fallback_args_preview(args);
                     ctx.conversation_history.push(uni::Message::system(format!(
@@ -714,8 +682,7 @@ pub(super) async fn run_interaction_loop_impl(
                 )?;
             } else {
                 let directive = REPEATED_FOLLOW_UP_DIRECTIVE;
-                ctx.conversation_history
-                    .push(uni::Message::system(directive.to_string()));
+                ctx.conversation_history.push(uni::Message::system(directive.to_string()));
                 ctx.renderer.line(
                     MessageStyle::Info,
                     "Repeated follow-up detected; forcing a concrete status/conclusion.",

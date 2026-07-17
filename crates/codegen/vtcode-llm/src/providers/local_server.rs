@@ -145,10 +145,7 @@ fn take_managed_child(provider: LocalProvider) -> Option<Child> {
 
 fn store_managed_child(provider: LocalProvider, child: Child) {
     if let Ok(mut guard) = MANAGED_PROCESSES.lock() {
-        guard
-            .entry(provider)
-            .or_insert_with(|| ManagedProcess { child: None })
-            .child = Some(child);
+        guard.entry(provider).or_insert_with(|| ManagedProcess { child: None }).child = Some(child);
     }
 }
 
@@ -557,9 +554,7 @@ async fn start_llamacpp() -> Result<String> {
         ),
     };
 
-    let binary = caps
-        .binary_path
-        .unwrap_or_else(|| "llama-server".to_string());
+    let binary = caps.binary_path.unwrap_or_else(|| "llama-server".to_string());
     let port = extract_port(&LocalProvider::LlamaCpp.base_url())
         .unwrap_or(LocalProvider::LlamaCpp.default_port());
 
@@ -746,10 +741,7 @@ pub fn is_local_base_url(base_url: &str) -> bool {
         "http://[::1]",
         "https://[::1]",
     ];
-    if LOCAL_PREFIXES
-        .iter()
-        .any(|prefix| lowered.starts_with(*prefix))
-    {
+    if LOCAL_PREFIXES.iter().any(|prefix| lowered.starts_with(*prefix)) {
         return true;
     }
     if let Ok(parsed) = url::Url::parse(lowered.trim_end_matches('/'))
@@ -878,26 +870,11 @@ mod tests {
 
     #[test]
     fn test_provider_from_key() {
-        assert_eq!(
-            LocalProvider::from_key("ollama"),
-            Some(LocalProvider::Ollama)
-        );
-        assert_eq!(
-            LocalProvider::from_key("lmstudio"),
-            Some(LocalProvider::LmStudio)
-        );
-        assert_eq!(
-            LocalProvider::from_key("lm-studio"),
-            Some(LocalProvider::LmStudio)
-        );
-        assert_eq!(
-            LocalProvider::from_key("llamacpp"),
-            Some(LocalProvider::LlamaCpp)
-        );
-        assert_eq!(
-            LocalProvider::from_key("llama.cpp"),
-            Some(LocalProvider::LlamaCpp)
-        );
+        assert_eq!(LocalProvider::from_key("ollama"), Some(LocalProvider::Ollama));
+        assert_eq!(LocalProvider::from_key("lmstudio"), Some(LocalProvider::LmStudio));
+        assert_eq!(LocalProvider::from_key("lm-studio"), Some(LocalProvider::LmStudio));
+        assert_eq!(LocalProvider::from_key("llamacpp"), Some(LocalProvider::LlamaCpp));
+        assert_eq!(LocalProvider::from_key("llama.cpp"), Some(LocalProvider::LlamaCpp));
         assert_eq!(LocalProvider::from_key("unknown"), None);
     }
 
@@ -917,18 +894,9 @@ mod tests {
 
     #[test]
     fn test_strip_path_suffix() {
-        assert_eq!(
-            strip_path_suffix("http://localhost:11434/v1"),
-            "http://localhost:11434"
-        );
-        assert_eq!(
-            strip_path_suffix("http://localhost:1234/v1/"),
-            "http://localhost:1234"
-        );
-        assert_eq!(
-            strip_path_suffix("http://localhost:8080"),
-            "http://localhost:8080"
-        );
+        assert_eq!(strip_path_suffix("http://localhost:11434/v1"), "http://localhost:11434");
+        assert_eq!(strip_path_suffix("http://localhost:1234/v1/"), "http://localhost:1234");
+        assert_eq!(strip_path_suffix("http://localhost:8080"), "http://localhost:8080");
     }
 
     #[test]

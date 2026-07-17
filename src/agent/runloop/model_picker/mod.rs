@@ -67,22 +67,10 @@ const SUBAGENT_REASONING_ACTION_PREFIX: &str = "subagent-reasoning:";
 const SUBAGENT_MODEL_PROMPT_ID: &str = "subagent-model-id";
 const SUBAGENT_SHORTCUTS: [(&str, &str); 5] = [
     ("inherit", "Use the parent session model and configuration."),
-    (
-        "small",
-        "Use VT Code's lightweight delegated-model shortcut.",
-    ),
-    (
-        "haiku",
-        "Use the Anthropic Haiku shortcut alias for delegated work.",
-    ),
-    (
-        "sonnet",
-        "Use the Anthropic Sonnet shortcut alias for delegated work.",
-    ),
-    (
-        "opus",
-        "Use the Anthropic Opus shortcut alias for delegated work.",
-    ),
+    ("small", "Use VT Code's lightweight delegated-model shortcut."),
+    ("haiku", "Use the Anthropic Haiku shortcut alias for delegated work."),
+    ("sonnet", "Use the Anthropic Sonnet shortcut alias for delegated work."),
+    ("opus", "Use the Anthropic Opus shortcut alias for delegated work."),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -180,10 +168,7 @@ impl ModelPickerState {
         let custom_providers = vt_cfg
             .as_ref()
             .map(|cfg| {
-                cfg.custom_providers
-                    .iter()
-                    .flat_map(selections_from_custom_provider)
-                    .collect()
+                cfg.custom_providers.iter().flat_map(selections_from_custom_provider).collect()
             })
             .unwrap_or_default();
 
@@ -329,10 +314,7 @@ impl ModelPickerState {
             .vt_cfg
             .as_ref()
             .map(|cfg| {
-                cfg.custom_providers
-                    .iter()
-                    .flat_map(selections_from_custom_provider)
-                    .collect()
+                cfg.custom_providers.iter().flat_map(selections_from_custom_provider).collect()
             })
             .unwrap_or_default();
         self.selection = None;
@@ -374,10 +356,7 @@ impl ModelPickerState {
     ) -> Result<ModelPickerProgress> {
         let trimmed = input.trim();
         if trimmed.is_empty() {
-            renderer.line(
-                MessageStyle::Error,
-                "Please enter a value or type 'cancel'.",
-            )?;
+            renderer.line(MessageStyle::Error, "Please enter a value or type 'cancel'.")?;
             return Ok(ModelPickerProgress::InProgress);
         }
         if is_cancel_command(trimmed) {
@@ -459,10 +438,8 @@ impl ModelPickerState {
                     Ok(ModelPickerProgress::InProgress)
                 }
                 InlineListSelection::DisableReasoning => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        "Select a model before disabling reasoning.",
-                    )?;
+                    renderer
+                        .line(MessageStyle::Error, "Select a model before disabling reasoning.")?;
                     Ok(ModelPickerProgress::InProgress)
                 }
                 InlineListSelection::OpenAIServiceTier(_) => {
@@ -598,10 +575,7 @@ impl ModelPickerState {
             Ok(detail) => detail,
             Err(err) => {
                 renderer.line(MessageStyle::Error, &err.to_string())?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "Try again with '<provider> <model-id>'.",
-                )?;
+                renderer.line(MessageStyle::Info, "Try again with '<provider> <model-id>'.")?;
                 return Ok(ModelPickerProgress::InProgress);
             }
         };
@@ -653,10 +627,8 @@ pub(crate) async fn pick_subagent_model(
     current_reasoning_effort: Option<&str>,
 ) -> Result<Option<SubagentModelSelection>> {
     if !renderer.supports_inline_ui() {
-        renderer.line(
-            MessageStyle::Info,
-            "Interactive subagent model selection requires inline UI.",
-        )?;
+        renderer
+            .line(MessageStyle::Info, "Interactive subagent model selection requires inline UI.")?;
         return Ok(None);
     }
 
@@ -754,9 +726,7 @@ async fn select_subagent_model_target(
             selection: Some(InlineListSelection::ConfigAction(format!(
                 "{SUBAGENT_MODEL_ACTION_PREFIX}shortcut:{shortcut}"
             ))),
-            search_value: Some(format!(
-                "{shortcut} shortcut alias delegated model {description}"
-            )),
+            search_value: Some(format!("{shortcut} shortcut alias delegated model {description}")),
         });
     }
 
@@ -912,10 +882,7 @@ async fn select_subagent_reasoning(
 ) -> Result<Option<SubagentModelSelection>> {
     let model = target.model().to_string();
     if !target.supports_reasoning() {
-        return Ok(Some(SubagentModelSelection {
-            model,
-            reasoning_effort: None,
-        }));
+        return Ok(Some(SubagentModelSelection { model, reasoning_effort: None }));
     }
 
     let current_reasoning_effort = normalized_subagent_reasoning(&target, current_reasoning_effort);
@@ -959,11 +926,7 @@ async fn select_subagent_reasoning(
                 "{SUBAGENT_REASONING_ACTION_PREFIX}{}",
                 level.as_str()
             ))),
-            search_value: Some(format!(
-                "{} {}",
-                level.as_str(),
-                reasoning_level_label(level)
-            )),
+            search_value: Some(format!("{} {}", level.as_str(), reasoning_level_label(level))),
         });
     }
 
@@ -974,9 +937,7 @@ async fn select_subagent_reasoning(
             target.model()
         )],
         items,
-        Some(InlineListSelection::ConfigAction(format!(
-            "{SUBAGENT_REASONING_ACTION_PREFIX}keep"
-        ))),
+        Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_REASONING_ACTION_PREFIX}keep"))),
         Some(InlineListSearchConfig {
             label: "Search reasoning".to_string(),
             placeholder: Some("keep, unset, high".to_string()),
@@ -1017,10 +978,7 @@ async fn select_subagent_reasoning(
         SubagentReasoningChoice::Explicit(level) => Some(level.as_str().to_string()),
     };
 
-    Ok(Some(SubagentModelSelection {
-        model,
-        reasoning_effort,
-    }))
+    Ok(Some(SubagentModelSelection { model, reasoning_effort }))
 }
 
 async fn prompt_subagent_model_id(
@@ -1076,15 +1034,10 @@ async fn prompt_subagent_model_id(
             return Ok(None);
         };
 
-        let InlineListSelection::RequestUserInputAnswer {
-            other, selected, ..
-        } = selection
-        else {
+        let InlineListSelection::RequestUserInputAnswer { other, selected, .. } = selection else {
             return Ok(None);
         };
-        let raw_value = other
-            .or_else(|| selected.first().cloned())
-            .unwrap_or_default();
+        let raw_value = other.or_else(|| selected.first().cloned()).unwrap_or_default();
         let trimmed = raw_value.trim();
         if trimmed.is_empty() {
             continue;

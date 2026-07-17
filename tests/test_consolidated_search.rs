@@ -27,10 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .await?;
-    println!(
-        "Exact search result: {}",
-        serde_json::to_string_pretty(&result)?
-    );
+    println!("Exact search result: {}", serde_json::to_string_pretty(&result)?);
 
     // Test 2: Fuzzy search
     println!("\n2. Testing fuzzy search mode:");
@@ -45,10 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .await?;
-    println!(
-        "Fuzzy search result: {}",
-        serde_json::to_string_pretty(&result)?
-    );
+    println!("Fuzzy search result: {}", serde_json::to_string_pretty(&result)?);
 
     // Test 3: Multi-pattern search with AND logic
     println!("\n3. Testing multi-pattern search (AND):");
@@ -65,10 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .await?;
-    println!(
-        "Multi-pattern AND result: {}",
-        serde_json::to_string_pretty(&result)?
-    );
+    println!("Multi-pattern AND result: {}", serde_json::to_string_pretty(&result)?);
 
     // Test 4: Multi-pattern search with OR logic
     println!("\n4. Testing multi-pattern search (OR):");
@@ -85,10 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
         )
         .await?;
-    println!(
-        "Multi-pattern OR result: {}",
-        serde_json::to_string_pretty(&result)?
-    );
+    println!("Multi-pattern OR result: {}", serde_json::to_string_pretty(&result)?);
 
     println!("\n[SUCCESS] All consolidated search tests completed successfully!");
     Ok(())

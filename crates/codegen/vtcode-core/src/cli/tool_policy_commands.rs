@@ -44,9 +44,7 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
         }
         ToolPolicyCommands::Allow { tool } => {
             let normalized_tool = normalize_cli_tool_name(&tool).await;
-            policy_manager
-                .set_policy(&normalized_tool, ToolPolicy::Allow)
-                .await?;
+            policy_manager.set_policy(&normalized_tool, ToolPolicy::Allow).await?;
             println!(
                 "{}",
                 style(format!(
@@ -58,9 +56,7 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
         }
         ToolPolicyCommands::Deny { tool } => {
             let normalized_tool = normalize_cli_tool_name(&tool).await;
-            policy_manager
-                .set_policy(&normalized_tool, ToolPolicy::Deny)
-                .await?;
+            policy_manager.set_policy(&normalized_tool, ToolPolicy::Deny).await?;
             println!(
                 "{}",
                 style(format!(
@@ -72,9 +68,7 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
         }
         ToolPolicyCommands::Prompt { tool } => {
             let normalized_tool = normalize_cli_tool_name(&tool).await;
-            policy_manager
-                .set_policy(&normalized_tool, ToolPolicy::Prompt)
-                .await?;
+            policy_manager.set_policy(&normalized_tool, ToolPolicy::Prompt).await?;
             println!(
                 "{}",
                 style(format!(
@@ -94,10 +88,7 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
         }
         ToolPolicyCommands::ResetAll => {
             policy_manager.reset_all_to_prompt().await?;
-            println!(
-                "{}",
-                style("? All tools reset to prompt for confirmation").cyan()
-            );
+            println!("{}", style("? All tools reset to prompt for confirmation").cyan());
         }
     }
 
@@ -129,18 +120,9 @@ pub fn print_tool_policy_help() {
     println!();
     println!("Tool policies control which tools the agent can use:");
     println!();
-    println!(
-        "  {} - Tool executes automatically without prompting",
-        style("allow").green()
-    );
-    println!(
-        "  {} - Tool prompts for user confirmation each time",
-        style("prompt").cyan()
-    );
-    println!(
-        "  {} - Tool is never allowed to execute",
-        style("deny").red()
-    );
+    println!("  {} - Tool executes automatically without prompting", style("allow").green());
+    println!("  {} - Tool prompts for user confirmation each time", style("prompt").cyan());
+    println!("  {} - Tool is never allowed to execute", style("deny").red());
     println!();
     println!("Policies are stored in ~/.vtcode/tool-policy.json");
     println!("Once you approve or deny a tool, your choice is remembered for future runs.");

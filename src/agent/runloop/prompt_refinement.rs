@@ -42,17 +42,11 @@ pub(super) fn should_accept_refinement(raw: &str, refined: &str) -> bool {
 
     let refined_lower = trimmed.to_lowercase();
     let suspicious_prefixes = ["hello", "hi", "hey", "greetings", "i'm", "i am"];
-    if suspicious_prefixes
-        .iter()
-        .any(|prefix| refined_lower.starts_with(prefix))
-    {
+    if suspicious_prefixes.iter().any(|prefix| refined_lower.starts_with(prefix)) {
         return false;
     }
     let suspicious_phrases = ["how can i help you", "i'm here to", "let me know if"];
-    if suspicious_phrases
-        .iter()
-        .any(|phrase| refined_lower.contains(phrase))
-    {
+    if suspicious_phrases.iter().any(|phrase| refined_lower.contains(phrase)) {
         return false;
     }
 

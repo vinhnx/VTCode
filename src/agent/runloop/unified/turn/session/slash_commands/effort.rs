@@ -43,11 +43,7 @@ pub(crate) async fn handle_set_effort(
                 MessageStyle::Info,
                 &format!(
                     "Supported levels: {}.",
-                    supported
-                        .iter()
-                        .map(|value| value.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    supported.iter().map(|value| value.as_str()).collect::<Vec<_>>().join(", ")
                 ),
             )?;
             return Ok(SlashCommandControl::Continue);
@@ -61,11 +57,7 @@ pub(crate) async fn handle_set_effort(
                     "Current effort level: {}. Supported levels for '{}': {}.",
                     ctx.config.reasoning_effort.as_str(),
                     ctx.config.model,
-                    supported
-                        .iter()
-                        .map(|value| value.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    supported.iter().map(|value| value.as_str()).collect::<Vec<_>>().join(", ")
                 ),
             )?;
             ctx.renderer.line(
@@ -98,8 +90,7 @@ pub(crate) async fn handle_set_effort(
         );
 
         let Some(selection) = super::ui::wait_for_list_modal_selection(&mut ctx).await else {
-            ctx.renderer
-                .line(MessageStyle::Info, "Effort selection cancelled.")?;
+            ctx.renderer.line(MessageStyle::Info, "Effort selection cancelled.")?;
             return Ok(SlashCommandControl::Continue);
         };
 
@@ -120,10 +111,8 @@ pub(crate) async fn handle_set_effort(
         };
 
         let Some(chosen) = ReasoningEffortLevel::parse(value) else {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Invalid effort level returned by inline UI.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, "Invalid effort level returned by inline UI.")?;
             return Ok(SlashCommandControl::Continue);
         };
 
@@ -163,13 +152,7 @@ async fn apply_effort_change(
     };
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!(
-            "{} effort level to {}: {}{}",
-            verb,
-            effort.as_str(),
-            description,
-            scope
-        ),
+        &format!("{} effort level to {}: {}{}", verb, effort.as_str(), description, scope),
     )?;
 
     Ok(())
@@ -191,33 +174,21 @@ fn effort_items(
                 "effort:{}",
                 level.as_str()
             ))),
-            search_value: Some(format!(
-                "{} {}",
-                level.as_str(),
-                effort_description(*level, model)
-            )),
+            search_value: Some(format!("{} {}", level.as_str(), effort_description(*level, model))),
         })
         .collect()
 }
 
 fn supported_effort_levels(ctx: &SlashCommandContext<'_>) -> Vec<ReasoningEffortLevel> {
     let Some(provider) = Provider::from_str(ctx.config.provider.as_str()).ok() else {
-        return provider_supports_effort(ctx)
-            .then(all_effort_levels)
-            .unwrap_or_default();
+        return provider_supports_effort(ctx).then(all_effort_levels).unwrap_or_default();
     };
 
     if let Some(preset) = resolve_model_preset(provider, ctx.config.model.as_str()) {
-        return preset
-            .supported_reasoning_efforts
-            .iter()
-            .map(|preset| preset.effort)
-            .collect();
+        return preset.supported_reasoning_efforts.iter().map(|preset| preset.effort).collect();
     }
 
-    provider_supports_effort(ctx)
-        .then(all_effort_levels)
-        .unwrap_or_default()
+    provider_supports_effort(ctx).then(all_effort_levels).unwrap_or_default()
 }
 
 fn resolve_model_preset(provider: Provider, model: &str) -> Option<ModelPreset> {
@@ -227,8 +198,7 @@ fn resolve_model_preset(provider: Provider, model: &str) -> Option<ModelPreset> 
 }
 
 fn provider_supports_effort(ctx: &SlashCommandContext<'_>) -> bool {
-    ctx.provider_client
-        .supports_reasoning_effort(&ctx.config.model)
+    ctx.provider_client.supports_reasoning_effort(&ctx.config.model)
 }
 
 fn all_effort_levels() -> Vec<ReasoningEffortLevel> {
@@ -265,8 +235,7 @@ async fn refresh_header_reasoning(ctx: &mut SlashCommandContext<'_>) -> Result<(
         ctx.session_bootstrap,
         provider_label_for_header(ctx),
         ctx.config.model.clone(),
-        ctx.provider_client
-            .effective_context_size(&ctx.config.model),
+        ctx.provider_client.effective_context_size(&ctx.config.model),
         ctx.config.reasoning_effort.as_str().to_string(),
     )
     .await?;

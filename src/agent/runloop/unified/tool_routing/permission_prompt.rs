@@ -62,15 +62,11 @@ fn normalized_shell_command_value(args: &Value) -> Option<Value> {
 }
 
 fn extract_shell_command_text_from_run_args(args: &Value) -> Option<String> {
-    vtcode_core::tools::command_args::command_text(args)
-        .ok()
-        .flatten()
+    vtcode_core::tools::command_args::command_text(args).ok().flatten()
 }
 
 fn extract_shell_command_words_from_run_args(args: &Value) -> Option<Vec<String>> {
-    vtcode_core::tools::command_args::command_words(args)
-        .ok()
-        .flatten()
+    vtcode_core::tools::command_args::command_words(args).ok().flatten()
 }
 
 fn render_shell_command_words(parts: &[String]) -> String {
@@ -101,10 +97,7 @@ fn shell_run_uses_nested_shell(command_words: &[String]) -> bool {
 
     match basename.as_str() {
         "sh" | "bash" | "zsh" | "fish" => args.iter().any(|arg| {
-            matches!(
-                arg.as_str(),
-                "-c" | "-ic" | "-lc" | "--command" | "--login" | "--interactive"
-            )
+            matches!(arg.as_str(), "-c" | "-ic" | "-lc" | "--command" | "--login" | "--interactive")
         }),
         "pwsh" | "powershell" | "powershell.exe" => args
             .iter()
@@ -278,11 +271,7 @@ pub(super) fn render_shell_persistent_approval_prefix_entry(
     prefix_rule: &[String],
 ) -> Option<String> {
     let scope_signature = extract_shell_approval_scope_signature(tool_name, tool_args)?;
-    Some(format!(
-        "{}|{}",
-        render_shell_command_words(prefix_rule),
-        scope_signature
-    ))
+    Some(format!("{}|{}", render_shell_command_words(prefix_rule), scope_signature))
 }
 
 pub(super) fn render_shell_approval_command_words(parts: &[String]) -> String {
@@ -330,14 +319,10 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
     let args = tool_args?.as_object()?;
     let (before, after) = match tool_name {
         "edit_file" => {
-            let old_str = args
-                .get("old_str")
-                .or_else(|| args.get("old_string"))
-                .and_then(Value::as_str)?;
-            let new_str = args
-                .get("new_str")
-                .or_else(|| args.get("new_string"))
-                .and_then(Value::as_str)?;
+            let old_str =
+                args.get("old_str").or_else(|| args.get("old_string")).and_then(Value::as_str)?;
+            let new_str =
+                args.get("new_str").or_else(|| args.get("new_string")).and_then(Value::as_str)?;
             (Some(old_str), new_str)
         }
         "write_file" | "create_file" => {
@@ -388,10 +373,7 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
         .unwrap_or("(unknown file)");
 
     let diff_preview = vtcode_core::tools::file_ops::build_diff_preview(path, before, after);
-    let skipped = diff_preview
-        .get("skipped")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    let skipped = diff_preview.get("skipped").and_then(Value::as_bool).unwrap_or(false);
     if skipped {
         let reason = diff_preview
             .get("reason")
@@ -400,10 +382,7 @@ fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<
         return Some(vec![format!("diff: {}", reason)]);
     }
 
-    let content = diff_preview
-        .get("content")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let content = diff_preview.get("content").and_then(Value::as_str).unwrap_or("");
     if content.is_empty() {
         return Some(vec!["(no changes)".to_string()]);
     }
@@ -506,10 +485,8 @@ fn build_tool_permission_options(
         }),
     });
 
-    if matches!(
-        persistent_approval_target,
-        Some(PersistentApprovalTarget::ToolLevel)
-    ) && prompt_kind != ToolPermissionPromptKind::Mcp
+    if matches!(persistent_approval_target, Some(PersistentApprovalTarget::ToolLevel))
+        && prompt_kind != ToolPermissionPromptKind::Mcp
     {
         options.push(InlineListItem {
             title: "Always Deny".to_string(),
@@ -877,10 +854,7 @@ mod tests {
             "command": "echo hi",
             "sandbox_permissions": "with_additional_permissions"
         });
-        assert!(!shell_allows_persistent_decisions(
-            tools::UNIFIED_EXEC,
-            Some(&args)
-        ));
+        assert!(!shell_allows_persistent_decisions(tools::UNIFIED_EXEC, Some(&args)));
     }
 
     #[test]
@@ -890,10 +864,7 @@ mod tests {
             "session_id": "run-123",
             "sandbox_permissions": "with_additional_permissions"
         });
-        assert!(shell_allows_persistent_decisions(
-            tools::UNIFIED_EXEC,
-            Some(&args)
-        ));
+        assert!(shell_allows_persistent_decisions(tools::UNIFIED_EXEC, Some(&args)));
     }
 
     #[test]
@@ -1091,11 +1062,7 @@ mod tests {
         .into_iter()
         .map(|item| item.title)
         .collect::<Vec<_>>();
-        assert!(
-            titles
-                .iter()
-                .any(|title| title == "Always approve and save to policy cache")
-        );
+        assert!(titles.iter().any(|title| title == "Always approve and save to policy cache"));
         assert!(!titles.iter().any(|title| title == "Always Deny"));
     }
 

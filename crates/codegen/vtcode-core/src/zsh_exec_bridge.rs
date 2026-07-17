@@ -69,18 +69,12 @@ mod unix_impl {
 
             if socket_path.exists() {
                 fs::remove_file(&socket_path).with_context(|| {
-                    format!(
-                        "remove pre-existing zsh bridge socket at {}",
-                        socket_path.display()
-                    )
+                    format!("remove pre-existing zsh bridge socket at {}", socket_path.display())
                 })?;
             }
 
             let listener = UnixListener::bind(&socket_path).with_context(|| {
-                format!(
-                    "bind zsh exec bridge socket listener at {}",
-                    socket_path.display()
-                )
+                format!("bind zsh exec bridge socket listener at {}", socket_path.display())
             })?;
             // Restrict socket to owner-only — prevents other users on the same
             // machine from communicating with the bridge (defence in depth;
@@ -171,9 +165,7 @@ mod unix_impl {
         allow_confirmed_dangerous: bool,
     ) -> Result<()> {
         let mut payload = String::new();
-        stream
-            .read_to_string(&mut payload)
-            .context("read wrapper request payload")?;
+        stream.read_to_string(&mut payload).context("read wrapper request payload")?;
         let request: WrapperExecRequest =
             serde_json::from_str(payload.trim()).context("parse wrapper request payload")?;
 
@@ -184,12 +176,8 @@ mod unix_impl {
             reason,
         };
         let encoded = serde_json::to_string(&response).context("serialize wrapper response")?;
-        stream
-            .write_all(encoded.as_bytes())
-            .context("write wrapper response payload")?;
-        stream
-            .write_all(b"\n")
-            .context("write wrapper response newline")?;
+        stream.write_all(encoded.as_bytes()).context("write wrapper response payload")?;
+        stream.write_all(b"\n").context("write wrapper response newline")?;
         stream.flush().context("flush wrapper response")?;
         Ok(())
     }
@@ -205,10 +193,7 @@ mod unix_impl {
         };
 
         if command.is_empty() {
-            return (
-                WrapperExecAction::Deny,
-                Some("Rejected empty wrapped command".to_string()),
-            );
+            return (WrapperExecAction::Deny, Some("Rejected empty wrapped command".to_string()));
         }
 
         if allow_confirmed_dangerous {
@@ -223,10 +208,7 @@ mod unix_impl {
             );
         }
         if crate::command_safety::command_might_be_dangerous(&command) {
-            return (
-                WrapperExecAction::Deny,
-                Some("Rejected dangerous subcommand".to_string()),
-            );
+            return (WrapperExecAction::Deny, Some("Rejected dangerous subcommand".to_string()));
         }
 
         (WrapperExecAction::Allow, None)
@@ -272,12 +254,8 @@ mod unix_impl {
         let mut stream = UnixStream::connect(&socket_path)
             .with_context(|| format!("connect to wrapper socket at {socket_path}"))?;
         let encoded = serde_json::to_string(&request).context("serialize wrapper request")?;
-        stream
-            .write_all(encoded.as_bytes())
-            .context("write wrapper request payload")?;
-        stream
-            .write_all(b"\n")
-            .context("write wrapper request newline")?;
+        stream.write_all(encoded.as_bytes()).context("write wrapper request payload")?;
+        stream.write_all(b"\n").context("write wrapper request newline")?;
         stream
             .shutdown(std::net::Shutdown::Write)
             .context("shutdown wrapper request writer")?;
@@ -370,9 +348,7 @@ pub(crate) struct ZshExecBridgeSession;
 #[cfg(not(unix))]
 impl ZshExecBridgeSession {
     pub(crate) fn spawn(_allow_confirmed_dangerous: bool) -> Result<Self> {
-        Err(anyhow!(
-            "zsh exec bridge is only supported on Unix platforms"
-        ))
+        Err(anyhow!("zsh exec bridge is only supported on Unix platforms"))
     }
 
     pub(crate) fn env_vars(&self, _wrapper_executable: &Path) -> HashMap<String, String> {

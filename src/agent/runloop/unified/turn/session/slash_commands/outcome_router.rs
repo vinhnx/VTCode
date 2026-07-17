@@ -86,11 +86,9 @@ async fn route_ui_and_settings_outcome(
         SlashCommandOutcome::StartThemePalette { mode } => {
             handlers::handle_start_theme_palette(ctx, mode).await
         }
-        SlashCommandOutcome::StartSessionPalette {
-            mode,
-            limit,
-            show_all,
-        } => handlers::handle_start_session_palette(ctx, mode, limit, show_all).await,
+        SlashCommandOutcome::StartSessionPalette { mode, limit, show_all } => {
+            handlers::handle_start_session_palette(ctx, mode, limit, show_all).await
+        }
         SlashCommandOutcome::ContinueLatest { show_all } => {
             handlers::handle_continue_latest(ctx, show_all)
         }
@@ -155,11 +153,9 @@ async fn route_runtime_outcome(
             handlers::handle_start_checkup_interactive(ctx).await
         }
         SlashCommandOutcome::RunCheckup { quick } => handlers::handle_run_checkup(ctx, quick).await,
-        SlashCommandOutcome::Update {
-            check_only,
-            install,
-            force,
-        } => handlers::handle_update(ctx, check_only, install, force).await,
+        SlashCommandOutcome::Update { check_only, install, force } => {
+            handlers::handle_update(ctx, check_only, install, force).await
+        }
         SlashCommandOutcome::StartTerminalSetup => handlers::handle_start_terminal_setup(ctx).await,
         SlashCommandOutcome::ManageLocalServer { action } => {
             handlers::handle_manage_local_server(ctx, action).await

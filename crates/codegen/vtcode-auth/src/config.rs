@@ -47,10 +47,7 @@ impl Default for CopilotAuthConfig {
 }
 
 fn default_copilot_available_tools() -> Vec<String> {
-    ["view", "glob", "grep"]
-        .into_iter()
-        .map(str::to_string)
-        .collect()
+    ["view", "glob", "grep"].into_iter().map(str::to_string).collect()
 }
 
 fn default_vtcode_tool_allowlist() -> Vec<String> {

@@ -213,14 +213,11 @@ impl SkillContainer {
         }
         let spec = SkillSpec {
             skill_type: SkillType::Custom,
-            skill_id: sha256
-                .clone()
-                .unwrap_or_else(|| format!("inline-{}", self.skills.len())),
+            skill_id: sha256.clone().unwrap_or_else(|| format!("inline-{}", self.skills.len())),
             version: SkillVersion::Latest,
         };
         self.skills.push(spec);
-        self.inline_bundles
-            .push(SkillSource::Inline { bundle_b64, sha256 });
+        self.inline_bundles.push(SkillSource::Inline { bundle_b64, sha256 });
         Ok(())
     }
 
@@ -281,10 +278,7 @@ impl SkillContainer {
 
     /// Get all skills of a specific type
     pub fn skills_by_type(&self, skill_type: SkillType) -> Vec<&SkillSpec> {
-        self.skills
-            .iter()
-            .filter(|s| s.skill_type == skill_type)
-            .collect()
+        self.skills.iter().filter(|s| s.skill_type == skill_type).collect()
     }
 
     /// Count anthropic skills
@@ -447,9 +441,7 @@ mod tests {
     fn test_container_validation() {
         let mut container = SkillContainer::new();
         for i in 0..8 {
-            container
-                .add_skill(SkillSpec::custom(format!("skill{i}")))
-                .ok();
+            container.add_skill(SkillSpec::custom(format!("skill{i}"))).ok();
         }
         container.validate().unwrap();
     }
@@ -468,10 +460,7 @@ mod tests {
 
         assert_eq!(deserialized.skill_id, "my-skill");
         assert_eq!(deserialized.skill_type, SkillType::Custom);
-        assert_eq!(
-            deserialized.version,
-            SkillVersion::Specific("1759178010641129".to_string())
-        );
+        assert_eq!(deserialized.version, SkillVersion::Specific("1759178010641129".to_string()));
     }
 
     #[test]
@@ -542,9 +531,7 @@ mod tests {
     #[test]
     fn test_add_inline_without_sha() {
         let mut container = SkillContainer::new();
-        container
-            .add_inline("UEsFBgAAAAAAAA==".to_string(), None)
-            .unwrap();
+        container.add_inline("UEsFBgAAAAAAAA==".to_string(), None).unwrap();
 
         assert_eq!(container.len(), 1);
         assert!(container.has_skill("inline-0"));
@@ -555,9 +542,7 @@ mod tests {
     fn test_add_inline_max_skills() {
         let mut container = SkillContainer::new();
         for i in 0..8 {
-            container
-                .add_skill(SkillSpec::custom(format!("skill{i}")))
-                .unwrap();
+            container.add_skill(SkillSpec::custom(format!("skill{i}"))).unwrap();
         }
         let result = container.add_inline("data".to_string(), None);
         assert!(result.is_err());

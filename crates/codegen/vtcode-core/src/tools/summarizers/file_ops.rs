@@ -182,10 +182,7 @@ struct EditStats {
 
 /// Parse read_file output to extract statistics
 fn parse_read_output(output: &str) -> ReadStats {
-    let mut stats = ReadStats {
-        total_chars: output.len(),
-        ..ReadStats::default()
-    };
+    let mut stats = ReadStats { total_chars: output.len(), ..ReadStats::default() };
 
     const PREVIEW_LINES: usize = 10;
     const SUFFIX_LINES: usize = 3;
@@ -216,30 +213,20 @@ fn parse_edit_output(output: &str) -> EditStats {
 
     // Try to parse as JSON first
     if let Ok(json) = serde_json::from_str::<Value>(output) {
-        stats.success = json
-            .get("success")
-            .and_then(|s| s.as_bool())
-            .unwrap_or(false);
+        stats.success = json.get("success").and_then(|s| s.as_bool()).unwrap_or(false);
 
         // Extract file information
         if let Some(files) = json.get("files").and_then(|f| f.as_array()) {
             stats.files_changed = files.len();
-            stats.affected_files = files
-                .iter()
-                .filter_map(|f| f.as_str().map(|s| s.to_string()))
-                .collect();
+            stats.affected_files =
+                files.iter().filter_map(|f| f.as_str().map(|s| s.to_string())).collect();
         }
 
         // Extract change statistics
-        stats.lines_added = json
-            .get("lines_added")
-            .and_then(|l| l.as_u64())
-            .unwrap_or(0) as usize;
+        stats.lines_added = json.get("lines_added").and_then(|l| l.as_u64()).unwrap_or(0) as usize;
 
-        stats.lines_removed = json
-            .get("lines_removed")
-            .and_then(|l| l.as_u64())
-            .unwrap_or(0) as usize;
+        stats.lines_removed =
+            json.get("lines_removed").and_then(|l| l.as_u64()).unwrap_or(0) as usize;
     } else {
         // Fallback: parse text output
         stats.success =

@@ -66,9 +66,7 @@ pub(crate) fn interpret_pre_tool(
         if let Some(Value::Object(spec)) = common.hook_specific
             && matches_hook_event(&spec, "PreToolUse")
         {
-            if let Some(decision) = spec
-                .get("permissionDecision")
-                .and_then(|value| value.as_str())
+            if let Some(decision) = spec.get("permissionDecision").and_then(|value| value.as_str())
             {
                 match decision {
                     "allow" => outcome.decision = PreToolHookDecision::Allow,
@@ -82,14 +80,11 @@ pub(crate) fn interpret_pre_tool(
                 }
             }
 
-            if let Some(reason) = spec
-                .get("permissionDecisionReason")
-                .and_then(|value| value.as_str())
+            if let Some(reason) =
+                spec.get("permissionDecisionReason").and_then(|value| value.as_str())
                 && !reason.trim().is_empty()
             {
-                outcome
-                    .messages
-                    .push(HookMessage::info(reason.trim().to_owned()));
+                outcome.messages.push(HookMessage::info(reason.trim().to_owned()));
             }
         }
 
@@ -97,9 +92,7 @@ pub(crate) fn interpret_pre_tool(
             && allow_plain_success_stdout(result, quiet_success_output)
             && !result.stdout.trim().is_empty()
         {
-            outcome
-                .messages
-                .push(HookMessage::info(result.stdout.trim().to_owned()));
+            outcome.messages.push(HookMessage::info(result.stdout.trim().to_owned()));
         }
     } else if !result.stdout.trim().is_empty() {
         if looks_like_json(&result.stdout) {
@@ -108,9 +101,7 @@ pub(crate) fn interpret_pre_tool(
                 command.command
             )));
         } else if allow_plain_success_stdout(result, quiet_success_output) {
-            outcome
-                .messages
-                .push(HookMessage::info(result.stdout.trim().to_owned()));
+            outcome.messages.push(HookMessage::info(result.stdout.trim().to_owned()));
         }
     }
 }
@@ -145,10 +136,8 @@ pub(crate) fn interpret_post_tool(
         if let Some(decision) = common.decision.as_deref()
             && decision.eq_ignore_ascii_case("block")
         {
-            if let Some(reason) = common
-                .decision_reason
-                .clone()
-                .and_then(|reason| trimmed_non_empty(&reason))
+            if let Some(reason) =
+                common.decision_reason.clone().and_then(|reason| trimmed_non_empty(&reason))
             {
                 outcome.block_reason = Some(reason);
             } else {
@@ -161,20 +150,14 @@ pub(crate) fn interpret_post_tool(
 
         if let Some(Value::Object(spec)) = common.hook_specific
             && matches_hook_event(&spec, "PostToolUse")
-            && let Some(additional) = spec
-                .get("additionalContext")
-                .and_then(|value| value.as_str())
+            && let Some(additional) = spec.get("additionalContext").and_then(|value| value.as_str())
             && !additional.trim().is_empty()
         {
-            outcome
-                .additional_context
-                .push(additional.trim().to_owned());
+            outcome.additional_context.push(additional.trim().to_owned());
         }
 
         if !common.suppress_stdout
-            && let Some(text) = json
-                .get("additional_context")
-                .and_then(|value| value.as_str())
+            && let Some(text) = json.get("additional_context").and_then(|value| value.as_str())
             && !text.trim().is_empty()
         {
             outcome.additional_context.push(text.trim().to_owned());
@@ -186,9 +169,7 @@ pub(crate) fn interpret_post_tool(
                 command.command
             )));
         } else if allow_plain_success_stdout(result, quiet_success_output) {
-            outcome
-                .messages
-                .push(HookMessage::info(result.stdout.trim().to_owned()));
+            outcome.messages.push(HookMessage::info(result.stdout.trim().to_owned()));
         }
     }
 }

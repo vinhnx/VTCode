@@ -55,10 +55,7 @@ pub(super) async fn load_session_listing(
         .with_context(|| format!("Failed to read session archive {}", path.display()))?;
     let snapshot: crate::utils::session_archive::SessionSnapshot = serde_json::from_str(&raw)
         .with_context(|| format!("Failed to parse session archive {}", path.display()))?;
-    Ok(crate::utils::session_archive::SessionListing {
-        path: path.to_path_buf(),
-        snapshot,
-    })
+    Ok(crate::utils::session_archive::SessionListing { path: path.to_path_buf(), snapshot })
 }
 
 pub(super) async fn checkpoint_subagent_archive_start(
@@ -66,10 +63,8 @@ pub(super) async fn checkpoint_subagent_archive_start(
     messages: &[Message],
 ) -> Result<()> {
     use crate::utils::session_archive::SessionMessage;
-    let recent_messages: Vec<SessionMessage> = messages
-        .iter()
-        .map(SessionMessage::from)
-        .collect::<Vec<_>>();
+    let recent_messages: Vec<SessionMessage> =
+        messages.iter().map(SessionMessage::from).collect::<Vec<_>>();
     archive
         .persist_progress_async(crate::utils::session_archive::SessionProgressArgs {
             total_messages: recent_messages.len(),
@@ -96,10 +91,7 @@ pub(super) async fn persist_child_archive(
         .filter_map(transcript_line_from_message)
         .take(SUBAGENT_TRANSCRIPT_LINE_LIMIT)
         .collect::<Vec<_>>();
-    let stored_messages = messages
-        .iter()
-        .map(SessionMessage::from)
-        .collect::<Vec<_>>();
+    let stored_messages = messages.iter().map(SessionMessage::from).collect::<Vec<_>>();
     let path = archive.finalize(
         transcript,
         stored_messages.len(),

@@ -24,9 +24,7 @@ pub struct TraceStore {
 impl TraceStore {
     /// Create a new trace store at the specified base directory.
     pub fn new(base_dir: impl Into<PathBuf>) -> Self {
-        Self {
-            base_dir: base_dir.into(),
-        }
+        Self { base_dir: base_dir.into() }
     }
 
     /// Create a trace store under the `.vtcode` directory in the workspace.
@@ -252,10 +250,7 @@ impl TraceIndex {
     /// Add a trace to the index.
     pub fn add_trace(&mut self, trace: &TraceRecord, filename: &str) {
         for file in &trace.files {
-            self.files
-                .entry(file.path.clone())
-                .or_default()
-                .push(filename.to_string());
+            self.files.entry(file.path.clone()).or_default().push(filename.to_string());
         }
     }
 
@@ -392,9 +387,8 @@ mod tests {
         assert_eq!(loaded.files.len(), 1);
 
         // Test read by revision async
-        let loaded_by_rev = store
-            .read_by_revision_async("abc123def456789012345678901234567890abcd")
-            .await?;
+        let loaded_by_rev =
+            store.read_by_revision_async("abc123def456789012345678901234567890abcd").await?;
         assert!(loaded_by_rev.is_some());
 
         Ok(())

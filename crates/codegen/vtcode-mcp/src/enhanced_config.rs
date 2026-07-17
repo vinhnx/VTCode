@@ -71,9 +71,7 @@ impl ValidatedMcpClientConfig {
         if self.original.server.enabled {
             // Validate port range
             if self.original.server.port == 0 {
-                errors.push(ValidationError::InvalidPort(
-                    self.original.server.port.into(),
-                ));
+                errors.push(ValidationError::InvalidPort(self.original.server.port.into()));
             }
 
             // Validate bind address

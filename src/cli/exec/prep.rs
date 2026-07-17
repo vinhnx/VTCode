@@ -206,11 +206,7 @@ pub(super) async fn prepare_exec_run(
             )
             .await
             .context("Failed to prepare archived exec session")?;
-            (
-                prepared.thread_id,
-                Some(prepared.archive),
-                prepared.bootstrap,
-            )
+            (prepared.thread_id, Some(prepared.archive), prepared.bootstrap)
         } else {
             let session_id = listing.identifier();
             let mut bootstrap = ThreadBootstrap::from_listing(listing);
@@ -218,12 +214,9 @@ pub(super) async fn prepare_exec_run(
             (session_id, None, bootstrap)
         }
     } else {
-        let session_id = next_exec_session_id(
-            run_workspace.as_path(),
-            reserved_archive_id,
-            history_enabled,
-        )
-        .await?;
+        let session_id =
+            next_exec_session_id(run_workspace.as_path(), reserved_archive_id, history_enabled)
+                .await?;
         let archive = if history_enabled {
             Some(
                 SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
@@ -357,18 +350,12 @@ fn exec_workspace_label(workspace: &Path) -> String {
 fn resolve_resume_workspace(listing: &SessionListing) -> Result<PathBuf> {
     let workspace = listing.snapshot.metadata.workspace_path.trim();
     if workspace.is_empty() {
-        bail!(
-            "Archived exec session '{}' is missing workspace metadata.",
-            listing.identifier()
-        );
+        bail!("Archived exec session '{}' is missing workspace metadata.", listing.identifier());
     }
 
     let path = PathBuf::from(workspace);
     if !path.exists() {
-        bail!(
-            "Archived exec workspace '{}' no longer exists on disk.",
-            path.display()
-        );
+        bail!("Archived exec workspace '{}' no longer exists on disk.", path.display());
     }
 
     Ok(path)
@@ -438,13 +425,7 @@ async fn resolve_resume_listing(
     options: &ExecCommandOptions,
     config: &CoreAgentConfig,
 ) -> Result<SessionListing> {
-    let ExecCommandKind::Resume {
-        session_id,
-        last,
-        all,
-        ..
-    } = &options.command
-    else {
+    let ExecCommandKind::Resume { session_id, last, all, .. } = &options.command else {
         bail!("Internal error: resume listing requested for non-resume exec command");
     };
 
@@ -464,11 +445,9 @@ async fn resolve_resume_listing(
     let identifier = session_id
         .as_deref()
         .context("Session id is required when --last is not used.")?;
-    find_session_by_identifier(identifier)
-        .await?
-        .with_context(|| {
-            format!("No archived exec session with identifier '{identifier}' was found.")
-        })
+    find_session_by_identifier(identifier).await?.with_context(|| {
+        format!("No archived exec session with identifier '{identifier}' was found.")
+    })
 }
 
 #[cfg(test)]
@@ -541,10 +520,7 @@ mod tests {
         )
         .expect_err("resume without prompt should fail");
 
-        assert!(
-            err.to_string()
-                .contains("Exec resume requires a follow-up prompt")
-        );
+        assert!(err.to_string().contains("Exec resume requires a follow-up prompt"));
     }
 
     #[test]
@@ -563,20 +539,14 @@ mod tests {
     fn prompt_with_stdin_context_wraps_stdin_block() {
         let combined = prompt_with_stdin_context("Summarize this concisely", "my output");
 
-        assert_eq!(
-            combined,
-            "Summarize this concisely\n\n<stdin>\nmy output\n</stdin>"
-        );
+        assert_eq!(combined, "Summarize this concisely\n\n<stdin>\nmy output\n</stdin>");
     }
 
     #[test]
     fn prompt_with_stdin_context_preserves_trailing_newline() {
         let combined = prompt_with_stdin_context("Summarize this concisely", "my output\n");
 
-        assert_eq!(
-            combined,
-            "Summarize this concisely\n\n<stdin>\nmy output\n</stdin>"
-        );
+        assert_eq!(combined, "Summarize this concisely\n\n<stdin>\nmy output\n</stdin>");
     }
 
     #[tokio::test]
@@ -621,14 +591,10 @@ default_model = "gpt-5"
     async fn load_exec_vt_config_preserves_launch_primary_agent_metadata_for_same_workspace() {
         let workspace = tempfile::tempdir().expect("workspace");
 
-        let loaded = load_exec_vt_config(
-            &VTCodeConfig::default(),
-            workspace.path(),
-            workspace.path(),
-            true,
-        )
-        .await
-        .expect("same-workspace config should load");
+        let loaded =
+            load_exec_vt_config(&VTCodeConfig::default(), workspace.path(), workspace.path(), true)
+                .await
+                .expect("same-workspace config should load");
 
         assert!(loaded.primary_agent_explicitly_configured);
     }
@@ -669,9 +635,6 @@ default_model = "gpt-5"
         let metadata = build_exec_archive_metadata(Path::new("."), &model_id, &vt_cfg, &config);
 
         assert_eq!(runtime_debug_log_path().as_deref(), Some(path.as_path()));
-        assert_eq!(
-            metadata.debug_log_path.as_deref(),
-            Some("/tmp/debug-session.log")
-        );
+        assert_eq!(metadata.debug_log_path.as_deref(), Some("/tmp/debug-session.log"));
     }
 }

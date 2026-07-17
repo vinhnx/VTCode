@@ -21,12 +21,10 @@ pub fn hash_value<T: Hash>(value: &T) -> u64 {
 /// Hash a serializable value as JSON.
 pub fn hash_json_value<T: Serialize + ?Sized>(value: &T) -> Option<u64> {
     let mut hasher = DefaultHasher::new();
-    serde_json::to_writer(HasherWriter::new(&mut hasher), value)
-        .ok()
-        .map(|_| {
-            hasher.write_u8(0xff);
-            hasher.finish()
-        })
+    serde_json::to_writer(HasherWriter::new(&mut hasher), value).ok().map(|_| {
+        hasher.write_u8(0xff);
+        hasher.finish()
+    })
 }
 
 /// Hash tool definitions for cache key computation.

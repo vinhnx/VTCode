@@ -108,17 +108,11 @@ pub(crate) async fn begin_openrouter_login(
         None,
     )
     .await?;
-    Ok(StartedOpenRouterLogin {
-        prepared,
-        callback_server,
-    })
+    Ok(StartedOpenRouterLogin { prepared, callback_server })
 }
 
 pub(crate) async fn complete_openrouter_login(started: StartedOpenRouterLogin) -> Result<String> {
-    let StartedOpenRouterLogin {
-        prepared,
-        callback_server,
-    } = started;
+    let StartedOpenRouterLogin { prepared, callback_server } = started;
 
     match callback_server.wait().await? {
         AuthCallbackOutcome::Code(code) => persist_openrouter_login_code(prepared, &code).await,
@@ -132,10 +126,7 @@ pub(crate) async fn complete_openrouter_login_with_tui_cancel(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<String> {
-    let StartedOpenRouterLogin {
-        prepared,
-        callback_server,
-    } = started;
+    let StartedOpenRouterLogin { prepared, callback_server } = started;
 
     let outcome =
         wait_for_callback_or_cancel(callback_server.wait(), ctrl_c_state, ctrl_c_notify).await?;
@@ -189,10 +180,7 @@ pub(crate) async fn begin_openai_login(
         Some(prepared.state.clone()),
     )
     .await?;
-    Ok(StartedOpenAiLogin {
-        prepared,
-        callback_server,
-    })
+    Ok(StartedOpenAiLogin { prepared, callback_server })
 }
 
 pub(crate) async fn complete_openai_login_with_manual_future<ManualFut>(
@@ -202,10 +190,7 @@ pub(crate) async fn complete_openai_login_with_manual_future<ManualFut>(
 where
     ManualFut: Future<Output = Result<Option<String>>>,
 {
-    let StartedOpenAiLogin {
-        prepared,
-        callback_server,
-    } = started;
+    let StartedOpenAiLogin { prepared, callback_server } = started;
     let code =
         resolve_openai_authorization_code(callback_server.wait(), &prepared.state, manual_input)
             .await?;
@@ -217,10 +202,7 @@ pub(crate) async fn complete_openai_login_with_tui_cancel(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<OpenAIChatGptSession> {
-    let StartedOpenAiLogin {
-        prepared,
-        callback_server,
-    } = started;
+    let StartedOpenAiLogin { prepared, callback_server } = started;
 
     let outcome =
         wait_for_callback_or_cancel(callback_server.wait(), ctrl_c_state, ctrl_c_notify).await?;
@@ -479,9 +461,7 @@ pub(crate) async fn handle_login_command(
             wait_for_codex_account_login_completion(&mut events, Some(&login_id)).await?;
         if !completion.success {
             return Err(anyhow!(
-                completion
-                    .error
-                    .unwrap_or_else(|| "Codex ChatGPT login failed".to_string())
+                completion.error.unwrap_or_else(|| "Codex ChatGPT login failed".to_string())
             ));
         }
         let updated = client.account_read().await?;
@@ -491,9 +471,7 @@ pub(crate) async fn handle_login_command(
 
     if provider == COPILOT_PROVIDER {
         let workspace = current_auth_workspace();
-        let auth_cfg = vt_cfg
-            .map(|cfg| cfg.auth.copilot.clone())
-            .unwrap_or_default();
+        let auth_cfg = vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
         println!("Starting GitHub Copilot authentication via the official `copilot` CLI...");
         login_with_events(&auth_cfg, &workspace, print_copilot_auth_event).await?;
         println!("GitHub Copilot authentication complete.");
@@ -556,9 +534,7 @@ pub(crate) async fn handle_logout_command(
 
     if provider == COPILOT_PROVIDER {
         let workspace = current_auth_workspace();
-        let auth_cfg = vt_cfg
-            .map(|cfg| cfg.auth.copilot.clone())
-            .unwrap_or_default();
+        let auth_cfg = vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
         logout_with_events(&auth_cfg, &workspace, print_copilot_auth_event).await?;
         println!("GitHub Copilot authentication cleared.");
         return Ok(());
@@ -566,10 +542,7 @@ pub(crate) async fn handle_logout_command(
 
     match provider.parse::<OAuthProvider>() {
         Ok(OAuthProvider::OpenRouter) => {
-            if matches!(
-                openrouter_auth_status(vt_cfg)?,
-                AuthStatus::NotAuthenticated
-            ) {
+            if matches!(openrouter_auth_status(vt_cfg)?, AuthStatus::NotAuthenticated) {
                 println!("OpenRouter OAuth token already cleared.");
                 return Ok(());
             }
@@ -578,10 +551,7 @@ pub(crate) async fn handle_logout_command(
             Ok(())
         }
         Ok(OAuthProvider::OpenAi) => {
-            if matches!(
-                openai_auth_status(vt_cfg)?,
-                OpenAIChatGptAuthStatus::NotAuthenticated
-            ) {
+            if matches!(openai_auth_status(vt_cfg)?, OpenAIChatGptAuthStatus::NotAuthenticated) {
                 println!("OpenAI ChatGPT session already cleared.");
                 return Ok(());
             }
@@ -612,9 +582,7 @@ pub(crate) async fn handle_show_auth_command(
         }
         Some(value) if value.eq_ignore_ascii_case(COPILOT_PROVIDER) => {
             let workspace = current_auth_workspace();
-            let auth_cfg = vt_cfg
-                .map(|cfg| cfg.auth.copilot.clone())
-                .unwrap_or_default();
+            let auth_cfg = vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
             render_copilot_auth_status(probe_auth_status(&auth_cfg, Some(&workspace)).await);
         }
         Some(value) => match value.parse::<OAuthProvider>() {
@@ -648,9 +616,7 @@ pub(crate) async fn handle_show_auth_command(
             render_openai_auth_status(openai_auth_status(vt_cfg)?);
             println!();
             let workspace = current_auth_workspace();
-            let auth_cfg = vt_cfg
-                .map(|cfg| cfg.auth.copilot.clone())
-                .unwrap_or_default();
+            let auth_cfg = vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
             render_copilot_auth_status(probe_auth_status(&auth_cfg, Some(&workspace)).await);
             println!();
             println!("Use `vtcode login <provider>` to authenticate.");
@@ -662,9 +628,7 @@ pub(crate) async fn handle_show_auth_command(
 }
 
 fn credential_storage_mode(vt_cfg: Option<&VTCodeConfig>) -> AuthCredentialsStoreMode {
-    vt_cfg
-        .map(|cfg| cfg.agent.credential_storage_mode)
-        .unwrap_or_default()
+    vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default()
 }
 
 fn current_auth_workspace() -> PathBuf {
@@ -764,9 +728,7 @@ async fn wait_for_codex_account_login_completion(
             Ok(event) => event,
             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
             Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                return Err(anyhow!(
-                    "lost connection while waiting for Codex login completion"
-                ));
+                return Err(anyhow!("lost connection while waiting for Codex login completion"));
             }
         };
 
@@ -817,10 +779,7 @@ fn render_codex_auth_status(
 fn render_codex_unavailable_status() {
     println!("Codex");
     println!("  Auth: sidecar unavailable");
-    println!(
-        "  Help: {}",
-        crate::codex_app_server::codex_sidecar_requirement_note()
-    );
+    println!("  Help: {}", crate::codex_app_server::codex_sidecar_requirement_note());
 }
 
 fn print_codex_login_summary(status: &CodexAccountReadResponse) {
@@ -872,11 +831,7 @@ fn cli_browser_open_approved(input: &str) -> bool {
 
 fn render_openrouter_auth_status(status: AuthStatus) {
     match status {
-        AuthStatus::Authenticated {
-            label,
-            age_seconds,
-            expires_in,
-        } => {
+        AuthStatus::Authenticated { label, age_seconds, expires_in } => {
             println!("OpenRouter: authenticated (OAuth)");
             if let Some(label) = label {
                 println!("  Label: {label}");
@@ -898,11 +853,7 @@ fn render_openrouter_auth_status(status: AuthStatus) {
 
 fn render_openai_auth_status(status: OpenAIChatGptAuthStatus) {
     match status {
-        OpenAIChatGptAuthStatus::Authenticated {
-            label,
-            age_seconds,
-            expires_in,
-        } => {
+        OpenAIChatGptAuthStatus::Authenticated { label, age_seconds, expires_in } => {
             println!("OpenAI: authenticated (ChatGPT)");
             if let Some(label) = label {
                 println!("  Label: {label}");
@@ -1053,9 +1004,7 @@ mod tests {
         let code = resolve_openai_authorization_code(
             future::pending::<Result<AuthCallbackOutcome, anyhow::Error>>(),
             "test-state",
-            Some(future::ready(Ok(Some(
-                "code=manual-code&state=test-state".to_string(),
-            )))),
+            Some(future::ready(Ok(Some("code=manual-code&state=test-state".to_string())))),
         )
         .await
         .expect("manual input should resolve");
@@ -1085,11 +1034,7 @@ mod tests {
         )
         .await
         .expect_err("bare code should fail");
-        assert!(
-            error
-                .to_string()
-                .contains("full redirect url or query string")
-        );
+        assert!(error.to_string().contains("full redirect url or query string"));
     }
 
     #[tokio::test]
@@ -1107,10 +1052,7 @@ mod tests {
     #[tokio::test]
     async fn callback_wait_returns_cancelled_when_ctrl_c_is_pending() {
         let ctrl_c_state = Arc::new(CtrlCState::new());
-        assert!(matches!(
-            ctrl_c_state.register_signal(),
-            CtrlCSignal::Cancel
-        ));
+        assert!(matches!(ctrl_c_state.register_signal(), CtrlCSignal::Cancel));
         let ctrl_c_notify = Arc::new(Notify::new());
 
         let outcome = wait_for_callback_or_cancel(
@@ -1131,11 +1073,7 @@ mod tests {
             .await
             .expect_err("non-codex device-code login should fail");
 
-        assert!(
-            error
-                .to_string()
-                .contains("supported only for `vtcode login codex`")
-        );
+        assert!(error.to_string().contains("supported only for `vtcode login codex`"));
     }
 
     #[test]

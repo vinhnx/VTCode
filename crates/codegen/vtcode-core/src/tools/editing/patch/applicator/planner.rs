@@ -58,11 +58,7 @@ pub(crate) async fn plan_operations<'a>(
             PatchOperation::DeleteFile { path } => {
                 prepared.push(PreparedOperation::Delete { path });
             }
-            PatchOperation::UpdateFile {
-                path,
-                new_path,
-                chunks,
-            } => {
+            PatchOperation::UpdateFile { path, new_path, chunks } => {
                 let source_path = root.join(path);
                 let metadata = fs::metadata(&source_path).await.map_err(|err| {
                     if err.kind() == ErrorKind::NotFound {
@@ -83,9 +79,8 @@ pub(crate) async fn plan_operations<'a>(
                     });
                 }
 
-                if let Some(dest_rel) = new_path
-                    .as_ref()
-                    .filter(|candidate| candidate.as_str() != path)
+                if let Some(dest_rel) =
+                    new_path.as_ref().filter(|candidate| candidate.as_str() != path)
                 {
                     let destination = root.join(dest_rel);
                     match fs::metadata(&destination).await {

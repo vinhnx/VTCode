@@ -38,10 +38,7 @@ fn test_provider_factory_basic() {
 fn test_provider_auto_detection() {
     let factory = LLMFactory::new();
 
-    assert_eq!(
-        factory.provider_from_model("gpt-oss-20b"),
-        Some("openai".to_string())
-    );
+    assert_eq!(factory.provider_from_model("gpt-oss-20b"), Some("openai".to_string()));
     assert_eq!(
         factory.provider_from_model(models::CLAUDE_SONNET_4_6),
         Some("anthropic".to_string())
@@ -50,10 +47,7 @@ fn test_provider_auto_detection() {
         factory.provider_from_model("claude-sonnet-4-20250514"),
         Some("anthropic".to_string())
     );
-    assert_eq!(
-        factory.provider_from_model("gemini-3-flash-preview"),
-        Some("gemini".to_string())
-    );
+    assert_eq!(factory.provider_from_model("gemini-3-flash-preview"), Some("gemini".to_string()));
     assert_eq!(
         factory.provider_from_model(models::openrouter::DEEPSEEK_V4_PRO),
         Some("openrouter".to_string())
@@ -79,12 +73,8 @@ fn test_unified_client_creation() {
     let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None);
     openai.unwrap();
 
-    let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_6,
-        "test_key".to_string(),
-        None,
-        None,
-    );
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
     anthropic.unwrap();
 
     let openrouter = create_provider_for_model(

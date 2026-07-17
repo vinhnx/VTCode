@@ -29,11 +29,11 @@ Achievements:
 
 **Key Files**:
 
-- `vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
-- `vtcode-core/src/ui/tui/style.rs` - Style conversion functions
-- `vtcode-core/src/ui/tui/theme_parser.rs` - Config parsing
-- `vtcode-core/src/utils/style_helpers.rs` - Style factories
-- `vtcode-core/src/utils/diff_styles.rs` - Diff color palettes
+- `crates/codegen/vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
+- `crates/codegen/vtcode-core/src/ui/tui/style.rs` - Style conversion functions
+- `crates/codegen/vtcode-core/src/ui/tui/theme_parser.rs` - Config parsing
+- `crates/codegen/vtcode-core/src/utils/style_helpers.rs` - Style factories
+- `crates/codegen/vtcode-core/src/utils/diff_styles.rs` - Diff color palettes
 
 ## Document Guide
 

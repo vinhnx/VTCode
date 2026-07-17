@@ -344,11 +344,7 @@ impl TestDataGenerator {
         use rand::{Rng, distr::Alphanumeric};
 
         let mut rng = rand::rng();
-        (&mut rng)
-            .sample_iter(&Alphanumeric)
-            .take(length)
-            .map(char::from)
-            .collect()
+        (&mut rng).sample_iter(&Alphanumeric).take(length).map(char::from).collect()
     }
 
     pub fn random_email() -> String {
@@ -356,11 +352,7 @@ impl TestDataGenerator {
     }
 
     pub fn random_file_path(extension: &str) -> String {
-        format!(
-            "/tmp/{}.{}",
-            Self::random_string(12),
-            extension.trim_start_matches('.')
-        )
+        format!("/tmp/{}.{}", Self::random_string(12), extension.trim_start_matches('.'))
     }
 
     pub fn random_port() -> u16 {

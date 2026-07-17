@@ -51,9 +51,7 @@ pub struct MiddlewareChain {
 impl MiddlewareChain {
     /// Create new chain.
     pub fn new() -> Self {
-        Self {
-            middlewares: Vec::new(),
-        }
+        Self { middlewares: Vec::new() }
     }
 
     /// Add middleware to chain.

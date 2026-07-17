@@ -197,10 +197,7 @@ pub fn specialized_instruction_text() -> String {
 }
 
 pub fn openai_gpt55_contract_addendum() -> String {
-    let lines_len = OPENAI_GPT55_CONTRACT_LINES
-        .iter()
-        .map(|line| line.len())
-        .sum::<usize>();
+    let lines_len = OPENAI_GPT55_CONTRACT_LINES.iter().map(|line| line.len()).sum::<usize>();
     let mut prompt = String::with_capacity(
         OPENAI_GPT55_CONTRACT_HEADER.len() + lines_len + OPENAI_GPT55_CONTRACT_LINES.len() * 3 + 8,
     );
@@ -216,10 +213,7 @@ pub fn openai_gpt55_contract_addendum() -> String {
 }
 
 pub fn openai_gpt56_contract_addendum() -> String {
-    let lines_len = OPENAI_GPT56_CONTRACT_LINES
-        .iter()
-        .map(|line| line.len())
-        .sum::<usize>();
+    let lines_len = OPENAI_GPT56_CONTRACT_LINES.iter().map(|line| line.len()).sum::<usize>();
     let mut prompt = String::with_capacity(
         OPENAI_GPT56_CONTRACT_HEADER.len() + lines_len + OPENAI_GPT56_CONTRACT_LINES.len() * 3 + 8,
     );
@@ -436,11 +430,7 @@ fn system_prompt_budget_settings(
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> (u64, bool, bool) {
     vtcode_config.map_or(
-        (
-            prompt_budget_constants::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS,
-            true,
-            false,
-        ),
+        (prompt_budget_constants::DEFAULT_MAX_SYSTEM_PROMPT_TOKENS, true, false),
         |cfg| {
             (
                 cfg.agent.max_system_prompt_tokens,
@@ -480,10 +470,7 @@ async fn build_prompt_sections(
         base_prompt = apply_agent_identity(&base_prompt, &agent_label);
     }
 
-    let mut sections = vec![PromptSection {
-        kind: SectionKind::BaseContract,
-        text: base_prompt,
-    }];
+    let mut sections = vec![PromptSection { kind: SectionKind::BaseContract, text: base_prompt }];
 
     if should_include_structured_reasoning(vtcode_config, prompt_mode) {
         sections.push(PromptSection {
@@ -514,10 +501,7 @@ async fn build_prompt_sections(
             });
         }
         if let Some(skills_section) = render_prompt_skills_section(&ctx.available_skill_metadata) {
-            sections.push(PromptSection {
-                kind: SectionKind::Skills,
-                text: skills_section,
-            });
+            sections.push(PromptSection { kind: SectionKind::Skills, text: skills_section });
         }
     }
 
@@ -572,10 +556,7 @@ fn apply_token_budget(
                     .iter()
                     .enumerate()
                     .filter_map(|(index, section)| {
-                        section
-                            .kind
-                            .trim_priority()
-                            .map(|priority| (priority, index))
+                        section.kind.trim_priority().map(|priority| (priority, index))
                     })
                     .min_by_key(|(priority, _)| *priority)
                     .map(|(_, index)| index);
@@ -668,11 +649,7 @@ fn static_profile_prompt(prompt_mode: SystemPromptMode) -> &'static str {
 
 fn build_contract_prompt(contract_groups: &[&[&str]]) -> String {
     let total_lines: usize = contract_groups.iter().map(|g| g.len()).sum();
-    let lines_len: usize = contract_groups
-        .iter()
-        .flat_map(|g| g.iter())
-        .map(|l| l.len())
-        .sum();
+    let lines_len: usize = contract_groups.iter().flat_map(|g| g.iter()).map(|l| l.len()).sum();
     let mut prompt = String::with_capacity(
         PROMPT_TITLE.len()
             + PROMPT_INTRO.len()
@@ -862,10 +839,7 @@ pub async fn apply_output_style(
 ) -> String {
     if let Some(config) = vtcode_config {
         let output_style_applier = OutputStyleApplier::new();
-        if let Err(e) = output_style_applier
-            .load_styles_from_config(config, project_root)
-            .await
-        {
+        if let Err(e) = output_style_applier.load_styles_from_config(config, project_root).await {
             tracing::warn!("Failed to load output styles: {}", e);
             instruction // Return original if loading fails
         } else {
@@ -901,12 +875,8 @@ fn cache_key(
         // Config fields that affect prompt generation
         cfg.agent.include_working_directory.hash(&mut hasher);
         cfg.agent.include_temporal_context.hash(&mut hasher);
-        cfg.prompt_cache
-            .cache_friendly_prompt_shaping
-            .hash(&mut hasher);
-        cfg.agent
-            .include_structured_reasoning_tags
-            .hash(&mut hasher);
+        cfg.prompt_cache.cache_friendly_prompt_shaping.hash(&mut hasher);
+        cfg.agent.include_structured_reasoning_tags.hash(&mut hasher);
         // Use discriminant since SystemPromptMode doesn't derive Hash
         std::mem::discriminant(&cfg.agent.system_prompt_mode).hash(&mut hasher);
         std::mem::discriminant(&cfg.agent.tool_documentation_mode).hash(&mut hasher);
@@ -1135,22 +1105,10 @@ mod tests {
 
     #[test]
     fn test_prompt_mode_enum_parsing() {
-        assert_eq!(
-            SystemPromptMode::parse("minimal"),
-            Some(SystemPromptMode::Minimal)
-        );
-        assert_eq!(
-            SystemPromptMode::parse("LIGHTWEIGHT"),
-            Some(SystemPromptMode::Lightweight)
-        );
-        assert_eq!(
-            SystemPromptMode::parse("Default"),
-            Some(SystemPromptMode::Default)
-        );
-        assert_eq!(
-            SystemPromptMode::parse("specialized"),
-            Some(SystemPromptMode::Specialized)
-        );
+        assert_eq!(SystemPromptMode::parse("minimal"), Some(SystemPromptMode::Minimal));
+        assert_eq!(SystemPromptMode::parse("LIGHTWEIGHT"), Some(SystemPromptMode::Lightweight));
+        assert_eq!(SystemPromptMode::parse("Default"), Some(SystemPromptMode::Default));
+        assert_eq!(SystemPromptMode::parse("specialized"), Some(SystemPromptMode::Specialized));
         assert_eq!(SystemPromptMode::parse("invalid"), None);
     }
 
@@ -1171,19 +1129,13 @@ mod tests {
     fn test_minimal_prompt_token_count() {
         // Rough estimate: 1 token ≈ 4 characters
         let approx_tokens = minimal_system_prompt().len() / 4;
-        assert!(
-            approx_tokens < 300,
-            "Minimal prompt should stay compact, got ~{approx_tokens}"
-        );
+        assert!(approx_tokens < 300, "Minimal prompt should stay compact, got ~{approx_tokens}");
     }
 
     #[test]
     fn test_default_prompt_token_count() {
         let approx_tokens = default_system_prompt().len() / 4;
-        assert!(
-            approx_tokens < 550,
-            "Default prompt should stay compact, got ~{approx_tokens}"
-        );
+        assert!(approx_tokens < 550, "Default prompt should stay compact, got ~{approx_tokens}");
     }
 
     #[tokio::test]
@@ -1668,10 +1620,7 @@ mod tests {
             result.contains("Capabilities: read-only"),
             "Should detect read-only capabilities when no edit/write/exec tools available"
         );
-        assert!(
-            result.contains("do not modify files"),
-            "Should explain read-only constraints"
-        );
+        assert!(result.contains("do not modify files"), "Should explain read-only constraints");
     }
 
     #[tokio::test]
@@ -1755,11 +1704,8 @@ mod tests {
         let prompts_dir = workspace.path().join(".vtcode/prompts");
         std::fs::create_dir_all(&prompts_dir).expect("create prompts dir");
         std::fs::write(prompts_dir.join("system.md"), "# Workspace system base").expect("system");
-        std::fs::write(
-            prompts_dir.join("append-system.md"),
-            "Workspace prompt appendix",
-        )
-        .expect("append");
+        std::fs::write(prompts_dir.join("append-system.md"), "Workspace prompt appendix")
+            .expect("append");
 
         let mut config = VTCodeConfig::default();
         config.agent.include_temporal_context = false;
@@ -1786,9 +1732,7 @@ mod tests {
         assert!(result.contains("## Skills"));
         assert!(result.contains("## Environment"));
 
-        let appendix_pos = result
-            .find("Workspace prompt appendix")
-            .expect("append text");
+        let appendix_pos = result.find("Workspace prompt appendix").expect("append text");
         let tools_pos = result.find("## Active Tools").expect("tools section");
         let skills_pos = result.find("## Skills").expect("skills section");
         let env_pos = result.find("## Environment").expect("environment section");
@@ -1808,17 +1752,11 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            result.contains("Time:"),
-            "Should include temporal context when enabled"
-        );
+        assert!(result.contains("Time:"), "Should include temporal context when enabled");
         let env_pos = result.find("## Environment");
         let temporal_pos = result.find("Time:");
         if let (Some(t), Some(e)) = (temporal_pos, env_pos) {
-            assert!(
-                t > e,
-                "Temporal context should appear inside the environment section"
-            );
+            assert!(t > e, "Temporal context should appear inside the environment section");
         }
     }
 
@@ -1850,10 +1788,7 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        assert!(
-            !result.contains("Time:"),
-            "Should not include temporal context when disabled"
-        );
+        assert!(!result.contains("Time:"), "Should not include temporal context when disabled");
     }
 
     #[tokio::test]
@@ -1928,21 +1863,12 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
-        assert!(
-            result.contains("Working directory"),
-            "Should include working directory label"
-        );
-        assert!(
-            result.contains("/tmp/test"),
-            "Should show actual directory path"
-        );
+        assert!(result.contains("Working directory"), "Should include working directory label");
+        assert!(result.contains("/tmp/test"), "Should show actual directory path");
         let wd_pos = result.find("Working directory");
         let env_pos = result.find("## Environment");
         if let (Some(w), Some(e)) = (wd_pos, env_pos) {
-            assert!(
-                w > e,
-                "Working directory should appear inside the environment section"
-            );
+            assert!(w > e, "Working directory should appear inside the environment section");
         }
     }
 
@@ -1977,10 +1903,7 @@ mod tests {
 
         // Should still work without new features
         assert!(result.len() > 600, "Should generate substantial prompt");
-        assert!(
-            result.contains("VT Code"),
-            "Should contain base prompt content"
-        );
+        assert!(result.contains("VT Code"), "Should contain base prompt content");
         // Should not have dynamic guidelines without context
         assert!(
             !result.contains("## Active Tools"),
@@ -2015,30 +1938,15 @@ mod tests {
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
         // Verify all enhancements present
-        assert!(
-            result.contains("## Active Tools"),
-            "Should have dynamic guidelines"
-        );
-        assert!(
-            result.contains("## Skills"),
-            "Should have lean skills routing"
-        );
-        assert!(
-            result.contains("## Environment"),
-            "Should have environment addenda"
-        );
+        assert!(result.contains("## Active Tools"), "Should have dynamic guidelines");
+        assert!(result.contains("## Skills"), "Should have lean skills routing");
+        assert!(result.contains("## Environment"), "Should have environment addenda");
         assert!(result.contains("Time:"), "Should have temporal context");
-        assert!(
-            result.contains("Working directory"),
-            "Should have working directory"
-        );
+        assert!(result.contains("Working directory"), "Should have working directory");
         assert!(result.contains("/workspace"), "Should show workspace path");
 
         // Verify specific guideline for this tool set
-        assert!(
-            result.contains("after inspection"),
-            "Should have read-before-edit guideline"
-        );
+        assert!(result.contains("after inspection"), "Should have read-before-edit guideline");
         assert_no_removed_model_facing_tool_names(&result);
     }
 
@@ -2067,17 +1975,12 @@ mod tests {
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
 
-        let mode_pos = result
-            .find("## Operating Profile")
-            .expect("operating profile section");
+        let mode_pos = result.find("## Operating Profile").expect("operating profile section");
         let tools_pos = result.find("## Active Tools").expect("tools section");
         let skills_pos = result.find("## Skills").expect("skills section");
         let env_pos = result.find("## Environment").expect("environment section");
 
-        assert!(
-            mode_pos < tools_pos,
-            "operating profile should precede tools"
-        );
+        assert!(mode_pos < tools_pos, "operating profile should precede tools");
         assert!(tools_pos < skills_pos, "tools should precede skills");
         assert!(skills_pos < env_pos, "skills should precede environment");
     }
@@ -2089,24 +1992,21 @@ mod tests {
 
         let config = VTCodeConfig::default();
         let mut ctx = PromptContext::default();
-        ctx.available_skill_metadata
-            .push(crate::skills::model::SkillMetadata {
-                name: "skill-creator".to_string(),
-                description: "Create or update skills".to_string(),
-                short_description: None,
-                path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
-                scope: SkillScope::System,
-                manifest: Some(
-                    SkillManifest {
-                        when_to_use: Some("Use when creating or updating a skill.".to_string()),
-                        when_not_to_use: Some(
-                            "Avoid for unrelated implementation work.".to_string(),
-                        ),
-                        ..SkillManifest::default()
-                    }
-                    .into(),
-                ),
-            });
+        ctx.available_skill_metadata.push(crate::skills::model::SkillMetadata {
+            name: "skill-creator".to_string(),
+            description: "Create or update skills".to_string(),
+            short_description: None,
+            path: PathBuf::from("/tmp/skill-creator/SKILL.md"),
+            scope: SkillScope::System,
+            manifest: Some(
+                SkillManifest {
+                    when_to_use: Some("Use when creating or updating a skill.".to_string()),
+                    when_not_to_use: Some("Avoid for unrelated implementation work.".to_string()),
+                    ..SkillManifest::default()
+                }
+                .into(),
+            ),
+        });
 
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), Some(&ctx)).await;
@@ -2242,14 +2142,8 @@ mod tests {
         // Realistic prompt size check — these are estimates, not exact token counts
         let minimal_tokens = estimate_token_count(minimal_system_prompt());
         let default_tokens = estimate_token_count(default_system_prompt());
-        assert!(
-            minimal_tokens < 400,
-            "Minimal prompt tokens: {minimal_tokens}"
-        );
-        assert!(
-            default_tokens < 600,
-            "Default prompt tokens: {default_tokens}"
-        );
+        assert!(minimal_tokens < 400, "Minimal prompt tokens: {minimal_tokens}");
+        assert!(default_tokens < 600, "Default prompt tokens: {default_tokens}");
     }
 
     #[tokio::test]
@@ -2383,10 +2277,7 @@ Use a skill only when the user names it or the task clearly matches. Load detail
 
 ## Environment
 - Working directory: /workspace"#;
-        assert_eq!(
-            result, expected,
-            "multi-section joined output must stay byte-identical"
-        );
+        assert_eq!(result, expected, "multi-section joined output must stay byte-identical");
     }
 
     #[tokio::test]
@@ -2429,14 +2320,8 @@ Use a skill only when the user names it or the task clearly matches. Load detail
             compose_system_instruction_with_report(workspace.path(), Some(&config), Some(&ctx))
                 .await;
 
-        assert_eq!(
-            text, full_text,
-            "trim disabled: full untrimmed text must still be used"
-        );
-        assert!(
-            report.over_budget,
-            "token estimate exceeds configured budget"
-        );
+        assert_eq!(text, full_text, "trim disabled: full untrimmed text must still be used");
+        assert!(report.over_budget, "token estimate exceeds configured budget");
         assert_eq!(report.token_estimate, full_tokens);
         assert!(
             report.trimmed_sections.is_empty(),
@@ -2497,18 +2382,12 @@ Use a skill only when the user names it or the task clearly matches. Load detail
             ],
             "sections must drop in lowest-trim-priority-first order"
         );
-        assert!(
-            text.contains("## Contract"),
-            "base contract must never be dropped"
-        );
+        assert!(text.contains("## Contract"), "base contract must never be dropped");
         assert!(!text.contains("## Structured Reasoning"));
         assert!(!text.contains("## Skills"));
         assert!(!text.contains("## Environment"));
         assert!(!text.contains("## Active Tools"));
-        assert!(
-            !report.over_budget,
-            "text should fit budget once every droppable section is gone"
-        );
+        assert!(!report.over_budget, "text should fit budget once every droppable section is gone");
     }
 
     #[test]

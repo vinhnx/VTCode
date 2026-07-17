@@ -67,11 +67,7 @@ impl ToolTimeoutPolicy {
     fn validate_ceiling(ceiling: Option<Duration>, name: &str) -> anyhow::Result<()> {
         if let Some(ceiling) = ceiling {
             if ceiling < Duration::from_secs(1) {
-                anyhow::bail!(
-                    "{} must be at least 1 second (got {}s)",
-                    name,
-                    ceiling.as_secs()
-                );
+                anyhow::bail!("{} must be at least 1 second (got {}s)", name, ceiling.as_secs());
             }
             if ceiling > Duration::from_secs(3600) {
                 anyhow::bail!(

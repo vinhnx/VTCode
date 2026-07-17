@@ -14,7 +14,7 @@ Complete this checklist when adding a new LLM model to VT Code.
 
 **Files:** `openai.rs`, `models.json`
 
-- [ ] Added to `SUPPORTED_MODELS` in `vtcode-config/src/constants/models/openai.rs`
+- [ ] Added to `SUPPORTED_MODELS` in `crates/codegen/vtcode-config/src/constants/models/openai.rs`
 - [ ] Added convenience constant (e.g., `GPT_5_4_NANO: &str = "gpt-5.4-nano"`)
 - [ ] Updated relevant arrays:
   - [ ] `RESPONSES_API_MODELS` (if applicable)

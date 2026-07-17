@@ -59,10 +59,7 @@ impl OpenAiCompatSpec for StepFunSpec {
         if let Some(effort) = request.reasoning_effort
             && let Some(mapped) = reasoning_effort_value(effort)
         {
-            payload.insert(
-                "reasoning_effort".to_owned(),
-                Value::String(mapped.to_string()),
-            );
+            payload.insert("reasoning_effort".to_owned(), Value::String(mapped.to_string()));
         }
         Ok(())
     }
@@ -136,12 +133,7 @@ mod tests {
             })
             .expect("payload should be valid");
 
-        assert_eq!(
-            payload
-                .get("reasoning_effort")
-                .and_then(|value| value.as_str()),
-            Some("high")
-        );
+        assert_eq!(payload.get("reasoning_effort").and_then(|value| value.as_str()), Some("high"));
         assert!(payload.get("temperature").is_none());
         assert!(payload.get("top_p").is_none());
     }

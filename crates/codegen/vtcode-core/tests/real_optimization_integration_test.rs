@@ -19,10 +19,7 @@ async fn test_real_tool_registry_optimizations() -> Result<()> {
     assert_eq!(cache_cap, 16); // Default cache size
 
     // The registry should have memory pool enabled by default
-    assert!(
-        initial_optimizations,
-        "Memory pool should be enabled by default"
-    );
+    assert!(initial_optimizations, "Memory pool should be enabled by default");
 
     // Configure optimizations
     let mut opt_config = OptimizationConfig::default();

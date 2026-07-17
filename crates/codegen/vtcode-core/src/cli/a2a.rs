@@ -11,24 +11,16 @@ use crate::a2a::cli::A2aCommands;
 /// Execute an A2A CLI command
 pub async fn execute_a2a_command(command: A2aCommands) -> anyhow::Result<()> {
     match command {
-        A2aCommands::Serve {
-            host,
-            port,
-            base_url,
-            enable_push,
-        } => serve_a2a_agent(host, port, base_url, enable_push).await,
+        A2aCommands::Serve { host, port, base_url, enable_push } => {
+            serve_a2a_agent(host, port, base_url, enable_push).await
+        }
         A2aCommands::Discover { agent_url } => discover_agent(agent_url).await,
-        A2aCommands::SendTask {
-            agent_url,
-            message,
-            stream,
-            context_id,
-        } => send_task_to_agent(agent_url, message, stream, context_id).await,
-        A2aCommands::ListTasks {
-            agent_url,
-            context_id,
-            limit,
-        } => list_agent_tasks(agent_url, context_id, limit).await,
+        A2aCommands::SendTask { agent_url, message, stream, context_id } => {
+            send_task_to_agent(agent_url, message, stream, context_id).await
+        }
+        A2aCommands::ListTasks { agent_url, context_id, limit } => {
+            list_agent_tasks(agent_url, context_id, limit).await
+        }
         A2aCommands::GetTask { agent_url, task_id } => get_agent_task(agent_url, task_id).await,
         A2aCommands::CancelTask { agent_url, task_id } => {
             cancel_agent_task(agent_url, task_id).await
@@ -116,10 +108,7 @@ async fn discover_agent(agent_url: String) -> anyhow::Result<()> {
         println!("\nCapabilities:");
         println!("  Streaming: {}", capabilities.streaming);
         println!("  Push Notifications: {}", capabilities.push_notifications);
-        println!(
-            "  State Transition History: {}",
-            capabilities.state_transition_history
-        );
+        println!("  State Transition History: {}", capabilities.state_transition_history);
         if !capabilities.extensions.is_empty() {
             println!("  Extensions: {:?}", capabilities.extensions);
         }
@@ -254,11 +243,7 @@ async fn list_agent_tasks(
         .and_then(|v| v.as_u64())
         .unwrap_or(tasks_array.len() as u64);
 
-    println!(
-        "\nTasks ({} total, showing {}):",
-        total_size,
-        tasks_array.len()
-    );
+    println!("\nTasks ({} total, showing {}):", total_size, tasks_array.len());
     println!("═══════════════════════════════════════════════════════════════\n");
 
     for task_value in tasks_array {

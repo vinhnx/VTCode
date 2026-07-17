@@ -20,35 +20,29 @@ fn show_list_modal(
     items: Vec<InlineListItem>,
 ) {
     session.handle_command(app_types::InlineCommand::ShowTransient {
-        request: Box::new(app_types::TransientRequest::List(
-            app_types::ListOverlayRequest {
-                title: title.to_string(),
-                lines: lines.into_iter().map(|s| s.to_string()).collect(),
-                footer_hint: None,
-                items,
-                selected: None,
-                search: None,
-                hotkeys: Vec::new(),
-            },
-        )),
+        request: Box::new(app_types::TransientRequest::List(app_types::ListOverlayRequest {
+            title: title.to_string(),
+            lines: lines.into_iter().map(|s| s.to_string()).collect(),
+            footer_hint: None,
+            items,
+            selected: None,
+            search: None,
+            hotkeys: Vec::new(),
+        })),
     });
 }
 
 fn render_session_to_terminal(session: &mut AppSession, rows: u16) -> Terminal<TestBackend> {
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
-    terminal
-        .draw(|frame| session.render(frame))
-        .expect("failed to render session");
+    terminal.draw(|frame| session.render(frame)).expect("failed to render session");
     terminal
 }
 
 fn render_session_to_terminal_app(session: &mut Session, rows: u16) -> Terminal<TestBackend> {
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
-    terminal
-        .draw(|frame| session.render(frame))
-        .expect("failed to render session");
+    terminal.draw(|frame| session.render(frame)).expect("failed to render session");
     terminal
 }
 
@@ -138,18 +132,9 @@ fn titled_floating_modal_renders_matching_title_and_divider_chrome() {
     assert_eq!(title_cell.symbol(), "P");
     assert_eq!(top_divider_cell.symbol(), ui::INLINE_BLOCK_HORIZONTAL);
     assert_eq!(bottom_divider_cell.symbol(), ui::INLINE_BLOCK_HORIZONTAL);
-    assert_ne!(
-        title_cell.style().bg,
-        Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
-    );
-    assert_eq!(
-        top_divider_cell.style().fg,
-        Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
-    );
-    assert_eq!(
-        bottom_divider_cell.style().fg,
-        Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
-    );
+    assert_ne!(title_cell.style().bg, Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN)));
+    assert_eq!(top_divider_cell.style().fg, Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN)));
+    assert_eq!(bottom_divider_cell.style().fg, Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN)));
 }
 
 #[test]
@@ -179,9 +164,8 @@ fn floating_modal_clears_stale_buffer_content_before_painting() {
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
     terminal
         .draw(|frame| {
-            let filler = (0..30)
-                .map(|_| Line::from("X".repeat(VIEW_WIDTH as usize)))
-                .collect::<Vec<_>>();
+            let filler =
+                (0..30).map(|_| Line::from("X".repeat(VIEW_WIDTH as usize))).collect::<Vec<_>>();
             frame.render_widget(ratatui::widgets::Paragraph::new(filler), frame.area());
         })
         .expect("failed to prefill terminal buffer");
@@ -190,21 +174,13 @@ fn floating_modal_clears_stale_buffer_content_before_painting() {
         .expect("failed to render modal over stale buffer");
 
     let buffer = terminal.backend().buffer();
-    let title_tail_cell = buffer
-        .cell((VIEW_WIDTH.saturating_sub(1), 15))
-        .expect("title tail cell");
+    let title_tail_cell = buffer.cell((VIEW_WIDTH.saturating_sub(1), 15)).expect("title tail cell");
     let body_blank_cell = buffer.cell((10, 25)).expect("body blank cell");
 
     assert_eq!(title_tail_cell.symbol(), " ");
     assert_eq!(body_blank_cell.symbol(), " ");
-    assert_eq!(
-        title_tail_cell.style().bg,
-        Some(Color::Rgb(0xF5, 0xF5, 0xF0))
-    );
-    assert_eq!(
-        body_blank_cell.style().bg,
-        Some(Color::Rgb(0xF5, 0xF5, 0xF0))
-    );
+    assert_eq!(title_tail_cell.style().bg, Some(Color::Rgb(0xF5, 0xF5, 0xF0)));
+    assert_eq!(body_blank_cell.style().bg, Some(Color::Rgb(0xF5, 0xF5, 0xF0)));
 }
 
 #[test]
@@ -217,24 +193,22 @@ fn selected_modal_row_uses_primary_foreground() {
     let mut session = AppSession::new(theme, None, 30);
     let selection = InlineListSelection::SlashCommand("a".to_string());
     session.handle_command(app_types::InlineCommand::ShowTransient {
-        request: Box::new(app_types::TransientRequest::List(
-            app_types::ListOverlayRequest {
-                title: "Pick one".to_string(),
-                lines: vec!["Choose an option".to_string()],
-                footer_hint: None,
-                items: vec![InlineListItem {
-                    title: "Option A".to_string(),
-                    subtitle: None,
-                    badge: Some("Active".to_string()),
-                    indent: 0,
-                    selection: Some(selection.clone()),
-                    search_value: Some("Option A".to_string()),
-                }],
-                selected: Some(selection),
-                search: None,
-                hotkeys: Vec::new(),
-            },
-        )),
+        request: Box::new(app_types::TransientRequest::List(app_types::ListOverlayRequest {
+            title: "Pick one".to_string(),
+            lines: vec!["Choose an option".to_string()],
+            footer_hint: None,
+            items: vec![InlineListItem {
+                title: "Option A".to_string(),
+                subtitle: None,
+                badge: Some("Active".to_string()),
+                indent: 0,
+                selection: Some(selection.clone()),
+                search_value: Some("Option A".to_string()),
+            }],
+            selected: Some(selection),
+            search: None,
+            hotkeys: Vec::new(),
+        })),
     });
 
     let terminal = render_session_to_terminal(&mut session, 30);
@@ -285,10 +259,7 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
     let terminal = render_session_to_terminal(&mut session, 30);
 
     let lines = rendered_app_session_lines(&mut session, 30);
-    let title_row = lines
-        .iter()
-        .position(|line| line.trim() == "Theme")
-        .expect("title row");
+    let title_row = lines.iter().position(|line| line.trim() == "Theme").expect("title row");
     let modal_area = session.core.modal_list_area().expect("modal list area");
     let header_cell = terminal
         .backend()
@@ -321,9 +292,7 @@ fn untitled_floating_modal_skips_title_chrome_rows() {
 
     let lines = rendered_app_session_lines(&mut session, 30);
     assert!(
-        lines
-            .get(15)
-            .is_some_and(|line| line.contains("Choose an option")),
+        lines.get(15).is_some_and(|line| line.contains("Choose an option")),
         "untitled modal body should begin at the floating modal origin"
     );
     assert!(
@@ -404,10 +373,7 @@ fn list_modal_keeps_last_selection_when_items_append() {
         .modal_state()
         .and_then(|modal| modal.list.as_ref())
         .and_then(|list| list.current_selection());
-    assert_eq!(
-        selection,
-        Some(InlineListSelection::SlashCommand("third".to_string()))
-    );
+    assert_eq!(selection, Some(InlineListSelection::SlashCommand("third".to_string())));
 }
 
 #[test]

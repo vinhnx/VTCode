@@ -26,7 +26,7 @@ pub struct SafetyConfig {
     pub audit: Option<ToolAuditConfig>,
 }
 
-/// Subset of `[safety.audit]` controlling the `vtcode_safety::audit_log::JsonlFileSink`.
+/// Subset of `[safety.audit]` controlling the audit log sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolAuditConfig {
     /// When true, the runloop persists audit entries. Default `false`.

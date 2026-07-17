@@ -119,10 +119,10 @@ index 0000000..1111111 100644
 #[test]
 fn edit_preview_uses_standard_numbered_diff_formatting() {
     let diff = "\
-diff --git a/vtcode-config/src/loader/config.rs b/vtcode-config/src/loader/config.rs
+diff --git a/crates/codegen/vtcode-config/src/loader/config.rs b/crates/codegen/vtcode-config/src/loader/config.rs
 index 0000000..1111111 100644
---- a/vtcode-config/src/loader/config.rs
-+++ b/vtcode-config/src/loader/config.rs
+--- a/crates/codegen/vtcode-config/src/loader/config.rs
++++ b/crates/codegen/vtcode-config/src/loader/config.rs
 @@ -536,4 +536,4 @@
  # Suppress notifications while terminal is focused
 -suppress_when_focused = false
@@ -137,7 +137,7 @@ index 0000000..1111111 100644
     let lines = format_diff_content_lines_with_numbers(diff);
     assert_eq!(
         lines[0],
-        "diff --git a/vtcode-config/src/loader/config.rs b/vtcode-config/src/loader/config.rs"
+        "diff --git a/crates/codegen/vtcode-config/src/loader/config.rs b/crates/codegen/vtcode-config/src/loader/config.rs"
     );
     assert!(lines.iter().any(|line| line == "@@ -536 +536 @@"));
     assert!(lines.iter().any(|line| line == "@@ -545 +545 @@"));
@@ -146,21 +146,9 @@ index 0000000..1111111 100644
             .iter()
             .any(|line| line.starts_with("-  537 suppress_when_focused = false"))
     );
-    assert!(
-        lines
-            .iter()
-            .any(|line| line.starts_with("+  537 suppress_when_focused = true"))
-    );
-    assert!(
-        lines
-            .iter()
-            .any(|line| line.starts_with("-  546 tool_success = true"))
-    );
-    assert!(
-        lines
-            .iter()
-            .any(|line| line.starts_with("+  546 tool_success = false"))
-    );
+    assert!(lines.iter().any(|line| line.starts_with("+  537 suppress_when_focused = true")));
+    assert!(lines.iter().any(|line| line.starts_with("-  546 tool_success = true")));
+    assert!(lines.iter().any(|line| line.starts_with("+  546 tool_success = false")));
 }
 
 #[test]

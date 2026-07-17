@@ -68,10 +68,7 @@ impl AgentPermissionsConfig {
 /// names, which means they work correctly across current and internal helper
 /// routes.
 fn is_semantic_rule(rule: &str) -> bool {
-    matches!(
-        rule.to_ascii_lowercase().as_str(),
-        "read" | "write" | "edit" | "bash" | "webfetch"
-    )
+    matches!(rule.to_ascii_lowercase().as_str(), "read" | "write" | "edit" | "bash" | "webfetch")
 }
 
 /// Normalize a tool-name permission rule to its semantic category.
@@ -446,20 +443,14 @@ mod tests {
         )
         .expect("permissions config");
 
-        assert_eq!(
-            config.allow,
-            vec!["read_file".to_string(), "code_search".to_string()]
-        );
+        assert_eq!(config.allow, vec!["read_file".to_string(), "code_search".to_string()]);
         assert_eq!(config.deny, vec!["exec_command".to_string()]);
     }
 
     #[test]
     fn normalizes_code_search_rules_to_read_semantics() {
         assert_eq!(super::normalize_permission_rule("code_search"), "read");
-        assert_eq!(
-            super::normalize_permission_rule("code_search(/src/**)"),
-            "read(/src/**)"
-        );
+        assert_eq!(super::normalize_permission_rule("code_search(/src/**)"), "read(/src/**)");
     }
 
     #[test]
@@ -531,44 +522,28 @@ mod tests {
     #[test]
     fn normalizes_read_tool_names_to_semantic_rule() {
         for input in ["read_file", "Read_File", "READ_FILE", "read", "Read"] {
-            assert_eq!(
-                super::normalize_permission_rule(input),
-                "read",
-                "input: {input}"
-            );
+            assert_eq!(super::normalize_permission_rule(input), "read", "input: {input}");
         }
     }
 
     #[test]
     fn normalizes_write_tool_names_to_semantic_rule() {
         for input in ["write_file", "Write_File", "create_file", "delete_file"] {
-            assert_eq!(
-                super::normalize_permission_rule(input),
-                "write",
-                "input: {input}"
-            );
+            assert_eq!(super::normalize_permission_rule(input), "write", "input: {input}");
         }
     }
 
     #[test]
     fn normalizes_edit_tool_names_to_semantic_rule() {
         for input in ["edit_file", "Edit_File", "apply_patch", "file_op"] {
-            assert_eq!(
-                super::normalize_permission_rule(input),
-                "edit",
-                "input: {input}"
-            );
+            assert_eq!(super::normalize_permission_rule(input), "edit", "input: {input}");
         }
     }
 
     #[test]
     fn normalizes_bash_tool_names_to_semantic_rule() {
         for input in ["bash", "Bash", "exec_command", "run_pty_cmd"] {
-            assert_eq!(
-                super::normalize_permission_rule(input),
-                "bash",
-                "input: {input}"
-            );
+            assert_eq!(super::normalize_permission_rule(input), "bash", "input: {input}");
         }
     }
 
@@ -585,40 +560,24 @@ mod tests {
             super::normalize_permission_rule("read_file(/src/**/*.rs)"),
             "read(/src/**/*.rs)"
         );
-        assert_eq!(
-            super::normalize_permission_rule("write_file(/docs/**)"),
-            "write(/docs/**)"
-        );
+        assert_eq!(super::normalize_permission_rule("write_file(/docs/**)"), "write(/docs/**)");
     }
 
     #[test]
     fn mcp_rules_pass_through_unchanged() {
-        assert_eq!(
-            super::normalize_permission_rule("mcp__server__tool"),
-            "mcp__server__tool"
-        );
-        assert_eq!(
-            super::normalize_permission_rule("mcp__context7__*"),
-            "mcp__context7__*"
-        );
+        assert_eq!(super::normalize_permission_rule("mcp__server__tool"), "mcp__server__tool");
+        assert_eq!(super::normalize_permission_rule("mcp__context7__*"), "mcp__context7__*");
     }
 
     #[test]
     fn semantic_rules_pass_through_unchanged() {
         for input in ["read", "write", "edit", "bash", "webfetch"] {
-            assert_eq!(
-                super::normalize_permission_rule(input),
-                input,
-                "input: {input}"
-            );
+            assert_eq!(super::normalize_permission_rule(input), input, "input: {input}");
         }
     }
 
     #[test]
     fn unknown_rules_pass_through_unchanged() {
-        assert_eq!(
-            super::normalize_permission_rule("some_custom_tool"),
-            "some_custom_tool"
-        );
+        assert_eq!(super::normalize_permission_rule("some_custom_tool"), "some_custom_tool");
     }
 }

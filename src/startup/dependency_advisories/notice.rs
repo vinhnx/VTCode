@@ -101,9 +101,7 @@ impl OptionalSearchToolsNotice {
             });
         }
 
-        lines.push(format!(
-            "Install both with `{SEARCH_TOOLS_INSTALL_COMMAND}`."
-        ));
+        lines.push(format!("Install both with `{SEARCH_TOOLS_INSTALL_COMMAND}`."));
         lines.push(format!(
             "Native installer bundle: use `{SEARCH_TOOLS_INSTALLER_FLAG}` during curl installs."
         ));

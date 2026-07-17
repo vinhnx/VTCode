@@ -80,15 +80,10 @@ pub(crate) async fn display_session_status(
     let settings_info = summarize_setting_sources(&ctx.config.workspace);
 
     render_status_heading(renderer, "Session status")?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Version: {}", env!("CARGO_PKG_VERSION")),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  Version: {}", env!("CARGO_PKG_VERSION")))?;
     renderer.line(MessageStyle::Info, &format!("  Session ID: {session_id}"))?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Directory: {}", ctx.config.workspace.display()),
-    )?;
+    renderer
+        .line(MessageStyle::Info, &format!("  Directory: {}", ctx.config.workspace.display()))?;
     renderer.line(MessageStyle::Info, "")?;
     let provider_label = {
         let label = crate::agent::runloop::unified::session_setup::resolve_provider_label(
@@ -101,40 +96,25 @@ pub(crate) async fn display_session_status(
         }
     };
     renderer.line(MessageStyle::Info, &format!("  Provider: {provider_label}"))?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Model: {}", ctx.config.model),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  Model: {}", ctx.config.model))?;
     render_auth_usage_status(renderer, &ctx, openai_session.as_ref()).await?;
     renderer.line(MessageStyle::Info, &format!("  IDE: {ide_info}"))?;
     renderer.line(MessageStyle::Info, &format!("  Terminal: {terminal_info}"))?;
     renderer.line(MessageStyle::Info, &format!("  MCP servers: {mcp_info}"))?;
     renderer.line(MessageStyle::Info, &format!("  Skills: {skills_info}"))?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Loaded AGENTS.md sources: {agents_info}"),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  Loaded AGENTS.md sources: {agents_info}"))?;
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Info, &format!("  Memory: {memory_info}"))?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Setting sources: {settings_info}"),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  Setting sources: {settings_info}"))?;
     renderer.line(
         MessageStyle::Info,
         &format!("  Reasoning effort: {}", ctx.config.reasoning_effort),
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Messages so far: {}", ctx.message_count),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("  Messages so far: {}", ctx.message_count))?;
 
     let used_tools = ctx.stats.sorted_tools();
     if used_tools.is_empty() {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  Tools used: 0 / {}", ctx.available_tools),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("  Tools used: 0 / {}", ctx.available_tools))?;
     } else {
         renderer.line(
             MessageStyle::Info,
@@ -157,15 +137,11 @@ async fn render_auth_usage_status(
 ) -> Result<()> {
     let openrouter_status = crate::cli::auth::openrouter_auth_status(ctx.vt_cfg)?;
     let openai_status = crate::cli::auth::openai_auth_status(ctx.vt_cfg)?;
-    let copilot_auth_cfg = ctx
-        .vt_cfg
-        .map(|cfg| cfg.auth.copilot.clone())
-        .unwrap_or_default();
+    let copilot_auth_cfg = ctx.vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
     let copilot_status = probe_auth_status(&copilot_auth_cfg, Some(&ctx.config.workspace)).await;
-    let openai_connected = matches!(
-        openai_status,
-        vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. }
-    ) || ctx.config.openai_chatgpt_auth.is_some();
+    let openai_connected =
+        matches!(openai_status, vtcode_auth::OpenAIChatGptAuthStatus::Authenticated { .. })
+            || ctx.config.openai_chatgpt_auth.is_some();
     render_status_heading(renderer, "Authentication info")?;
     renderer.line(
         MessageStyle::Info,
@@ -188,29 +164,18 @@ async fn render_auth_usage_status(
     }
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "  OpenRouter: {}",
-            short_oauth_status_openrouter(&openrouter_status)
-        ),
+        &format!("  OpenRouter: {}", short_oauth_status_openrouter(&openrouter_status)),
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "  GitHub Copilot: {}",
-            short_copilot_status(&copilot_status)
-        ),
+        &format!("  GitHub Copilot: {}", short_copilot_status(&copilot_status)),
     )?;
 
     if ctx.config.provider.eq_ignore_ascii_case("openai") {
         let default_auth = vtcode_auth::OpenAIAuthConfig::default();
-        let auth_cfg = ctx
-            .vt_cfg
-            .map(|cfg| &cfg.auth.openai)
-            .unwrap_or(&default_auth);
-        let storage_mode = ctx
-            .vt_cfg
-            .map(|cfg| cfg.agent.credential_storage_mode)
-            .unwrap_or_default();
+        let auth_cfg = ctx.vt_cfg.map(|cfg| &cfg.auth.openai).unwrap_or(&default_auth);
+        let storage_mode =
+            ctx.vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default();
         let api_key = get_api_key("openai", &ApiKeySources::default()).ok();
         let overview =
             vtcode_config::auth::summarize_openai_credentials(auth_cfg, storage_mode, api_key)?;
@@ -239,10 +204,7 @@ async fn render_auth_usage_status(
             renderer.line(MessageStyle::Info, &format!("  Notice: {notice}"))?;
         }
         if let Some(recommendation) = overview.recommendation.as_deref() {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  Recommendation: {recommendation}"),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("  Recommendation: {recommendation}"))?;
         }
     } else if ctx.config.provider.eq_ignore_ascii_case("openrouter") {
         let api_key = get_api_key("openrouter", &ApiKeySources::default()).ok();
@@ -253,10 +215,7 @@ async fn render_auth_usage_status(
             }
             vtcode_auth::AuthStatus::NotAuthenticated => "no active OpenRouter credential",
         };
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  Usage status: {usage_status}"),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("  Usage status: {usage_status}"))?;
     } else if ctx.config.provider.eq_ignore_ascii_case("copilot") {
         let usage_status = match copilot_status.kind {
             CopilotAuthStatusKind::Authenticated => "using GitHub Copilot managed authentication",
@@ -266,10 +225,7 @@ async fn render_auth_usage_status(
                 "GitHub Copilot authentication needs attention"
             }
         };
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  Usage status: {usage_status}"),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("  Usage status: {usage_status}"))?;
         if let Some(message) = copilot_status.message.as_deref()
             && !message.trim().is_empty()
         {
@@ -311,9 +267,7 @@ fn current_session_id() -> String {
 }
 
 fn detect_ide_info() -> String {
-    let term_program = env::var("TERM_PROGRAM")
-        .ok()
-        .map(|value| value.to_ascii_lowercase());
+    let term_program = env::var("TERM_PROGRAM").ok().map(|value| value.to_ascii_lowercase());
 
     if env::var("ZED_CLI").is_ok() || env::var("VIMRUNTIME").is_ok() {
         return format_tool_version_label("Zed", detect_command_version("zed", &["--version"]));
@@ -328,9 +282,7 @@ fn detect_ide_info() -> String {
 
     let in_vscode = env::var("VSCODE_PID").is_ok()
         || env::var("VSCODE_IPC_HOOK_CLI").is_ok()
-        || term_program
-            .as_deref()
-            .is_some_and(|value| value.contains("vscode"));
+        || term_program.as_deref().is_some_and(|value| value.contains("vscode"));
     if in_vscode {
         return format_tool_version_label(
             "VS Code",
@@ -351,11 +303,7 @@ fn detect_terminal_info() -> String {
     let version = env::var("TERM_PROGRAM_VERSION")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .or_else(|| {
-            env::var("WEZTERM_VERSION")
-                .ok()
-                .filter(|value| !value.trim().is_empty())
-        });
+        .or_else(|| env::var("WEZTERM_VERSION").ok().filter(|value| !value.trim().is_empty()));
 
     if terminal_type == TerminalType::Unknown {
         if let Ok(term) = env::var("TERM")
@@ -439,18 +387,14 @@ async fn summarize_mcp_servers(
                             .map(|name| format!("{} (version unknown)", name.trim())),
                     );
                 }
-                Some(format!(
-                    "active {}/{}",
-                    runtime.active_connections, runtime.provider_count
-                ))
+                Some(format!("active {}/{}", runtime.active_connections, runtime.provider_count))
             }
             McpInitStatus::Initializing { progress } => {
                 Some(format!("initializing: {}", progress.trim()))
             }
-            McpInitStatus::Error { message } => Some(format!(
-                "error: {}",
-                truncate_status_value(message.trim(), 80)
-            )),
+            McpInitStatus::Error { message } => {
+                Some(format!("error: {}", truncate_status_value(message.trim(), 80)))
+            }
             McpInitStatus::Disabled => Some("disabled".to_string()),
         }
     } else {
@@ -482,12 +426,7 @@ async fn summarize_loaded_skills(loaded_skills: &Arc<RwLock<LoadedSkillsMap>>) -
     }
 
     let remaining = names.len() - visible_limit;
-    format!(
-        "{} loaded ({} +{} more)",
-        names.len(),
-        names[..visible_limit].join(", "),
-        remaining
-    )
+    format!("{} loaded ({} +{} more)", names.len(), names[..visible_limit].join(", "), remaining)
 }
 
 fn summarize_project_memory(workspace: &Path) -> String {
@@ -581,10 +520,7 @@ fn summarize_setting_sources(workspace: &Path) -> String {
         }
     }
 
-    let user_label = user_sources
-        .first()
-        .cloned()
-        .unwrap_or_else(|| "defaults".to_string());
+    let user_label = user_sources.first().cloned().unwrap_or_else(|| "defaults".to_string());
     let project_label = project_sources
         .first()
         .cloned()
@@ -619,10 +555,7 @@ pub(crate) struct PlaceholderGuard {
 
 impl PlaceholderGuard {
     pub(crate) fn new(handle: &InlineHandle, restore: Option<String>) -> Self {
-        Self {
-            handle: handle.clone(),
-            restore,
-        }
+        Self { handle: handle.clone(), restore }
     }
 }
 

@@ -4,10 +4,7 @@ use super::ToolRegistry;
 
 pub(super) fn runtime_sandbox_config_default() -> vtcode_config::SandboxConfig {
     // Keep legacy behavior for registry instances that never receive workspace config.
-    vtcode_config::SandboxConfig {
-        enabled: false,
-        ..Default::default()
-    }
+    vtcode_config::SandboxConfig { enabled: false, ..Default::default() }
 }
 
 impl ToolRegistry {

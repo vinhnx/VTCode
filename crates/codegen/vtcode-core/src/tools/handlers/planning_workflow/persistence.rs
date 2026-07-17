@@ -33,19 +33,13 @@ async fn persist_global_tracker_if_missing(
     if workspace_root.as_os_str().is_empty() {
         return Ok(());
     }
-    let task_file = workspace_root
-        .join(".vtcode")
-        .join("tasks")
-        .join("current_task.md");
+    let task_file = workspace_root.join(".vtcode").join("tasks").join("current_task.md");
     if task_file.exists() {
         return Ok(());
     }
     if let Some(parent) = task_file.parent() {
         ensure_dir_exists(parent).await.with_context(|| {
-            format!(
-                "Failed to create task tracker directory: {}",
-                parent.display()
-            )
+            format!("Failed to create task tracker directory: {}", parent.display())
         })?;
     }
     write_file_with_context(&task_file, tracker_markdown, "task checklist")
@@ -77,10 +71,7 @@ pub async fn persist_plan_draft(
     let tracker_file = tracker_file_for_plan_file(&plan_file);
     let (existing_tracker, tracker_from_sidecar) = if let Some(path) = tracker_file.as_ref() {
         if path.exists() {
-            (
-                read_file_with_context(path, "plan tracker file").await.ok(),
-                true,
-            )
+            (read_file_with_context(path, "plan tracker file").await.ok(), true)
         } else {
             (
                 existing_plan
@@ -127,10 +118,7 @@ pub async fn persist_plan_draft(
     {
         if let Some(parent) = path.parent() {
             ensure_dir_exists(parent).await.with_context(|| {
-                format!(
-                    "Failed to create plan tracker directory: {}",
-                    parent.display()
-                )
+                format!("Failed to create plan tracker directory: {}", parent.display())
             })?;
         }
         write_file_with_context(path, tracker_markdown, "plan tracker file")
@@ -140,11 +128,7 @@ pub async fn persist_plan_draft(
         persist_global_tracker_if_missing(&workspace_root, tracker_markdown).await?;
     }
 
-    Ok(PersistedPlanDraft {
-        plan_file,
-        tracker_file,
-        validation,
-    })
+    Ok(PersistedPlanDraft { plan_file, tracker_file, validation })
 }
 
 pub(super) fn resolve_plan_path(workspace_root: &Path, raw_path: &str) -> PathBuf {
@@ -191,10 +175,7 @@ pub(super) fn render_initial_plan_file_content(
 ) -> String {
     let mut content = format!("# {plan_title}\n\n");
     content.push_str("Status: drafting\n");
-    content.push_str(&format!(
-        "Created: {}\n",
-        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
-    ));
+    content.push_str(&format!("Created: {}\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
     content.push_str(&format!("Plan file: `{}`\n", plan_file.display()));
     if let Some(description) = description.map(str::trim).filter(|value| !value.is_empty()) {
         content.push_str(&format!("Description: {description}\n"));
@@ -287,10 +268,7 @@ pub(super) fn detect_validation_command_hints(workspace_root: &Path) -> Validati
             format!("Use configured {pm} test command for this workspace")
         };
 
-        return ValidationCommandHints {
-            build_and_lint,
-            tests,
-        };
+        return ValidationCommandHints { build_and_lint, tests };
     }
 
     if workspace_root.join("pyproject.toml").exists()

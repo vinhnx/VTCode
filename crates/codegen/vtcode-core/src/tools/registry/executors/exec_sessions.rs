@@ -21,10 +21,7 @@ struct ResolvedExecSession {
 impl ResolvedExecSession {
     fn new(metadata: VTCodeExecSession) -> Self {
         let command_display = build_exec_session_command_display(&metadata);
-        Self {
-            metadata,
-            command_display,
-        }
+        Self { metadata, command_display }
     }
 
     fn should_settle_noninteractive(&self, exec_settlement_mode: ExecSettlementMode) -> bool {
@@ -142,8 +139,7 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_command_session_write(&self, args: Value) -> Result<Value> {
-        self.execute_command_session_write_for_tool(args, tools::UNIFIED_EXEC)
-            .await
+        self.execute_command_session_write_for_tool(args, tools::UNIFIED_EXEC).await
     }
 
     pub(crate) async fn execute_command_session_write_for_tool(
@@ -232,8 +228,7 @@ impl ToolRegistry {
         if crate::tools::command_args::interactive_input_text(&args).is_some() {
             self.execute_command_session_write(args).await
         } else {
-            self.execute_command_session_poll_internal(args, exec_settlement_mode)
-                .await
+            self.execute_command_session_poll_internal(args, exec_settlement_mode).await
         }
     }
 
@@ -244,10 +239,7 @@ impl ToolRegistry {
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty());
-        let literal = payload
-            .get("literal")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let literal = payload.get("literal").and_then(Value::as_bool).unwrap_or(false);
         let max_matches = clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64));
         let head_lines = clamp_inspect_lines(
             payload.get("head_lines").and_then(Value::as_u64),
@@ -277,18 +269,11 @@ impl ToolRegistry {
             let yield_time_ms =
                 clamp_peek_yield_ms(payload.get("yield_time_ms").and_then(Value::as_u64));
             let capture = self
-                .wait_for_exec_yield(
-                    session_id,
-                    Duration::from_millis(yield_time_ms),
-                    None,
-                    false,
-                )
+                .wait_for_exec_yield(session_id, Duration::from_millis(yield_time_ms), None, false)
                 .await;
             filter_pty_output(&strip_ansi(&capture.output))
         } else {
-            return Err(anyhow!(
-                "inspect requires either `session_id` or `spool_path`"
-            ));
+            return Err(anyhow!("inspect requires either `session_id` or `spool_path`"));
         };
 
         let (output, matched_count, truncated) = if let Some(query) = query {
@@ -345,10 +330,7 @@ impl ToolRegistry {
         extra_env: HashMap<String, String>,
     ) -> HashMap<String, String> {
         let mut env: HashMap<String, String> = std::env::vars().collect();
-        env.insert(
-            "WORKSPACE_DIR".to_string(),
-            self.workspace_root().display().to_string(),
-        );
+        env.insert("WORKSPACE_DIR".to_string(), self.workspace_root().display().to_string());
         env.insert("PAGER".to_string(), "cat".to_string());
         env.insert("GIT_PAGER".to_string(), "cat".to_string());
         env.insert("NO_COLOR".to_string(), "1".to_string());
@@ -426,11 +408,7 @@ impl ToolRegistry {
         let mut peeked_bytes = 0usize;
         let start = Instant::now();
         let poll_interval = Duration::from_millis(50);
-        let mut activity_rx = self
-            .exec_session_activity_receiver(session_id)
-            .await
-            .ok()
-            .flatten();
+        let mut activity_rx = self.exec_session_activity_receiver(session_id).await.ok().flatten();
 
         let progress_callback = self.progress_callback();
         let mut last_ui_update = Instant::now();
@@ -438,14 +416,12 @@ impl ToolRegistry {
         let mut pending_lines = String::new();
 
         loop {
-            let observed_activity = activity_rx
-                .as_mut()
-                .map(|receiver| *receiver.borrow_and_update());
+            let observed_activity =
+                activity_rx.as_mut().map(|receiver| *receiver.borrow_and_update());
 
             if let Ok(Some(code)) = self.exec_session_completed(session_id).await {
-                if let Ok(Some(final_output)) = self
-                    .next_exec_session_output(session_id, drain_output, &mut peeked_bytes)
-                    .await
+                if let Ok(Some(final_output)) =
+                    self.next_exec_session_output(session_id, drain_output, &mut peeked_bytes).await
                 {
                     output.push_str(&final_output);
 
@@ -480,10 +456,8 @@ impl ToolRegistry {
                             last_output_at = Instant::now();
                         }
                         Ok(None) | Err(_) => {
-                            let output_drained = self
-                                .exec_session_output_drained(session_id)
-                                .await
-                                .unwrap_or(true);
+                            let output_drained =
+                                self.exec_session_output_drained(session_id).await.unwrap_or(true);
                             if output_drained
                                 && Instant::now().duration_since(last_output_at) >= quiet_window
                             {
@@ -500,9 +474,8 @@ impl ToolRegistry {
                 };
             }
 
-            if let Ok(Some(new_output)) = self
-                .next_exec_session_output(session_id, drain_output, &mut peeked_bytes)
-                .await
+            if let Ok(Some(new_output)) =
+                self.next_exec_session_output(session_id, drain_output, &mut peeked_bytes).await
             {
                 output.push_str(&new_output);
                 if tool_name.is_some() {
@@ -525,10 +498,8 @@ impl ToolRegistry {
             }
 
             if start.elapsed() >= yield_duration {
-                let output_drained = self
-                    .exec_session_output_drained(session_id)
-                    .await
-                    .unwrap_or(false);
+                let output_drained =
+                    self.exec_session_output_drained(session_id).await.unwrap_or(false);
                 if output_drained {
                     let exit_grace_deadline = Instant::now() + Duration::from_millis(250);
                     while Instant::now() < exit_grace_deadline {
@@ -554,11 +525,7 @@ impl ToolRegistry {
                 {
                     callback(tool_name, &pending_lines);
                 }
-                return PtyEphemeralCapture {
-                    output,
-                    exit_code: None,
-                    duration: start.elapsed(),
-                };
+                return PtyEphemeralCapture { output, exit_code: None, duration: start.elapsed() };
             }
 
             if let Some(observed_version) = observed_activity
@@ -586,18 +553,15 @@ impl ToolRegistry {
         settle_until_terminal: bool,
     ) -> Result<PtyEphemeralCapture> {
         if !settle_until_terminal {
-            return Ok(self
-                .wait_for_exec_yield(session_id, yield_duration, tool_name, true)
-                .await);
+            return Ok(self.wait_for_exec_yield(session_id, yield_duration, tool_name, true).await);
         }
 
         let start = Instant::now();
         let mut output = String::new();
 
         loop {
-            let capture = self
-                .wait_for_exec_yield(session_id, yield_duration, tool_name, true)
-                .await;
+            let capture =
+                self.wait_for_exec_yield(session_id, yield_duration, tool_name, true).await;
             output.push_str(&capture.output);
 
             if let Some(exit_code) = capture.exit_code {
@@ -608,11 +572,9 @@ impl ToolRegistry {
                 });
             }
 
-            self.exec_session_metadata(session_id)
-                .await
-                .with_context(|| {
-                    format!("exec session '{session_id}' disappeared during settlement")
-                })?;
+            self.exec_session_metadata(session_id).await.with_context(|| {
+                format!("exec session '{session_id}' disappeared during settlement")
+            })?;
         }
     }
 
@@ -622,10 +584,7 @@ impl ToolRegistry {
         drain_output: bool,
         peeked_bytes: &mut usize,
     ) -> Result<Option<String>> {
-        let Some(output) = self
-            .read_exec_session_output(session_id, drain_output)
-            .await?
-        else {
+        let Some(output) = self.read_exec_session_output(session_id, drain_output).await? else {
             return Ok(None);
         };
         if drain_output {

@@ -120,19 +120,13 @@ mod tests {
         };
 
         assert_eq!(provider_config.env.len(), 2);
-        assert_eq!(
-            provider_config.env.get("API_KEY"),
-            Some(&"secret_key".to_string())
-        );
+        assert_eq!(provider_config.env.get("API_KEY"), Some(&"secret_key".to_string()));
         assert_eq!(provider_config.env.get("DEBUG"), Some(&"true".to_string()));
     }
 
     #[tokio::test]
     async fn test_mcp_client_initialization() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let config = McpClientConfig { enabled: true, ..Default::default() };
 
         let mut client = McpClient::new(config);
 

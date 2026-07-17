@@ -20,12 +20,7 @@ pub async fn handle_validate_command(
     _check_config: bool,
     all: bool,
 ) -> Result<()> {
-    println!(
-        "{}",
-        style(" Validating environment and configuration...")
-            .cyan()
-            .bold()
-    );
+    println!("{}", style(" Validating environment and configuration...").cyan().bold());
 
     let mut all_checks = true;
 
@@ -47,11 +42,7 @@ pub async fn handle_validate_command(
         match check_filesystem_permissions(&config).await {
             Ok(_) => println!("  {} Filesystem permissions OK", style("[+]").green()),
             Err(e) => {
-                println!(
-                    "  {} Filesystem permissions issue: {}",
-                    style("[X]").red(),
-                    e
-                );
+                println!("  {} Filesystem permissions issue: {}", style("[X]").red(), e);
                 all_checks = false;
             }
         }
@@ -91,10 +82,7 @@ async fn check_filesystem_permissions(config: &AgentConfig) -> Result<()> {
 
     // Try to list files in the workspace
     registry
-        .execute_tool(
-            tools::LIST_FILES,
-            json!({"mode": "list", "path": ".", "per_page": 5}),
-        )
+        .execute_tool(tools::LIST_FILES, json!({"mode": "list", "path": ".", "per_page": 5}))
         .await?;
 
     // Try to create a test file

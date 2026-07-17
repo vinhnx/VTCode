@@ -86,10 +86,8 @@ pub(super) fn maybe_recover_after_post_tool_llm_failure(
         "Tool execution completed, but the model follow-up failed{transient_hint}. Output above is valid.",
     );
     renderer.line(MessageStyle::Info, &summary)?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Follow-up error category: {}", err_cat.user_label()),
-    )?;
+    renderer
+        .line(MessageStyle::Info, &format!("Follow-up error category: {}", err_cat.user_label()))?;
     if !err_cat.is_retryable() {
         renderer.line(
             MessageStyle::Info,
@@ -190,11 +188,7 @@ fn build_recovery_fallback(working_history: &[uni::Message], lead_in: &str) -> S
     } else {
         format!(
             "{lead_in}\n\nFiles already read this turn (do NOT re-read):\n{}",
-            files_read
-                .iter()
-                .map(|f| format!("  - {f}"))
-                .collect::<Vec<_>>()
-                .join("\n")
+            files_read.iter().map(|f| format!("  - {f}")).collect::<Vec<_>>().join("\n")
         )
     }
 }
@@ -694,9 +688,7 @@ mod tests {
             "budget-exhausted must not re-force the interview (would loop forever)"
         );
         assert!(
-            working_history
-                .iter()
-                .any(|m| m.role == uni::MessageRole::Assistant),
+            working_history.iter().any(|m| m.role == uni::MessageRole::Assistant),
             "budget-exhausted must finalize the plan with a fallback answer"
         );
     }

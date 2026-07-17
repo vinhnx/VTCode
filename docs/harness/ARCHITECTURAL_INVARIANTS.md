@@ -107,7 +107,7 @@ Exception: test code (`#[cfg(test)]` modules) may use `.unwrap()` when the test 
 
 ## 6. No Hardcoded Model IDs
 
-Model identifiers change frequently. All model references must come from `docs/models.json` or `vtcode-core/src/config/constants.rs`.
+Model identifiers change frequently. All model references must come from `docs/models.json` or `crates/codegen/vtcode-core/src/config/constants.rs`.
 
 ```rust
 // Correct
@@ -118,7 +118,7 @@ let model = "gpt-5-mini";
 ```
 
 **Violation**: string literal matching a known model ID pattern (e.g., `"gpt-"`, `"claude-"`, `"gemini-"`) in non-test code.
-**Remediation**: add the model to `docs/models.json` and reference it via constants. If it's a default, add it to `vtcode-core/src/config/constants.rs`.
+**Remediation**: add the model to `docs/models.json` and reference it via constants. If it's a default, add it to `crates/codegen/vtcode-core/src/config/constants.rs`.
 
 ---
 

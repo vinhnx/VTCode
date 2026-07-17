@@ -20,12 +20,7 @@ impl<'a> UpdateOperation<'a> {
         chunks: &'a [PatchChunk],
         permissions: Permissions,
     ) -> Self {
-        Self {
-            path,
-            new_path,
-            chunks,
-            permissions,
-        }
+        Self { path, new_path, chunks, permissions }
     }
 
     pub(crate) async fn apply(self, root: &Path) -> Result<OperationEffect, PatchError> {
@@ -37,15 +32,11 @@ impl<'a> UpdateOperation<'a> {
         let ensure_trailing_newline =
             had_trailing_newline || self.chunks.iter().any(|chunk| chunk.is_end_of_file());
         let Some(backup) = snapshot_for(&source_path).await? else {
-            return Err(PatchError::MissingFile {
-                path: self.path.to_string(),
-            });
+            return Err(PatchError::MissingFile { path: self.path.to_string() });
         };
 
-        let destination_path = self
-            .new_path
-            .map(|rel| root.join(rel))
-            .unwrap_or_else(|| source_path.clone());
+        let destination_path =
+            self.new_path.map(|rel| root.join(rel)).unwrap_or_else(|| source_path.clone());
 
         let mut writer = match AtomicWriter::create(&destination_path, Some(self.permissions)).await
         {
@@ -84,10 +75,7 @@ impl<'a> UpdateOperation<'a> {
                     self.path, dest_rel, chunk_count
                 )
             }
-            _ => format!(
-                "Updated file: {} ({} {chunk_label})",
-                self.path, chunk_count
-            ),
+            _ => format!("Updated file: {} ({} {chunk_label})", self.path, chunk_count),
         };
 
         Ok(OperationEffect::applied(

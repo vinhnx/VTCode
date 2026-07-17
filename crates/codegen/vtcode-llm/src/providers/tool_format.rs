@@ -76,7 +76,7 @@ pub trait ProviderToolFormatter: Send + Sync {
 }
 
 /// Anthropic formatter — extracts logic from
-/// `vtcode-llm/src/providers/anthropic/request_builder/tools.rs::build_tools`.
+/// `crates/codegen/vtcode-llm/src/providers/anthropic/request_builder/tools.rs::build_tools`.
 pub struct AnthropicFormatter;
 
 impl ProviderToolFormatter for AnthropicFormatter {
@@ -114,7 +114,7 @@ impl ProviderToolFormatter for AnthropicFormatter {
 }
 
 /// OpenAI Chat Completions formatter — extracts logic from
-/// `vtcode-llm/src/providers/common.rs::serialize_tools_openai_format`.
+/// `crates/codegen/vtcode-llm/src/providers/common.rs::serialize_tools_openai_format`.
 pub struct OpenAIChatFormatter;
 
 impl ProviderToolFormatter for OpenAIChatFormatter {
@@ -272,26 +272,11 @@ mod tests {
 
     #[test]
     fn provider_family_resolution_handles_known_ids() {
-        assert_eq!(
-            ProviderFamily::from_provider_id("openai"),
-            ProviderFamily::OpenAIChat
-        );
-        assert_eq!(
-            ProviderFamily::from_provider_id("anthropic"),
-            ProviderFamily::Anthropic
-        );
-        assert_eq!(
-            ProviderFamily::from_provider_id("gemini"),
-            ProviderFamily::Gemini
-        );
-        assert_eq!(
-            ProviderFamily::from_provider_id("deepseek"),
-            ProviderFamily::OpenAICompatible
-        );
-        assert_eq!(
-            ProviderFamily::from_provider_id("unknown"),
-            ProviderFamily::OpenAICompatible
-        );
+        assert_eq!(ProviderFamily::from_provider_id("openai"), ProviderFamily::OpenAIChat);
+        assert_eq!(ProviderFamily::from_provider_id("anthropic"), ProviderFamily::Anthropic);
+        assert_eq!(ProviderFamily::from_provider_id("gemini"), ProviderFamily::Gemini);
+        assert_eq!(ProviderFamily::from_provider_id("deepseek"), ProviderFamily::OpenAICompatible);
+        assert_eq!(ProviderFamily::from_provider_id("unknown"), ProviderFamily::OpenAICompatible);
     }
 
     #[test]
@@ -321,9 +306,7 @@ mod tests {
     fn openai_compatible_formatter_silently_drops_extensions() {
         // Build a tool with `defer_loading` and `strict` set; the OpenAI-compatible
         // formatter must drop both (the serializer has nowhere to put them).
-        let tool = sample_function_tool()
-            .with_strict(true)
-            .with_defer_loading(true);
+        let tool = sample_function_tool().with_strict(true).with_defer_loading(true);
 
         let f = formatter_for_provider("deepseek");
         let value = f
@@ -336,22 +319,17 @@ mod tests {
             serialized.get("defer_loading").is_none(),
             "openai-compatible formatter must drop defer_loading"
         );
-        assert!(
-            serialized.get("strict").is_none(),
-            "openai-compatible formatter must drop strict"
-        );
+        assert!(serialized.get("strict").is_none(), "openai-compatible formatter must drop strict");
     }
 
     #[test]
     fn anthropic_formatter_preserves_function_extension_fields() {
         // `strict` and `input_examples` are explicitly preserved by the Anthropic
         // path; this guards against a regression that drops them on the floor.
-        let tool = sample_function_tool()
-            .with_strict(true)
-            .with_input_examples(vec![json!({
-                "input": "Find Rust docs",
-                "tool_use": { "query": "rust" }
-            })]);
+        let tool = sample_function_tool().with_strict(true).with_input_examples(vec![json!({
+            "input": "Find Rust docs",
+            "tool_use": { "query": "rust" }
+        })]);
 
         let f = formatter_for_provider("anthropic");
         assert!(f.supports(&tool));

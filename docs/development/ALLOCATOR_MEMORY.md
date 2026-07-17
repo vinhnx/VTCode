@@ -88,6 +88,10 @@ container findings).
   `tikv_jemallocator` (with the `background_threads` feature). The throughput
   benchmark (`benches/allocator_throughput.rs`) uses the same selection so it
   compares the active allocator, not the system default.
+- **Rust 1.93.0**: global allocators written in Rust can now safely use
+  `thread_local!` and `std::thread::current` without re-entrancy concerns. This
+  removes a previous limitation that could cause issues with Rust-based allocators
+  using thread-local storage.
 - RSS sampling lives in `vtcode-commons::memory` (real values on macOS via
   `mach_task_basic_info`, on Linux via `/proc/self/statm`) — unlike
   `performance_profiler::get_memory_usage_mb`, which is Linux-only with a fake

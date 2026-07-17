@@ -18,10 +18,7 @@ pub struct ShellPolicyChecker {
 
 impl ShellPolicyChecker {
     pub fn new() -> Self {
-        Self {
-            cache: None,
-            commands_config: None,
-        }
+        Self { cache: None, commands_config: None }
     }
 }
 
@@ -110,17 +107,13 @@ impl ShellPolicyChecker {
 
             for (pattern, compiled) in &entry.deny_regexes {
                 if compiled.is_match(sub) {
-                    return Err(anyhow!(
-                        "Shell command denied by agent regex policy: {pattern}"
-                    ));
+                    return Err(anyhow!("Shell command denied by agent regex policy: {pattern}"));
                 }
             }
 
             for (pattern, compiled) in &entry.deny_globs {
                 if compiled.is_match(sub) {
-                    return Err(anyhow!(
-                        "Shell command denied by agent glob policy: {pattern}"
-                    ));
+                    return Err(anyhow!("Shell command denied by agent glob policy: {pattern}"));
                 }
             }
         }
@@ -268,11 +261,7 @@ mod tests {
         let mut checker = ShellPolicyChecker::new();
         let globs = vec!["curl*".to_string()];
         // `curl https://example.com` should be denied by `curl*` glob.
-        assert!(
-            checker
-                .check_command("curl https://example.com", "test", &[], &globs)
-                .is_err()
-        );
+        assert!(checker.check_command("curl https://example.com", "test", &[], &globs).is_err());
     }
 
     #[test]
@@ -289,11 +278,7 @@ mod tests {
     fn glob_does_not_match_unrelated_command() {
         let mut checker = ShellPolicyChecker::new();
         let globs = vec!["curl*".to_string()];
-        assert!(
-            checker
-                .check_command("echo hello", "test", &[], &globs)
-                .is_ok()
-        );
+        assert!(checker.check_command("echo hello", "test", &[], &globs).is_ok());
     }
 
     #[test]
@@ -307,10 +292,6 @@ mod tests {
                 .is_err()
         );
         // `echo hello && echo world` -- both sub-commands are safe.
-        assert!(
-            checker
-                .check_command("echo hello && echo world", "test", &regexes, &[])
-                .is_ok()
-        );
+        assert!(checker.check_command("echo hello && echo world", "test", &regexes, &[]).is_ok());
     }
 }

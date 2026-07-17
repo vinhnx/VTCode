@@ -17,8 +17,8 @@ VT Code implements a comprehensive, defense-in-depth command security system tha
 ### Configuration Sources (Precedence Order)
 
 1. **vtcode.toml** - User/project-level overrides (highest priority)
-2. **vtcode-config/src/core/commands.rs** - Code defaults (runtime)
-3. **vtcode-config/src/constants.rs** - System constants (backup)
+2. **crates/codegen/vtcode-config/src/core/commands.rs** - Code defaults (runtime)
+3. **crates/codegen/vtcode-config/src/constants.rs** - System constants (backup)
 
 ### Command Validation Layers
 
@@ -530,4 +530,4 @@ RUST_LOG=debug cargo run
 ## See Also
 
 -   [docs/development/EXECUTION_POLICY.md](./EXECUTION_POLICY.md) - Overall execution policy
--   [vtcode-config/src/core/commands.rs](../../vtcode-config/src/core/commands.rs) - Implementation
+-   [crates/codegen/vtcode-config/src/core/commands.rs](../../crates/codegen/vtcode-config/src/core/commands.rs) - Implementation

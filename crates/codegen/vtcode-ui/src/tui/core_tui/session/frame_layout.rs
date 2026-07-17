@@ -46,11 +46,7 @@ impl Session {
         let status_height = ui::INLINE_INPUT_STATUS_HEIGHT;
         let input_core_height = block_height.saturating_add(status_height);
 
-        SessionFrameMetrics {
-            header_lines,
-            header_height,
-            input_core_height,
-        }
+        SessionFrameMetrics { header_lines, header_height, input_core_height }
     }
 
     pub(crate) fn build_frame_layout(
@@ -59,9 +55,7 @@ impl Session {
         metrics: SessionFrameMetrics,
         extra_bottom_height: u16,
     ) -> SessionFrameLayout {
-        let input_height = metrics
-            .input_core_height
-            .saturating_add(extra_bottom_height);
+        let input_height = metrics.input_core_height.saturating_add(extra_bottom_height);
         self.apply_input_height(input_height);
 
         let [header_area, main_area, input_area] = viewport
@@ -112,15 +106,12 @@ impl Session {
             return;
         }
 
-        self.mouse_selection
-            .apply_highlight(frame.buffer_mut(), viewport);
+        self.mouse_selection.apply_highlight(frame.buffer_mut(), viewport);
 
         let auto_copy_requested =
             self.fullscreen.interaction.copy_on_select && self.mouse_selection.needs_copy();
         if self.mouse_selection.has_copy_request() || auto_copy_requested {
-            let text = self
-                .mouse_selection
-                .extract_text(frame.buffer_mut(), viewport);
+            let text = self.mouse_selection.extract_text(frame.buffer_mut(), viewport);
             if !text.is_empty() {
                 self.copy_text_to_clipboard(&text);
             }

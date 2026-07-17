@@ -15,10 +15,7 @@ impl ToolRegistry {
     pub(super) async fn rebuild_tool_assembly(&self) {
         let registrations = self.inventory.registrations_snapshot();
         let next = super::assembly::ToolAssembly::from_registrations(registrations);
-        *self
-            .tool_assembly
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = next;
+        *self.tool_assembly.write().unwrap_or_else(std::sync::PoisonError::into_inner) = next;
     }
 
     pub async fn public_tool_names(
@@ -26,10 +23,7 @@ impl ToolRegistry {
         surface: SessionSurface,
         capability_level: CapabilityLevel,
     ) -> Vec<String> {
-        let assembly = self
-            .tool_assembly
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut names = assembly.catalog().public_tool_names(
             SessionToolsConfig::full_public(
                 surface,
@@ -52,10 +46,7 @@ impl ToolRegistry {
     }
 
     pub async fn schema_entries(&self, config: SessionToolsConfig) -> Vec<ToolSchemaEntry> {
-        let assembly = self
-            .tool_assembly
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut entries = assembly.catalog().schema_entries(config);
         if !self.has_subagent_controller() {
             entries.retain(|entry| !is_subagent_tool(entry.name.as_str()));
@@ -67,10 +58,7 @@ impl ToolRegistry {
         &self,
         config: SessionToolsConfig,
     ) -> Vec<FunctionDeclaration> {
-        let assembly = self
-            .tool_assembly
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut declarations = assembly.catalog().function_declarations(config);
         if !self.has_subagent_controller() {
             declarations.retain(|entry| !is_subagent_tool(entry.name.as_str()));
@@ -79,10 +67,7 @@ impl ToolRegistry {
     }
 
     pub async fn model_tools(&self, config: SessionToolsConfig) -> Vec<ToolDefinition> {
-        let assembly = self
-            .tool_assembly
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut tools = assembly.catalog().model_tools(config);
         if !self.has_subagent_controller() {
             tools.retain(|entry| !is_subagent_tool(entry.function_name()));
@@ -95,10 +80,7 @@ impl ToolRegistry {
         name: &str,
         config: SessionToolsConfig,
     ) -> Option<ToolSchemaEntry> {
-        let assembly = self
-            .tool_assembly
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         if !self.has_subagent_controller() && is_subagent_tool(name) {
             return None;
         }
@@ -109,10 +91,7 @@ impl ToolRegistry {
         &self,
         name: &str,
     ) -> Result<String, ToolCallError> {
-        let assembly = self
-            .tool_assembly
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         assembly
             .resolve_public_tool(name)
             .map(|resolution| resolution.registration_name().to_string())
@@ -122,10 +101,7 @@ impl ToolRegistry {
         &self,
         name: &str,
     ) -> Result<super::assembly::PublicToolResolution, ToolCallError> {
-        let assembly = self
-            .tool_assembly
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let assembly = self.tool_assembly.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         assembly.resolve_public_tool(name)
     }
 

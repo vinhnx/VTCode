@@ -35,10 +35,7 @@ fn compact_loop_text(value: &str, max_chars: usize) -> String {
 
 fn normalize_shell_command_text(value: &str, max_chars: usize) -> String {
     compact_loop_text(
-        &value
-            .chars()
-            .filter(|ch| !matches!(ch, '\'' | '"'))
-            .collect::<String>(),
+        &value.chars().filter(|ch| !matches!(ch, '\'' | '"')).collect::<String>(),
         max_chars,
     )
 }
@@ -238,13 +235,15 @@ fn stable_family_label(name: &str) -> Cow<'_, str> {
 pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> Option<String> {
     let label = stable_family_label(canonical_tool_name);
     match canonical_tool_name {
-        tool_names::READ_FILE => read_file_path_arg(args).map(|path| {
-            format!(
-                "{label}::{}{}",
-                compact_loop_key_part(path, 120),
-                read_file_slice_suffix(args),
-            )
-        }),
+        tool_names::READ_FILE => {
+            read_file_path_arg(args).map(|path| {
+                format!(
+                    "{label}::{}{}",
+                    compact_loop_key_part(path, 120),
+                    read_file_slice_suffix(args),
+                )
+            })
+        }
         tool_names::UNIFIED_FILE => {
             let action = tool_intent::file_operation_action(args).unwrap_or("read");
             if !action.eq_ignore_ascii_case("read") {
@@ -302,10 +301,7 @@ mod tests {
     #[test]
     fn read_file_offset_value_accepts_alias_keys() {
         assert_eq!(read_file_offset_value(&json!({"offset": 7})), Some(7));
-        assert_eq!(
-            read_file_offset_value(&json!({"offset_lines": "8"})),
-            Some(8)
-        );
+        assert_eq!(read_file_offset_value(&json!({"offset_lines": "8"})), Some(8));
         assert_eq!(read_file_offset_value(&json!({"offset_bytes": 9})), Some(9));
     }
 
@@ -328,10 +324,7 @@ mod tests {
     #[test]
     fn read_file_limit_value_accepts_alias_keys() {
         assert_eq!(read_file_limit_value(&json!({"limit": 10})), Some(10));
-        assert_eq!(
-            read_file_limit_value(&json!({"page_size_lines": "20"})),
-            Some(20)
-        );
+        assert_eq!(read_file_limit_value(&json!({"page_size_lines": "20"})), Some(20));
         assert_eq!(read_file_limit_value(&json!({"max_lines": 5})), Some(5));
         assert_eq!(read_file_limit_value(&json!({"chunk_lines": 3})), Some(3));
         assert_eq!(read_file_limit_value(&json!({"path": "src/main.rs"})), None);
@@ -429,10 +422,7 @@ mod tests {
         );
 
         // Sanity: the bare read keeps the legacy key (no slice suffix).
-        assert_eq!(
-            base.as_deref(),
-            Some("unified_file::read::src/cli/update.rs")
-        );
+        assert_eq!(base.as_deref(), Some("unified_file::read::src/cli/update.rs"));
         assert!(off81.unwrap().ends_with("::off=81::lim=229"));
         assert!(off80.unwrap().ends_with("::off=80::lim=200"));
         assert!(raw.unwrap().ends_with("::off=80::lim=200::raw=true"));
@@ -460,10 +450,7 @@ mod tests {
                 "limit": 100
             }),
         );
-        assert_eq!(
-            first, second,
-            "identical slice retries must share a family key"
-        );
+        assert_eq!(first, second, "identical slice retries must share a family key");
     }
 
     #[test]

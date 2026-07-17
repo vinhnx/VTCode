@@ -142,13 +142,9 @@ pub(crate) fn validate_tool_args_security(
         let exec_failures =
             vtcode_core::tools::command_args::command_session_missing_required_args(args);
         if !exec_failures.is_empty() {
-            failures
-                .get_or_insert_with(|| Vec::with_capacity(exec_failures.len()))
-                .extend(
-                    exec_failures
-                        .into_iter()
-                        .map(|key| format!("Missing required argument: {key}")),
-                );
+            failures.get_or_insert_with(|| Vec::with_capacity(exec_failures.len())).extend(
+                exec_failures.into_iter().map(|key| format!("Missing required argument: {key}")),
+            );
         }
     }
 
@@ -181,9 +177,7 @@ pub(crate) fn validate_tool_args_security(
     if (name == tool_names::RUN_PTY_CMD
         || (name == tool_names::UNIFIED_EXEC
             && vtcode_core::tools::command_args::command_session_requires_command_safety(args)))
-        && let Some(cmd) = vtcode_core::tools::command_args::command_text(args)
-            .ok()
-            .flatten()
+        && let Some(cmd) = vtcode_core::tools::command_args::command_text(args).ok().flatten()
         && let Err(e) = commands::validate_command_safety(&cmd)
     {
         failures
@@ -350,10 +344,7 @@ pub(crate) async fn handle_turn_balancer(
     // NL2Repo-Bench: Edit-Test Validation Loop (Anti-Blind-Editing)
     if repeated_tool_attempts.consecutive_mutations >= BLIND_EDITING_THRESHOLD {
         ctx.renderer
-            .line(
-                MessageStyle::Warning,
-                "[!] Anti-Blind-Editing: Pause to run verification/tests.",
-            )
+            .line(MessageStyle::Warning, "[!] Anti-Blind-Editing: Pause to run verification/tests.")
             .unwrap_or(());
         ctx.working_history.push(uni::Message::system(
             "CRITICAL: Multiple edits were made without verification. Stop editing and run `exec_command` to compile or test before proceeding."
@@ -369,9 +360,8 @@ pub(crate) async fn handle_turn_balancer(
     if repeated_tool_attempts.consecutive_navigations >= NAVIGATION_LOOP_THRESHOLD
         && repeated_tool_attempts.repeated_navigation_count() >= 3
     {
-        repeated_tool_attempts.navigation_loop_recoveries = repeated_tool_attempts
-            .navigation_loop_recoveries
-            .saturating_add(1);
+        repeated_tool_attempts.navigation_loop_recoveries =
+            repeated_tool_attempts.navigation_loop_recoveries.saturating_add(1);
         let recurrence = repeated_tool_attempts.navigation_loop_recoveries;
         let recovery_reason = format!(
             "Navigation loop detected after {} consecutive read/search steps (recurrence #{recurrence}). Tools are disabled on the next pass; summarize findings and propose the next concrete action.",
@@ -415,8 +405,7 @@ pub(crate) async fn handle_turn_balancer(
                 "[!] Turn balancer: repeated low-signal navigation detected; scheduling an early recovery pass.",
             )
             .unwrap_or(());
-        ctx.working_history
-            .push(uni::Message::system(recovery_reason));
+        ctx.working_history.push(uni::Message::system(recovery_reason));
         {
             let mut ledger = ctx.decision_ledger.write().await;
             ledger.record_decision(
@@ -458,8 +447,7 @@ pub(crate) async fn handle_turn_balancer(
                 "[!] Turn balancer: repeated low-signal calls detected; scheduling a final recovery pass.",
             )
             .unwrap_or(());
-        ctx.working_history
-            .push(uni::Message::system(recovery_reason));
+        ctx.working_history.push(uni::Message::system(recovery_reason));
         // Record in ledger
         {
             let mut ledger = ctx.decision_ledger.write().await;
@@ -508,7 +496,7 @@ mod tests {
     fn readonly_signature_handles_file_and_code_search_signatures() {
         assert!(is_readonly_signature(r#"read file:{"path":"README.md"}"#));
         assert!(is_readonly_signature(
-            r#"code_search:{"query":"LLMStreamEvent","path":"vtcode-core/src/llm/providers/anthropic/api.rs"}"#
+            r#"code_search:{"query":"LLMStreamEvent","path":"crates/codegen/vtcode-core/src/llm/providers/anthropic/api.rs"}"#
         ));
     }
 
@@ -521,16 +509,12 @@ mod tests {
 
     #[test]
     fn readonly_signature_fast_path_accepts_ro_tag() {
-        assert!(is_readonly_signature(
-            "code_search:ro:{\"query\":\"Widget\"}"
-        ));
+        assert!(is_readonly_signature("code_search:ro:{\"query\":\"Widget\"}"));
     }
 
     #[test]
     fn readonly_signature_fast_path_rejects_rw_tag() {
-        assert!(!is_readonly_signature(
-            "file_operation:rw:len42-fnv1234abcd"
-        ));
+        assert!(!is_readonly_signature("file_operation:rw:len42-fnv1234abcd"));
     }
 
     #[test]
@@ -566,10 +550,7 @@ mod tests {
         )
         .expect("missing command should fail");
 
-        assert_eq!(
-            failures,
-            vec!["Missing required argument: command".to_string()]
-        );
+        assert_eq!(failures, vec!["Missing required argument: command".to_string()]);
     }
 
     #[test]
@@ -637,12 +618,11 @@ mod tests {
         assert!(matches!(balancer_outcome, TurnHandlerOutcome::Continue));
         assert_eq!(tracker.consecutive_navigations, 0);
         assert!(ctx.is_recovery_active());
-        assert!(ctx.working_history.iter().any(|message| {
-            message
-                .content
-                .as_text()
-                .contains("Navigation loop detected")
-        }));
+        assert!(
+            ctx.working_history
+                .iter()
+                .any(|message| { message.content.as_text().contains("Navigation loop detected") })
+        );
         assert!(ctx.consume_recovery_pass());
 
         let recovery_outcome = ctx
@@ -656,10 +636,7 @@ mod tests {
             .await
             .expect("recovery response should be handled");
 
-        assert!(matches!(
-            recovery_outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(recovery_outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(!ctx.is_recovery_active());
     }
 
@@ -669,11 +646,7 @@ mod tests {
         let mut backing = TestTurnProcessingBacking::new(8).await;
         backing.set_loop_limit(tool_names::CODE_SEARCH, 2);
         let seeded_args = json!({"query":"Result","path":"src"});
-        assert!(
-            backing
-                .record_tool_call(tool_names::CODE_SEARCH, &seeded_args)
-                .is_none()
-        );
+        assert!(backing.record_tool_call(tool_names::CODE_SEARCH, &seeded_args).is_none());
         let _ = backing.record_tool_call(tool_names::CODE_SEARCH, &seeded_args);
         let warning = backing.record_tool_call(tool_names::CODE_SEARCH, &seeded_args);
         assert!(warning.is_some());
@@ -708,10 +681,7 @@ mod tests {
             .await
             .expect("recovery response should be handled");
 
-        assert!(matches!(
-            recovery_outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(recovery_outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(!ctx.is_recovery_active());
         assert!(backing.is_hard_limit_exceeded(tool_names::CODE_SEARCH));
     }

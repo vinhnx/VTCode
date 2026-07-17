@@ -170,10 +170,7 @@ pub struct Response {
 impl Response {
     /// Creates a new response with the given ID and model.
     pub fn new(id: impl Into<ResponseId>, model: impl Into<String>) -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
 
         Self {
             id: id.into(),
@@ -209,36 +206,24 @@ impl Response {
     /// Marks the response as completed.
     pub fn complete(&mut self) {
         self.status = ResponseStatus::Completed;
-        self.completed_at = Some(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
-        );
+        self.completed_at =
+            Some(SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
     }
 
     /// Marks the response as failed with the given error.
     pub fn fail(&mut self, error: OpenResponseError) {
         self.status = ResponseStatus::Failed;
         self.error = Some(error.into());
-        self.completed_at = Some(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
-        );
+        self.completed_at =
+            Some(SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
     }
 
     /// Marks the response as incomplete with the given reason.
     pub fn incomplete(&mut self, reason: IncompleteReason) {
         self.status = ResponseStatus::Incomplete;
         self.incomplete_details = Some(IncompleteDetails { reason });
-        self.completed_at = Some(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
-        );
+        self.completed_at =
+            Some(SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
     }
 
     /// Sets the usage statistics.
@@ -265,10 +250,8 @@ pub fn generate_response_id() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
+    let timestamp =
+        SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let count = COUNTER.fetch_add(1, Ordering::Relaxed);
 
     format!("resp_{timestamp:x}_{count:04x}")

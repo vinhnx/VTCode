@@ -102,12 +102,7 @@ pub(super) fn visible_delegated_local_agents(
 ) -> Vec<SubagentStatusEntry> {
     let mut entries = entries
         .into_iter()
-        .filter(|entry| {
-            !matches!(
-                entry.status,
-                SubagentStatus::Completed | SubagentStatus::Closed
-            )
-        })
+        .filter(|entry| !matches!(entry.status, SubagentStatus::Completed | SubagentStatus::Closed))
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
     entries
@@ -296,11 +291,7 @@ fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
             format!("thinking: {}", summarize_preview_text(&reasoning.text)?)
         }
         ThreadItemDetails::ToolInvocation(tool) => {
-            format!(
-                "tool {}: {}",
-                tool.tool_name,
-                tool_status_label(tool.status.clone())
-            )
+            format!("tool {}: {}", tool.tool_name, tool_status_label(tool.status.clone()))
         }
         ThreadItemDetails::ToolOutput(output) => summarize_preview_text(&output.output)
             .map(|text| format!("tool output: {text}"))
@@ -365,10 +356,7 @@ fn truncate_preview_text(text: String, max_chars: usize) -> String {
         return text;
     }
 
-    let mut truncated = text
-        .chars()
-        .take(max_chars.saturating_sub(1))
-        .collect::<String>();
+    let mut truncated = text.chars().take(max_chars.saturating_sub(1)).collect::<String>();
     truncated.push_str("...");
     truncated
 }

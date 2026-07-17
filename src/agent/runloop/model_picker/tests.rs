@@ -17,9 +17,7 @@ use self::options::{find_option_index, option_indexes_for_provider};
 fn has_model(options: &[ModelOption], model: ModelId) -> bool {
     let id = model.as_str();
     let provider = model.provider();
-    options
-        .iter()
-        .any(|option| option.id == id && option.provider == provider)
+    options.iter().any(|option| option.id == id && option.provider == provider)
 }
 
 #[test]
@@ -30,14 +28,8 @@ fn model_picker_lists_new_anthropic_models() {
     assert!(has_model(options, ModelId::ClaudeHaiku45));
 
     // OpenRouter variants
-    assert!(has_model(
-        options,
-        ModelId::OpenRouterAnthropicClaudeSonnet46
-    ));
-    assert!(has_model(
-        options,
-        ModelId::OpenRouterAnthropicClaudeSonnet46
-    ));
+    assert!(has_model(options, ModelId::OpenRouterAnthropicClaudeSonnet46));
+    assert!(has_model(options, ModelId::OpenRouterAnthropicClaudeSonnet46));
 }
 
 #[test]
@@ -76,10 +68,7 @@ fn subagent_model_shortcuts_include_expected_aliases() {
         .map(|(shortcut, _)| *shortcut)
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        shortcuts,
-        vec!["inherit", "small", "haiku", "sonnet", "opus"]
-    );
+    assert_eq!(shortcuts, vec!["inherit", "small", "haiku", "sonnet", "opus"]);
 }
 
 #[test]
@@ -123,22 +112,11 @@ fn subagent_reasoning_levels_only_enable_xhigh_when_supported() {
 
 #[test]
 fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
-    let shortcut = SubagentModelTarget::Shortcut {
-        model: "Haiku".to_string(),
-    };
-    assert_eq!(
-        normalized_subagent_reasoning(&shortcut, Some("high")),
-        Some("high".to_string())
-    );
-    assert_eq!(
-        normalized_subagent_reasoning(&shortcut, Some("xhigh")),
-        None
-    );
+    let shortcut = SubagentModelTarget::Shortcut { model: "Haiku".to_string() };
+    assert_eq!(normalized_subagent_reasoning(&shortcut, Some("high")), Some("high".to_string()));
+    assert_eq!(normalized_subagent_reasoning(&shortcut, Some("xhigh")), None);
     assert_eq!(normalized_subagent_reasoning(&shortcut, Some("max")), None);
-    assert_eq!(
-        normalized_subagent_reasoning(&shortcut, Some("bogus")),
-        None
-    );
+    assert_eq!(normalized_subagent_reasoning(&shortcut, Some("bogus")), None);
 
     let concrete = SubagentModelTarget::Concrete(selection::selection_from_dynamic(
         Provider::OpenAI,
@@ -147,10 +125,7 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
         None,
         None,
     ));
-    assert_eq!(
-        normalized_subagent_reasoning(&concrete, Some("xhigh")),
-        Some("xhigh".to_string())
-    );
+    assert_eq!(normalized_subagent_reasoning(&concrete, Some("xhigh")), Some("xhigh".to_string()));
 
     let sonnet = SubagentModelTarget::Concrete(selection::selection_from_dynamic(
         Provider::Anthropic,
@@ -159,10 +134,7 @@ fn subagent_reasoning_normalization_drops_invalid_or_unsupported_values() {
         None,
         None,
     ));
-    assert_eq!(
-        normalized_subagent_reasoning(&sonnet, Some("max")),
-        Some("max".to_string())
-    );
+    assert_eq!(normalized_subagent_reasoning(&sonnet, Some("max")), Some("max".to_string()));
 }
 
 #[test]
@@ -172,9 +144,7 @@ fn preferred_subagent_model_selection_canonicalizes_shortcuts() {
 
     assert_eq!(
         selection,
-        Some(InlineListSelection::ConfigAction(
-            "subagent-model:shortcut:haiku".to_string()
-        ))
+        Some(InlineListSelection::ConfigAction("subagent-model:shortcut:haiku".to_string()))
     );
 }
 
@@ -338,10 +308,7 @@ fn session_with_channels() -> (InlineHandle, InlineSession) {
     let (command_tx, _command_rx) = mpsc::unbounded_channel();
     let (_event_tx, event_rx) = mpsc::unbounded_channel();
     let handle = InlineHandle::new_for_tests(command_tx);
-    let session = InlineSession {
-        handle: handle.clone(),
-        events: event_rx,
-    };
+    let session = InlineSession { handle: handle.clone(), events: event_rx };
     (handle, session)
 }
 
@@ -355,10 +322,7 @@ fn preferred_model_selection_matches_current_static_model() {
         panic!("expected static model selection, got {selection:?}");
     };
 
-    let option = picker
-        .options
-        .get(index)
-        .expect("selected index should be valid");
+    let option = picker.options.get(index).expect("selected index should be valid");
     assert_eq!(option.provider, Provider::Anthropic);
     assert_eq!(option.id, model_id);
 }
@@ -370,9 +334,7 @@ fn static_picker_indexes_resolve_provider_models() {
 
     let gpt54_index = find_option_index(Provider::OpenAI, "GPT-5.4")
         .expect("gpt-5.4 should be indexed case-insensitively");
-    let option = MODEL_OPTIONS
-        .get(gpt54_index)
-        .expect("indexed option should exist");
+    let option = MODEL_OPTIONS.get(gpt54_index).expect("indexed option should exist");
     assert_eq!(option.id, "gpt-5.4");
     assert_eq!(option.provider, Provider::OpenAI);
 }
@@ -467,9 +429,7 @@ fn selection_omits_openai_service_tier_support_for_gpt_oss() {
 fn openai_codex_reasoning_helpers_match_supported_variants() {
     assert!(!selection::supports_gpt5_none_reasoning("gpt"));
     assert!(selection::supports_gpt5_none_reasoning("gpt-5.5"));
-    assert!(selection::supports_gpt5_none_reasoning(
-        "gpt-5.5-2026-04-23"
-    ));
+    assert!(selection::supports_gpt5_none_reasoning("gpt-5.5-2026-04-23"));
     assert!(selection::supports_gpt5_none_reasoning("gpt-5.2-codex"));
     assert!(selection::supports_gpt5_none_reasoning("gpt-5.3-codex"));
     assert!(!selection::supports_gpt5_none_reasoning("gpt-5.1-codex"));

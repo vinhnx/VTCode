@@ -27,9 +27,7 @@ impl PathSuggestionKind {
 }
 
 fn normalize_path_for_suggestion(path: &str) -> String {
-    path.replace('\\', "/")
-        .trim_matches('/')
-        .to_ascii_lowercase()
+    path.replace('\\', "/").trim_matches('/').to_ascii_lowercase()
 }
 
 fn suggestion_basename(path: &str) -> &str {
@@ -88,8 +86,7 @@ impl FileOpsTool {
     }
 
     pub(super) async fn normalize_and_validate_user_path(&self, path: &str) -> Result<PathBuf> {
-        self.normalize_and_validate_candidate(Path::new(path), path)
-            .await
+        self.normalize_and_validate_candidate(Path::new(path), path).await
     }
 
     pub(super) async fn normalize_and_validate_candidate(

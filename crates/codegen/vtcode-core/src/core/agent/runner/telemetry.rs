@@ -85,12 +85,7 @@ impl AgentRunner {
     ) {
         let warning_message = warning_message.into();
         if !self.quiet {
-            println!(
-                "{} {} {}",
-                agent_prefix,
-                style("(WARN)").red().bold(),
-                warning_message
-            );
+            println!("{} {} {}", agent_prefix, style("(WARN)").red().bold(), warning_message);
         }
         event_recorder.warning(&warning_message);
         session_state.warnings.push(warning_message);
@@ -124,10 +119,7 @@ impl AgentRunner {
         }
         failure_ctx.event_recorder.warning(&failure_text);
         // Move failure_text into warnings first, then reference for conversation
-        failure_ctx
-            .session_state
-            .warnings
-            .push(failure_text.clone());
+        failure_ctx.session_state.warnings.push(failure_text.clone());
 
         if let Some(call_id) = tool_response_id {
             failure_ctx.session_state.push_tool_error(
@@ -140,10 +132,7 @@ impl AgentRunner {
             // Fallback for when we don't have a call_id (should be rare in Codex-style)
             failure_ctx.session_state.conversation.push(Content {
                 role: ROLE_USER.into(),
-                parts: vec![Part::Text {
-                    text: failure_text,
-                    thought_signature: None,
-                }],
+                parts: vec![Part::Text { text: failure_text, thought_signature: None }],
             });
         }
     }

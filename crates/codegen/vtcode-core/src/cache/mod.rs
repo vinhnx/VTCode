@@ -117,10 +117,7 @@ where
                 entries: FxHashMap::with_capacity_and_hasher(max_size, Default::default()),
                 max_size,
                 ttl,
-                stats: CacheStats {
-                    max_size,
-                    ..Default::default()
-                },
+                stats: CacheStats { max_size, ..Default::default() },
                 eviction_policy,
             }),
         }
@@ -161,11 +158,8 @@ where
             LookupState::Expired => {
                 if let Ok(mut inner) = self.inner.try_write() {
                     let ttl = inner.ttl;
-                    let should_remove = inner
-                        .entries
-                        .get(key)
-                        .map(|entry| entry.is_expired(ttl))
-                        .unwrap_or(false);
+                    let should_remove =
+                        inner.entries.get(key).map(|entry| entry.is_expired(ttl)).unwrap_or(false);
                     if should_remove {
                         Self::remove_inner(&mut inner, key);
                     }
@@ -256,29 +250,20 @@ where
 
         let keys_to_remove: Vec<K> = match inner.eviction_policy {
             EvictionPolicy::Lru => {
-                let mut entries: Vec<_> = inner
-                    .entries
-                    .iter()
-                    .map(|(k, e)| (k.clone(), e.last_accessed))
-                    .collect();
+                let mut entries: Vec<_> =
+                    inner.entries.iter().map(|(k, e)| (k.clone(), e.last_accessed)).collect();
                 entries.sort_by_key(|(_, ts)| *ts);
                 entries.into_iter().take(count).map(|(k, _)| k).collect()
             }
             EvictionPolicy::Lfu => {
-                let mut entries: Vec<_> = inner
-                    .entries
-                    .iter()
-                    .map(|(k, e)| (k.clone(), e.access_count))
-                    .collect();
+                let mut entries: Vec<_> =
+                    inner.entries.iter().map(|(k, e)| (k.clone(), e.access_count)).collect();
                 entries.sort_by_key(|(_, c)| *c);
                 entries.into_iter().take(count).map(|(k, _)| k).collect()
             }
             EvictionPolicy::Fifo | EvictionPolicy::TtlOnly => {
-                let mut entries: Vec<_> = inner
-                    .entries
-                    .iter()
-                    .map(|(k, e)| (k.clone(), e.created_at))
-                    .collect();
+                let mut entries: Vec<_> =
+                    inner.entries.iter().map(|(k, e)| (k.clone(), e.created_at)).collect();
                 entries.sort_by_key(|(_, ts)| *ts);
                 entries.into_iter().take(count).map(|(k, _)| k).collect()
             }
@@ -327,10 +312,7 @@ where
 
     /// Get cache statistics (returns owned clone)
     pub fn stats(&self) -> CacheStats {
-        self.inner
-            .read()
-            .map(|inner| inner.stats.clone())
-            .unwrap_or_default()
+        self.inner.read().map(|inner| inner.stats.clone()).unwrap_or_default()
     }
 
     /// Clear all entries
@@ -352,10 +334,7 @@ where
 
     /// Get current size
     pub fn len(&self) -> usize {
-        self.inner
-            .read()
-            .map(|inner| inner.entries.len())
-            .unwrap_or(0)
+        self.inner.read().map(|inner| inner.entries.len()).unwrap_or(0)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -419,12 +398,8 @@ where
             return 0;
         };
 
-        let keys_to_remove: Vec<K> = inner
-            .entries
-            .keys()
-            .filter(|key| predicate(key))
-            .cloned()
-            .collect();
+        let keys_to_remove: Vec<K> =
+            inner.entries.keys().filter(|key| predicate(key)).cloned().collect();
 
         let removed_count = keys_to_remove.len();
         for key in keys_to_remove {
@@ -435,10 +410,7 @@ where
 
     /// Get total memory used by cache in bytes
     pub fn total_memory_bytes(&self) -> u64 {
-        self.inner
-            .read()
-            .map(|inner| inner.stats.total_memory_bytes)
-            .unwrap_or(0)
+        self.inner.read().map(|inner| inner.stats.total_memory_bytes).unwrap_or(0)
     }
 
     /// Estimate entry cost in bytes (for memory-aware decisions)
@@ -529,10 +501,8 @@ where
             .iter()
             .map(|(k, entry)| {
                 // Score = access_count * recency_factor
-                let age_secs = now
-                    .duration_since(entry.last_accessed)
-                    .unwrap_or_default()
-                    .as_secs();
+                let age_secs =
+                    now.duration_since(entry.last_accessed).unwrap_or_default().as_secs();
 
                 // Recency factor: recent entries get higher score
                 let recency_factor = std::cmp::max(1_u64, 3600 / (age_secs + 1));
@@ -561,11 +531,7 @@ pub fn estimate_json_size(value: &serde_json::Value) -> u64 {
             .fold(0u64, |acc, size| acc.saturating_add(size)),
         serde_json::Value::Object(obj) => obj
             .iter()
-            .map(|(k, v)| {
-                (k.len() as u64)
-                    .saturating_add(estimate_json_size(v))
-                    .saturating_add(3)
-            }) // +3 for quotes and colon
+            .map(|(k, v)| (k.len() as u64).saturating_add(estimate_json_size(v)).saturating_add(3)) // +3 for quotes and colon
             .fold(0u64, |acc, size| acc.saturating_add(size)),
     }
 }

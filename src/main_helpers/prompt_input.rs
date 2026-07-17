@@ -38,9 +38,7 @@ fn collect_piped_stdin() -> Result<Option<String>> {
     }
 
     let mut buffer = String::new();
-    stdin
-        .read_to_string(&mut buffer)
-        .context("Failed to read prompt from stdin")?;
+    stdin.read_to_string(&mut buffer).context("Failed to read prompt from stdin")?;
 
     if buffer.trim().is_empty() {
         Ok(None)

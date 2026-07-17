@@ -174,24 +174,14 @@ mod tests {
 
     #[test]
     fn zero_ceiling_disables_limit() {
-        let config = TimeoutsConfig {
-            default_ceiling_seconds: 0,
-            ..Default::default()
-        };
+        let config = TimeoutsConfig { default_ceiling_seconds: 0, ..Default::default() };
         assert!(config.validate().is_ok());
-        assert!(
-            config
-                .ceiling_duration(config.default_ceiling_seconds)
-                .is_none()
-        );
+        assert!(config.ceiling_duration(config.default_ceiling_seconds).is_none());
     }
 
     #[test]
     fn warning_threshold_bounds_are_enforced() {
-        let config_low = TimeoutsConfig {
-            warning_threshold_percent: 0,
-            ..Default::default()
-        };
+        let config_low = TimeoutsConfig { warning_threshold_percent: 0, ..Default::default() };
         assert!(config_low.validate().is_err());
 
         let config_high = TimeoutsConfig {
@@ -206,10 +196,7 @@ mod tests {
         assert_eq!(resolve_timeout(None), DEFAULT_TIMEOUT_SECS);
         assert_eq!(resolve_timeout(Some(0)), DEFAULT_TIMEOUT_SECS);
         assert_eq!(resolve_timeout(Some(1)), MIN_TIMEOUT_SECS);
-        assert_eq!(
-            resolve_timeout(Some(MAX_TIMEOUT_SECS + 1)),
-            MAX_TIMEOUT_SECS
-        );
+        assert_eq!(resolve_timeout(Some(MAX_TIMEOUT_SECS + 1)), MAX_TIMEOUT_SECS);
         assert_eq!(resolve_timeout(Some(120)), 120);
     }
 }

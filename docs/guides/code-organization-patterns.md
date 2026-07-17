@@ -66,8 +66,8 @@ type system and in field comments, because the compiler cannot check them:
   small safe wrapper with a single `// SAFETY:` note, so the audit surface is
   one place rather than scattered call sites.
 
-`vtcode-skills/src/native_plugin.rs` (`NativePlugin`, `get_plugin_symbol`) and
-`vtcode-bash-runner/src/process.rs` (`ProcessHandle`, `PtyHandles`) are the
+`crates/codegen/vtcode-skills/src/native_plugin.rs` (`NativePlugin`, `get_plugin_symbol`) and
+`crates/codegen/vtcode-bash-runner/src/process.rs` (`ProcessHandle`, `PtyHandles`) are the
 reference implementations of these rules.
 
 ## Background Task Lifecycle
@@ -119,5 +119,5 @@ cleans up its background processing task:
 - Awaits task completion during shutdown
 - Aborts lingering task on drop
 
-See: `vtcode-core/src/tools/exec_session.rs`.
+See: `crates/codegen/vtcode-core/src/tools/exec_session.rs`.
 

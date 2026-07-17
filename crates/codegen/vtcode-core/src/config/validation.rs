@@ -96,9 +96,9 @@ fn catalog_model_context_window(provider: &str, model: &str) -> Result<Option<us
 /// Resolve the effective context window size for a model.
 pub fn effective_model_context_window(provider: &str, model: &str) -> Result<Option<usize>> {
     if provider.eq_ignore_ascii_case("anthropic") {
-        return Ok(Some(
-            crate::llm::providers::anthropic::capabilities::effective_context_size(model),
-        ));
+        return Ok(Some(crate::llm::providers::anthropic::capabilities::effective_context_size(
+            model,
+        )));
     }
 
     catalog_model_context_window(provider, model)
@@ -109,11 +109,7 @@ pub fn validate_config(config: &VTCodeConfig, workspace: &Path) -> Result<Valida
     let mut result = ValidationResult::new();
 
     // Validate agent model exists
-    validate_agent_model(
-        &config.agent.provider,
-        &config.agent.default_model,
-        &mut result,
-    );
+    validate_agent_model(&config.agent.provider, &config.agent.default_model, &mut result);
 
     // Validate context window if specified
     validate_context_window(config, &mut result);
@@ -240,10 +236,7 @@ mod tests {
     #[test]
     fn validates_known_model() {
         let result = validate_model_exists("google", "gemini-3-flash-preview");
-        assert!(
-            result.is_ok(),
-            "Should validate gemini-3-flash-preview for google provider"
-        );
+        assert!(result.is_ok(), "Should validate gemini-3-flash-preview for google provider");
     }
 
     #[test]
@@ -282,10 +275,7 @@ mod tests {
         assert!(result.is_ok(), "Should get context window");
 
         let context = result.unwrap();
-        assert!(
-            context.is_some() && context.unwrap() > 0,
-            "Should have positive context window"
-        );
+        assert!(context.is_some() && context.unwrap() > 0, "Should have positive context window");
     }
 
     #[test]

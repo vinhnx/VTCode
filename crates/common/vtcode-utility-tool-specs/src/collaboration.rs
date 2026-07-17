@@ -255,10 +255,7 @@ mod tests {
 
         assert_eq!(spawn_items, send_items);
         assert_eq!(spawn_items["additionalProperties"], json!(false));
-        assert_eq!(
-            spawn_items["properties"]["image_url"]["type"],
-            json!("string")
-        );
+        assert_eq!(spawn_items["properties"]["image_url"]["type"], json!("string"));
     }
     #[test]
     fn collaboration_schemas_expose_updated_agent_description_text() {
@@ -271,10 +268,7 @@ mod tests {
             spawn["properties"]["message"]["description"],
             json!("Task prompt for the child agent.")
         );
-        assert_eq!(
-            send["properties"]["id"]["description"],
-            json!("Child agent id to message.")
-        );
+        assert_eq!(send["properties"]["id"]["description"], json!("Child agent id to message."));
         assert_eq!(
             spawn["properties"]["background"]["description"],
             json!("Run agent in background. Returns immediately.")

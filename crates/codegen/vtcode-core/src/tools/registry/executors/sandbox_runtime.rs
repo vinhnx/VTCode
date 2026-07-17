@@ -134,10 +134,9 @@ pub(super) fn sandbox_policy_from_runtime_config(
                 sandbox_config.external.sandbox_type
             ),
         }),
-        RuntimeSandboxPolicy::WorkspaceWrite => Ok(workspace_write_policy_from_runtime_config(
-            sandbox_config,
-            workspace_root,
-        )),
+        RuntimeSandboxPolicy::WorkspaceWrite => {
+            Ok(workspace_write_policy_from_runtime_config(sandbox_config, workspace_root))
+        }
     }
 }
 
@@ -173,11 +172,7 @@ fn workspace_write_policy_from_runtime_config(
         seccomp_profile,
     );
     if network_allow_all
-        && let SandboxPolicy::WorkspaceWrite {
-            network_access,
-            network_allowlist,
-            ..
-        } = &mut policy
+        && let SandboxPolicy::WorkspaceWrite { network_access, network_allowlist, .. } = &mut policy
     {
         *network_access = true;
         network_allowlist.clear();
@@ -300,9 +295,7 @@ fn sensitive_paths_from_runtime_config(
             .collect::<Vec<_>>();
         sensitive_paths.retain(|entry| {
             let expanded = entry.expand_path();
-            !exception_paths
-                .iter()
-                .any(|allowed| expanded.starts_with(allowed))
+            !exception_paths.iter().any(|allowed| expanded.starts_with(allowed))
         });
     }
 
@@ -334,10 +327,7 @@ pub(super) fn parse_requested_sandbox_permissions(
         .filter(|permissions| !permissions.is_empty());
 
     if sandbox_permissions.requires_escalated_permissions() {
-        let justification = payload
-            .get("justification")
-            .and_then(Value::as_str)
-            .map(str::trim);
+        let justification = payload.get("justification").and_then(Value::as_str).map(str::trim);
         if justification.is_none_or(str::is_empty) {
             return Err(anyhow!(MISSING_ESCALATION_JUSTIFICATION_MESSAGE));
         }
@@ -440,13 +430,8 @@ pub(super) fn sandbox_policy_with_additional_permissions(
             exclude_slash_tmp,
         } => {
             let mut merged_writes = writable_roots;
-            merged_writes.extend(
-                additional_permissions
-                    .fs_write
-                    .iter()
-                    .cloned()
-                    .map(WritableRoot::new),
-            );
+            merged_writes
+                .extend(additional_permissions.fs_write.iter().cloned().map(WritableRoot::new));
             SandboxPolicy::WorkspaceWrite {
                 writable_roots: dedupe_writable_roots(merged_writes),
                 network_access,
@@ -458,15 +443,9 @@ pub(super) fn sandbox_policy_with_additional_permissions(
                 exclude_slash_tmp,
             }
         }
-        SandboxPolicy::ReadOnly {
-            network_access,
-            network_allowlist,
-        } => {
+        SandboxPolicy::ReadOnly { network_access, network_allowlist } => {
             if additional_permissions.fs_write.is_empty() {
-                SandboxPolicy::ReadOnly {
-                    network_access,
-                    network_allowlist,
-                }
+                SandboxPolicy::ReadOnly { network_access, network_allowlist }
             } else {
                 let network_enabled = network_access || !network_allowlist.is_empty();
                 SandboxPolicy::WorkspaceWrite {
@@ -540,12 +519,7 @@ fn transform_command_with_sandbox_policy(
     let manager = SandboxManager::new();
     let linux_sandbox_executable = resolve_linux_sandbox_executable();
     let exec_env = manager
-        .transform(
-            spec,
-            policy,
-            sandbox_cwd,
-            linux_sandbox_executable.as_deref(),
-        )
+        .transform(spec, policy, sandbox_cwd, linux_sandbox_executable.as_deref())
         .map_err(|err| map_sandbox_transform_error(err, policy))?;
 
     let executable = exec_env.program.to_string_lossy().to_string();
@@ -610,11 +584,7 @@ pub(super) fn enforce_sandbox_preflight_guards(
         }
     }
     if !blocked_paths.is_empty() {
-        let listed = blocked_paths
-            .into_iter()
-            .take(3)
-            .collect::<Vec<_>>()
-            .join(", ");
+        let listed = blocked_paths.into_iter().take(3).collect::<Vec<_>>().join(", ");
         return Err(anyhow!(
             "Command references sensitive path(s) blocked by sandbox policy '{}': {}",
             policy.description(),
@@ -632,11 +602,7 @@ pub(super) fn enforce_sandbox_preflight_guards(
             }
         }
         if !blocked_write_paths.is_empty() {
-            let listed = blocked_write_paths
-                .into_iter()
-                .take(3)
-                .collect::<Vec<_>>()
-                .join(", ");
+            let listed = blocked_write_paths.into_iter().take(3).collect::<Vec<_>>().join(", ");
             return Err(anyhow!(
                 "Command references path(s) blocked for writes by sandbox policy '{}': {}",
                 policy.description(),
@@ -717,17 +683,11 @@ fn command_likely_writes_workspace(command: &[String]) -> bool {
     }
 
     if name == "sed" {
-        return command
-            .iter()
-            .skip(1)
-            .any(|arg| arg == "-i" || arg.starts_with("-i"));
+        return command.iter().skip(1).any(|arg| arg == "-i" || arg.starts_with("-i"));
     }
 
     if name == "perl" {
-        return command
-            .iter()
-            .skip(1)
-            .any(|arg| arg == "-i" || arg.starts_with("-i"));
+        return command.iter().skip(1).any(|arg| arg == "-i" || arg.starts_with("-i"));
     }
 
     if name == "cargo" {
@@ -810,10 +770,8 @@ fn resolve_argument_path(argument: &str, working_dir: &Path) -> Option<PathBuf> 
 #[cfg(target_os = "linux")]
 fn resolve_linux_sandbox_executable() -> Option<PathBuf> {
     #[cfg(test)]
-    if let Some(path) = LINUX_SANDBOX_EXECUTABLE_OVERRIDE
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone())
+    if let Some(path) =
+        LINUX_SANDBOX_EXECUTABLE_OVERRIDE.lock().ok().and_then(|guard| guard.clone())
     {
         return Some(path);
     }

@@ -104,11 +104,7 @@ impl PromptCache {
 
     /// Create a new prompt cache with the given configuration.
     pub async fn with_config(config: PromptCacheConfig) -> Self {
-        let mut cache = Self {
-            config,
-            cache: HashMap::new(),
-            dirty: false,
-        };
+        let mut cache = Self { config, cache: HashMap::new(), dirty: false };
 
         // Load existing cache
         if cache.config.enabled {
@@ -172,16 +168,9 @@ impl PromptCache {
         }
         let total_entries = self.cache.len();
         let total_usage = self.cache.values().map(|e| e.usage_count).sum::<u32>();
-        let total_tokens_saved = self
-            .cache
-            .values()
-            .filter_map(|e| e.tokens_saved)
-            .sum::<u32>();
+        let total_tokens_saved = self.cache.values().filter_map(|e| e.tokens_saved).sum::<u32>();
         let avg_quality = if !self.cache.is_empty() {
-            self.cache
-                .values()
-                .filter_map(|e| e.quality_score)
-                .sum::<f64>()
+            self.cache.values().filter_map(|e| e.quality_score).sum::<f64>()
                 / self.cache.len() as f64
         } else {
             0.0
@@ -217,17 +206,13 @@ impl PromptCache {
         }
 
         // Ensure cache directory exists
-        fs::create_dir_all(&self.config.cache_dir)
-            .await
-            .map_err(PromptCacheError::Io)?;
+        fs::create_dir_all(&self.config.cache_dir).await.map_err(PromptCacheError::Io)?;
 
         let cache_path = self.config.cache_dir.join("prompt_cache.json");
         let data =
             serde_json::to_string_pretty(&self.cache).map_err(PromptCacheError::Serialization)?;
 
-        fs::write(cache_path, data)
-            .await
-            .map_err(PromptCacheError::Io)?;
+        fs::write(cache_path, data).await.map_err(PromptCacheError::Io)?;
 
         Ok(())
     }
@@ -243,9 +228,7 @@ impl PromptCache {
             return Ok(());
         }
 
-        let data = fs::read_to_string(cache_path)
-            .await
-            .map_err(PromptCacheError::Io)?;
+        let data = fs::read_to_string(cache_path).await.map_err(PromptCacheError::Io)?;
 
         self.cache = serde_json::from_str(&data).map_err(PromptCacheError::Serialization)?;
 
@@ -260,8 +243,7 @@ impl PromptCache {
         let now = current_timestamp();
         let max_age_seconds = self.config.max_age_days * 24 * 60 * 60;
 
-        self.cache
-            .retain(|_, entry| now - entry.created_at < max_age_seconds);
+        self.cache.retain(|_, entry| now - entry.created_at < max_age_seconds);
 
         self.dirty = true;
         Ok(())
@@ -342,10 +324,7 @@ pub struct PromptOptimizer {
 impl PromptOptimizer {
     /// Create a new prompt optimizer with the given LLM provider.
     pub async fn new(llm_provider: Box<dyn crate::llm::provider::LLMProvider>) -> Self {
-        Self {
-            cache: PromptCache::new().await,
-            llm_provider,
-        }
+        Self { cache: PromptCache::new().await, llm_provider }
     }
 
     /// Replace the default cache with a custom [`PromptCache`] instance.
@@ -374,9 +353,8 @@ impl PromptOptimizer {
         }
 
         // Generate optimized prompt
-        let optimized = self
-            .generate_optimized_prompt(original_prompt, target_model, context)
-            .await?;
+        let optimized =
+            self.generate_optimized_prompt(original_prompt, target_model, context).await?;
 
         // Calculate tokens saved (rough estimate)
         let original_tokens = estimate_tokens(original_prompt);
@@ -460,9 +438,7 @@ impl PromptOptimizer {
             .await
             .map_err(|e| PromptOptimizationError::LLMError(e.to_string()))?;
 
-        Ok(response
-            .content
-            .unwrap_or_else(|| original_prompt.to_string()))
+        Ok(response.content.unwrap_or_else(|| original_prompt.to_string()))
     }
 
     /// Get cache statistics

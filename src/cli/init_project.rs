@@ -13,12 +13,7 @@ pub async fn handle_init_project_command(
     force: bool,
     migrate: bool,
 ) -> Result<()> {
-    println!(
-        "{}",
-        style("Initialize project with dot-folder structure")
-            .cyan()
-            .bold()
-    );
+    println!("{}", style("Initialize project with dot-folder structure").cyan().bold());
 
     // Initialize project manager
     let project_manager = SimpleProjectManager::new(std::env::current_dir()?);
@@ -71,19 +66,10 @@ pub async fn handle_init_project_command(
         migrate_existing_files(&project_manager, &project_name, &current_dir).await?;
     }
 
-    println!(
-        "\n{} Project initialization completed!",
-        style("Success").green().bold()
-    );
+    println!("\n{} Project initialization completed!", style("Success").green().bold());
     println!("Project structure created at: {}", project_dir.display());
-    println!(
-        "Configuration directory: {}",
-        project_manager.config_dir(&project_name).display()
-    );
-    println!(
-        "Cache directory: {}",
-        project_manager.cache_dir(&project_name).display()
-    );
+    println!("Configuration directory: {}", project_manager.config_dir(&project_name).display());
+    println!("Cache directory: {}", project_manager.cache_dir(&project_name).display());
 
     Ok(())
 }
@@ -94,10 +80,7 @@ async fn migrate_existing_files(
     _project_name: &str,
     current_dir: &Path,
 ) -> Result<()> {
-    println!(
-        "\n{} Checking for existing config/cache files to migrate...",
-        style("Info").cyan()
-    );
+    println!("\n{} Checking for existing config/cache files to migrate...", style("Info").cyan());
 
     let mut files_to_migrate = Vec::new();
 
@@ -154,9 +137,7 @@ async fn migrate_existing_files(
         let destination = if name.contains("cache") {
             _project_manager.cache_dir(_project_name).join(name)
         } else if name.contains("vtcode.toml") {
-            _project_manager
-                .config_dir(_project_name)
-                .join("vtcode.toml")
+            _project_manager.config_dir(_project_name).join("vtcode.toml")
         } else {
             _project_manager.project_data_dir(_project_name).join(name)
         };
@@ -173,10 +154,7 @@ async fn migrate_existing_files(
         }
 
         if path.is_dir() {
-            for entry in build_walker_single_threaded(&path)
-                .build()
-                .filter_map(|e| e.ok())
-            {
+            for entry in build_walker_single_threaded(&path).build().filter_map(|e| e.ok()) {
                 let file_path = entry.path();
                 let relative = file_path.strip_prefix(&path).unwrap_or(file_path);
                 let dest_path = destination.join(relative);
@@ -186,27 +164,15 @@ async fn migrate_existing_files(
                     if let Some(parent) = dest_path.parent() {
                         ensure_dir_exists(parent).await?;
                     }
-                    tokio::fs::copy(file_path, &dest_path)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "failed to copy {} to {}",
-                                file_path.display(),
-                                dest_path.display()
-                            )
-                        })?;
+                    tokio::fs::copy(file_path, &dest_path).await.with_context(|| {
+                        format!("failed to copy {} to {}", file_path.display(), dest_path.display())
+                    })?;
                 }
             }
         } else {
-            tokio::fs::copy(&path, &destination)
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to copy {} to {}",
-                        path.display(),
-                        destination.display()
-                    )
-                })?;
+            tokio::fs::copy(&path, &destination).await.with_context(|| {
+                format!("failed to copy {} to {}", path.display(), destination.display())
+            })?;
         }
     }
 

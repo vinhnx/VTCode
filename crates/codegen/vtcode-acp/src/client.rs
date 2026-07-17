@@ -33,10 +33,7 @@ pub struct AcpClientBuilder {
 impl AcpClientBuilder {
     /// Create a new builder
     pub fn new(local_agent_id: String) -> Self {
-        Self {
-            local_agent_id,
-            timeout: Duration::from_secs(30),
-        }
+        Self { local_agent_id, timeout: Duration::from_secs(30) }
     }
 
     /// Set request timeout
@@ -97,10 +94,7 @@ impl AcpClient {
 
         let response = self.send_request(&agent_info.base_url, &message).await?;
 
-        trace!(
-            remote_agent = remote_agent_id,
-            "Response received from remote agent"
-        );
+        trace!(remote_agent = remote_agent_id, "Response received from remote agent");
 
         Ok(response)
     }
@@ -176,13 +170,13 @@ impl AcpClient {
                 })
             }
 
-            StatusCode::REQUEST_TIMEOUT => Err(AcpError::Timeout(
-                "Request to remote agent timed out".to_string(),
-            )),
+            StatusCode::REQUEST_TIMEOUT => {
+                Err(AcpError::Timeout("Request to remote agent timed out".to_string()))
+            }
 
-            StatusCode::NOT_FOUND => Err(AcpError::AgentNotFound(
-                "Remote agent endpoint not found".to_string(),
-            )),
+            StatusCode::NOT_FOUND => {
+                Err(AcpError::AgentNotFound("Remote agent endpoint not found".to_string()))
+            }
 
             status => {
                 let body = response.text().await.unwrap_or_default();

@@ -46,10 +46,7 @@ mod tests {
         let mut state = PtyStreamState::new(None, test_pty_config(), None);
         state.apply_chunk("line1\nline2", 5);
         let rendered = state.render_lines(5);
-        assert_eq!(
-            rendered,
-            vec!["  └ line1".to_string(), "    line2".to_string()]
-        );
+        assert_eq!(rendered, vec!["  └ line1".to_string(), "    line2".to_string()]);
         assert_eq!(state.last_display_line(5), Some("line2".to_string()));
     }
 
@@ -170,20 +167,14 @@ mod tests {
         let mut state = PtyStreamState::new(None, test_pty_config(), None);
         state.apply_chunk("before\n\x1b[2J\x1b[Hmenu\nitem\n", 6);
 
-        assert_eq!(
-            state.render_lines(6),
-            vec!["  └ menu".to_string(), "    item".to_string()]
-        );
+        assert_eq!(state.render_lines(6), vec!["  └ menu".to_string(), "    item".to_string()]);
         assert_eq!(state.last_display_line(6), Some("item".to_string()));
     }
 
     #[test]
     fn tokenization_preserves_whitespace() {
         let tokens = tokenize_preserve_whitespace("cargo   check -p  vtcode");
-        assert_eq!(
-            tokens,
-            vec!["cargo", "   ", "check", " ", "-p", "  ", "vtcode"]
-        );
+        assert_eq!(tokens, vec!["cargo", "   ", "check", " ", "-p", "  ", "vtcode"]);
     }
 
     #[test]
@@ -223,10 +214,7 @@ mod tests {
             .iter()
             .find(|segment| segment.text.contains("ERR"))
             .expect("colored text segment should be present");
-        assert_eq!(
-            err_segment.style.color,
-            Some(AnsiColorEnum::Ansi(AnsiColor::Red))
-        );
+        assert_eq!(err_segment.style.color, Some(AnsiColorEnum::Ansi(AnsiColor::Red)));
     }
 
     #[test]

@@ -315,21 +315,13 @@ impl VTCodeConfig {
             .validate()
             .context("Invalid syntax_highlighting configuration")?;
 
-        self.context
-            .validate()
-            .context("Invalid context configuration")?;
+        self.context.validate().context("Invalid context configuration")?;
 
-        self.hooks
-            .validate()
-            .context("Invalid hooks configuration")?;
+        self.hooks.validate().context("Invalid hooks configuration")?;
 
-        self.timeouts
-            .validate()
-            .context("Invalid timeouts configuration")?;
+        self.timeouts.validate().context("Invalid timeouts configuration")?;
 
-        self.prompt_cache
-            .validate()
-            .context("Invalid prompt_cache configuration")?;
+        self.prompt_cache.validate().context("Invalid prompt_cache configuration")?;
 
         self.agent
             .validate_llm_params()
@@ -402,9 +394,7 @@ impl VTCodeConfig {
     /// Look up a custom provider by its stable key.
     pub fn custom_provider(&self, name: &str) -> Option<&CustomProviderConfig> {
         let lower = name.to_lowercase();
-        self.custom_providers
-            .iter()
-            .find(|cp| cp.name.to_lowercase() == lower)
+        self.custom_providers.iter().find(|cp| cp.name.to_lowercase() == lower)
     }
 
     /// Get the display name for any provider key, falling back to the raw key
@@ -459,14 +449,10 @@ impl VTCodeConfig {
         )?;
         let vtcode_readme_path = workspace.join(".vtcode").join("README.md");
         let ast_grep_config_path = workspace.join("sgconfig.yml");
-        let ast_grep_rule_path = workspace
-            .join("rules")
-            .join("examples")
-            .join("no-console-log.yml");
-        let ast_grep_test_path = workspace
-            .join("rule-tests")
-            .join("examples")
-            .join("no-console-log-test.yml");
+        let ast_grep_rule_path =
+            workspace.join("rules").join("examples").join("no-console-log.yml");
+        let ast_grep_test_path =
+            workspace.join("rule-tests").join("examples").join("no-console-log-test.yml");
         let ast_grep_snapshot_path = workspace
             .join("rule-tests")
             .join("__snapshots__")
@@ -497,10 +483,7 @@ impl VTCodeConfig {
         if !gitignore_path.exists() || force {
             let gitignore_content = Self::default_vtcode_gitignore();
             fs::write(&gitignore_path, gitignore_content).with_context(|| {
-                format!(
-                    "Failed to write gitignore file: {}",
-                    gitignore_path.display()
-                )
+                format!("Failed to write gitignore file: {}", gitignore_path.display())
             })?;
 
             if let Some(file_name) = gitignore_path.file_name().and_then(|name| name.to_str()) {
@@ -511,20 +494,13 @@ impl VTCodeConfig {
         if !vtcode_readme_path.exists() || force {
             let vtcode_readme = Self::default_vtcode_readme_template();
             fs::write(&vtcode_readme_path, vtcode_readme).with_context(|| {
-                format!(
-                    "Failed to write VT Code README: {}",
-                    vtcode_readme_path.display()
-                )
+                format!("Failed to write VT Code README: {}", vtcode_readme_path.display())
             })?;
             created_files.push(".vtcode/README.md".to_string());
         }
 
         let ast_grep_files = [
-            (
-                &ast_grep_config_path,
-                Self::default_ast_grep_config_template(),
-                "sgconfig.yml",
-            ),
+            (&ast_grep_config_path, Self::default_ast_grep_config_template(), "sgconfig.yml"),
             (
                 &ast_grep_rule_path,
                 Self::default_ast_grep_example_rule_template(),
@@ -1276,11 +1252,7 @@ mod tests {
             .expect("bootstrap project should succeed");
 
         assert!(created.iter().any(|entry| entry == "sgconfig.yml"));
-        assert!(
-            created
-                .iter()
-                .any(|entry| entry == "rules/examples/no-console-log.yml")
-        );
+        assert!(created.iter().any(|entry| entry == "rules/examples/no-console-log.yml"));
         assert!(
             created
                 .iter()
@@ -1293,18 +1265,8 @@ mod tests {
         );
 
         assert!(workspace.path().join("sgconfig.yml").exists());
-        assert!(
-            workspace
-                .path()
-                .join("rules/examples/no-console-log.yml")
-                .exists()
-        );
-        assert!(
-            workspace
-                .path()
-                .join("rule-tests/examples/no-console-log-test.yml")
-                .exists()
-        );
+        assert!(workspace.path().join("rules/examples/no-console-log.yml").exists());
+        assert!(workspace.path().join("rule-tests/examples/no-console-log-test.yml").exists());
         assert!(
             workspace
                 .path()
@@ -1327,23 +1289,15 @@ mod tests {
         let created = VTCodeConfig::bootstrap_project(workspace.path(), false)
             .expect("bootstrap project should succeed");
 
+        assert!(!created.iter().any(|entry| entry == "sgconfig.yml"), "created files: {created:?}");
         assert!(
-            !created.iter().any(|entry| entry == "sgconfig.yml"),
-            "created files: {created:?}"
-        );
-        assert!(
-            !created
-                .iter()
-                .any(|entry| entry == "rules/examples/no-console-log.yml"),
+            !created.iter().any(|entry| entry == "rules/examples/no-console-log.yml"),
             "created files: {created:?}"
         );
         assert_eq!(
             std::fs::read_to_string(&sgconfig_path).expect("read sgconfig"),
             "ruleDirs:\n  - custom-rules\n"
         );
-        assert_eq!(
-            std::fs::read_to_string(&rule_path).expect("read rule"),
-            "id: custom-rule\n"
-        );
+        assert_eq!(std::fs::read_to_string(&rule_path).expect("read rule"), "id: custom-rule\n");
     }
 }

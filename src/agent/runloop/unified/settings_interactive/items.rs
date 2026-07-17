@@ -216,8 +216,7 @@ fn append_missing_optional_doc_items(
     for path in OPTIONAL_DOC_FIELDS {
         let lookup_path = parent_path
             .and_then(|parent| {
-                path.strip_prefix(parent)
-                    .and_then(|suffix| suffix.strip_prefix('.'))
+                path.strip_prefix(parent).and_then(|suffix| suffix.strip_prefix('.'))
             })
             .unwrap_or(path);
         if get_node(root, lookup_path).is_some() {
@@ -281,9 +280,7 @@ fn item_for_value(
             subtitle: Some(section_subtitle(path, value)),
             badge: Some("Setup".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                ACTION_CONFIGURE_EDITOR.to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction(ACTION_CONFIGURE_EDITOR.to_string())),
             search_value: Some(search_value),
         };
     }
@@ -325,11 +322,7 @@ fn item_for_value(
         TomlValue::Array(entries) => InlineListItem {
             title,
             subtitle: Some(collection_subtitle(
-                format!(
-                    "{} item{}",
-                    entries.len(),
-                    if entries.len() == 1 { "" } else { "s" }
-                ),
+                format!("{} item{}", entries.len(), if entries.len() == 1 { "" } else { "s" }),
                 &description,
             )),
             badge: Some("List".to_string()),

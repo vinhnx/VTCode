@@ -477,9 +477,7 @@ pub struct CmdletDatabase;
 impl CmdletDatabase {
     /// Check if a cmdlet is dangerous and get its info
     pub fn get_info(cmdlet_name: &str) -> Option<CmdletInfo> {
-        DANGEROUS_CMDLETS
-            .get(&cmdlet_name.to_lowercase().as_str())
-            .cloned()
+        DANGEROUS_CMDLETS.get(&cmdlet_name.to_lowercase().as_str()).cloned()
     }
 
     /// Get minimum severity to block
@@ -546,35 +544,19 @@ mod tests {
     #[test]
     fn test_is_above_threshold() {
         // invoke-expression is CRITICAL
-        assert!(CmdletDatabase::is_above_threshold(
-            "invoke-expression",
-            CmdletSeverity::High
-        ));
-        assert!(CmdletDatabase::is_above_threshold(
-            "invoke-expression",
-            CmdletSeverity::Medium
-        ));
-        assert!(!CmdletDatabase::is_above_threshold(
-            "invoke-expression",
-            CmdletSeverity::Critical
-        ));
+        assert!(CmdletDatabase::is_above_threshold("invoke-expression", CmdletSeverity::High));
+        assert!(CmdletDatabase::is_above_threshold("invoke-expression", CmdletSeverity::Medium));
+        assert!(!CmdletDatabase::is_above_threshold("invoke-expression", CmdletSeverity::Critical));
 
         // get-content is LOW
-        assert!(!CmdletDatabase::is_above_threshold(
-            "get-content",
-            CmdletSeverity::Low
-        ));
+        assert!(!CmdletDatabase::is_above_threshold("get-content", CmdletSeverity::Low));
     }
 
     #[test]
     fn test_get_by_severity() {
         let critical = CmdletDatabase::get_by_severity(CmdletSeverity::Critical);
         assert!(!critical.is_empty());
-        assert!(
-            critical
-                .iter()
-                .all(|c| c.severity == CmdletSeverity::Critical)
-        );
+        assert!(critical.iter().all(|c| c.severity == CmdletSeverity::Critical));
 
         let low = CmdletDatabase::get_by_severity(CmdletSeverity::Low);
         assert!(!low.is_empty());
@@ -585,11 +567,7 @@ mod tests {
     fn test_get_by_category() {
         let code_exec = CmdletDatabase::get_by_category(CmdletCategory::CodeExecution);
         assert!(!code_exec.is_empty());
-        assert!(
-            code_exec
-                .iter()
-                .all(|c| c.category == CmdletCategory::CodeExecution)
-        );
+        assert!(code_exec.iter().all(|c| c.category == CmdletCategory::CodeExecution));
     }
 
     #[test]

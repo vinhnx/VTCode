@@ -21,7 +21,7 @@ VT Code's main loop must handle three independent timers and one blocking I/O re
 
 Without async, polling each source would require sleeping, causing latency. With `tokio::select!`, VT Code reacts to whichever is ready first.
 
-**File:** `vtcode-ui/src/tui/core_tui/runner/`
+**File:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 tokio::select! {
@@ -113,7 +113,7 @@ Synchronous main
 
 ### Pattern 1: Spawned Event Handler
 
-**File:** `vtcode-ui/src/tui/core_tui/runner/`
+**File:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 fn start(&mut self) {
@@ -135,7 +135,7 @@ fn start(&mut self) {
 
 ### Pattern 2: Blocking I/O in Async Context
 
-**File:** `vtcode-ui/src/tui/core_tui/runner/`
+**File:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 let event_fut = tokio::task::spawn_blocking(|| {
@@ -174,7 +174,7 @@ let results = tokio::join_all(tool_tasks).await;
 
 ### Pattern 4: Graceful Shutdown with CancellationToken
 
-**File:** `vtcode-ui/src/tui/`
+**File:** `crates/codegen/vtcode-ui/src/tui/`
 
 ```rust
 pub fn cancel(&self) {
@@ -290,10 +290,10 @@ async fn actor_loop(mut rx: mpsc::Receiver<ActorMessage>) {
 
 | Component | File | Pattern |
 |---|---|---|
-| `StdioTransport` | `vtcode-acp/src/transport.rs` | Handle sends JSON-RPC via `mpsc::UnboundedSender`; background tasks handle stdin write, stdout read, stderr log. Uses `oneshot` for RPC responses. |
-| `AsyncLineWriter` | `vtcode-core/src/utils/async_line_writer.rs` | Cloneable handle sends `LogMessage` via bounded `mpsc`; background task buffers and flushes via `spawn_blocking`. |
-| `TimeoutDetector` | `vtcode-core/src/core/timeout_detector.rs` | Global detector with `mpsc::UnboundedSender<String>` cleanup channel; background task processes end-operation requests from dropped `TimeoutHandle`s. |
-| `ProcessHandle` | `vtcode-bash-runner/src/pipe.rs` | Handle wraps channels for stdin, output broadcast, and exit status; separate writer, reader, and wait tasks. |
+| `StdioTransport` | `crates/codegen/vtcode-acp/src/transport.rs` | Handle sends JSON-RPC via `mpsc::UnboundedSender`; background tasks handle stdin write, stdout read, stderr log. Uses `oneshot` for RPC responses. |
+| `AsyncLineWriter` | `crates/codegen/vtcode-core/src/utils/async_line_writer.rs` | Cloneable handle sends `LogMessage` via bounded `mpsc`; background task buffers and flushes via `spawn_blocking`. |
+| `TimeoutDetector` | `crates/codegen/vtcode-core/src/core/timeout_detector.rs` | Global detector with `mpsc::UnboundedSender<String>` cleanup channel; background task processes end-operation requests from dropped `TimeoutHandle`s. |
+| `ProcessHandle` | `crates/codegen/vtcode-bash-runner/src/pipe.rs` | Handle wraps channels for stdin, output broadcast, and exit status; separate writer, reader, and wait tasks. |
 
 **When to use the actor pattern vs. simpler alternatives:**
 
@@ -477,7 +477,7 @@ Event::Key(key) if key.code == KeyCode::Enter => {
 
 VT Code uses `#[tokio::test]` for async tests:
 
-**File:** `vtcode-core/src/hooks/lifecycle/tests.rs`
+**File:** `crates/codegen/vtcode-core/src/hooks/lifecycle/tests.rs`
 
 ```rust
 #[tokio::test]
@@ -561,5 +561,5 @@ Tokio's work-stealing scheduler minimizes context switches. Most of VT Code's as
 - [Tokio Tutorial](https://tokio.rs/tokio/tutorial)
 - [Tokio Select Documentation](https://tokio.rs/tokio/tutorial/select)
 - [Rust Async Book](https://rust-lang.github.io/async-book/)
-- `vtcode-ui/src/tui/` - Event loop implementation
+- `crates/codegen/vtcode-ui/src/tui/` - Event loop implementation
 - `src/agent/runloop/unified/tool_pipeline.rs` - Concurrent tool execution

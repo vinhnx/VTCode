@@ -103,10 +103,7 @@ fn runtime_config(workspace: &Path) -> RuntimeAgentConfig {
 }
 
 fn enabled_memory_config() -> PersistentMemoryConfig {
-    PersistentMemoryConfig {
-        enabled: true,
-        ..PersistentMemoryConfig::default()
-    }
+    PersistentMemoryConfig { enabled: true, ..PersistentMemoryConfig::default() }
 }
 
 fn enabled_memory_config_for(workspace: &Path) -> PersistentMemoryConfig {
@@ -139,10 +136,9 @@ fn maybe_extract_user_fact_keeps_durable_self_facts() {
     assert_eq!(name.source, "user_assertion");
     assert_eq!(name.fact, "My name is Vinh Nguyen");
 
-    let preference = maybe_extract_user_fact(&Message::user(
-        "I prefer cargo nextest for test runs".to_string(),
-    ))
-    .expect("preference should be extracted");
+    let preference =
+        maybe_extract_user_fact(&Message::user("I prefer cargo nextest for test runs".to_string()))
+            .expect("preference should be extracted");
     assert_eq!(preference.source, "user_assertion");
     assert_eq!(preference.fact, "I prefer cargo nextest for test runs");
 }
@@ -176,9 +172,9 @@ fn maybe_extract_user_fact_keeps_authored_notes_after_polite_prefixes() {
 #[test]
 fn maybe_extract_user_fact_ignores_memory_prompts_and_questions() {
     assert!(
-        maybe_extract_user_fact(&Message::user(
-            "remember that I prefer cargo nextest".to_string(),
-        ))
+        maybe_extract_user_fact(
+            &Message::user("remember that I prefer cargo nextest".to_string(),)
+        )
         .is_none()
     );
     assert!(
@@ -277,14 +273,8 @@ async fn llm_classification_rewrites_and_routes_candidates() {
 
     assert_eq!(classified.preferences.len(), 1);
     assert_eq!(classified.repository_facts.len(), 1);
-    assert_eq!(
-        classified.preferences[0].fact,
-        "Prefer cargo nextest for test runs"
-    );
-    assert_eq!(
-        classified.repository_facts[0].fact,
-        "Tests live under vtcode-core/tests"
-    );
+    assert_eq!(classified.preferences[0].fact, "Prefer cargo nextest for test runs");
+    assert_eq!(classified.repository_facts[0].fact, "Tests live under vtcode-core/tests");
 }
 
 #[tokio::test]
@@ -317,10 +307,7 @@ async fn remember_planner_requests_missing_details() {
     .expect("plan");
 
     assert_eq!(plan.kind, MemoryOpKind::AskMissing);
-    assert_eq!(
-        plan.missing.as_ref().map(|missing| missing.field.as_str()),
-        Some("name")
-    );
+    assert_eq!(plan.missing.as_ref().map(|missing| missing.field.as_str()), Some("name"));
 }
 
 #[tokio::test]
@@ -392,12 +379,7 @@ async fn classification_falls_back_to_prompt_only_json_when_native_schema_is_uns
     assert_eq!(classified.preferences.len(), 1);
     let request = provider.last_request();
     assert!(request.output_format.is_none());
-    assert!(
-        request.messages[0]
-            .content
-            .as_text()
-            .contains("Return JSON only.")
-    );
+    assert!(request.messages[0].content.as_text().contains("Return JSON only."));
 }
 
 #[tokio::test]
@@ -427,12 +409,7 @@ async fn planner_falls_back_to_prompt_only_json_when_native_schema_is_unsupporte
     assert_eq!(plan.kind, MemoryOpKind::AskMissing);
     let request = provider.last_request();
     assert!(request.output_format.is_none());
-    assert!(
-        request.messages[0]
-            .content
-            .as_text()
-            .contains("Return JSON only.")
-    );
+    assert!(request.messages[0].content.as_text().contains("Return JSON only."));
 }
 
 #[derive(Clone)]
@@ -462,23 +439,21 @@ impl LLMProvider for StreamingOnlyMemoryProvider {
         &self,
         _request: LLMRequest,
     ) -> std::result::Result<LLMNormalizedStream, LLMError> {
-        Ok(Box::pin(stream::iter(vec![Ok(
-            NormalizedStreamEvent::Done {
-                response: Box::new(LLMResponse {
-                    content: Some(self.response.to_string()),
-                    model: "stub-model".to_string(),
-                    tool_calls: None,
-                    usage: None,
-                    finish_reason: FinishReason::Stop,
-                    reasoning: None,
-                    reasoning_details: None,
-                    organization_id: None,
-                    request_id: None,
-                    tool_references: Vec::new(),
-                    compaction: None,
-                }),
-            },
-        )])))
+        Ok(Box::pin(stream::iter(vec![Ok(NormalizedStreamEvent::Done {
+            response: Box::new(LLMResponse {
+                content: Some(self.response.to_string()),
+                model: "stub-model".to_string(),
+                tool_calls: None,
+                usage: None,
+                finish_reason: FinishReason::Stop,
+                reasoning: None,
+                reasoning_details: None,
+                organization_id: None,
+                request_id: None,
+                tool_references: Vec::new(),
+                compaction: None,
+            }),
+        })])))
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -565,9 +540,7 @@ async fn rebuild_summary_uses_summary_file_not_registry() {
         .expect("resolved dir");
     let files = PersistentMemoryFiles::new(memory_dir.clone());
     let mut created_files = Vec::new();
-    ensure_memory_layout(&files, &mut created_files)
-        .await
-        .expect("layout");
+    ensure_memory_layout(&files, &mut created_files).await.expect("layout");
     tokio::fs::write(
         &files.preferences_file,
         render_topic_file(
@@ -650,12 +623,8 @@ async fn rebuild_generated_files_include_notes_as_canonical_inputs() {
         .await
         .expect("rebuild");
 
-    let summary = tokio::fs::read_to_string(&files.summary_file)
-        .await
-        .expect("summary");
-    let index = tokio::fs::read_to_string(&files.memory_file)
-        .await
-        .expect("index");
+    let summary = tokio::fs::read_to_string(&files.summary_file).await.expect("summary");
+    let index = tokio::fs::read_to_string(&files.memory_file).await.expect("index");
 
     assert!(summary.contains("Keep Anthropic memory backed by shared storage"));
     assert!(index.contains("## Note Files"), "{index}");
@@ -780,11 +749,8 @@ fn cleanup_status_flags_legacy_prompt_lines() {
         "# Preferences\n\n- [user_assertion] save to memory and remember my name\n",
     )
     .expect("prefs");
-    std::fs::write(
-        &files.summary_file,
-        "# VT Code Memory Summary\n\n- {\"query\":\"pnpm\"}\n",
-    )
-    .expect("summary");
+    std::fs::write(&files.summary_file, "# VT Code Memory Summary\n\n- {\"query\":\"pnpm\"}\n")
+        .expect("summary");
 
     let status = detect_memory_cleanup_status(&files).expect("status");
     assert!(status.needed);
@@ -878,11 +844,7 @@ fn resolves_project_scoped_memory_directory() {
     let directory = resolve_persistent_memory_dir(&config, workspace.path())
         .expect("memory dir")
         .expect("memory dir should resolve");
-    assert!(
-        directory
-            .to_string_lossy()
-            .contains(".vtcode/projects/renamed-project/memory")
-    );
+    assert!(directory.to_string_lossy().contains(".vtcode/projects/renamed-project/memory"));
 }
 
 #[test]
@@ -940,16 +902,10 @@ fn migrates_legacy_memory_over_scaffold_only_target() {
         render_topic_file(MemoryTopic::RepositoryFacts, &[]),
     )
     .expect("target facts");
-    std::fs::write(
-        target_dir.join(MEMORY_FILENAME),
-        render_memory_index(&[], &[], &[], 0),
-    )
-    .expect("target memory");
-    std::fs::write(
-        target_dir.join(MEMORY_SUMMARY_FILENAME),
-        render_memory_summary(&[], &[], &[]),
-    )
-    .expect("target summary");
+    std::fs::write(target_dir.join(MEMORY_FILENAME), render_memory_index(&[], &[], &[], 0))
+        .expect("target memory");
+    std::fs::write(target_dir.join(MEMORY_SUMMARY_FILENAME), render_memory_summary(&[], &[], &[]))
+        .expect("target summary");
 
     migrate_legacy_memory_dir(&legacy_dir, &target_dir).expect("migrate");
 

@@ -169,14 +169,8 @@ impl RetryPolicyCoreExt for RetryPolicy {
     ) -> RetryStep {
         let decision = self.decision_for_vtcode_error(&error, attempt_index, tool_name);
         if decision.retryable {
-            let delay = decision
-                .delay
-                .unwrap_or_else(|| self.delay_for_attempt(attempt_index));
-            RetryStep::Backoff {
-                delay,
-                decision,
-                error,
-            }
+            let delay = decision.delay.unwrap_or_else(|| self.delay_for_attempt(attempt_index));
+            RetryStep::Backoff { delay, decision, error }
         } else {
             RetryStep::GiveUp { decision, error }
         }
@@ -321,13 +315,7 @@ where
 
     let mut last_error: Option<VtCodeError> = None;
     for attempt in 0..policy.max_attempts {
-        on_event(
-            state,
-            RetryEvent::AttemptStart {
-                attempt,
-                max_attempts: policy.max_attempts,
-            },
-        );
+        on_event(state, RetryEvent::AttemptStart { attempt, max_attempts: policy.max_attempts });
         match operation(state).await {
             Ok(value) => {
                 on_event(state, RetryEvent::Success { attempt });
@@ -350,11 +338,7 @@ where
                         );
                         return Err(error);
                     }
-                    RetryStep::Backoff {
-                        delay,
-                        decision,
-                        error,
-                    } => {
+                    RetryStep::Backoff { delay, decision, error } => {
                         on_event(
                             state,
                             RetryEvent::Backoff {
@@ -373,12 +357,7 @@ where
         }
     }
     let final_error = last_error.unwrap_or_else(|| synthesize_exhausted_error(policy));
-    on_event(
-        state,
-        RetryEvent::Exhausted {
-            last_error: Some(&final_error),
-        },
-    );
+    on_event(state, RetryEvent::Exhausted { last_error: Some(&final_error) });
     Err(final_error)
 }
 
@@ -530,10 +509,7 @@ mod tests {
             "bash",
             "container.exec",
         ] {
-            assert!(
-                is_command_tool(alias),
-                "expected {alias} to be a command tool"
-            );
+            assert!(is_command_tool(alias), "expected {alias} to be a command tool");
         }
     }
 
@@ -594,10 +570,7 @@ mod tests {
                 Box::pin(async move {
                     let n = attempts.fetch_add(1, Ordering::SeqCst) + 1;
                     if n < 2 {
-                        Err(VtCodeError::network(
-                            ErrorCode::ConnectionFailed,
-                            "transient",
-                        ))
+                        Err(VtCodeError::network(ErrorCode::ConnectionFailed, "transient"))
                     } else {
                         Ok("ok".to_string())
                     }
@@ -633,10 +606,6 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
-        assert_eq!(
-            attempts.load(Ordering::SeqCst),
-            1,
-            "GiveUp should short-circuit retries"
-        );
+        assert_eq!(attempts.load(Ordering::SeqCst), 1, "GiveUp should short-circuit retries");
     }
 }

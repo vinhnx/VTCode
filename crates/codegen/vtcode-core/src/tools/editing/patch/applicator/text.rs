@@ -29,9 +29,7 @@ pub(super) async fn load_file_lines(
 ) -> Result<(Vec<String>, bool, LineEnding), PatchError> {
     let file = fs::File::open(path).await.map_err(|err| {
         if err.kind() == ErrorKind::NotFound {
-            PatchError::MissingFile {
-                path: path.display().to_string(),
-            }
+            PatchError::MissingFile { path: path.display().to_string() }
         } else {
             PatchError::Io {
                 action: "read",
@@ -48,14 +46,11 @@ pub(super) async fn load_file_lines(
 
     loop {
         let mut line = String::new();
-        let bytes_read = reader
-            .read_line(&mut line)
-            .await
-            .map_err(|err| PatchError::Io {
-                action: "read",
-                path: path.to_path_buf(),
-                source: err,
-            })?;
+        let bytes_read = reader.read_line(&mut line).await.map_err(|err| PatchError::Io {
+            action: "read",
+            path: path.to_path_buf(),
+            source: err,
+        })?;
 
         if bytes_read == 0 {
             break;
@@ -153,12 +148,7 @@ pub(super) async fn compute_replacements(
             None
         };
 
-        if found.is_none()
-            && chunk
-                .change_context()
-                .and_then(semantic_anchor_term)
-                .is_some()
-        {
+        if found.is_none() && chunk.change_context().and_then(semantic_anchor_term).is_some() {
             match resolve_semantic_match(
                 source_path,
                 path,
@@ -206,10 +196,7 @@ pub(super) async fn compute_replacements(
             } else {
                 old_segment.join("\n")
             };
-            return Err(PatchError::SegmentNotFound {
-                path: path.to_string(),
-                snippet,
-            });
+            return Err(PatchError::SegmentNotFound { path: path.to_string(), snippet });
         }
     }
 
@@ -227,12 +214,7 @@ pub(super) async fn render_patched_text_from_content(
     let replacements = compute_replacements(source_path, &original_lines, chunks, path).await?;
     let ensure_trailing_newline =
         had_trailing_newline || chunks.iter().any(|chunk| chunk.is_end_of_file());
-    Ok(render_patched_content(
-        original_lines,
-        replacements,
-        ensure_trailing_newline,
-        line_ending,
-    ))
+    Ok(render_patched_content(original_lines, replacements, ensure_trailing_newline, line_ending))
 }
 
 fn render_patched_content(

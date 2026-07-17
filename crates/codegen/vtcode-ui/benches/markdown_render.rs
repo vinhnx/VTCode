@@ -59,10 +59,7 @@ fn markdown_render_benchmark(c: &mut Criterion) {
         ("short_assistant", short_assistant_markdown()),
         ("large_mixed", large_mixed_markdown()),
         ("nested_list_blockquote", nested_list_blockquote_markdown()),
-        (
-            "large_code_with_language",
-            large_fenced_code_block(Some("rust")),
-        ),
+        ("large_code_with_language", large_fenced_code_block(Some("rust"))),
         ("large_code_without_language", large_fenced_code_block(None)),
     ];
 

@@ -22,11 +22,6 @@ impl ToolRegistry {
             .shell_policy
             .write()
             .map_err(|e| anyhow::anyhow!("Shell policy lock poisoned: {e}"))?;
-        checker.check_command(
-            command,
-            agent_type.as_str(),
-            deny_regex_patterns,
-            deny_glob_patterns,
-        )
+        checker.check_command(command, agent_type.as_str(), deny_regex_patterns, deny_glob_patterns)
     }
 }

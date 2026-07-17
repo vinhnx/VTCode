@@ -89,9 +89,7 @@ pub fn exact_terms_match(query: &str, candidate: &str) -> bool {
     if query.is_empty() {
         return true;
     }
-    query
-        .split_whitespace()
-        .all(|term| candidate.contains(term))
+    query.split_whitespace().all(|term| candidate.contains(term))
 }
 
 /// Returns true when the characters from `needle` can be found in order within
@@ -188,10 +186,7 @@ mod tests {
         // Candidates are pre-lowered (as done by ModalListState construction)
         assert!(exact_terms_match("openai", "openai openai gpt-5.4 gpt-5.4"));
         assert!(exact_terms_match("gpt", "openai openai gpt-5.4 gpt-5.4"));
-        assert!(!exact_terms_match(
-            "anthropic",
-            "openai openai gpt-5.4 gpt-5.4"
-        ));
+        assert!(!exact_terms_match("anthropic", "openai openai gpt-5.4 gpt-5.4"));
     }
 
     #[test]

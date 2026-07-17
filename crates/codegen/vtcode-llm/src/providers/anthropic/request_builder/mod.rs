@@ -207,11 +207,7 @@ pub fn convert_to_anthropic_format(
                 .effort
                 .as_ref()
                 .map(|effort| effort.to_ascii_lowercase())
-                .or_else(|| {
-                    adaptive_effort
-                        .as_ref()
-                        .map(|effort| effort.to_ascii_lowercase())
-                })
+                .or_else(|| adaptive_effort.as_ref().map(|effort| effort.to_ascii_lowercase()))
                 .or_else(|| {
                     thinking_val.as_ref().and_then(|_| {
                         let configured_effort = ctx.anthropic_config.effort.as_str();
@@ -228,29 +224,22 @@ pub fn convert_to_anthropic_format(
     };
     let task_budget = if supports_task_budget(resolved_model, ctx.model) {
         match anthropic_overrides.map(|overrides| &overrides.task_budget_tokens) {
-            Some(AnthropicOptionalU32Override::Explicit(total)) => Some(AnthropicTaskBudget {
-                budget_type: "tokens".to_string(),
-                total: *total,
-            }),
+            Some(AnthropicOptionalU32Override::Explicit(total)) => {
+                Some(AnthropicTaskBudget { budget_type: "tokens".to_string(), total: *total })
+            }
             Some(AnthropicOptionalU32Override::Omit) => None,
             _ => ctx
                 .anthropic_config
                 .task_budget_tokens
-                .map(|total| AnthropicTaskBudget {
-                    budget_type: "tokens".to_string(),
-                    total,
-                }),
+                .map(|total| AnthropicTaskBudget { budget_type: "tokens".to_string(), total }),
         }
     } else {
         None
     };
-    let output_format =
-        request
-            .output_format
-            .as_ref()
-            .map(|schema| AnthropicOutputFormat::JsonSchema {
-                schema: schema.clone(),
-            });
+    let output_format = request
+        .output_format
+        .as_ref()
+        .map(|schema| AnthropicOutputFormat::JsonSchema { schema: schema.clone() });
     let output_config =
         if effort_value.is_some() || task_budget.is_some() || output_format.is_some() {
             Some(AnthropicOutputConfig {
@@ -292,9 +281,7 @@ pub fn convert_to_anthropic_format(
 
     let anthropic_request = AnthropicRequest {
         model: resolved_model.to_string(),
-        max_tokens: request
-            .max_tokens
-            .unwrap_or(if thinking_val.is_some() { 16000 } else { 4096 }),
+        max_tokens: request.max_tokens.unwrap_or(if thinking_val.is_some() { 16000 } else { 4096 }),
         cache_control: top_level_cache_control,
         messages,
         system: system_value,
@@ -313,17 +300,16 @@ pub fn convert_to_anthropic_format(
                     max_tokens: fb.max_tokens,
                     thinking: fb.thinking.as_ref().map(|t| match t {
                         AnthropicThinkingConfig::Disabled => ThinkingConfig::Disabled,
-                        AnthropicThinkingConfig::Enabled {
-                            budget_tokens,
-                            display,
-                        } => ThinkingConfig::Enabled {
-                            budget_tokens: *budget_tokens,
-                            display: display.as_ref().and_then(|d| match d.as_str() {
-                                "summarized" => Some(ThinkingDisplay::Summarized),
-                                "omitted" => Some(ThinkingDisplay::Omitted),
-                                _ => None,
-                            }),
-                        },
+                        AnthropicThinkingConfig::Enabled { budget_tokens, display } => {
+                            ThinkingConfig::Enabled {
+                                budget_tokens: *budget_tokens,
+                                display: display.as_ref().and_then(|d| match d.as_str() {
+                                    "summarized" => Some(ThinkingDisplay::Summarized),
+                                    "omitted" => Some(ThinkingDisplay::Omitted),
+                                    _ => None,
+                                }),
+                            }
+                        }
                         AnthropicThinkingConfig::Adaptive { display } => ThinkingConfig::Adaptive {
                             display: display.as_ref().and_then(|d| match d.as_str() {
                                 "summarized" => Some(ThinkingDisplay::Summarized),
@@ -403,10 +389,7 @@ pub(crate) fn resolve_advisor_tool(
     if let Some(max_tokens) = advisor.max_tokens
         && max_tokens < 1024
     {
-        tracing::warn!(
-            max_tokens,
-            "advisor tool disabled: max_tokens must be >= 1024"
-        );
+        tracing::warn!(max_tokens, "advisor tool disabled: max_tokens must be >= 1024");
         return None;
     }
 

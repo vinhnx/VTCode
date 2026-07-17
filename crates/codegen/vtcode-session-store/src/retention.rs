@@ -20,10 +20,7 @@ pub struct RetentionPolicy {
 
 impl Default for RetentionPolicy {
     fn default() -> Self {
-        Self {
-            max_sessions: 50,
-            max_age_days: 30,
-        }
+        Self { max_sessions: 50, max_age_days: 30 }
     }
 }
 

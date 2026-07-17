@@ -47,10 +47,8 @@ impl LLMProvider for OpenRouterProvider {
         let model = self.resolve_model(&request).to_string();
         let response = self.send_with_fallback(&request, Some(false)).await?;
 
-        let response_json: Value = response
-            .json()
-            .await
-            .map_err(|e| format_parse_error("OpenRouter", &e))?;
+        let response_json: Value =
+            response.json().await.map_err(|e| format_parse_error("OpenRouter", &e))?;
 
         let include_cache_metrics =
             self.prompt_cache_enabled && self.prompt_cache_settings.report_savings;
@@ -315,10 +313,7 @@ impl LLMProvider for OpenRouterProvider {
 
     fn supported_models(&self) -> Vec<String> {
         use vtcode_config::constants::models;
-        models::openrouter::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+        models::openrouter::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {

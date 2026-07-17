@@ -45,9 +45,7 @@ where
     let resolved = resolve_copilot_command(config).context("invalid copilot command")?;
     if let Err(err) = ensure_command_available(&resolved) {
         emit_missing_command_guidance(config, &mut on_event)?;
-        on_event(CopilotAuthEvent::Failure {
-            message: err.to_string(),
-        })?;
+        on_event(CopilotAuthEvent::Failure { message: err.to_string() })?;
         return Err(err);
     }
 
@@ -89,9 +87,7 @@ where
     let resolved = resolve_copilot_command(config).context("invalid copilot command")?;
     if let Err(err) = ensure_command_available(&resolved) {
         emit_missing_command_guidance(config, &mut on_event)?;
-        on_event(CopilotAuthEvent::Failure {
-            message: err.to_string(),
-        })?;
+        on_event(CopilotAuthEvent::Failure { message: err.to_string() })?;
         return Err(err);
     }
 
@@ -152,10 +148,7 @@ pub async fn probe_auth_status(
         return CopilotAuthStatus::server_unavailable(format!(
             "GitHub Copilot CLI command `{}` was not found. Install `copilot`, set `VTCODE_COPILOT_COMMAND`, or configure `[auth.copilot].command`.{source_suffix}",
             resolved.display(),
-            source_suffix = auth_source
-                .as_ref()
-                .map(auth_source_suffix)
-                .unwrap_or_default(),
+            source_suffix = auth_source.as_ref().map(auth_source_suffix).unwrap_or_default(),
         ));
     }
 
@@ -208,14 +201,8 @@ where
     let mut child = command
         .spawn()
         .with_context(|| format!("failed to spawn `{}`", resolved.display()))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("{action_name} stdout unavailable"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| anyhow!("{action_name} stderr unavailable"))?;
+    let stdout = child.stdout.take().ok_or_else(|| anyhow!("{action_name} stdout unavailable"))?;
+    let stderr = child.stderr.take().ok_or_else(|| anyhow!("{action_name} stderr unavailable"))?;
 
     let (line_tx, mut line_rx) = mpsc::unbounded_channel();
     spawn_line_reader(stdout, CapturedStream::Stdout, line_tx.clone());
@@ -247,9 +234,7 @@ where
                 "{action_name} timed out after {} seconds",
                 resolved.auth_timeout.as_secs()
             );
-            on_event(CopilotAuthEvent::Failure {
-                message: message.clone(),
-            })?;
+            on_event(CopilotAuthEvent::Failure { message: message.clone() })?;
             return Err(anyhow!(message));
         }
     };
@@ -262,9 +247,7 @@ where
         Ok(())
     } else {
         let message = state.failure_message(action_name, status);
-        on_event(CopilotAuthEvent::Failure {
-            message: message.clone(),
-        })?;
+        on_event(CopilotAuthEvent::Failure { message: message.clone() })?;
         Err(anyhow!(message))
     }
 }
@@ -294,9 +277,7 @@ impl CapturedCommandState {
 
         if matches!(kind, CommandKind::Logout)
             && matches!(line.stream, CapturedStream::Stdout)
-            && trimmed
-                .to_ascii_lowercase()
-                .contains("non-interactive mode")
+            && trimmed.to_ascii_lowercase().contains("non-interactive mode")
         {
             self.record_safe_message(trimmed.to_string());
             return Ok(());
@@ -434,11 +415,7 @@ fn parse_login_event(line: &str) -> Option<CopilotAuthEvent> {
 
 fn parse_device_flow_code(line: &str) -> Option<(String, String)> {
     let captures = DEVICE_FLOW_LINE_RE.captures(line)?;
-    let url = captures
-        .get(1)?
-        .as_str()
-        .trim_end_matches(['.', ',', ')', ']'])
-        .to_string();
+    let url = captures.get(1)?.as_str().trim_end_matches(['.', ',', ')', ']']).to_string();
     let code = captures
         .get(2)?
         .as_str()
@@ -575,16 +552,10 @@ fn blocking_interactive_logout_command(
         writer
             .write_all(b"/logout\n")
             .context("failed to send /logout to Copilot CLI")?;
-        writer
-            .flush()
-            .context("failed to flush /logout to Copilot CLI")?;
+        writer.flush().context("failed to flush /logout to Copilot CLI")?;
         thread::sleep(Duration::from_millis(250));
-        writer
-            .write_all(b"/exit\n")
-            .context("failed to send /exit to Copilot CLI")?;
-        writer
-            .flush()
-            .context("failed to flush /exit to Copilot CLI")?;
+        writer.write_all(b"/exit\n").context("failed to send /exit to Copilot CLI")?;
+        writer.flush().context("failed to flush /exit to Copilot CLI")?;
         Ok(())
     });
 
@@ -633,10 +604,7 @@ fn blocking_interactive_logout_command(
         while let Ok(text) = line_rx.try_recv() {
             state.handle_line(
                 CommandKind::Logout,
-                CapturedLine {
-                    stream: CapturedStream::Stderr,
-                    text,
-                },
+                CapturedLine { stream: CapturedStream::Stderr, text },
                 &mut |_| Ok(()),
             )?;
         }
@@ -691,10 +659,7 @@ fn blocking_interactive_logout_command(
     while let Ok(text) = line_rx.try_recv() {
         state.handle_line(
             CommandKind::Logout,
-            CapturedLine {
-                stream: CapturedStream::Stderr,
-                text,
-            },
+            CapturedLine { stream: CapturedStream::Stderr, text },
             &mut |_| Ok(()),
         )?;
     }
@@ -837,16 +802,9 @@ fn stored_auth_source(host: &CopilotHost) -> Result<Option<CopilotAuthSource>> {
         .logged_in_users
         .iter()
         .find(|user| user.host_matches(host))
-        .or_else(|| {
-            config
-                .last_logged_in_user
-                .as_ref()
-                .filter(|user| user.host_matches(host))
-        })
+        .or_else(|| config.last_logged_in_user.as_ref().filter(|user| user.host_matches(host)))
     {
-        return Ok(Some(CopilotAuthSource::StoredCredentials {
-            login: user.login.clone(),
-        }));
+        return Ok(Some(CopilotAuthSource::StoredCredentials { login: user.login.clone() }));
     }
 
     let token_login = config
@@ -891,10 +849,7 @@ async fn github_cli_auth_available(
     }
 
     let mut child = command.spawn().with_context(|| {
-        format!(
-            "failed to spawn `gh auth status --hostname {}`",
-            host.gh_hostname
-        )
+        format!("failed to spawn `gh auth status --hostname {}`", host.gh_hostname)
     })?;
 
     let status = match timeout(Duration::from_secs(5), child.wait()).await {
@@ -973,10 +928,7 @@ impl CopilotHost {
             url.push_str(path);
         }
 
-        Ok(Self {
-            url,
-            gh_hostname: hostname.to_string(),
-        })
+        Ok(Self { url, gh_hostname: hostname.to_string() })
     }
 
     fn is_default(&self) -> bool {
@@ -1038,18 +990,15 @@ impl CopilotAuthSource {
     fn message(&self, host: &CopilotHost) -> String {
         match self {
             Self::Environment(name) => format!("Using {name} for GitHub Copilot authentication."),
-            Self::StoredCredentials { login: Some(login) } => format!(
-                "Using Copilot CLI stored credentials for {login} on {}.",
-                host.gh_hostname
-            ),
-            Self::StoredCredentials { login: None } => format!(
-                "Using Copilot CLI stored credentials on {}.",
-                host.gh_hostname
-            ),
-            Self::GitHubCli => format!(
-                "Using GitHub CLI authentication fallback on {}.",
-                host.gh_hostname
-            ),
+            Self::StoredCredentials { login: Some(login) } => {
+                format!("Using Copilot CLI stored credentials for {login} on {}.", host.gh_hostname)
+            }
+            Self::StoredCredentials { login: None } => {
+                format!("Using Copilot CLI stored credentials on {}.", host.gh_hostname)
+            }
+            Self::GitHubCli => {
+                format!("Using GitHub CLI authentication fallback on {}.", host.gh_hostname)
+            }
         }
     }
 }
@@ -1100,10 +1049,7 @@ mod tests {
             _ => None,
         });
 
-        assert!(matches!(
-            source,
-            Some(CopilotAuthSource::Environment("GH_TOKEN"))
-        ));
+        assert!(matches!(source, Some(CopilotAuthSource::Environment("GH_TOKEN"))));
     }
 
     #[test]
@@ -1160,10 +1106,7 @@ mod tests {
 
         assert_eq!(
             parsed,
-            Some((
-                "https://github.com/login/device".to_string(),
-                "D8E1-101D".to_string()
-            ))
+            Some(("https://github.com/login/device".to_string(), "D8E1-101D".to_string()))
         );
     }
 
@@ -1177,10 +1120,7 @@ mod tests {
 
         assert_eq!(
             parsed,
-            Some((
-                "https://github.com/login/device".to_string(),
-                "D8E1-101D".to_string()
-            ))
+            Some(("https://github.com/login/device".to_string(), "D8E1-101D".to_string()))
         );
     }
 
@@ -1264,16 +1204,8 @@ mod tests {
         let lines = missing_copilot_command_help_lines_with("copilot", false, false).expect("help");
 
         assert!(lines.iter().any(|line| line.contains("Install `copilot`")));
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("`gh` is also not installed"))
-        );
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("docs/providers/copilot.md"))
-        );
+        assert!(lines.iter().any(|line| line.contains("`gh` is also not installed")));
+        assert!(lines.iter().any(|line| line.contains("docs/providers/copilot.md")));
     }
 
     #[test]

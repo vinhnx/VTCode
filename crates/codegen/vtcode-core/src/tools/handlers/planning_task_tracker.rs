@@ -225,11 +225,8 @@ fn build_view_lines(
         } else {
             format!("{index_prefix}.{}", idx + 1)
         };
-        let display = format!(
-            "{tree_prefix}{branch} {} {}",
-            node.status.view_symbol(),
-            node.description
-        );
+        let display =
+            format!("{tree_prefix}{branch} {} {}", node.status.view_symbol(), node.description);
 
         out.push(json!({
             "display": display,
@@ -453,10 +450,9 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
 
         if let Some(header) = trimmed.strip_prefix("## ") {
             let lowered = header.trim().to_ascii_lowercase();
-            in_plan_section = matches!(
-                lowered.as_str(),
-                "plan of work" | "concrete steps" | "updated plan"
-            ) || lowered.starts_with("phase ");
+            in_plan_section =
+                matches!(lowered.as_str(), "plan of work" | "concrete steps" | "updated plan")
+                    || lowered.starts_with("phase ");
             in_notes = lowered == "notes";
             continue;
         }
@@ -497,11 +493,7 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
     };
     let items = build_tree_from_flat(&task_lines);
 
-    Some(PlanTaskDocument {
-        title,
-        items,
-        notes,
-    })
+    Some(PlanTaskDocument { title, items, notes })
 }
 
 fn build_flat_create_lines(items: &[TaskItemInput]) -> Result<Vec<FlatTaskLine>> {
@@ -526,12 +518,7 @@ fn build_flat_create_lines(items: &[TaskItemInput]) -> Result<Vec<FlatTaskLine>>
                 }))
             }
             TaskItemInput::Structured(payload) => {
-                let level = payload
-                    .description
-                    .chars()
-                    .take_while(|c| *c == ' ')
-                    .count()
-                    / 2;
+                let level = payload.description.chars().take_while(|c| *c == ' ').count() / 2;
                 let (parsed_status, description) = parse_status_prefix(payload.description.trim());
                 let description = description.trim().to_string();
                 if description.is_empty() {
@@ -607,28 +594,18 @@ impl PlanningTaskTrackerTool {
                 format!("Failed to create plans directory: {}", parent.display())
             })?;
         }
-        write_file_with_context(
-            &tracker_file,
-            &document.to_markdown(),
-            "plan task tracker file",
-        )
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to write plan task tracker file: {}",
-                tracker_file.display()
-            )
-        })?;
+        write_file_with_context(&tracker_file, &document.to_markdown(), "plan task tracker file")
+            .await
+            .with_context(|| {
+                format!("Failed to write plan task tracker file: {}", tracker_file.display())
+            })?;
         Ok(tracker_file)
     }
 
     fn global_task_file(&self) -> Option<PathBuf> {
-        self.state.workspace_root().map(|workspace| {
-            workspace
-                .join(".vtcode")
-                .join("tasks")
-                .join("current_task.md")
-        })
+        self.state
+            .workspace_root()
+            .map(|workspace| workspace.join(".vtcode").join("tasks").join("current_task.md"))
     }
 
     async fn mirror_global_task_file(&self, document: &PlanTaskDocument) -> Result<()> {
@@ -655,10 +632,7 @@ impl PlanningTaskTrackerTool {
         write_file_with_context(&task_file, &markdown, "task checklist")
             .await
             .with_context(|| {
-                format!(
-                    "Failed to write mirrored task checklist file: {}",
-                    task_file.display()
-                )
+                format!("Failed to write mirrored task checklist file: {}", task_file.display())
             })?;
         Ok(())
     }
@@ -691,12 +665,7 @@ impl PlanningTaskTrackerTool {
         {
             sync_tracker_into_plan_file(&plan_file, &document.to_markdown()).await?;
         }
-        Ok(Self::success_payload(
-            status,
-            message,
-            &tracker_file,
-            document,
-        ))
+        Ok(Self::success_payload(status, message, &tracker_file, document))
     }
 
     async fn handle_create(&self, args: &PlanningTaskTrackerArgs) -> Result<Value> {
@@ -713,10 +682,7 @@ impl PlanningTaskTrackerTool {
         }
 
         let mut document = PlanTaskDocument {
-            title: args
-                .title
-                .clone()
-                .unwrap_or_else(|| "Updated Plan".to_string()),
+            title: args.title.clone().unwrap_or_else(|| "Updated Plan".to_string()),
             items: build_tree_from_flat(&flat_lines),
             notes: None,
         };
@@ -826,10 +792,8 @@ impl PlanningTaskTrackerTool {
             .await?
             .context("No active plan tracker. Use action='create' first.")?;
 
-        let description = args
-            .description
-            .as_deref()
-            .context("'description' is required for 'add'")?;
+        let description =
+            args.description.as_deref().context("'description' is required for 'add'")?;
         let (status, parsed_description) = parse_status_prefix(description);
         let node = PlanTaskNode {
             description: parsed_description.trim().to_string(),
@@ -1072,9 +1036,7 @@ mod tests {
         assert_eq!(created["checklist"]["in_progress"], 1);
         assert_eq!(created["view"]["title"], "Updated Plan");
 
-        let lines = created["view"]["lines"]
-            .as_array()
-            .expect("view lines array");
+        let lines = created["view"]["lines"].as_array().expect("view lines array");
         assert!(!lines.is_empty());
         let first = lines[0]["display"].as_str().unwrap_or_default();
         assert!(first.contains('└') || first.contains('├'));
@@ -1104,18 +1066,9 @@ mod tests {
             .await
             .expect("create tracker");
 
-        assert_eq!(
-            created["checklist"]["items"][0]["files"],
-            json!(["docs/ARCHITECTURE.md"])
-        );
-        assert_eq!(
-            created["checklist"]["items"][0]["outcome"],
-            "Map the harness"
-        );
-        assert_eq!(
-            created["checklist"]["items"][0]["verify"],
-            json!(["cargo check"])
-        );
+        assert_eq!(created["checklist"]["items"][0]["files"], json!(["docs/ARCHITECTURE.md"]));
+        assert_eq!(created["checklist"]["items"][0]["outcome"], "Map the harness");
+        assert_eq!(created["checklist"]["items"][0]["verify"], json!(["cargo check"]));
         assert_eq!(
             created["checklist"]["items"][1]["verify"],
             json!([
@@ -1177,10 +1130,7 @@ mod tests {
         .expect("update tracker");
 
         let tool2 = PlanningTaskTrackerTool::new(state);
-        let listed = tool2
-            .execute(json!({"action": "list"}))
-            .await
-            .expect("list tracker");
+        let listed = tool2.execute(json!({"action": "list"})).await.expect("list tracker");
 
         assert_eq!(listed["status"], "ok");
         assert_eq!(listed["checklist"]["completed"], 1);
@@ -1210,11 +1160,7 @@ mod tests {
         assert_eq!(updated["checklist"]["in_progress"], 1);
         assert_eq!(updated["checklist"]["pending"], 1);
 
-        let mirrored = temp_dir
-            .path()
-            .join(".vtcode")
-            .join("tasks")
-            .join("current_task.md");
+        let mirrored = temp_dir.path().join(".vtcode").join("tasks").join("current_task.md");
         let mirrored_content = std::fs::read_to_string(mirrored).expect("read mirrored checklist");
         assert!(mirrored_content.contains("Step 3"));
     }

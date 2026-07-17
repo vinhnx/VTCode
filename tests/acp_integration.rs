@@ -58,10 +58,7 @@ impl FakeRegistry {
             .map(|value| format!("{value}/"))
             .unwrap_or_else(|| "workspace".to_string());
 
-        let mode = args
-            .get(TOOL_LIST_FILES_MODE_ARG)
-            .and_then(Value::as_str)
-            .unwrap_or("list");
+        let mode = args.get(TOOL_LIST_FILES_MODE_ARG).and_then(Value::as_str).unwrap_or("list");
 
         format!("List files in {scope} ({mode})")
     }
@@ -139,41 +136,25 @@ fn collect_options(args: Option<&Value>, tool: SupportedTool) -> Vec<TestOption>
 #[test]
 fn permission_options_include_allow_once() {
     let options = collect_options(None, SupportedTool::ReadFile);
-    assert!(
-        options
-            .iter()
-            .any(|o| o.option_id == TOOL_PERMISSION_ALLOW_OPTION_ID)
-    );
+    assert!(options.iter().any(|o| o.option_id == TOOL_PERMISSION_ALLOW_OPTION_ID));
 }
 
 #[test]
 fn permission_options_include_allow_always() {
     let options = collect_options(None, SupportedTool::ReadFile);
-    assert!(
-        options
-            .iter()
-            .any(|o| o.option_id == TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID)
-    );
+    assert!(options.iter().any(|o| o.option_id == TOOL_PERMISSION_ALLOW_ALWAYS_OPTION_ID));
 }
 
 #[test]
 fn permission_options_include_deny_once() {
     let options = collect_options(None, SupportedTool::ReadFile);
-    assert!(
-        options
-            .iter()
-            .any(|o| o.option_id == TOOL_PERMISSION_DENY_OPTION_ID)
-    );
+    assert!(options.iter().any(|o| o.option_id == TOOL_PERMISSION_DENY_OPTION_ID));
 }
 
 #[test]
 fn permission_options_include_deny_always() {
     let options = collect_options(None, SupportedTool::ReadFile);
-    assert!(
-        options
-            .iter()
-            .any(|o| o.option_id == TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID)
-    );
+    assert!(options.iter().any(|o| o.option_id == TOOL_PERMISSION_DENY_ALWAYS_OPTION_ID));
 }
 
 #[test]

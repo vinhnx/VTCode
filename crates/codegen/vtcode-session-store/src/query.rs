@@ -43,10 +43,10 @@ pub fn recent_sessions(workspace: &Path, n: usize) -> Vec<SessionSummary> {
     };
     for entry in entries.filter_map(Result::ok) {
         let manifest = entry.path().join("manifest.json");
-        if let Ok(bytes) = std::fs::read(&manifest) {
-            if let Ok(s) = serde_json::from_slice::<SessionSummary>(&bytes) {
-                out.push(s);
-            }
+        if let Ok(bytes) = std::fs::read(&manifest)
+            && let Ok(s) = serde_json::from_slice::<SessionSummary>(&bytes)
+        {
+            out.push(s);
         }
     }
     out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));

@@ -699,10 +699,7 @@ mod tests {
             classify_error_message("provider returned 429 Too Many Requests"),
             ErrorCategory::RateLimit
         );
-        assert_eq!(
-            classify_error_message("rate limit exceeded"),
-            ErrorCategory::RateLimit
-        );
+        assert_eq!(classify_error_message("rate limit exceeded"), ErrorCategory::RateLimit);
     }
 
     #[test]
@@ -719,10 +716,7 @@ mod tests {
             classify_error_message("invalid api key provided"),
             ErrorCategory::Authentication
         );
-        assert_eq!(
-            classify_error_message("401 unauthorized"),
-            ErrorCategory::Authentication
-        );
+        assert_eq!(classify_error_message("401 unauthorized"), ErrorCategory::Authentication);
     }
 
     #[test]
@@ -739,26 +733,14 @@ mod tests {
 
     #[test]
     fn timeout_errors() {
-        assert_eq!(
-            classify_error_message("connection timeout"),
-            ErrorCategory::Timeout
-        );
-        assert_eq!(
-            classify_error_message("request timed out after 30s"),
-            ErrorCategory::Timeout
-        );
+        assert_eq!(classify_error_message("connection timeout"), ErrorCategory::Timeout);
+        assert_eq!(classify_error_message("request timed out after 30s"), ErrorCategory::Timeout);
     }
 
     #[test]
     fn network_errors() {
-        assert_eq!(
-            classify_error_message("connection reset by peer"),
-            ErrorCategory::Network
-        );
-        assert_eq!(
-            classify_error_message("dns name resolution failed"),
-            ErrorCategory::Network
-        );
+        assert_eq!(classify_error_message("connection reset by peer"), ErrorCategory::Network);
+        assert_eq!(classify_error_message("dns name resolution failed"), ErrorCategory::Network);
     }
 
     #[test]
@@ -776,7 +758,7 @@ mod tests {
             ErrorCategory::ResourceNotFound
         );
         assert_eq!(
-            classify_error_message("Path 'vtcode-core/src/agent' does not exist"),
+            classify_error_message("Path 'crates/codegen/vtcode-core/src/agent' does not exist"),
             ErrorCategory::ResourceNotFound
         );
     }
@@ -827,10 +809,7 @@ mod tests {
 
     #[test]
     fn cancelled_operations() {
-        assert_eq!(
-            classify_error_message("operation cancelled by user"),
-            ErrorCategory::Cancelled
-        );
+        assert_eq!(classify_error_message("operation cancelled by user"), ErrorCategory::Cancelled);
     }
 
     #[test]
@@ -851,10 +830,7 @@ mod tests {
 
     #[test]
     fn unknown_error_is_execution_error() {
-        assert_eq!(
-            classify_error_message("something went wrong"),
-            ErrorCategory::ExecutionError
-        );
+        assert_eq!(classify_error_message("something went wrong"), ErrorCategory::ExecutionError);
     }
 
     #[test]
@@ -920,10 +896,8 @@ mod tests {
 
     #[test]
     fn llm_error_authentication_converts() {
-        let err = crate::llm::LLMError::Authentication {
-            message: "bad key".to_string(),
-            metadata: None,
-        };
+        let err =
+            crate::llm::LLMError::Authentication { message: "bad key".to_string(), metadata: None };
         assert_eq!(ErrorCategory::from(&err), ErrorCategory::Authentication);
     }
 
@@ -1002,9 +976,7 @@ mod tests {
     #[test]
     fn non_retryable_llm_messages() {
         assert!(!is_retryable_llm_error_message("invalid api key"));
-        assert!(!is_retryable_llm_error_message(
-            "weekly usage limit reached"
-        ));
+        assert!(!is_retryable_llm_error_message("weekly usage limit reached"));
         assert!(!is_retryable_llm_error_message("permission denied"));
     }
 
@@ -1043,9 +1015,6 @@ mod tests {
 
     #[test]
     fn display_matches_user_label() {
-        assert_eq!(
-            format!("{}", ErrorCategory::RateLimit),
-            ErrorCategory::RateLimit.user_label()
-        );
+        assert_eq!(format!("{}", ErrorCategory::RateLimit), ErrorCategory::RateLimit.user_label());
     }
 }

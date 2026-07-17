@@ -30,10 +30,7 @@ pub struct InputWidget<'a> {
 impl<'a> InputWidget<'a> {
     /// Create a new InputWidget with required parameters
     pub fn new(session: &'a mut Session) -> Self {
-        Self {
-            session,
-            area: None,
-        }
+        Self { session, area: None }
     }
 
     /// Set the area for rendering (used for cursor positioning calculations)
@@ -79,17 +76,10 @@ impl<'a> Widget for InputWidget<'a> {
             block = block
                 .title(title)
                 .border_type(crate::tui::ui::tui::session::terminal_capabilities::get_border_type())
-                .border_style(
-                    self.session
-                        .styles
-                        .accent_style()
-                        .add_modifier(Modifier::BOLD),
-                );
+                .border_style(self.session.styles.accent_style().add_modifier(Modifier::BOLD));
         }
         let inner = block.inner(input_area);
-        let input_data = self
-            .session
-            .build_input_widget_data(inner.width, inner.height);
+        let input_data = self.session.build_input_widget_data(inner.width, inner.height);
 
         let paragraph = Paragraph::new(input_data.text)
             .style(input_data.background_style)
@@ -99,14 +89,10 @@ impl<'a> Widget for InputWidget<'a> {
 
         // Handle cursor positioning using buffer API
         if input_data.cursor_should_be_visible && inner.width > 0 && inner.height > 0 {
-            let cursor_x = input_data
-                .cursor_x
-                .min(inner.width.saturating_sub(1))
-                .saturating_add(inner.x);
-            let cursor_y = input_data
-                .cursor_y
-                .min(inner.height.saturating_sub(1))
-                .saturating_add(inner.y);
+            let cursor_x =
+                input_data.cursor_x.min(inner.width.saturating_sub(1)).saturating_add(inner.x);
+            let cursor_y =
+                input_data.cursor_y.min(inner.height.saturating_sub(1)).saturating_add(inner.y);
 
             if let Some(cell) = buf.cell_mut((cursor_x, cursor_y)) {
                 if input_data.use_fake_cursor {
@@ -126,9 +112,8 @@ impl<'a> Widget for InputWidget<'a> {
 
         // Render status line if present
         if let (Some(status_rect), Some(line)) = (status_area, status_line) {
-            let paragraph = Paragraph::new(line)
-                .style(input_data.default_style)
-                .wrap(Wrap { trim: false });
+            let paragraph =
+                Paragraph::new(line).style(input_data.default_style).wrap(Wrap { trim: false });
             paragraph.render(status_rect, buf);
         }
     }

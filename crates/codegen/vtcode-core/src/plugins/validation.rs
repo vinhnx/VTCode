@@ -61,8 +61,7 @@ impl PluginValidator {
     /// Check if a plugin name is valid (kebab-case)
     fn is_valid_plugin_name(name: &str) -> bool {
         // Check if name contains only lowercase letters, numbers, and hyphens
-        name.chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
             && !name.starts_with('-')
             && !name.ends_with('-')
             && !name.is_empty()

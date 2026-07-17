@@ -20,9 +20,6 @@ impl StreamTelemetry for OpenAIStreamTelemetry {
 
     fn on_tool_call_delta(&self) {
         #[cfg(debug_assertions)]
-        debug!(
-            target = "vtcode::llm::openai::stream",
-            "tool call delta received"
-        );
+        debug!(target = "vtcode::llm::openai::stream", "tool call delta received");
     }
 }

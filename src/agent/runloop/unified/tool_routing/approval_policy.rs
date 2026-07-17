@@ -53,9 +53,8 @@ pub(super) fn build_tool_risk_context(
     );
     let args = tool_args.unwrap_or(&Value::Null);
     let intent = vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args);
-    if let Some(command_words) = vtcode_core::tools::command_args::command_words(args)
-        .ok()
-        .flatten()
+    if let Some(command_words) =
+        vtcode_core::tools::command_args::command_words(args).ok().flatten()
     {
         risk_context.command_args = command_words;
     } else if !args.is_null() {

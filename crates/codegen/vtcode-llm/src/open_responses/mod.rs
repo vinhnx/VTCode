@@ -51,9 +51,7 @@ pub fn is_valid_extension_type(type_name: &str) -> bool {
     if let Some((prefix, name)) = type_name.split_once(':') {
         !prefix.is_empty()
             && !name.is_empty()
-            && prefix
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && prefix.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
             && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     } else {
         false

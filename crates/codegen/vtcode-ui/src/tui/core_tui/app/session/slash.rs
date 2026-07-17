@@ -61,10 +61,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     let description_style = slash_description_style(session);
     let blank_gutter = selection_padding();
 
-    let selected = session
-        .slash_palette
-        .selected_index()
-        .filter(|index| *index < item_count);
+    let selected = session.slash_palette.selected_index().filter(|index| *index < item_count);
 
     let rendered_rows = rows
         .into_iter()
@@ -106,18 +103,16 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         })
         .collect::<Vec<_>>();
     let offset = session.slash_palette.scroll_offset();
-    let search_line = command_prefix(
-        session.core.input_manager.content(),
-        session.core.input_manager.cursor(),
-    )
-    .map(|prefix| {
-        let filter = prefix.trim_start_matches('/');
-        SharedSearchField {
-            label: "Search commands".to_owned(),
-            placeholder: Some("command name or description".to_owned()),
-            query: filter.to_owned(),
-        }
-    });
+    let search_line =
+        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor())
+            .map(|prefix| {
+                let filter = prefix.trim_start_matches('/');
+                SharedSearchField {
+                    label: "Search commands".to_owned(),
+                    placeholder: Some("command name or description".to_owned()),
+                    query: filter.to_owned(),
+                }
+            });
     let sections = SharedListPanelSections {
         header: vec![Line::from(Span::styled(
             "Slash Commands".to_owned(),
@@ -170,11 +165,9 @@ pub(crate) fn slash_panel_layout(session: &Session) -> Option<ListPanelLayout> {
     }
 
     let info_rows = slash_palette_instructions(session).len();
-    let has_search_row = command_prefix(
-        session.core.input_manager.content(),
-        session.core.input_manager.cursor(),
-    )
-    .is_some();
+    let has_search_row =
+        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor())
+            .is_some();
     let fixed_rows = fixed_section_rows_with_divider(1, info_rows, has_search_row, true);
     let desired_list_rows = rows_to_u16(ui::INLINE_LIST_MAX_ROWS);
     Some(ListPanelLayout::new(fixed_rows, desired_list_rows))
@@ -199,10 +192,9 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
         return;
     }
 
-    let Some(prefix) = command_prefix(
-        session.core.input_manager.content(),
-        session.core.input_manager.cursor(),
-    ) else {
+    let Some(prefix) =
+        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor())
+    else {
         clear_slash_suggestions(session);
         return;
     };
@@ -222,11 +214,9 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
 }
 
 pub(crate) fn slash_navigation_available(session: &Session) -> bool {
-    let has_prefix = command_prefix(
-        session.core.input_manager.content(),
-        session.core.input_manager.cursor(),
-    )
-    .is_some();
+    let has_prefix =
+        command_prefix(session.core.input_manager.content(), session.core.input_manager.cursor())
+            .is_some();
     session.core.input_enabled()
         && session.inline_lists_visible()
         && session.slash_palette_visible()
@@ -284,10 +274,9 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
     let Some(command) = session.slash_palette.selected_command() else {
         return;
     };
-    let Some(range) = command_range(
-        session.core.input_manager.content(),
-        session.core.input_manager.cursor(),
-    ) else {
+    let Some(range) =
+        command_range(session.core.input_manager.content(), session.core.input_manager.cursor())
+    else {
         return;
     };
 
@@ -309,9 +298,7 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
     }
 
     session.core.input_manager.set_content(new_input.clone());
-    session
-        .input_manager
-        .set_cursor(cursor_position.min(new_input.len()));
+    session.input_manager.set_cursor(cursor_position.min(new_input.len()));
     session.mark_dirty();
 }
 
@@ -509,13 +496,7 @@ const IMMEDIATE_SUBMIT_COMMANDS: &[&str] = &[
 ];
 
 pub(crate) fn should_submit_immediately_from_palette(session: &Session) -> bool {
-    let Some(command) = session
-        .core
-        .input_manager
-        .content()
-        .split_whitespace()
-        .next()
-    else {
+    let Some(command) = session.core.input_manager.content().split_whitespace().next() else {
         return false;
     };
 
@@ -558,11 +539,7 @@ fn slash_name_style(session: &Session) -> Style {
 }
 
 fn slash_description_style(session: &Session) -> Style {
-    session
-        .core
-        .styles
-        .default_style()
-        .add_modifier(Modifier::DIM)
+    session.core.styles.default_style().add_modifier(Modifier::DIM)
 }
 
 #[cfg(test)]

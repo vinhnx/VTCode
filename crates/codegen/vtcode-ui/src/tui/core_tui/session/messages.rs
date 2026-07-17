@@ -90,10 +90,7 @@ impl Session {
             for segment in &mut line.segments {
                 let mut updated_style = (*segment.style).clone();
                 if let Some(color) = updated_style.color.as_ref()
-                    && previous_colors
-                        .iter()
-                        .flatten()
-                        .any(|candidate| *candidate == color)
+                    && previous_colors.iter().flatten().any(|candidate| *candidate == color)
                 {
                     updated_style.color = None;
                     line_changed = true;
@@ -125,12 +122,9 @@ impl Session {
     #[expect(dead_code)]
     pub(crate) fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
         match kind {
-            InlineMessageKind::User => Some(
-                self.labels
-                    .user
-                    .clone()
-                    .unwrap_or_else(|| USER_PREFIX.to_owned()),
-            ),
+            InlineMessageKind::User => {
+                Some(self.labels.user.clone().unwrap_or_else(|| USER_PREFIX.to_owned()))
+            }
             InlineMessageKind::Agent => None,
             InlineMessageKind::Policy => self.labels.agent.clone(),
             InlineMessageKind::Tool
@@ -157,12 +151,8 @@ impl Session {
         let previous_max_offset = self.current_max_scroll_offset();
         let revision = self.next_revision();
         let index = self.lines.len();
-        self.lines.push(MessageLine {
-            kind,
-            segments,
-            link_ranges: Vec::new(),
-            revision,
-        });
+        self.lines
+            .push(MessageLine { kind, segments, link_ranges: Vec::new(), revision });
         self.mark_line_dirty(index);
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
@@ -241,10 +231,7 @@ impl Session {
                     style: std::sync::Arc::new(InlineTextStyle::default()),
                 }],
             );
-            self.collapsed_pastes.push(CollapsedPaste {
-                line_index,
-                full_text: text,
-            });
+            self.collapsed_pastes.push(CollapsedPaste { line_index, full_text: text });
             return;
         }
 
@@ -271,9 +258,8 @@ impl Session {
             let style = segment.style.clone();
 
             while !remaining.is_empty() {
-                if let Some((index, control)) = remaining
-                    .char_indices()
-                    .find(|(_, ch)| matches!(ch, '\n' | '\r'))
+                if let Some((index, control)) =
+                    remaining.char_indices().find(|(_, ch)| matches!(ch, '\n' | '\r'))
                 {
                     let (text, _) = remaining.split_at(index);
                     if !text.is_empty() {
@@ -320,11 +306,9 @@ impl Session {
         let previous_max_offset = self.current_max_scroll_offset();
         let remove_count = min(count, self.lines.len());
         let first_removed = self.lines.len().saturating_sub(remove_count);
-        self.collapsed_pastes
-            .retain(|paste| paste.line_index < first_removed);
+        self.collapsed_pastes.retain(|paste| paste.line_index < first_removed);
         let first_dirty = self.lines.len().saturating_sub(remove_count);
-        self.lines
-            .truncate(self.lines.len().saturating_sub(remove_count));
+        self.lines.truncate(self.lines.len().saturating_sub(remove_count));
         let mut link_ranges = link_ranges.unwrap_or_default().into_iter();
         for segments in lines {
             let revision = self.next_revision();
@@ -354,10 +338,8 @@ impl Session {
             return false;
         }
 
-        let Some(index) = self
-            .collapsed_pastes
-            .iter()
-            .position(|paste| paste.line_index == line_index)
+        let Some(index) =
+            self.collapsed_pastes.iter().position(|paste| paste.line_index == line_index)
         else {
             return false;
         };
@@ -395,11 +377,7 @@ impl Session {
                     Err(pos) => pos.saturating_sub(1),
                 };
                 let start = cache.row_offsets.get(idx).copied().unwrap_or(0);
-                let height = cache
-                    .messages
-                    .get(idx)
-                    .map(|msg| msg.lines.len())
-                    .unwrap_or(1);
+                let height = cache.messages.get(idx).map(|msg| msg.lines.len()).unwrap_or(1);
                 if row < start.saturating_add(height.max(1)) {
                     Some(idx)
                 } else {
@@ -433,11 +411,7 @@ impl Session {
                 Err(pos) => pos.saturating_sub(1),
             };
             let start = cache.row_offsets.get(idx).copied().unwrap_or(0);
-            let height = cache
-                .messages
-                .get(idx)
-                .map(|msg| msg.lines.len())
-                .unwrap_or(1);
+            let height = cache.messages.get(idx).map(|msg| msg.lines.len()).unwrap_or(1);
             if row < start.saturating_add(height.max(1)) {
                 Some(idx)
             } else {
@@ -666,9 +640,7 @@ impl Session {
     /// Returns true if the text was a code fence marker (and should not be displayed)
     pub(crate) fn handle_tool_code_fence_marker(&mut self, text: &str) -> bool {
         let trimmed = text.trim();
-        let stripped = trimmed
-            .strip_prefix("```")
-            .or_else(|| trimmed.strip_prefix("~~~"));
+        let stripped = trimmed.strip_prefix("```").or_else(|| trimmed.strip_prefix("~~~"));
 
         let Some(rest) = stripped else {
             return false;

@@ -99,11 +99,7 @@ impl AcpToolRegistry {
 
         entries.sort_unstable_by_key(|entry| entry.tool.sort_key());
 
-        Self {
-            entries,
-            local_definitions,
-            mapping,
-        }
+        Self { entries, local_definitions, mapping }
     }
 
     pub fn registered_tools(&self) -> Vec<SupportedTool> {
@@ -212,9 +208,6 @@ fn push_registry_entry(
     tool: SupportedTool,
     definition: ToolDefinition,
 ) {
-    mapping.insert(
-        definition.function_name().to_string(),
-        ToolDescriptor::Acp(tool),
-    );
+    mapping.insert(definition.function_name().to_string(), ToolDescriptor::Acp(tool));
     entries.push(ToolRegistryEntry { tool, definition });
 }

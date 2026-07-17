@@ -120,20 +120,14 @@ pub(crate) fn git_dirty_worktree_entries(
         .current_dir(workspace)
         .output()
         .with_context(|| {
-            format!(
-                "Failed to read git worktree state for {}",
-                workspace.display()
-            )
+            format!("Failed to read git worktree state for {}", workspace.display())
         })?;
 
     if !output.status.success() {
         return Ok(None);
     }
 
-    let mut records = output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|record| !record.is_empty());
+    let mut records = output.stdout.split(|byte| *byte == 0).filter(|record| !record.is_empty());
     let mut entries = Vec::new();
 
     while let Some(record) = records.next() {
@@ -184,10 +178,7 @@ pub(crate) fn git_working_tree_numstat_snapshot(
         .current_dir(workspace)
         .output()
         .with_context(|| {
-            format!(
-                "Failed to read git working tree numstat for {}",
-                workspace.display()
-            )
+            format!("Failed to read git working tree numstat for {}", workspace.display())
         })?;
 
     if !output.status.success() {
@@ -208,13 +199,7 @@ pub(crate) fn git_working_tree_numstat_snapshot(
 
         let additions = additions_raw.parse::<u64>().unwrap_or(0);
         let deletions = deletions_raw.parse::<u64>().unwrap_or(0);
-        snapshot.insert(
-            PathBuf::from(path_raw),
-            FileStat {
-                additions,
-                deletions,
-            },
-        );
+        snapshot.insert(PathBuf::from(path_raw), FileStat { additions, deletions });
     }
 
     Ok(Some(snapshot))
@@ -258,9 +243,7 @@ pub(crate) fn git_status_summary(workspace: &Path) -> Result<Option<GitStatusSum
         return Ok(None);
     }
 
-    let branch = String::from_utf8_lossy(&branch_output.stdout)
-        .trim()
-        .to_string();
+    let branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
     if branch.is_empty() {
         return Ok(None);
     }
@@ -275,9 +258,7 @@ pub(crate) fn git_status_summary(workspace: &Path) -> Result<Option<GitStatusSum
         return Ok(None);
     }
 
-    let dirty = !String::from_utf8_lossy(&status_output.stdout)
-        .trim()
-        .is_empty();
+    let dirty = !String::from_utf8_lossy(&status_output.stdout).trim().is_empty();
 
     Ok(Some(GitStatusSummary { branch, dirty }))
 }
@@ -332,9 +313,7 @@ pub(crate) async fn confirm_changes_with_git_diff(
             if !input.trim().eq_ignore_ascii_case("y") {
                 let file_clone = file.clone();
                 tokio::task::spawn_blocking(move || {
-                    std::process::Command::new("git")
-                        .args(["checkout", "--", &file_clone])
-                        .status()
+                    std::process::Command::new("git").args(["checkout", "--", &file_clone]).status()
                 })
                 .await
                 .context("Failed to spawn blocking git checkout")?
@@ -361,68 +340,27 @@ mod tests {
     #[test]
     fn session_code_change_delta_is_net_positive_only() {
         let mut start = HashMap::new();
-        start.insert(
-            PathBuf::from("src/a.rs"),
-            FileStat {
-                additions: 10,
-                deletions: 5,
-            },
-        );
+        start.insert(PathBuf::from("src/a.rs"), FileStat { additions: 10, deletions: 5 });
 
         let mut end = HashMap::new();
-        end.insert(
-            PathBuf::from("src/a.rs"),
-            FileStat {
-                additions: 12,
-                deletions: 8,
-            },
-        );
+        end.insert(PathBuf::from("src/a.rs"), FileStat { additions: 12, deletions: 8 });
 
         let delta = compute_session_code_change_delta(Some(&start), Some(&end));
-        assert_eq!(
-            delta,
-            Some(CodeChangeDelta {
-                additions: 2,
-                deletions: 3
-            })
-        );
+        assert_eq!(delta, Some(CodeChangeDelta { additions: 2, deletions: 3 }));
     }
 
     #[test]
     fn session_code_change_delta_handles_new_and_reduced_files() {
         let mut start = HashMap::new();
-        start.insert(
-            PathBuf::from("src/preexisting.rs"),
-            FileStat {
-                additions: 20,
-                deletions: 10,
-            },
-        );
+        start
+            .insert(PathBuf::from("src/preexisting.rs"), FileStat { additions: 20, deletions: 10 });
 
         let mut end = HashMap::new();
-        end.insert(
-            PathBuf::from("src/preexisting.rs"),
-            FileStat {
-                additions: 5,
-                deletions: 2,
-            },
-        );
-        end.insert(
-            PathBuf::from("src/new.rs"),
-            FileStat {
-                additions: 7,
-                deletions: 1,
-            },
-        );
+        end.insert(PathBuf::from("src/preexisting.rs"), FileStat { additions: 5, deletions: 2 });
+        end.insert(PathBuf::from("src/new.rs"), FileStat { additions: 7, deletions: 1 });
 
         let delta = compute_session_code_change_delta(Some(&start), Some(&end));
-        assert_eq!(
-            delta,
-            Some(CodeChangeDelta {
-                additions: 7,
-                deletions: 1
-            })
-        );
+        assert_eq!(delta, Some(CodeChangeDelta { additions: 7, deletions: 1 }));
     }
 
     #[test]
@@ -451,10 +389,7 @@ mod tests {
     fn workspace_display_prefers_relative_path() {
         let workspace = Path::new("/workspace");
         let path = Path::new("/workspace/docs/project/TODO.md");
-        assert_eq!(
-            workspace_relative_display(workspace, path),
-            "docs/project/TODO.md"
-        );
+        assert_eq!(workspace_relative_display(workspace, path), "docs/project/TODO.md");
     }
 
     #[test]
@@ -483,9 +418,7 @@ mod tests {
         run(&["commit", "-m", "test: seed repo"]);
 
         fs::write(repo.path().join("docs/project/TODO.md"), "after\n").expect("write");
-        let entries = git_dirty_worktree_entries(repo.path())
-            .expect("entries")
-            .expect("git repo");
+        let entries = git_dirty_worktree_entries(repo.path()).expect("entries").expect("git repo");
 
         assert_eq!(entries.len(), 1);
         assert_eq!(

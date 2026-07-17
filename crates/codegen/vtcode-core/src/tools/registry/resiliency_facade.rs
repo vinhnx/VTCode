@@ -10,20 +10,13 @@ impl ToolRegistry {
             return duration;
         }
         let millis = duration.as_millis();
-        let scaled = millis
-            .saturating_mul(num as u128)
-            .saturating_div(denom as u128);
+        let scaled = millis.saturating_mul(num as u128).saturating_div(denom as u128);
         Duration::from_millis(scaled as u64)
     }
 
     pub(super) fn effective_timeout(&self, category: ToolTimeoutCategory) -> Option<Duration> {
         let base = self.timeout_policy.read().ceiling_for(category);
-        let adaptive = self
-            .resiliency
-            .lock()
-            .adaptive_timeout_ceiling
-            .get(&category)
-            .copied();
+        let adaptive = self.resiliency.lock().adaptive_timeout_ceiling.get(&category).copied();
 
         match (base, adaptive) {
             (Some(b), Some(a)) if a.as_millis() > 0 => Some(std::cmp::min(b, a)),
@@ -96,10 +89,8 @@ impl ToolRegistry {
         let mut state = self.resiliency.lock();
         let tuning = state.adaptive_tuning;
 
-        let stats = state
-            .latency_stats
-            .entry(category)
-            .or_insert_with(|| ToolLatencyStats::new(50));
+        let stats =
+            state.latency_stats.entry(category).or_insert_with(|| ToolLatencyStats::new(50));
         stats.record(duration);
 
         if let Some(p95) = stats.percentile(0.95) {

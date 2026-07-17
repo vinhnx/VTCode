@@ -111,10 +111,8 @@ pub(crate) async fn handle_start_theme_palette(
         return Ok(SlashCommandControl::Continue);
     }
     if show_theme_palette(ctx.renderer, mode)? {
-        *ctx.palette_state = Some(ActivePalette::Theme {
-            mode,
-            original_theme_id: theme::active_theme_id(),
-        });
+        *ctx.palette_state =
+            Some(ActivePalette::Theme { mode, original_theme_id: theme::active_theme_id() });
     }
     Ok(SlashCommandControl::Continue)
 }
@@ -141,19 +139,13 @@ pub(crate) async fn handle_start_session_palette(
     match list_recent_sessions_in_scope(limit, &scope).await {
         Ok(listings) => {
             if show_sessions_palette(ctx.renderer, mode, &listings, limit, show_all)? {
-                *ctx.palette_state = Some(ActivePalette::Sessions {
-                    mode,
-                    listings,
-                    limit,
-                    show_all,
-                });
+                *ctx.palette_state =
+                    Some(ActivePalette::Sessions { mode, listings, limit, show_all });
             }
         }
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to load session archives: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to load session archives: {err}"))?;
         }
     }
     Ok(SlashCommandControl::Continue)
@@ -264,8 +256,7 @@ pub(super) async fn start_model_selection_target(
                         "Loading lightweight model lists...",
                     ))
                 } else {
-                    ctx.renderer
-                        .line(MessageStyle::Info, "Loading lightweight model lists...")?;
+                    ctx.renderer.line(MessageStyle::Info, "Loading lightweight model lists...")?;
                     None
                 };
                 let result = build_lightweight_palette_view(ctx.config, vt_cfg.as_ref()).await;
@@ -273,9 +264,7 @@ pub(super) async fn start_model_selection_target(
                 result
             };
             if show_lightweight_model_palette(ctx.renderer, &view, None)? {
-                *ctx.palette_state = Some(ActivePalette::LightweightModel {
-                    view: Box::new(view),
-                });
+                *ctx.palette_state = Some(ActivePalette::LightweightModel { view: Box::new(view) });
             }
             ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
             Ok(SlashCommandControl::Continue)
@@ -346,10 +335,7 @@ pub(super) async fn start_model_picker(
         .as_ref()
         .map(|cfg| cfg.agent.reasoning_effort)
         .unwrap_or(ctx.config.reasoning_effort);
-    let service_tier = ctx
-        .vt_cfg
-        .as_ref()
-        .and_then(|cfg| cfg.provider.openai.service_tier);
+    let service_tier = ctx.vt_cfg.as_ref().and_then(|cfg| cfg.provider.openai.service_tier);
     let workspace_hint = Some(ctx.config.workspace.clone());
     let restore_status_left = ctx.input_status_state.left.clone();
     let restore_status_right = ctx.input_status_state.right.clone();
@@ -362,8 +348,7 @@ pub(super) async fn start_model_picker(
                 "Loading model lists...",
             ))
         } else {
-            ctx.renderer
-                .line(MessageStyle::Info, "Loading model lists...")?;
+            ctx.renderer.line(MessageStyle::Info, "Loading model lists...")?;
             None
         };
         let result = ModelPickerState::new(
@@ -417,10 +402,8 @@ pub(super) async fn start_model_picker(
             }
         }
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to start model picker: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to start model picker: {err}"))?;
         }
     }
     Ok(SlashCommandControl::Continue)
@@ -441,10 +424,8 @@ pub(crate) async fn handle_start_mode_palette(
         )) {
             Ok(discovered) => discovered.effective,
             Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to discover agents: {err}"),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("Failed to discover agents: {err}"))?;
                 return Ok(SlashCommandControl::Continue);
             }
         }

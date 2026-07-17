@@ -406,11 +406,7 @@ fn coalesce_adjacent_spans(mut spans: Vec<Span<'static>>) -> Vec<Span<'static>> 
 }
 
 fn wrapped_continuation_prefix(line: &Line<'static>) -> String {
-    let text: String = line
-        .spans
-        .iter()
-        .map(|span| span.content.as_ref())
-        .collect();
+    let text: String = line.spans.iter().map(|span| span.content.as_ref()).collect();
     structural_continuation_prefix(&text)
 }
 
@@ -492,9 +488,7 @@ fn numbered_list_marker_width(text: &str) -> Option<usize> {
     }
     let end = idx + space.len_utf8();
 
-    Some(UnicodeWidthStr::width(
-        &text[..end.max(end_after_separator)],
-    ))
+    Some(UnicodeWidthStr::width(&text[..end.max(end_after_separator)]))
 }
 
 /// Detect if a line is a todo/checkbox item and its state
@@ -616,26 +610,14 @@ mod tests {
     fn test_strip_ansi_codes() {
         assert_eq!(strip_ansi_codes("\x1b[31mRed text\x1b[0m"), "Red text");
         assert_eq!(strip_ansi_codes("No codes here"), "No codes here");
-        assert_eq!(
-            strip_ansi_codes("\x1b[1;32mBold green\x1b[0m"),
-            "Bold green"
-        );
+        assert_eq!(strip_ansi_codes("\x1b[1;32mBold green\x1b[0m"), "Bold green");
     }
 
     #[test]
     fn test_simplify_tool_display() {
-        assert_eq!(
-            simplify_tool_display("file path/to/file"),
-            "accessing path/to/file"
-        );
-        assert_eq!(
-            simplify_tool_display("path: path/to/file"),
-            "file: path/to/file"
-        );
-        assert_eq!(
-            simplify_tool_display("grep pattern"),
-            "searching for pattern"
-        );
+        assert_eq!(simplify_tool_display("file path/to/file"), "accessing path/to/file");
+        assert_eq!(simplify_tool_display("path: path/to/file"), "file: path/to/file");
+        assert_eq!(simplify_tool_display("grep pattern"), "searching for pattern");
     }
 
     #[test]
@@ -654,10 +636,7 @@ mod tests {
         assert_eq!(detect_todo_state("* [ ] Task"), TodoState::Pending);
         assert_eq!(detect_todo_state("+ [ ] Task"), TodoState::Pending);
         assert_eq!(detect_todo_state("[ ] Task"), TodoState::Pending);
-        assert_eq!(
-            detect_todo_state("  - [ ] Indented task"),
-            TodoState::Pending
-        );
+        assert_eq!(detect_todo_state("  - [ ] Indented task"), TodoState::Pending);
     }
 
     #[test]
@@ -666,14 +645,8 @@ mod tests {
         assert_eq!(detect_todo_state("- [X] Done"), TodoState::Completed);
         assert_eq!(detect_todo_state("* [x] Done"), TodoState::Completed);
         assert_eq!(detect_todo_state("[x] Done"), TodoState::Completed);
-        assert_eq!(
-            detect_todo_state("  - [x] Indented done"),
-            TodoState::Completed
-        );
-        assert_eq!(
-            detect_todo_state("~~Strikethrough text~~"),
-            TodoState::Completed
-        );
+        assert_eq!(detect_todo_state("  - [x] Indented done"), TodoState::Completed);
+        assert_eq!(detect_todo_state("~~Strikethrough text~~"), TodoState::Completed);
     }
 
     #[test]
@@ -718,10 +691,7 @@ mod tests {
 
     #[test]
     fn test_pty_wrapped_continuation_prefix() {
-        assert_eq!(
-            pty_wrapped_continuation_prefix("  ", "  └ cargo check"),
-            "      "
-        );
+        assert_eq!(pty_wrapped_continuation_prefix("  ", "  └ cargo check"), "      ");
         assert_eq!(
             pty_wrapped_continuation_prefix("  ", "\u{1b}[32m• Ran cargo check -p vtcode\u{1b}[0m",),
             "        "

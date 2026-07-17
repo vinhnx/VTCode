@@ -114,10 +114,7 @@ pub(super) fn timeline_rows_from_thread_events(records: &[ThreadEventRecord]) ->
                 record.turn_id.as_deref(),
                 record.submission_id.as_ref().map(|value| value.as_str()),
                 "Turn started".to_string(),
-                record
-                    .turn_id
-                    .clone()
-                    .unwrap_or_else(|| "turn started".to_string()),
+                record.turn_id.clone().unwrap_or_else(|| "turn started".to_string()),
                 String::new(),
                 pretty_json_string(&record.event),
                 false,
@@ -467,10 +464,7 @@ pub(super) fn timeline_rows_from_messages(messages: &[Value]) -> Vec<TimelineRow
     let mut sequence = 1_u64;
 
     for message in messages {
-        let role = message
-            .get("role")
-            .and_then(Value::as_str)
-            .unwrap_or("Unknown");
+        let role = message.get("role").and_then(Value::as_str).unwrap_or("Unknown");
         let content = message.get("content").and_then(Value::as_str).unwrap_or("");
         let tool_call_id = message.get("tool_call_id").and_then(Value::as_str);
         let role_lower = role.to_ascii_lowercase();
@@ -523,9 +517,8 @@ pub(super) fn timeline_rows_from_messages(messages: &[Value]) -> Vec<TimelineRow
                     .unwrap_or_else(|| "unknown".to_string());
                 let tool_call_id = tool_call.get("id").and_then(Value::as_str);
                 let mut body = String::new();
-                if let Some(arguments) = tool_call
-                    .get("function")
-                    .and_then(|value| value.get("arguments"))
+                if let Some(arguments) =
+                    tool_call.get("function").and_then(|value| value.get("arguments"))
                 {
                     append_json_section(&mut body, "Arguments", arguments);
                 }
@@ -645,10 +638,7 @@ fn infer_row_role(category: &str, item_type: Option<&str>, title: &str) -> Strin
         return "user".to_string();
     }
     if normalized_title.starts_with("assistant ")
-        || matches!(
-            item_type,
-            Some("agent_message" | "plan" | "reasoning" | "plan_delta")
-        )
+        || matches!(item_type, Some("agent_message" | "plan" | "reasoning" | "plan_delta"))
     {
         return "assistant".to_string();
     }
@@ -714,12 +704,7 @@ fn format_usage_summary(usage: &Usage) -> String {
 }
 
 fn truncate_preview(text: &str, max_chars: usize) -> String {
-    let candidate = text
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .unwrap_or("")
-        .trim();
+    let candidate = text.lines().map(str::trim).find(|line| !line.is_empty()).unwrap_or("").trim();
 
     if candidate.is_empty() {
         return "No textual content.".to_string();
@@ -758,18 +743,13 @@ pub(super) fn redact_timeline_export(export: &TimelineExport) -> TimelineExport 
         row.title = super::super::redact_sensitive_text(&row.title);
         row.summary = super::super::redact_sensitive_text(&row.summary);
         row.body = super::super::redact_sensitive_text(&row.body);
-        row.turn_id = row
-            .turn_id
-            .as_ref()
-            .map(|value| super::super::redact_sensitive_text(value));
+        row.turn_id = row.turn_id.as_ref().map(|value| super::super::redact_sensitive_text(value));
         row.submission_id = row
             .submission_id
             .as_ref()
             .map(|value| super::super::redact_sensitive_text(value));
-        row.detail_json = row
-            .detail_json
-            .as_ref()
-            .map(|value| super::super::redact_sensitive_text(value));
+        row.detail_json =
+            row.detail_json.as_ref().map(|value| super::super::redact_sensitive_text(value));
     }
     redacted
 }
@@ -919,8 +899,5 @@ fn escape_html(input: &str) -> String {
 }
 
 fn sanitize_json_for_script_tag(input: &str) -> String {
-    input
-        .replace('&', "\\u0026")
-        .replace('<', "\\u003c")
-        .replace('>', "\\u003e")
+    input.replace('&', "\\u0026").replace('<', "\\u003c").replace('>', "\\u003e")
 }

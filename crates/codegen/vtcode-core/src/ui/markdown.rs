@@ -28,10 +28,7 @@ pub fn highlight_code_to_segments(
     _language: Option<&str>,
     _theme: &str,
 ) -> Vec<HighlightedSegment> {
-    vec![HighlightedSegment {
-        style: Style::default(),
-        text: code.to_string(),
-    }]
+    vec![HighlightedSegment { style: Style::default(), text: code.to_string() }]
 }
 
 /// Highlight a single line for diff display (headless passthrough).

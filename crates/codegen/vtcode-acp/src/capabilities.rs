@@ -463,11 +463,7 @@ mod tests {
     fn test_initialize_params_default() {
         let params = InitializeParams::default();
         assert!(!params.protocol_versions.is_empty());
-        assert!(
-            params
-                .protocol_versions
-                .contains(&PROTOCOL_VERSION.to_string())
-        );
+        assert!(params.protocol_versions.contains(&PROTOCOL_VERSION.to_string()));
     }
 
     #[test]
@@ -487,12 +483,7 @@ mod tests {
                 search: true,
                 watch: false,
             },
-            terminal: TerminalCapabilities {
-                create: true,
-                input: true,
-                output: true,
-                pty: true,
-            },
+            terminal: TerminalCapabilities { create: true, input: true, output: true, pty: true },
             ..Default::default()
         };
 
@@ -503,9 +494,7 @@ mod tests {
 
     #[test]
     fn test_auth_credentials() {
-        let creds = AuthCredentials::ApiKey {
-            key: "sk-test123".to_string(),
-        };
+        let creds = AuthCredentials::ApiKey { key: "sk-test123".to_string() };
         let json = serde_json::to_value(&creds).unwrap();
         assert_eq!(json["type"], "api_key");
         assert_eq!(json["key"], "sk-test123");
@@ -573,9 +562,7 @@ mod tests {
         let deserialized: AuthMethod = serde_json::from_value(json).unwrap();
 
         match deserialized {
-            AuthMethod::EnvVar {
-                id, name, var_name, ..
-            } => {
+            AuthMethod::EnvVar { id, name, var_name, .. } => {
                 assert_eq!(id, "test_id");
                 assert_eq!(name, "Test");
                 assert_eq!(var_name, "TEST_VAR");

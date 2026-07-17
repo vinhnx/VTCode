@@ -24,9 +24,7 @@ pub struct LanguageRegistry {
 
 impl LanguageRegistry {
     pub fn new() -> Self {
-        let mut registry = Self {
-            providers: Vec::new(),
-        };
+        let mut registry = Self { providers: Vec::new() };
 
         // Register default providers
         registry.register(Box::new(rust::RustProvider::new()));

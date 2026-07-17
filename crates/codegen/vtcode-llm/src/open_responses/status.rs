@@ -101,13 +101,7 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        assert_eq!(
-            serde_json::to_string(&ItemStatus::InProgress).unwrap(),
-            "\"in_progress\""
-        );
-        assert_eq!(
-            serde_json::to_string(&ItemStatus::Completed).unwrap(),
-            "\"completed\""
-        );
+        assert_eq!(serde_json::to_string(&ItemStatus::InProgress).unwrap(), "\"in_progress\"");
+        assert_eq!(serde_json::to_string(&ItemStatus::Completed).unwrap(), "\"completed\"");
     }
 }

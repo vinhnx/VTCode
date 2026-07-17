@@ -40,9 +40,7 @@ pub(crate) fn interpret_stop(
                     command.command
                 )));
             } else if allow_plain_success_stdout(result, quiet_success_output) {
-                outcome
-                    .messages
-                    .push(HookMessage::info(result.stdout.trim().to_owned()));
+                outcome.messages.push(HookMessage::info(result.stdout.trim().to_owned()));
             }
         }
         return;
@@ -52,16 +50,12 @@ pub(crate) fn interpret_stop(
     if let Some(decision) = common.decision.as_deref()
         && decision.eq_ignore_ascii_case("block")
     {
-        outcome.block_reason = common
-            .decision_reason
-            .and_then(|reason| trimmed_non_empty(&reason));
+        outcome.block_reason = common.decision_reason.and_then(|reason| trimmed_non_empty(&reason));
         return;
     }
 
     if let Some(false) = common.continue_decision {
-        outcome.block_reason = common
-            .stop_reason
-            .and_then(|reason| trimmed_non_empty(&reason));
+        outcome.block_reason = common.stop_reason.and_then(|reason| trimmed_non_empty(&reason));
         return;
     }
 
@@ -71,15 +65,11 @@ pub(crate) fn interpret_stop(
         if let Some(decision) = spec.get("decision").and_then(Value::as_str)
             && decision.eq_ignore_ascii_case("block")
         {
-            outcome.block_reason = spec
-                .get("reason")
-                .and_then(Value::as_str)
-                .and_then(trimmed_non_empty);
+            outcome.block_reason =
+                spec.get("reason").and_then(Value::as_str).and_then(trimmed_non_empty);
         } else if spec.get("continue").and_then(Value::as_bool) == Some(false) {
-            outcome.block_reason = spec
-                .get("stopReason")
-                .and_then(Value::as_str)
-                .and_then(trimmed_non_empty);
+            outcome.block_reason =
+                spec.get("stopReason").and_then(Value::as_str).and_then(trimmed_non_empty);
         }
     }
 }

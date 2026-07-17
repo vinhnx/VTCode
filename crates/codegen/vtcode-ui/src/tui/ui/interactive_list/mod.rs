@@ -19,10 +19,7 @@ pub struct SelectionEntry {
 
 impl SelectionEntry {
     pub fn new(title: impl Into<String>, description: Option<String>) -> Self {
-        Self {
-            title: title.into(),
-            description,
-        }
+        Self { title: title.into(), description }
     }
 }
 

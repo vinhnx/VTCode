@@ -12,10 +12,7 @@ pub(super) fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError
         provider_name,
         &format!("Failed to render streaming output: {err}"),
     );
-    uni::LLMError::Provider {
-        message: formatted_error,
-        metadata: None,
-    }
+    uni::LLMError::Provider { message: formatted_error, metadata: None }
 }
 
 pub(super) fn reasoning_matches_content(reasoning: &str, content: &str) -> bool {

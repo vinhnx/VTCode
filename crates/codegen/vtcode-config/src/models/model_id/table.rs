@@ -871,14 +871,8 @@ mod tests {
             (models::openai::GPT_5_5_DATED, ModelId::GPT55),
             (models::GEMINI_3_FLASH_PREVIEW, ModelId::Gemini35Flash),
             (models::CLAUDE_HAIKU_4_5_20251001, ModelId::ClaudeHaiku45),
-            (
-                models::huggingface::STEP_3_5_FLASH_BASE,
-                ModelId::HuggingFaceStep35Flash,
-            ),
-            (
-                models::huggingface::STEP_3_5_FLASH_LEGACY_FASTEST,
-                ModelId::HuggingFaceStep35Flash,
-            ),
+            (models::huggingface::STEP_3_5_FLASH_BASE, ModelId::HuggingFaceStep35Flash),
+            (models::huggingface::STEP_3_5_FLASH_LEGACY_FASTEST, ModelId::HuggingFaceStep35Flash),
         ];
         for (alias, expected) in cases {
             let parsed = ModelId::from_str(alias)

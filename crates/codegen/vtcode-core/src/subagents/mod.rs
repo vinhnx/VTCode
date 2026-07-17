@@ -227,11 +227,7 @@ impl SubagentController {
     /// Returns status entries for all tracked child subagents.
     pub async fn status_entries(&self) -> Vec<SubagentStatusEntry> {
         let state = self.state.read().await;
-        state
-            .children
-            .values()
-            .map(ChildRecord::build_status_entry)
-            .collect()
+        state.children.values().map(ChildRecord::build_status_entry).collect()
     }
 }
 

@@ -49,7 +49,7 @@ Patch edit:
 Code search with the advanced profile:
 
 ```json
-{"query":"ToolRegistration","path":"vtcode-core/src/tools","file_types":["rust"],"result_types":["definition","usage"]}
+{"query":"ToolRegistration","path":"crates/codegen/vtcode-core/src/tools","file_types":["rust"],"result_types":["definition","usage"]}
 ```
 
 ## Advanced Profile

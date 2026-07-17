@@ -117,16 +117,9 @@ async fn explicit_full_auto_retains_tool_exposed_by_planning_transition() {
     let temp = TempDir::new().expect("tempdir");
     let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
 
-    assert!(
-        !registry
-            .available_tools()
-            .await
-            .contains(&tools::CODE_SEARCH.to_string())
-    );
+    assert!(!registry.available_tools().await.contains(&tools::CODE_SEARCH.to_string()));
 
-    registry
-        .enable_full_auto_permission(&[tools::CODE_SEARCH.to_string()])
-        .await;
+    registry.enable_full_auto_permission(&[tools::CODE_SEARCH.to_string()]).await;
 
     assert_eq!(
         registry.current_full_auto_allowlist().await,
@@ -136,12 +129,7 @@ async fn explicit_full_auto_retains_tool_exposed_by_planning_transition() {
 
     registry.enable_planning();
 
-    assert!(
-        registry
-            .available_tools()
-            .await
-            .contains(&tools::CODE_SEARCH.to_string())
-    );
+    assert!(registry.available_tools().await.contains(&tools::CODE_SEARCH.to_string()));
     assert!(
         registry
             .preflight_tool_permission(tools::CODE_SEARCH)
@@ -160,9 +148,7 @@ async fn wildcard_full_auto_tracks_late_tools_visible_to_the_effective_profile()
         ToolDocumentationMode::Full,
         ToolModelCapabilities::default(),
     );
-    let advanced_config = default_config
-        .clone()
-        .with_tool_profile(ToolProfile::AdvancedVtCode);
+    let advanced_config = default_config.clone().with_tool_profile(ToolProfile::AdvancedVtCode);
     let profile_filtered_tool = "profile_filtered_dynamic_tool";
     let late_advanced_tool = "late_advanced_dynamic_tool";
     let post_explicit_tool = "post_explicit_dynamic_tool";
@@ -182,11 +168,7 @@ async fn wildcard_full_auto_tracks_late_tools_visible_to_the_effective_profile()
         )
         .await
         .expect("register profile-filtered dynamic tool");
-    assert!(
-        !registry
-            .is_allowed_in_full_auto(profile_filtered_tool)
-            .await
-    );
+    assert!(!registry.is_allowed_in_full_auto(profile_filtered_tool).await);
 
     registry
         .enable_full_auto_permission_for_session(
@@ -194,11 +176,7 @@ async fn wildcard_full_auto_tracks_late_tools_visible_to_the_effective_profile()
             advanced_config,
         )
         .await;
-    assert!(
-        registry
-            .is_allowed_in_full_auto(profile_filtered_tool)
-            .await
-    );
+    assert!(registry.is_allowed_in_full_auto(profile_filtered_tool).await);
 
     registry
         .register_tool(
@@ -214,9 +192,7 @@ async fn wildcard_full_auto_tracks_late_tools_visible_to_the_effective_profile()
         .expect("register late advanced dynamic tool");
     assert!(registry.is_allowed_in_full_auto(late_advanced_tool).await);
 
-    registry
-        .enable_full_auto_permission(&[tools::EXEC_COMMAND.to_string()])
-        .await;
+    registry.enable_full_auto_permission(&[tools::EXEC_COMMAND.to_string()]).await;
     registry
         .register_tool(
             ToolRegistration::new(

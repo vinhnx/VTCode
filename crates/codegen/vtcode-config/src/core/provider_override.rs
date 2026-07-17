@@ -56,24 +56,18 @@ impl ProviderOverrideConfig {
                 ));
             }
             if !seen.insert(trimmed.to_lowercase()) {
-                return Err(format!(
-                    "providers[{provider_name}]: duplicate model `{trimmed}`"
-                ));
+                return Err(format!("providers[{provider_name}]: duplicate model `{trimmed}`"));
             }
         }
         if let Some(base_url) = &self.base_url
             && base_url.trim().is_empty()
         {
-            return Err(format!(
-                "providers[{provider_name}]: `base_url` must not be empty"
-            ));
+            return Err(format!("providers[{provider_name}]: `base_url` must not be empty"));
         }
         if let Some(api_key_env) = &self.api_key_env
             && api_key_env.trim().is_empty()
         {
-            return Err(format!(
-                "providers[{provider_name}]: `api_key_env` must not be empty"
-            ));
+            return Err(format!("providers[{provider_name}]: `api_key_env` must not be empty"));
         }
         Ok(())
     }
@@ -108,9 +102,7 @@ mod tests {
             base_url: None,
             api_key_env: None,
         };
-        let err = config
-            .validate("test-provider")
-            .expect_err("blank model should fail");
+        let err = config.validate("test-provider").expect_err("blank model should fail");
         assert!(err.contains("`models` entries must not be empty"));
     }
 
@@ -121,9 +113,7 @@ mod tests {
             base_url: Some("   ".to_string()),
             api_key_env: None,
         };
-        let err = config
-            .validate("test-provider")
-            .expect_err("blank base_url should fail");
+        let err = config.validate("test-provider").expect_err("blank base_url should fail");
         assert!(err.contains("`base_url` must not be empty"));
     }
 
@@ -134,9 +124,7 @@ mod tests {
             base_url: None,
             api_key_env: Some("   ".to_string()),
         };
-        let err = config
-            .validate("test-provider")
-            .expect_err("blank api_key_env should fail");
+        let err = config.validate("test-provider").expect_err("blank api_key_env should fail");
         assert!(err.contains("`api_key_env` must not be empty"));
     }
 
@@ -151,9 +139,7 @@ mod tests {
             base_url: None,
             api_key_env: None,
         };
-        let err = config
-            .validate("test-provider")
-            .expect_err("duplicate model should fail");
+        let err = config.validate("test-provider").expect_err("duplicate model should fail");
         assert!(err.contains("duplicate model"));
     }
 

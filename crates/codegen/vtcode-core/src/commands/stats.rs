@@ -67,40 +67,22 @@ fn display_text_stats(
     }
 
     println!("\n{} Performance Metrics:", style("[METRICS]").dim());
-    println!(
-        "  Session Duration: {} seconds",
-        style(metrics.session_duration_seconds).cyan()
-    );
+    println!("  Session Duration: {} seconds", style(metrics.session_duration_seconds).cyan());
     println!("  API Calls: {}", style(metrics.total_api_calls).cyan());
-    println!(
-        "  Tool Executions: {}",
-        style(metrics.tool_execution_count).cyan()
-    );
+    println!("  Tool Executions: {}", style(metrics.tool_execution_count).cyan());
     println!("  Errors: {}", style(metrics.error_count).red());
-    println!(
-        "  Recovery Rate: {:.1}%",
-        style(metrics.recovery_success_rate * 100.0).green()
-    );
+    println!("  Recovery Rate: {:.1}%", style(metrics.recovery_success_rate * 100.0).green());
 
     if let Some(tokens) = metrics.total_tokens_used {
         println!("  Total Tokens: {}", style(tokens).cyan());
     }
 
-    println!(
-        "  Avg Response Time: {:.0}ms",
-        style(metrics.average_response_time_ms).cyan()
-    );
+    println!("  Avg Response Time: {:.0}ms", style(metrics.average_response_time_ms).cyan());
 
     if detailed {
         println!("\n{} System Information:", style("[SYS]").dim());
-        println!(
-            "  Rust Version: {}",
-            style(env!("CARGO_PKG_RUST_VERSION")).cyan()
-        );
-        println!(
-            "  vtcode Version: {}",
-            style(env!("CARGO_PKG_VERSION")).cyan()
-        );
+        println!("  Rust Version: {}", style(env!("CARGO_PKG_RUST_VERSION")).cyan());
+        println!("  vtcode Version: {}", style(env!("CARGO_PKG_VERSION")).cyan());
         println!(
             "  Build Profile: {}",
             if cfg!(debug_assertions) {
@@ -152,10 +134,7 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
     println!("<h2>Configuration</h2>");
     println!("<ul>");
     println!("<li><strong>Model:</strong> {}</li>", config.model);
-    println!(
-        "<li><strong>Workspace:</strong> {}</li>",
-        config.workspace.display()
-    );
+    println!("<li><strong>Workspace:</strong> {}</li>", config.workspace.display());
     println!(
         "<li><strong>Verbose Mode:</strong> {}</li>",
         if config.verbose {
@@ -167,10 +146,7 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
     println!("</ul>");
 
     println!("<h2>Tool Information</h2>");
-    println!(
-        "<p><strong>Available Tools:</strong> {}</p>",
-        tool_names.len()
-    );
+    println!("<p><strong>Available Tools:</strong> {}</p>", tool_names.len());
     println!("<ul>");
     for tool_name in tool_names {
         println!("<li>{tool_name}</li>");
@@ -183,14 +159,8 @@ fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics, tool_n
         "<li><strong>Session Duration:</strong> {} seconds</li>",
         metrics.session_duration_seconds
     );
-    println!(
-        "<li><strong>API Calls:</strong> {}</li>",
-        metrics.total_api_calls
-    );
-    println!(
-        "<li><strong>Tool Executions:</strong> {}</li>",
-        metrics.tool_execution_count
-    );
+    println!("<li><strong>API Calls:</strong> {}</li>", metrics.total_api_calls);
+    println!("<li><strong>Tool Executions:</strong> {}</li>", metrics.tool_execution_count);
     println!("<li><strong>Errors:</strong> {}</li>", metrics.error_count);
     println!(
         "<li><strong>Recovery Rate:</strong> {:.1}%</li>",

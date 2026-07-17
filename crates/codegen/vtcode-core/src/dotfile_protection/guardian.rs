@@ -43,10 +43,7 @@ pub fn get_global_guardian() -> Option<Arc<DotfileGuardian>> {
 ///
 /// Returns false if the guardian hasn't been initialized.
 pub fn is_protected_dotfile(path: &Path) -> bool {
-    GLOBAL_GUARDIAN
-        .get()
-        .map(|g| g.is_protected(path))
-        .unwrap_or(false)
+    GLOBAL_GUARDIAN.get().map(|g| g.is_protected(path)).unwrap_or(false)
 }
 
 /// Decision from the dotfile guardian.
@@ -81,10 +78,7 @@ impl ProtectionDecision {
 
     /// Check if access is blocked or denied.
     pub fn is_blocked(&self) -> bool {
-        matches!(
-            self,
-            ProtectionDecision::Blocked(_) | ProtectionDecision::Denied(_)
-        )
+        matches!(self, ProtectionDecision::Blocked(_) | ProtectionDecision::Denied(_))
     }
 }
 
@@ -277,8 +271,7 @@ impl DotfileGuardian {
     pub async fn request_access(&self, context: &AccessContext) -> Result<ProtectionDecision> {
         // Check if protection is enabled
         if !self.config.enabled {
-            self.log_access(context, AuditOutcome::AllowedUnprotected)
-                .await?;
+            self.log_access(context, AuditOutcome::AllowedUnprotected).await?;
             return Ok(ProtectionDecision::Allowed);
         }
 
@@ -339,9 +332,7 @@ impl DotfileGuardian {
         // Track pending modification
         {
             let mut state = self.state.lock().await;
-            state
-                .pending_modifications
-                .insert(context.file_path.clone());
+            state.pending_modifications.insert(context.file_path.clone());
         }
 
         if self.is_whitelisted(&context.file_path)
@@ -352,8 +343,7 @@ impl DotfileGuardian {
             Ok(ProtectionDecision::RequiresConfirmation(request))
         } else {
             // Protection enabled but no confirmation required (unusual config)
-            self.log_access(context, AuditOutcome::AllowedUnprotected)
-                .await?;
+            self.log_access(context, AuditOutcome::AllowedUnprotected).await?;
             Ok(ProtectionDecision::Allowed)
         }
     }
@@ -493,10 +483,8 @@ impl DotfileGuardian {
             if context.is_cascading
                 && let Some(ref triggered_by) = context.triggered_by
             {
-                entry = entry.with_context(format!(
-                    "Cascading from: {}",
-                    triggered_by.to_string_lossy()
-                ));
+                entry = entry
+                    .with_context(format!("Cascading from: {}", triggered_by.to_string_lossy()));
             }
 
             log.log(entry).await?;
@@ -507,10 +495,7 @@ impl DotfileGuardian {
 
     /// Get a human-readable reason why a file is protected.
     fn get_protection_reason(&self, path: &Path) -> String {
-        let filename = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown");
+        let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
 
         if filename.starts_with(".git") {
             "Git configuration file - changes may affect repository behavior".to_string()
@@ -529,11 +514,7 @@ impl DotfileGuardian {
 
     /// Build a warning message for the user.
     fn build_warning_message(&self, context: &AccessContext) -> String {
-        let filename = context
-            .file_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown");
+        let filename = context.file_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
 
         format!(
             "DOTFILE PROTECTION WARNING\n\n\
@@ -545,10 +526,7 @@ impl DotfileGuardian {
             context.initiator,
             context.access_type.to_string().to_lowercase(),
             filename,
-            context
-                .proposed_changes
-                .as_deref()
-                .unwrap_or("No details provided")
+            context.proposed_changes.as_deref().unwrap_or("No details provided")
         )
     }
 }
@@ -584,13 +562,9 @@ mod tests {
     async fn test_requires_confirmation() {
         let (guardian, _dir) = create_test_guardian().await;
 
-        let context = AccessContext::new(
-            ".gitignore",
-            AccessType::Write,
-            "write_file",
-            "test-session",
-        )
-        .with_proposed_changes("Adding node_modules to ignore list");
+        let context =
+            AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session")
+                .with_proposed_changes("Adding node_modules to ignore list");
 
         let decision = guardian.request_access(&context).await.unwrap();
 
@@ -623,10 +597,7 @@ mod tests {
         // First modification
         let context1 = AccessContext::new(".gitignore", AccessType::Write, "test", "test-session");
         let _ = guardian.request_access(&context1).await.unwrap();
-        guardian
-            .confirm_modification(&context1, false)
-            .await
-            .unwrap();
+        guardian.confirm_modification(&context1, false).await.unwrap();
 
         // Cascading modification
         let context2 =
@@ -660,12 +631,8 @@ mod tests {
 
         let guardian = DotfileGuardian::new(config).await.unwrap();
 
-        let context = AccessContext::new(
-            ".gitignore",
-            AccessType::Write,
-            "write_file",
-            "test-session",
-        );
+        let context =
+            AccessContext::new(".gitignore", AccessType::Write, "write_file", "test-session");
 
         let decision = guardian.request_access(&context).await.unwrap();
         assert!(decision.is_allowed());

@@ -162,13 +162,9 @@ impl TagStreamSanitizer {
         let mut events = Vec::new();
         if !self.partial_tag.is_empty() {
             if self.in_reasoning {
-                events.push(LLMStreamEvent::Reasoning {
-                    delta: self.partial_tag,
-                });
+                events.push(LLMStreamEvent::Reasoning { delta: self.partial_tag });
             } else {
-                events.push(LLMStreamEvent::Token {
-                    delta: self.partial_tag,
-                });
+                events.push(LLMStreamEvent::Token { delta: self.partial_tag });
             }
         }
         events

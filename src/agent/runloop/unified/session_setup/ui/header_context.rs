@@ -117,9 +117,7 @@ fn maybe_render_openai_priority_notice(
 
     let default_auth = vtcode_auth::OpenAIAuthConfig::default();
     let auth_cfg = vt_cfg.map(|cfg| &cfg.auth.openai).unwrap_or(&default_auth);
-    let storage_mode = vt_cfg
-        .map(|cfg| cfg.agent.credential_storage_mode)
-        .unwrap_or_default();
+    let storage_mode = vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default();
     let api_key = vtcode_core::config::api_keys::get_api_key(
         "openai",
         &vtcode_core::config::api_keys::ApiKeySources::default(),
@@ -152,9 +150,7 @@ fn maybe_render_system_prompt_budget_warning(
         return Ok(());
     }
 
-    let warning_enabled = vt_cfg
-        .map(|cfg| cfg.agent.system_prompt_budget_warning)
-        .unwrap_or(true);
+    let warning_enabled = vt_cfg.map(|cfg| cfg.agent.system_prompt_budget_warning).unwrap_or(true);
     if !warning_enabled {
         return Ok(());
     }
@@ -184,11 +180,8 @@ pub(crate) fn apply_ide_context_snapshot(
     context_manager.set_editor_context_snapshot(snapshot.clone(), ide_context_config);
     let effective_ide_context_config =
         context_manager.effective_ide_context_config_with_base(ide_context_config);
-    header_context.editor_context = tui_header_summary(
-        workspace,
-        Some(&effective_ide_context_config),
-        snapshot.as_ref(),
-    );
+    header_context.editor_context =
+        tui_header_summary(workspace, Some(&effective_ide_context_config), snapshot.as_ref());
     handle.set_header_context(header_context.clone());
 }
 
@@ -201,12 +194,7 @@ pub(crate) fn ide_context_status_label(
 ) -> Option<String> {
     let effective_ide_context_config =
         context_manager.effective_ide_context_config_with_base(vt_cfg.map(|cfg| &cfg.ide_context));
-    status_line_editor_label(
-        workspace,
-        Some(&effective_ide_context_config),
-        snapshot,
-        source,
-    )
+    status_line_editor_label(workspace, Some(&effective_ide_context_config), snapshot, source)
 }
 
 pub(crate) fn ide_context_status_label_from_bridge(

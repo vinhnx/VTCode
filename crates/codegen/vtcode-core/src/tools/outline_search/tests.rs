@@ -224,10 +224,7 @@ async fn code_search_declaration_batch_failure_fails_the_component() {
 
 fn fixed_outline_arg_bytes(executable: &std::path::Path) -> usize {
     super::arg_os_bytes(executable.as_os_str())
-        + CODE_SEARCH_OUTLINE_FIXED_ARGS
-            .iter()
-            .map(|arg| arg_bytes(arg))
-            .sum::<usize>()
+        + CODE_SEARCH_OUTLINE_FIXED_ARGS.iter().map(|arg| arg_bytes(arg)).sum::<usize>()
 }
 
 #[test]
@@ -252,11 +249,9 @@ fn code_search_outline_path_batches_roll_over_at_byte_cap() {
 fn code_search_outline_path_batch_counts_executable_and_nul() {
     let executable = std::path::Path::new("/long/path/to/ast-grep");
     let path = "a.rs".to_owned();
-    let cap_without_executable = CODE_SEARCH_OUTLINE_FIXED_ARGS
-        .iter()
-        .map(|arg| arg_bytes(arg))
-        .sum::<usize>()
-        + arg_bytes(&path);
+    let cap_without_executable =
+        CODE_SEARCH_OUTLINE_FIXED_ARGS.iter().map(|arg| arg_bytes(arg)).sum::<usize>()
+            + arg_bytes(&path);
     let mut paths = vec![path.clone()].into_iter().peekable();
 
     let error = next_outline_path_batch_with_cap(executable, &mut paths, cap_without_executable)
@@ -345,26 +340,16 @@ async fn code_search_outline_bounded_record_distinguishes_exact_eof_from_exhaust
     let mut exact_record = Vec::with_capacity(3);
     let mut exact_bytes_read = 0;
     assert_eq!(
-        read_bounded_record(
-            &mut exact_reader,
-            &mut exact_record,
-            &mut exact_bytes_read,
-            3,
-        )
-        .await
-        .expect("exact record"),
+        read_bounded_record(&mut exact_reader, &mut exact_record, &mut exact_bytes_read, 3,)
+            .await
+            .expect("exact record"),
         BoundedRecordRead::Record
     );
     exact_record.clear();
     assert_eq!(
-        read_bounded_record(
-            &mut exact_reader,
-            &mut exact_record,
-            &mut exact_bytes_read,
-            3,
-        )
-        .await
-        .expect("exact EOF probe"),
+        read_bounded_record(&mut exact_reader, &mut exact_record, &mut exact_bytes_read, 3,)
+            .await
+            .expect("exact EOF probe"),
         BoundedRecordRead::Eof
     );
 

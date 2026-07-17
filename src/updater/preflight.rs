@@ -51,10 +51,7 @@ pub(crate) async fn run_preflight_check() {
     // Always hit the GitHub API.  Cap the timeout so a version-info request
     // never blocks startup for longer than the cap.  Users can shorten it
     // further via config.
-    let timeout = updater
-        .config()
-        .download_timeout_secs
-        .min(PREFLIGHT_TIMEOUT_CAP_SECS);
+    let timeout = updater.config().download_timeout_secs.min(PREFLIGHT_TIMEOUT_CAP_SECS);
     let channel = &updater.config().channel;
     let latest = match github::fetch_latest_for_channel(timeout, channel).await {
         Ok(info) => info,

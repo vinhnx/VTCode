@@ -113,11 +113,7 @@ impl<'a> CompactionState<'a> {
         session_stats: &'a mut SessionStats,
         context_manager: &'a mut ContextManager,
     ) -> Self {
-        Self {
-            history,
-            session_stats,
-            context_manager,
-        }
+        Self { history, session_stats, context_manager }
     }
 }
 
@@ -296,11 +292,7 @@ async fn run_manual_compaction(
         lifecycle_hooks,
         harness_emitter,
     } = context;
-    let CompactionState {
-        history,
-        session_stats,
-        context_manager,
-    } = state;
+    let CompactionState { history, session_stats, context_manager } = state;
 
     // `--native-only` preserves the legacy strict behavior: refuse unless the
     // provider exposes a real standalone compaction endpoint (OpenAI
@@ -310,9 +302,8 @@ async fn run_manual_compaction(
         anyhow::bail!(provider.manual_openai_compaction_unavailable_message(model));
     }
 
-    let previous_response_chain_present = session_stats
-        .previous_response_id_for(provider.name(), model)
-        .is_some();
+    let previous_response_chain_present =
+        session_stats.previous_response_id_for(provider.name(), model).is_some();
     let mut compaction_input = history.clone();
     strip_existing_memory_envelope(&mut compaction_input);
     let original_history = compaction_input.clone();
@@ -392,15 +383,10 @@ async fn compact_history_segment_in_place(
         lifecycle_hooks,
         harness_emitter,
     } = context;
-    let CompactionState {
-        history,
-        session_stats,
-        context_manager,
-    } = state;
+    let CompactionState { history, session_stats, context_manager } = state;
 
-    let previous_response_chain_present = session_stats
-        .previous_response_id_for(provider.name(), model)
-        .is_some();
+    let previous_response_chain_present =
+        session_stats.previous_response_id_for(provider.name(), model).is_some();
     let mut compaction_input = history.clone();
     strip_existing_memory_envelope(&mut compaction_input);
     let original_history = compaction_input.clone();
@@ -478,22 +464,12 @@ async fn apply_compacted_history(
         lifecycle_hooks,
         harness_emitter,
     } = context;
-    let CompactionState {
-        history,
-        session_stats,
-        context_manager,
-    } = state;
+    let CompactionState { history, session_stats, context_manager } = state;
 
     let original_len = original_history.len();
     if let Some(lifecycle_hooks) = lifecycle_hooks {
         let outcome = lifecycle_hooks
-            .run_pre_compact(
-                plan.trigger,
-                compaction_mode,
-                original_len,
-                compacted.len(),
-                None,
-            )
+            .run_pre_compact(plan.trigger, compaction_mode, original_len, compacted.len(), None)
             .await?;
         for message in outcome.messages {
             tracing::debug!(message = %message.text, "pre-compact hook message");
@@ -514,9 +490,8 @@ async fn apply_compacted_history(
         plan.envelope_mode.placement,
         None,
     )?;
-    let history_artifact_path = envelope
-        .as_ref()
-        .and_then(|item| item.history_artifact_path.clone());
+    let history_artifact_path =
+        envelope.as_ref().and_then(|item| item.history_artifact_path.clone());
     *history = compacted;
     session_stats.clear_previous_response_chain_for(provider.name(), model);
     context_manager
@@ -584,11 +559,7 @@ async fn compact_history_before_index_in_place(
         lifecycle_hooks,
         harness_emitter,
     } = context;
-    let CompactionState {
-        history,
-        session_stats,
-        context_manager,
-    } = state;
+    let CompactionState { history, session_stats, context_manager } = state;
 
     if preserve_from_index == 0 {
         return Ok(None);
@@ -747,11 +718,7 @@ pub(crate) async fn maybe_auto_compact_history(
         harness_emitter,
         ..
     } = context;
-    let CompactionState {
-        history,
-        session_stats,
-        context_manager,
-    } = state;
+    let CompactionState { history, session_stats, context_manager } = state;
 
     let current_prompt_pressure_tokens = context_manager.current_token_usage();
 

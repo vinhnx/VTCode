@@ -100,10 +100,7 @@ impl Default for CommandSpec {
 impl CommandSpec {
     /// Create a new command specification.
     pub fn new(program: impl Into<OsString>) -> Self {
-        Self {
-            program: program.into(),
-            ..Default::default()
-        }
+        Self { program: program.into(), ..Default::default() }
     }
 
     /// Add arguments to the command.

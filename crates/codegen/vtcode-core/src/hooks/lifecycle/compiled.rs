@@ -89,10 +89,7 @@ fn compile_groups(groups: &[HookGroupConfig]) -> Result<Vec<CompiledHookGroup>> 
             HookMatcher::Any
         };
 
-        compiled.push(CompiledHookGroup {
-            matcher,
-            commands: group.hooks.clone(),
-        });
+        compiled.push(CompiledHookGroup { matcher, commands: group.hooks.clone() });
     }
 
     Ok(compiled)

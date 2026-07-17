@@ -6,11 +6,7 @@ pub(crate) const WAIT_KEEPALIVE_INITIAL: Duration = Duration::from_secs(5);
 pub(crate) const WAIT_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(10);
 
 pub(crate) fn wait_keepalive_message(subject: &str, elapsed: Duration) -> String {
-    format!(
-        "{subject} is still running after {}s. {}.",
-        elapsed.as_secs(),
-        STOP_HINT_INLINE
-    )
+    format!("{subject} is still running after {}s. {}.", elapsed.as_secs(), STOP_HINT_INLINE)
 }
 
 pub(crate) fn wait_timeout_warning_message(

@@ -122,11 +122,7 @@ pub(super) async fn handle_exec_command_impl(
     options: ExecCommandOptions,
 ) -> Result<()> {
     // Handle eval command separately — it runs multiple tasks, not a single one.
-    if let ExecCommandKind::Eval {
-        suite_path,
-        output_path,
-    } = &options.command
-    {
+    if let ExecCommandKind::Eval { suite_path, output_path } = &options.command {
         return super::eval::handle_eval_command(
             config,
             vt_cfg,
@@ -180,9 +176,7 @@ pub(super) async fn handle_exec_command_impl(
 
     let allowed_tools = match &options.command {
         ExecCommandKind::Review { .. } => {
-            runner
-                .review_tool_allowlist(&automation_cfg.allowed_tools)
-                .await
+            runner.review_tool_allowlist(&automation_cfg.allowed_tools).await
         }
         _ => automation_cfg.allowed_tools.clone(),
     };
@@ -197,20 +191,17 @@ pub(super) async fn handle_exec_command_impl(
         &event_session_id,
     );
 
-    let processor = Arc::new(Mutex::new(ExecEventProcessor::<
-        io::Stdout,
-        BufWriter<File>,
-        io::Stderr,
-    >::new(
-        options.json,
-        !options.json && !run_config.quiet,
-        options.json.then(io::stdout),
-        events_path
-            .as_ref()
-            .map(|path| open_events_writer(path.as_path()))
-            .transpose()?,
-        (!options.json && !run_config.quiet).then(io::stderr),
-    )));
+    let processor =
+        Arc::new(Mutex::new(ExecEventProcessor::<io::Stdout, BufWriter<File>, io::Stderr>::new(
+            options.json,
+            !options.json && !run_config.quiet,
+            options.json.then(io::stdout),
+            events_path
+                .as_ref()
+                .map(|path| open_events_writer(path.as_path()))
+                .transpose()?,
+            (!options.json && !run_config.quiet).then(io::stderr),
+        )));
     let event_processor = Arc::clone(&processor);
     runner.set_event_handler(move |event| {
         let mut processor = lock_or_recover(&event_processor);
@@ -261,9 +252,7 @@ pub(super) async fn handle_exec_command_impl(
     }
 
     let mut processor = lock_or_recover(&processor);
-    processor
-        .take_error()
-        .context("Failed to process exec event output")?;
+    processor.take_error().context("Failed to process exec event output")?;
 
     Ok(())
 }
@@ -301,11 +290,7 @@ async fn handle_codex_exec_command_impl(
             skip_confirmations: true,
             ephemeral: archive.is_none(),
             resume_thread_id: external_thread_id_from_bootstrap(&thread_bootstrap),
-            seed_messages: thread_bootstrap
-                .messages
-                .iter()
-                .map(SessionMessage::from)
-                .collect(),
+            seed_messages: thread_bootstrap.messages.iter().map(SessionMessage::from).collect(),
             review_target: native_review_target(&options.command, run_config.workspace.as_path())
                 .await?,
         },
@@ -420,9 +405,9 @@ async fn native_review_target(
         ReviewTarget::LastDiff => get_head_commit_hash_async(workspace.to_path_buf())
             .await?
             .map(|sha| CodexReviewTarget::Commit { sha, title: None }),
-        ReviewTarget::Custom(target) => Some(CodexReviewTarget::Custom {
-            instructions: target.clone(),
-        }),
+        ReviewTarget::Custom(target) => {
+            Some(CodexReviewTarget::Custom { instructions: target.clone() })
+        }
         ReviewTarget::Files(_) => None,
     })
 }
@@ -480,10 +465,7 @@ mod tests {
     #[tokio::test]
     async fn native_review_target_uses_uncommitted_changes_when_style_is_absent() {
         let command = super::ExecCommandKind::Review {
-            spec: ReviewSpec {
-                target: ReviewTarget::CurrentDiff,
-                style: None,
-            },
+            spec: ReviewSpec { target: ReviewTarget::CurrentDiff, style: None },
         };
 
         let target = native_review_target(&command, Path::new("/tmp"))

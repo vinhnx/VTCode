@@ -28,10 +28,8 @@ pub(crate) async fn handle_notify(
         message: message.clone(),
     })
     .await?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Sent VT Code notification: {message}"),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Sent VT Code notification: {message}"))?;
     Ok(SlashCommandControl::Continue)
 }
 
@@ -82,10 +80,8 @@ pub(crate) async fn show_settings_at_path_from_context(
     }
 
     if show_settings_palette(ctx.renderer, &settings_state, None)? {
-        *ctx.palette_state = Some(ActivePalette::Settings {
-            state: Box::new(settings_state),
-            esc_armed: false,
-        });
+        *ctx.palette_state =
+            Some(ActivePalette::Settings { state: Box::new(settings_state), esc_armed: false });
     }
 
     Ok(SlashCommandControl::Continue)
@@ -96,8 +92,7 @@ pub(crate) async fn handle_stop_agent(ctx: SlashCommandContext<'_>) -> Result<Sl
         && !ctx.ctrl_c_state.is_cancel_requested()
         && !ctx.ctrl_c_state.is_exit_requested()
     {
-        ctx.renderer
-            .line(MessageStyle::Info, "No active run to stop.")?;
+        ctx.renderer.line(MessageStyle::Info, "No active run to stop.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -128,8 +123,7 @@ pub(crate) async fn handle_clear_conversation(
     }
     transcript::clear();
     ctx.renderer.clear_screen();
-    ctx.renderer
-        .line(MessageStyle::Info, "Cleared conversation history.")?;
+    ctx.renderer.line(MessageStyle::Info, "Cleared conversation history.")?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
@@ -138,10 +132,8 @@ pub(crate) async fn handle_clear_screen(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     ctx.renderer.clear_screen();
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Cleared screen. Conversation context is preserved.",
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, "Cleared screen. Conversation context is preserved.")?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
@@ -153,11 +145,7 @@ pub(crate) async fn handle_copy_latest_assistant_reply(
         if message.role != MessageRole::Assistant {
             return None;
         }
-        if message
-            .tool_calls
-            .as_ref()
-            .is_some_and(|calls| !calls.is_empty())
-        {
+        if message.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) {
             return None;
         }
         let text = message.content.as_text();
@@ -171,15 +159,11 @@ pub(crate) async fn handle_copy_latest_assistant_reply(
 
     if let Some(reply) = latest_reply {
         vtcode_ui::tui::core::MouseSelectionState::copy_to_clipboard(&reply);
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Copied latest assistant reply to clipboard.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Copied latest assistant reply to clipboard.")?;
     } else {
-        ctx.renderer.line(
-            MessageStyle::Warning,
-            "No complete assistant reply found to copy yet.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Warning, "No complete assistant reply found to copy yet.")?;
     }
 
     Ok(SlashCommandControl::Continue)

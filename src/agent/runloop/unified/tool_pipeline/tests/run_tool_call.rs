@@ -79,10 +79,7 @@ async fn test_run_tool_call_unknown_tool_failure() {
     .await
     .expect("run_tool_call must run");
 
-    assert!(matches!(
-        outcome.status,
-        ToolExecutionStatus::Failure { .. }
-    ));
+    assert!(matches!(outcome.status, ToolExecutionStatus::Failure { .. }));
 }
 
 #[tokio::test]
@@ -152,11 +149,7 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
             assert!(error.to_string().contains("Policy violation"));
-            assert!(
-                error
-                    .to_string()
-                    .contains("exceeded max tool calls per turn")
-            );
+            assert!(error.to_string().contains("exceeded max tool calls per turn"));
         }
         other => panic!("Expected permission denial, got: {other:?}"),
     }
@@ -387,10 +380,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_planning_workflow() 
     .await
     .expect("run_tool_call must run");
 
-    println!(
-        "Planning workflow guard test outcome status: {:?}",
-        outcome.status
-    );
+    println!("Planning workflow guard test outcome status: {:?}", outcome.status);
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
@@ -427,10 +417,7 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_planning_workflo
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
     let plan_file = plans_dir.join("tracker-test-task-tracker.md");
     std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
-    registry
-        .planning_workflow_state()
-        .set_plan_file(Some(plan_file))
-        .await;
+    registry.planning_workflow_state().set_plan_file(Some(plan_file)).await;
 
     let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -513,10 +500,7 @@ async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_planning_wor
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
     let plan_file = plans_dir.join("tracker-test-task-tracker-non-prevalidated.md");
     std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
-    registry
-        .planning_workflow_state()
-        .set_plan_file(Some(plan_file))
-        .await;
+    registry.planning_workflow_state().set_plan_file(Some(plan_file)).await;
 
     let mut harness_state = build_harness_state_with(2);
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -636,10 +620,7 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     .await
     .expect("first run_tool_call must run");
 
-    assert!(matches!(
-        first_outcome.status,
-        ToolExecutionStatus::Failure { .. }
-    ));
+    assert!(matches!(first_outcome.status, ToolExecutionStatus::Failure { .. }));
     assert_eq!(ctx.harness_state.tool_calls, 0);
 
     let second_outcome = run_tool_call(
@@ -657,10 +638,7 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     .await
     .expect("second run_tool_call must run");
 
-    assert!(matches!(
-        second_outcome.status,
-        ToolExecutionStatus::Failure { .. }
-    ));
+    assert!(matches!(second_outcome.status, ToolExecutionStatus::Failure { .. }));
     assert_eq!(ctx.harness_state.tool_calls, 0);
 }
 
@@ -761,11 +739,7 @@ async fn test_run_tool_call_command_session_git_diff_uses_cache_on_repeat() {
 
     let extract_session_id = |status: &ToolExecutionStatus| -> String {
         match status {
-            ToolExecutionStatus::Success {
-                output,
-                command_success,
-                ..
-            } => {
+            ToolExecutionStatus::Success { output, command_success, .. } => {
                 assert!(*command_success);
                 output
                     .get("session_id")
@@ -803,12 +777,8 @@ async fn test_run_tool_call_command_session_git_diff_uses_cache_on_repeat() {
         .expect("second output should include wall_time");
     assert!(first_wall_time >= 0.0);
     assert!(second_wall_time >= 0.0);
-    first_stable
-        .as_object_mut()
-        .map(|object| object.remove("wall_time"));
-    second_stable
-        .as_object_mut()
-        .map(|object| object.remove("wall_time"));
+    first_stable.as_object_mut().map(|object| object.remove("wall_time"));
+    second_stable.as_object_mut().map(|object| object.remove("wall_time"));
     assert_eq!(first_stable, second_stable);
 }
 
@@ -964,10 +934,7 @@ async fn successful_apply_patch_invalidates_cached_code_search() {
     .expect("successful apply_patch should run");
     match patched.status {
         ToolExecutionStatus::Success { modified_files, .. } => {
-            assert_eq!(
-                modified_files,
-                vec![source_dir.join("widget.rs").to_string_lossy()]
-            );
+            assert_eq!(modified_files, vec![source_dir.join("widget.rs").to_string_lossy()]);
         }
         other => panic!("expected patch success, got: {other:?}"),
     }
@@ -1201,14 +1168,12 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
     harness_state
         .remember_streamed_tool_call_items([(tool_call_id.clone(), streamed_item_id.clone())]);
     emitter
-        .emit(
-            crate::agent::runloop::unified::inline_events::harness::tool_started_event(
-                streamed_item_id.clone(),
-                tools::READ_FILE,
-                Some(&json!({"path":"note.txt"})),
-                Some(tool_call_id.as_str()),
-            ),
-        )
+        .emit(crate::agent::runloop::unified::inline_events::harness::tool_started_event(
+            streamed_item_id.clone(),
+            tools::READ_FILE,
+            Some(&json!({"path":"note.txt"})),
+            Some(tool_call_id.as_str()),
+        ))
         .expect("emit tool started");
 
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -1254,15 +1219,8 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
     .await
     .expect("run_tool_call must run");
 
-    assert!(matches!(
-        outcome.status,
-        ToolExecutionStatus::Success { .. }
-    ));
-    assert!(
-        ctx.harness_state
-            .take_streamed_tool_call_item_id(&tool_call_id)
-            .is_none()
-    );
+    assert!(matches!(outcome.status, ToolExecutionStatus::Success { .. }));
+    assert!(ctx.harness_state.take_streamed_tool_call_item_id(&tool_call_id).is_none());
 
     let payload =
         std::fs::read_to_string(log_dir.path().join("harness.jsonl")).expect("read harness log");
@@ -1272,19 +1230,10 @@ async fn test_run_tool_call_reuses_streamed_invocation_item_without_duplicate_st
     for line in payload.lines() {
         let value: serde_json::Value = serde_json::from_str(line).expect("json line");
         let event = value.get("event").expect("event");
-        let event_type = event
-            .get("type")
-            .and_then(|kind| kind.as_str())
-            .unwrap_or_default();
+        let event_type = event.get("type").and_then(|kind| kind.as_str()).unwrap_or_default();
         let item = event.get("item").expect("item");
-        let item_id = item
-            .get("id")
-            .and_then(|id| id.as_str())
-            .unwrap_or_default();
-        let item_type = item
-            .get("type")
-            .and_then(|kind| kind.as_str())
-            .unwrap_or_default();
+        let item_id = item.get("id").and_then(|id| id.as_str()).unwrap_or_default();
+        let item_type = item.get("type").and_then(|kind| kind.as_str()).unwrap_or_default();
 
         if item_id == streamed_item_id && item_type == "tool_invocation" {
             if event_type == "item.started" {

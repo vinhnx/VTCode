@@ -1,8 +1,9 @@
 # Clippy configuration for vtcode
 # Based on best practices from https://rust-lang.github.io/rust-clippy/master/index.html
+# and grok-build patterns
 
 # Minimum supported Rust version
-msrv = "1.88"
+msrv = "1.93.0"
 
 # Cognitive complexity threshold for functions
 cognitive-complexity-threshold = 75
@@ -28,6 +29,16 @@ absolute-paths-allowed-crates = [
     "vtcode-bash-runner",
     "vtcode-exec-events",
     "vtcode-acp",
+    "vtcode-auth",
+    "vtcode-a2a",
+    "vtcode-mcp",
+    "vtcode-llm",
+    "vtcode-safety",
+    "vtcode-session-store",
+    "vtcode-skills",
+    "vtcode-eval",
+    "vtcode-macros",
+    "vtcode-utility-tool-specs",
 ]
 
 # Suppress arithmetic checks for specific types where overflow is expected
@@ -40,6 +51,7 @@ arithmetic-side-effects-allowed = [
 ignore-interior-mutability = [
     "std::sync::atomic::AtomicBool",
     "std::sync::atomic::AtomicUsize",
+    "std::sync::atomic::AtomicI32",
     "std::cell::RefCell",
     "std::cell::Cell",
     "parking_lot::Mutex",

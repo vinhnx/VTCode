@@ -207,10 +207,7 @@ fn default_bindings() -> HashMap<Action, Vec<(KeyCode, KeyModifiers)>> {
         ],
     );
     m.insert(ScrollPageUp, vec![(KeyCode::PageUp, KeyModifiers::empty())]);
-    m.insert(
-        ScrollPageDown,
-        vec![(KeyCode::PageDown, KeyModifiers::empty())],
-    );
+    m.insert(ScrollPageDown, vec![(KeyCode::PageDown, KeyModifiers::empty())]);
 
     m.insert(
         EditQueue,
@@ -272,10 +269,8 @@ impl BindingStore {
                 continue;
             };
 
-            let parsed: Vec<(KeyCode, KeyModifiers)> = key_specs
-                .iter()
-                .filter_map(|s| parse_key_binding(s))
-                .collect();
+            let parsed: Vec<(KeyCode, KeyModifiers)> =
+                key_specs.iter().filter_map(|s| parse_key_binding(s)).collect();
 
             if parsed.is_empty() {
                 // Empty list → unbind (remove defaults).

@@ -146,10 +146,7 @@ pub async fn resolve_local_model(
             if requested.trim().is_empty() && list.len() == 1 {
                 return Ok(list[0].clone());
             }
-            Err(LocalReadinessError::ModelMissing {
-                provider,
-                model: requested.to_string(),
-            })
+            Err(LocalReadinessError::ModelMissing { provider, model: requested.to_string() })
         }
         // Server is up but we could not enumerate models: trust the request id
         // rather than blocking the user with a false negative.
@@ -210,9 +207,7 @@ mod tests {
 
     #[test]
     fn fix_command_for_server_down() {
-        let err = LocalReadinessError::ServerDown {
-            provider: LocalProvider::Ollama,
-        };
+        let err = LocalReadinessError::ServerDown { provider: LocalProvider::Ollama };
         assert_eq!(err.code(), "local_server_down");
         assert_eq!(err.fix_command(), "/local start ollama");
     }

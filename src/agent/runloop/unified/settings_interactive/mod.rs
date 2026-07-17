@@ -79,9 +79,7 @@ pub(crate) fn create_settings_palette_state(
     let draft = if has_config_file {
         manager.config().clone()
     } else {
-        vt_snapshot
-            .clone()
-            .unwrap_or_else(|| manager.config().clone())
+        vt_snapshot.clone().unwrap_or_else(|| manager.config().clone())
     };
 
     let source_label = if has_config_file {
@@ -111,11 +109,7 @@ pub(crate) fn show_settings_palette(
     lines.push(state.source_label.clone());
     if let Some(view_path) = state.view_path.as_deref() {
         let heading = heading_for_path(view_path);
-        lines.push(format!(
-            "{} ({})",
-            heading.title,
-            display_settings_view_path(view_path)
-        ));
+        lines.push(format!("{} ({})", heading.title, display_settings_view_path(view_path)));
         if !heading.summary.is_empty() {
             lines.push(heading.summary.into_owned());
         }
@@ -218,9 +212,7 @@ pub(crate) fn apply_settings_action(
             _ => bail!("Unsupported settings operation: {op}"),
         };
 
-        mutate_draft_and_persist(state, |draft| {
-            apply_scalar_operation(draft, path, operation)
-        })?;
+        mutate_draft_and_persist(state, |draft| apply_scalar_operation(draft, path, operation))?;
         outcome.saved = true;
         outcome.message = Some(describe_scalar_change(state, path, operation));
         return Ok(outcome);
@@ -291,11 +283,7 @@ fn describe_scalar_change(
 
     match (operation, value) {
         (ScalarOperation::Toggle, Some(TomlValue::Boolean(enabled))) => {
-            format!(
-                "{} {}",
-                if *enabled { "Enabled" } else { "Disabled" },
-                title
-            )
+            format!("{} {}", if *enabled { "Enabled" } else { "Disabled" }, title)
         }
         (_, Some(value)) => format!("{} → {}", title, summarize_value(value)),
         _ => format!("Updated {}", title),
@@ -328,19 +316,13 @@ mod tests {
 
     #[test]
     fn normalize_field_path_replaces_indexes() {
-        assert_eq!(
-            normalize_config_path("commands.allow_list[12]"),
-            "commands.allow_list[]"
-        );
+        assert_eq!(normalize_config_path("commands.allow_list[12]"), "commands.allow_list[]");
     }
 
     #[test]
     fn parent_view_path_handles_nested_segments() {
         assert_eq!(parent_view_path("agent"), None);
-        assert_eq!(
-            parent_view_path("agent.vibe_coding"),
-            Some("agent".to_string())
-        );
+        assert_eq!(parent_view_path("agent.vibe_coding"), Some("agent".to_string()));
         assert_eq!(
             parent_view_path("hooks.lifecycle.pre_tool_use[0].hooks[2]"),
             Some("hooks.lifecycle.pre_tool_use[0].hooks".to_string())
@@ -456,11 +438,7 @@ mod tests {
             TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
         let items = build_settings_items(&state, &draft).expect("settings items");
-        assert!(
-            !items
-                .iter()
-                .any(|item| item.title == "Autonomous Execution")
-        );
+        assert!(!items.iter().any(|item| item.title == "Autonomous Execution"));
     }
 
     #[test]
@@ -559,26 +537,14 @@ mod tests {
 
     #[test]
     fn resolve_settings_view_path_maps_model_aliases() {
-        assert_eq!(
-            resolve_settings_view_path("model"),
-            SETTINGS_MODEL_CONFIG_PATH
-        );
-        assert_eq!(
-            resolve_settings_view_path("model.main"),
-            SETTINGS_MODEL_CONFIG_MAIN_PATH
-        );
+        assert_eq!(resolve_settings_view_path("model"), SETTINGS_MODEL_CONFIG_PATH);
+        assert_eq!(resolve_settings_view_path("model.main"), SETTINGS_MODEL_CONFIG_MAIN_PATH);
         assert_eq!(
             resolve_settings_view_path("model.lightweight"),
             SETTINGS_MODEL_CONFIG_LIGHTWEIGHT_PATH
         );
-        assert_eq!(
-            resolve_settings_view_path("codex"),
-            "agent.codex_app_server"
-        );
-        assert_eq!(
-            resolve_settings_view_path("codex_app_server"),
-            "agent.codex_app_server"
-        );
+        assert_eq!(resolve_settings_view_path("codex"), "agent.codex_app_server");
+        assert_eq!(resolve_settings_view_path("codex_app_server"), "agent.codex_app_server");
     }
 
     #[test]
@@ -625,9 +591,7 @@ mod tests {
             .expect("external editor quick access");
         assert_eq!(
             entry.selection,
-            Some(InlineListSelection::ConfigAction(
-                ACTION_CONFIGURE_EDITOR.to_string()
-            ))
+            Some(InlineListSelection::ConfigAction(ACTION_CONFIGURE_EDITOR.to_string()))
         );
     }
 
@@ -677,10 +641,7 @@ mod tests {
         .expect("valid draft value");
 
         let items = build_settings_items(&state, &draft).expect("settings items");
-        let entry = items
-            .iter()
-            .find(|item| item.title == "Command")
-            .expect("command entry");
+        let entry = items.iter().find(|item| item.title == "Command").expect("command entry");
         assert_eq!(
             entry.selection,
             Some(InlineListSelection::ConfigAction(
@@ -726,9 +687,7 @@ mod tests {
             .expect("default model entry");
         assert_eq!(
             default_model.selection,
-            Some(InlineListSelection::ConfigAction(
-                ACTION_PICK_MAIN_MODEL.to_string()
-            ))
+            Some(InlineListSelection::ConfigAction(ACTION_PICK_MAIN_MODEL.to_string()))
         );
     }
 
@@ -754,10 +713,7 @@ mod tests {
             "Use For Web Summary",
             "Use For Memory",
         ] {
-            assert!(
-                items.iter().any(|item| item.title == title),
-                "missing {title}"
-            );
+            assert!(items.iter().any(|item| item.title == title), "missing {title}");
         }
 
         let model = items
@@ -766,9 +722,7 @@ mod tests {
             .expect("lightweight model entry");
         assert_eq!(
             model.selection,
-            Some(InlineListSelection::ConfigAction(
-                ACTION_PICK_LIGHTWEIGHT_MODEL.to_string()
-            ))
+            Some(InlineListSelection::ConfigAction(ACTION_PICK_LIGHTWEIGHT_MODEL.to_string()))
         );
     }
 
@@ -809,9 +763,7 @@ mod tests {
             .expect("tools.external editor entry");
         assert_eq!(
             entry.selection,
-            Some(InlineListSelection::ConfigAction(
-                ACTION_CONFIGURE_EDITOR.to_string()
-            ))
+            Some(InlineListSelection::ConfigAction(ACTION_CONFIGURE_EDITOR.to_string()))
         );
     }
 
@@ -834,9 +786,7 @@ mod tests {
             .expect("default model entry");
         assert_eq!(
             default_model.selection,
-            Some(InlineListSelection::ConfigAction(
-                ACTION_PICK_MAIN_MODEL.to_string()
-            ))
+            Some(InlineListSelection::ConfigAction(ACTION_PICK_MAIN_MODEL.to_string()))
         );
     }
 
@@ -853,22 +803,12 @@ mod tests {
             TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
         let items = build_settings_items(&state, &draft).expect("settings items");
-        let model = items
-            .iter()
-            .find(|item| item.title == "Model")
-            .expect("model entry");
+        let model = items.iter().find(|item| item.title == "Model").expect("model entry");
         assert_eq!(
             model.selection,
-            Some(InlineListSelection::ConfigAction(
-                ACTION_PICK_LIGHTWEIGHT_MODEL.to_string()
-            ))
+            Some(InlineListSelection::ConfigAction(ACTION_PICK_LIGHTWEIGHT_MODEL.to_string()))
         );
-        assert!(
-            model
-                .subtitle
-                .as_deref()
-                .is_some_and(|subtitle| subtitle.contains("Automatic"))
-        );
+        assert!(model.subtitle.as_deref().is_some_and(|subtitle| subtitle.contains("Automatic")));
     }
 
     #[test]
@@ -907,10 +847,7 @@ mod tests {
         let outcome = apply_settings_action(&mut state, "settings:array_add:custom_providers")
             .expect("add custom provider template");
 
-        assert_eq!(
-            outcome.message.as_deref(),
-            Some("Added item to Custom Providers")
-        );
+        assert_eq!(outcome.message.as_deref(), Some("Added item to Custom Providers"));
         assert!(outcome.saved);
 
         assert_eq!(state.draft.custom_providers.len(), 1);
@@ -951,11 +888,8 @@ mod tests {
         let source_path = temp.path().join("vtcode.toml");
         let mut config = VTCodeConfig::default();
         config.agent.theme = "ansi".to_string();
-        std::fs::write(
-            &source_path,
-            toml::to_string(&config).expect("config should serialize"),
-        )
-        .expect("workspace config should be written");
+        std::fs::write(&source_path, toml::to_string(&config).expect("config should serialize"))
+            .expect("workspace config should be written");
 
         let state =
             create_settings_palette_state(temp.path(), &None).expect("settings state should load");

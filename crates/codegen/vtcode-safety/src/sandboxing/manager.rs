@@ -134,9 +134,7 @@ impl SandboxManager {
         _policy: &SandboxPolicy,
         _sandbox_cwd: &Path,
     ) -> Result<ExecEnv, SandboxTransformError> {
-        Err(SandboxTransformError::UnavailableSandboxType(
-            SandboxType::MacosSeatbelt,
-        ))
+        Err(SandboxTransformError::UnavailableSandboxType(SandboxType::MacosSeatbelt))
     }
 
     /// Build a seatbelt profile string.
@@ -199,19 +197,12 @@ impl SandboxManager {
         profile.push_str("(allow file-read*)\n");
 
         match policy {
-            SandboxPolicy::ReadOnly {
-                network_access,
-                network_allowlist,
-            } => {
+            SandboxPolicy::ReadOnly { network_access, network_allowlist } => {
                 // Read-only: only allow writing to /dev/null
                 profile.push_str("(allow file-write* (literal \"/dev/null\"))\n");
                 append_network_rules(&mut profile, *network_access, network_allowlist);
             }
-            SandboxPolicy::WorkspaceWrite {
-                network_access,
-                network_allowlist,
-                ..
-            } => {
+            SandboxPolicy::WorkspaceWrite { network_access, network_allowlist, .. } => {
                 for root in policy.get_writable_roots_with_cwd(sandbox_cwd) {
                     let path = root.root.display();
                     profile.push_str(&format!("(allow file-write* (subpath \"{path}\"))\n"));
@@ -311,9 +302,7 @@ impl SandboxManager {
 }
 
 fn os_string_to_arg(value: OsString) -> String {
-    value
-        .into_string()
-        .unwrap_or_else(|value| value.to_string_lossy().into_owned())
+    value.into_string().unwrap_or_else(|value| value.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
@@ -326,9 +315,7 @@ mod tests {
         let spec = CommandSpec::new("echo").with_args(vec!["hello"]);
         let policy = SandboxPolicy::full_access();
 
-        let env = manager
-            .transform(spec, &policy, Path::new("/tmp"), None)
-            .unwrap();
+        let env = manager.transform(spec, &policy, Path::new("/tmp"), None).unwrap();
 
         assert!(!env.sandbox_active);
         assert_eq!(env.sandbox_type, SandboxType::None);

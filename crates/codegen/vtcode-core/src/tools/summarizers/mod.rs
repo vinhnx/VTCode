@@ -40,11 +40,7 @@ pub(super) fn truncate_line<'a>(line: &'a str, max_len: usize) -> Cow<'a, str> {
         Cow::Borrowed(line)
     } else {
         let target = max_len.saturating_sub(3);
-        let end = line
-            .char_indices()
-            .map(|(i, _)| i)
-            .rfind(|&i| i <= target)
-            .unwrap_or(0);
+        let end = line.char_indices().map(|(i, _)| i).rfind(|&i| i <= target).unwrap_or(0);
         Cow::Owned(format!("{}...", &line[..end]))
     }
 }
@@ -74,11 +70,7 @@ pub trait Summarizer {
         } else {
             0.0
         };
-        SavingsEstimate {
-            llm_tokens,
-            ui_tokens,
-            savings_percent,
-        }
+        SavingsEstimate { llm_tokens, ui_tokens, savings_percent }
     }
 }
 
@@ -96,11 +88,7 @@ pub fn extract_key_info(text: &str, max_lines: usize) -> String {
     }
 
     if total_lines > max_lines {
-        format!(
-            "{}\n[...{} more lines]",
-            lines.join("\n"),
-            total_lines - max_lines
-        )
+        format!("{}\n[...{} more lines]", lines.join("\n"), total_lines - max_lines)
     } else {
         lines.join("\n")
     }

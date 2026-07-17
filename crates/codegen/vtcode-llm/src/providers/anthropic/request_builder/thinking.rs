@@ -50,10 +50,7 @@ fn manual_thinking_config(
 
     let max_tokens = max_tokens.unwrap_or(16000);
     let effective_budget = budget.min(max_tokens.saturating_sub(100)).max(1024);
-    Some(ThinkingConfig::Enabled {
-        budget_tokens: effective_budget,
-        display,
-    })
+    Some(ThinkingConfig::Enabled { budget_tokens: effective_budget, display })
 }
 
 pub(crate) fn build_thinking_config(
@@ -73,10 +70,7 @@ pub(crate) fn build_thinking_config(
                 return (Some(ThinkingConfig::Adaptive { display }), None);
             }
             AnthropicThinkingModeOverride::ManualBudget(budget) => {
-                return (
-                    manual_thinking_config(budget, request.max_tokens, display),
-                    None,
-                );
+                return (manual_thinking_config(budget, request.max_tokens, display), None);
             }
             AnthropicThinkingModeOverride::Inherit => {}
         }
@@ -84,10 +78,7 @@ pub(crate) fn build_thinking_config(
 
     if thinking_enabled {
         if claude_thinking_profile(resolved_model, default_model).is_some_and(|profile| {
-            matches!(
-                profile.mode,
-                super::super::capabilities::ClaudeThinkingMode::Adaptive
-            )
+            matches!(profile.mode, super::super::capabilities::ClaudeThinkingMode::Adaptive)
         }) {
             if claude_thinking_profile(resolved_model, default_model)
                 .is_some_and(|profile| profile.supports_manual_budget)
@@ -101,9 +92,8 @@ pub(crate) fn build_thinking_config(
             return (Some(ThinkingConfig::Adaptive { display }), None);
         }
 
-        let max_thinking_tokens: Option<u32> = env::var(env_vars::MAX_THINKING_TOKENS)
-            .ok()
-            .and_then(|v| v.parse().ok());
+        let max_thinking_tokens: Option<u32> =
+            env::var(env_vars::MAX_THINKING_TOKENS).ok().and_then(|v| v.parse().ok());
 
         let budget = if let Some(explicit_budget) = request.thinking_budget {
             explicit_budget
@@ -128,10 +118,7 @@ pub(crate) fn build_thinking_config(
         }
     } else if let Some(effort) = request.reasoning_effort {
         if claude_thinking_profile(resolved_model, default_model).is_some_and(|profile| {
-            matches!(
-                profile.mode,
-                super::super::capabilities::ClaudeThinkingMode::Adaptive
-            )
+            matches!(profile.mode, super::super::capabilities::ClaudeThinkingMode::Adaptive)
         }) {
             return (None, None);
         }
@@ -181,9 +168,7 @@ mod tests {
             build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
 
         match thinking {
-            Some(ThinkingConfig::Adaptive {
-                display: Some(ThinkingDisplay::Summarized),
-            }) => {}
+            Some(ThinkingConfig::Adaptive { display: Some(ThinkingDisplay::Summarized) }) => {}
             other => panic!("expected Adaptive with Summarized display, got {other:?}"),
         }
     }
@@ -202,9 +187,7 @@ mod tests {
             build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
 
         match thinking {
-            Some(ThinkingConfig::Adaptive {
-                display: Some(ThinkingDisplay::Omitted),
-            }) => {}
+            Some(ThinkingConfig::Adaptive { display: Some(ThinkingDisplay::Omitted) }) => {}
             other => panic!("expected Adaptive with Omitted display, got {other:?}"),
         }
     }
@@ -223,9 +206,7 @@ mod tests {
             build_thinking_config(&request, &config, models::anthropic::DEFAULT_MODEL);
 
         match thinking {
-            Some(ThinkingConfig::Adaptive {
-                display: Some(ThinkingDisplay::Summarized),
-            }) => {}
+            Some(ThinkingConfig::Adaptive { display: Some(ThinkingDisplay::Summarized) }) => {}
             other => panic!("expected Adaptive with Summarized display, got {other:?}"),
         }
     }

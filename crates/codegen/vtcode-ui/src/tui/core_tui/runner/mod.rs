@@ -71,45 +71,27 @@ pub trait TuiSessionDriver {
 
 impl TuiCommand for crate::tui::core_tui::types::InlineCommand {
     fn is_suspend_event_loop(&self) -> bool {
-        matches!(
-            self,
-            crate::tui::core_tui::types::InlineCommand::SuspendEventLoop
-        )
+        matches!(self, crate::tui::core_tui::types::InlineCommand::SuspendEventLoop)
     }
 
     fn is_resume_event_loop(&self) -> bool {
-        matches!(
-            self,
-            crate::tui::core_tui::types::InlineCommand::ResumeEventLoop
-        )
+        matches!(self, crate::tui::core_tui::types::InlineCommand::ResumeEventLoop)
     }
 
     fn is_clear_input_queue(&self) -> bool {
-        matches!(
-            self,
-            crate::tui::core_tui::types::InlineCommand::ClearInputQueue
-        )
+        matches!(self, crate::tui::core_tui::types::InlineCommand::ClearInputQueue)
     }
 
     fn is_force_redraw(&self) -> bool {
-        matches!(
-            self,
-            crate::tui::core_tui::types::InlineCommand::ForceRedraw
-        )
+        matches!(self, crate::tui::core_tui::types::InlineCommand::ForceRedraw)
     }
 
     fn is_stop_event_stream(&self) -> bool {
-        matches!(
-            self,
-            crate::tui::core_tui::types::InlineCommand::StopEventStream
-        )
+        matches!(self, crate::tui::core_tui::types::InlineCommand::StopEventStream)
     }
 
     fn is_start_event_stream(&self) -> bool {
-        matches!(
-            self,
-            crate::tui::core_tui::types::InlineCommand::StartEventStream
-        )
+        matches!(self, crate::tui::core_tui::types::InlineCommand::StartEventStream)
     }
 }
 
@@ -285,13 +267,9 @@ where
     let mut stderr = io::stderr();
     let mut mode_restore_guard =
         TerminalModeRestoreGuard::new(enable_terminal_modes(&mut stderr, &options.fullscreen)?);
-    mode_restore_guard
-        .state_mut()
-        .save_cursor_position(&mut stderr);
+    mode_restore_guard.state_mut().save_cursor_position(&mut stderr);
     if surface.use_alternate() {
-        mode_restore_guard
-            .state_mut()
-            .enter_alternate_screen(&mut stderr)?;
+        mode_restore_guard.state_mut().enter_alternate_screen(&mut stderr)?;
     }
     mode_restore_guard
         .state_mut()

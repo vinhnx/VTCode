@@ -232,12 +232,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         );
         if let Err(err) = self
             .approval_recorder
-            .record_approval(
-                &summary.cache_key,
-                Some(&summary.learning_label),
-                approved,
-                None,
-            )
+            .record_approval(&summary.cache_key, Some(&summary.learning_label), approved, None)
             .await
         {
             tracing::debug!(
@@ -287,10 +282,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         let canonical_tool_name = prepared.canonical_name;
         let effective_arguments = prepared.effective_args;
 
-        if !self
-            .exposed_tool_names
-            .contains(canonical_tool_name.as_str())
-        {
+        if !self.exposed_tool_names.contains(canonical_tool_name.as_str()) {
             return Ok(tool_not_exposed_response(&canonical_tool_name));
         }
 
@@ -375,9 +367,8 @@ impl<'a> CopilotRuntimeHost<'a> {
 
         match pipeline_outcome.status {
             ToolExecutionStatus::Success { output, .. } => {
-                let text_result = last_stdout
-                    .filter(|s: &String| !s.trim().is_empty())
-                    .unwrap_or_else(|| {
+                let text_result =
+                    last_stdout.filter(|s: &String| !s.trim().is_empty()).unwrap_or_else(|| {
                         serde_json::to_string_pretty(&output).unwrap_or_else(|_| output.to_string())
                     });
                 Ok(CopilotToolCallResponse::Success(CopilotToolCallSuccess {
@@ -387,10 +378,9 @@ impl<'a> CopilotRuntimeHost<'a> {
             ToolExecutionStatus::Failure { error } => {
                 Ok(tool_failed_response(&canonical_tool_name, &error.message))
             }
-            ToolExecutionStatus::Timeout { error } => Ok(tool_timed_out_response(
-                &canonical_tool_name,
-                &error.message,
-            )),
+            ToolExecutionStatus::Timeout { error } => {
+                Ok(tool_timed_out_response(&canonical_tool_name, &error.message))
+            }
             ToolExecutionStatus::Cancelled => Ok(tool_cancelled_response(&canonical_tool_name)),
         }
     }
@@ -458,29 +448,21 @@ impl<'a> CopilotRuntimeHost<'a> {
                 } else {
                     format!("VT Code denied the tool `{tool_name}`.")
                 };
-                return Ok(Some(CopilotToolCallResponse::Failure(
-                    CopilotToolCallFailure {
-                        text_result_for_llm: text,
-                        error: format!("tool '{tool_name}' denied by user or policy"),
-                    },
-                )));
+                return Ok(Some(CopilotToolCallResponse::Failure(CopilotToolCallFailure {
+                    text_result_for_llm: text,
+                    error: format!("tool '{tool_name}' denied by user or policy"),
+                })));
             }
             ToolPermissionFlow::Blocked { reason } => {
                 return Ok(Some(denied_tool_response(tool_name, &reason)));
             }
             ToolPermissionFlow::Exit | ToolPermissionFlow::Interrupted => {
-                return Ok(Some(denied_tool_response(
-                    tool_name,
-                    "permission request interrupted",
-                )));
+                return Ok(Some(denied_tool_response(tool_name, "permission request interrupted")));
             }
         }
 
         if let Some(exhaustion) = self.harness_state.tool_budget_exhaustion() {
-            return Ok(Some(tool_exceeded_budget_response(
-                tool_name,
-                exhaustion.max,
-            )));
+            return Ok(Some(tool_exceeded_budget_response(tool_name, exhaustion.max)));
         }
 
         if let Some(warning) = self.harness_state.record_tool_call_with_default_warning() {
@@ -533,12 +515,8 @@ impl<'a> CopilotRuntimeHost<'a> {
         };
         let item_id = harness_call_item_id(&self.harness_item_prefix, tool_call_id, tool_name);
         let raw_id = raw_tool_call_id(tool_call_id);
-        let _ = emitter.emit(tool_started_event(
-            item_id.clone(),
-            tool_name,
-            Some(arguments),
-            raw_id,
-        ));
+        let _ =
+            emitter.emit(tool_started_event(item_id.clone(), tool_name, Some(arguments), raw_id));
         let _ = emitter.emit(tool_output_started_event(item_id, raw_id));
     }
 
@@ -577,11 +555,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             return;
         };
         let item_id = harness_call_item_id(&self.harness_item_prefix, tool_call_id, tool_name);
-        let _ = emitter.emit(tool_updated_event(
-            item_id,
-            raw_tool_call_id(tool_call_id),
-            output,
-        ));
+        let _ = emitter.emit(tool_updated_event(item_id, raw_tool_call_id(tool_call_id), output));
     }
 
     async fn handle_terminal_create(
@@ -600,10 +574,7 @@ impl<'a> CopilotRuntimeHost<'a> {
             .and_then(Value::as_str)
             .map(str::to_string)
             .ok_or_else(|| anyhow!("copilot local terminal create missing session_id"))?;
-        let initial_output = response
-            .get("output")
-            .and_then(Value::as_str)
-            .map(str::to_string);
+        let initial_output = response.get("output").and_then(Value::as_str).map(str::to_string);
         let initial_exit_status = response
             .get("exit_code")
             .and_then(Value::as_i64)
@@ -611,9 +582,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         let initial_session_completed = initial_exit_status.is_some();
         let released = Arc::new(AtomicBool::new(false));
         let exit_notify = Arc::new(tokio::sync::Notify::new());
-        let state = Arc::new(Mutex::new(LocalTerminalSessionState::new(
-            request.output_byte_limit,
-        )));
+        let state = Arc::new(Mutex::new(LocalTerminalSessionState::new(request.output_byte_limit)));
         {
             let mut session_state = lock_local_terminal_state(&state);
             if let Some(output) = initial_output.as_deref() {
@@ -670,9 +639,7 @@ impl<'a> CopilotRuntimeHost<'a> {
         };
         let exec_session_id = session.exec_session_id.clone();
         session.release();
-        self.tool_registry
-            .close_harness_exec_session(&exec_session_id)
-            .await?;
+        self.tool_registry.close_harness_exec_session(&exec_session_id).await?;
         Ok(())
     }
 
@@ -951,11 +918,7 @@ fn process_observed_tool_state(
         let _ = state.pty_stream.take().map(|s| s.finish());
     }
 
-    ObservedToolUpdate {
-        started,
-        output_delta,
-        finished,
-    }
+    ObservedToolUpdate { started, output_delta, finished }
 }
 
 struct ObservedToolPtyStream {
@@ -1182,19 +1145,14 @@ impl LocalTerminalSession {
 pub(super) fn prompt_session_to_stream(
     model: String,
     prompt_session: PromptSession,
-) -> (
-    uni::LLMStream,
-    tokio::sync::mpsc::UnboundedReceiver<CopilotRuntimeRequest>,
-) {
+) -> (uni::LLMStream, tokio::sync::mpsc::UnboundedReceiver<CopilotRuntimeRequest>) {
     struct PromptCancellationGuard {
         cancel_handle: Option<PromptSessionCancelHandle>,
     }
 
     impl PromptCancellationGuard {
         fn new(cancel_handle: PromptSessionCancelHandle) -> Self {
-            Self {
-                cancel_handle: Some(cancel_handle),
-            }
+            Self { cancel_handle: Some(cancel_handle) }
         }
 
         fn disarm(&mut self) {
@@ -1318,10 +1276,7 @@ async fn run_local_terminal_session(task: LocalTerminalTaskContext) {
             break;
         }
 
-        match tool_registry
-            .read_harness_exec_session_output(&exec_session_id, true)
-            .await
-        {
+        match tool_registry.read_harness_exec_session_output(&exec_session_id, true).await {
             Ok(Some(chunk)) if !chunk.is_empty() => {
                 pty_stream.progress_callback("exec_command", &chunk);
                 if let Some((tool_call_id, tool_name, output)) =
@@ -1347,10 +1302,7 @@ async fn run_local_terminal_session(task: LocalTerminalTaskContext) {
             }
         }
 
-        match tool_registry
-            .harness_exec_session_completed(&exec_session_id)
-            .await
-        {
+        match tool_registry.harness_exec_session_completed(&exec_session_id).await {
             Ok(Some(code)) => {
                 let exit_status = terminal_exit_status_from_code(i64::from(code));
                 if let Some((tool_call_id, tool_name, arguments, output, status)) =
@@ -1479,9 +1431,8 @@ fn terminal_command_display(command: &str, args: &[String]) -> String {
     if args.is_empty() {
         command.to_string()
     } else {
-        let parts: Vec<&str> = std::iter::once(command)
-            .chain(args.iter().map(|s| s.as_str()))
-            .collect();
+        let parts: Vec<&str> =
+            std::iter::once(command).chain(args.iter().map(|s| s.as_str())).collect();
         shell_words::join(&parts)
     }
 }
@@ -1493,11 +1444,7 @@ fn extract_command_from_args(arguments: Option<&Value>) -> Option<String> {
         match value {
             Value::String(text) if !text.trim().is_empty() => return Some(text.to_string()),
             Value::Array(parts) => {
-                let command = parts
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let command = parts.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ");
                 if !command.trim().is_empty() {
                     return Some(command);
                 }
@@ -1511,10 +1458,7 @@ fn extract_command_from_args(arguments: Option<&Value>) -> Option<String> {
 fn terminal_exit_status_from_code(code: i64) -> Option<CopilotTerminalExitStatus> {
     u32::try_from(code)
         .ok()
-        .map(|exit_code| CopilotTerminalExitStatus {
-            exit_code: Some(exit_code),
-            signal: None,
-        })
+        .map(|exit_code| CopilotTerminalExitStatus { exit_code: Some(exit_code), signal: None })
 }
 
 fn tool_status_from_exit(exit_status: &CopilotTerminalExitStatus) -> ToolCallStatus {
@@ -1534,11 +1478,7 @@ fn update_local_terminal_output(
     if !state.tool_started || chunk.trim().is_empty() {
         return None;
     }
-    Some((
-        association.tool_call_id,
-        association.tool_name,
-        state.output.clone(),
-    ))
+    Some((association.tool_call_id, association.tool_name, state.output.clone()))
 }
 
 fn finalize_local_terminal_exit(
@@ -1571,11 +1511,7 @@ fn emit_terminal_output_event(
 ) {
     let Some(_emitter) = emitter else { return };
     let item_id = harness_call_item_id(harness_item_prefix, tool_call_id, tool_name);
-    let _ = _emitter.emit(tool_updated_event(
-        item_id,
-        raw_tool_call_id(tool_call_id),
-        output,
-    ));
+    let _ = _emitter.emit(tool_updated_event(item_id, raw_tool_call_id(tool_call_id), output));
 }
 
 fn emit_terminal_finished_event(
@@ -1597,17 +1533,13 @@ fn emit_terminal_finished_event(
         raw_id,
         status.clone(),
     ));
-    let _ = emitter.emit(tool_output_completed_event(
-        item_id, raw_id, status, None, None, output,
-    ));
+    let _ = emitter.emit(tool_output_completed_event(item_id, raw_id, status, None, None, output));
 }
 
 fn lock_local_terminal_state(
     state: &Arc<Mutex<LocalTerminalSessionState>>,
 ) -> MutexGuard<'_, LocalTerminalSessionState> {
-    state
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn normalize_copilot_reasoning_delta(existing: &str, delta: String) -> String {
@@ -1615,10 +1547,7 @@ fn normalize_copilot_reasoning_delta(existing: &str, delta: String) -> String {
     if existing.is_empty()
         || existing.chars().last().is_some_and(char::is_whitespace)
         || delta.chars().next().is_some_and(char::is_whitespace)
-        || delta
-            .chars()
-            .next()
-            .is_some_and(is_reasoning_closing_punctuation)
+        || delta.chars().next().is_some_and(is_reasoning_closing_punctuation)
     {
         delta
     } else {
@@ -1716,9 +1645,7 @@ fn filter_copilot_tools(
 }
 
 fn tool_definition_name(tool: &ToolDefinition) -> Option<&str> {
-    tool.function
-        .as_ref()
-        .map(|function| function.name.as_str())
+    tool.function.as_ref().map(|function| function.name.as_str())
 }
 
 struct PermissionPromptSummary {
@@ -1762,10 +1689,9 @@ fn map_builtin_permission_prompt_decision(
         HitlDecision::Denied
         | HitlDecision::DeniedOnce
         | HitlDecision::Exit
-        | HitlDecision::Interrupt => (
-            CopilotPermissionDecision::DeniedInteractivelyByUser { feedback },
-            false,
-        ),
+        | HitlDecision::Interrupt => {
+            (CopilotPermissionDecision::DeniedInteractivelyByUser { feedback }, false)
+        }
     }
 }
 
@@ -1861,11 +1787,7 @@ fn summarize_permission_request(
             })),
             reason: warning.clone().or_else(|| Some(intention.clone())),
         },
-        CopilotPermissionRequest::Write {
-            file_name,
-            intention,
-            ..
-        } => SummaryDef {
+        CopilotPermissionRequest::Write { file_name, intention, .. } => SummaryDef {
             prefix: "copilot:write",
             tool_name: "copilot_write".to_string(),
             display_name: "GitHub Copilot file write".to_string(),
@@ -1873,9 +1795,7 @@ fn summarize_permission_request(
             tool_args: Some(json!({"file": file_name, "intention": intention})),
             reason: Some(intention.clone()),
         },
-        CopilotPermissionRequest::Read {
-            path, intention, ..
-        } => SummaryDef {
+        CopilotPermissionRequest::Read { path, intention, .. } => SummaryDef {
             prefix: "copilot:read",
             tool_name: "copilot_read".to_string(),
             display_name: "GitHub Copilot file read".to_string(),
@@ -1914,25 +1834,17 @@ fn summarize_permission_request(
             tool_args: Some(json!({"subject": subject, "fact": fact})),
             reason: Some("GitHub Copilot wants to store a memory fact.".to_string()),
         },
-        CopilotPermissionRequest::CustomTool {
-            tool_name,
-            tool_description,
-            args,
-            ..
-        } => SummaryDef {
-            prefix: "copilot:custom-tool",
-            tool_name: format!("copilot_custom_{tool_name}"),
-            display_name: format!("GitHub Copilot custom tool {tool_name}"),
-            cache_scope: json!({"tool": tool_name, "args": args}),
-            tool_args: args.clone(),
-            reason: Some(tool_description.clone()),
-        },
-        CopilotPermissionRequest::Hook {
-            tool_name,
-            tool_args,
-            hook_message,
-            ..
-        } => SummaryDef {
+        CopilotPermissionRequest::CustomTool { tool_name, tool_description, args, .. } => {
+            SummaryDef {
+                prefix: "copilot:custom-tool",
+                tool_name: format!("copilot_custom_{tool_name}"),
+                display_name: format!("GitHub Copilot custom tool {tool_name}"),
+                cache_scope: json!({"tool": tool_name, "args": args}),
+                tool_args: args.clone(),
+                reason: Some(tool_description.clone()),
+            }
+        }
+        CopilotPermissionRequest::Hook { tool_name, tool_args, hook_message, .. } => SummaryDef {
             prefix: "copilot:hook",
             tool_name: format!("copilot_hook_{tool_name}"),
             display_name: format!("GitHub Copilot hook {tool_name}"),

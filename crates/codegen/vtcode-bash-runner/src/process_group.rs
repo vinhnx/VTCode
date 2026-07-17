@@ -386,10 +386,7 @@ pub fn graceful_kill_process_group(
     {
         let _ = initial_signal;
         let pid_arg = pid.to_string();
-        match std::process::Command::new("taskkill")
-            .args(["/PID", &pid_arg, "/T"])
-            .status()
-        {
+        match std::process::Command::new("taskkill").args(["/PID", &pid_arg, "/T"]).status() {
             Ok(status) if status.success() => {
                 std::thread::sleep(grace_period);
                 GracefulTerminationResult::GracefulExit

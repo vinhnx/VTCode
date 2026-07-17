@@ -6,7 +6,7 @@ This checklist covers the exact steps to publish VTCode assets that pass
 ## Preconditions
 
 1. Merge ACP auth-method changes into `main`.
-2. Confirm `vtcode-acp/src/zed/agent/handlers.rs` returns `authMethods` in `initialize`.
+2. Confirm `crates/codegen/vtcode-acp/src/zed/agent/handlers.rs` returns `authMethods` in `initialize`.
 3. Ensure GitHub CLI is authenticated with permissions: `repo`, `workflow`.
 
 ## 1) Build and publish a macOS asset (local)

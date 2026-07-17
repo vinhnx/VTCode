@@ -28,10 +28,8 @@ fn validate_json_language_consistency(json: &Value) -> Result<()> {
     let has_arabic = json_str.chars().any(is_arabic_character);
 
     // Count how many different scripts are present
-    let script_count = [has_latin, has_cjk, has_cyrillic, has_arabic]
-        .iter()
-        .filter(|&&x| x)
-        .count();
+    let script_count =
+        [has_latin, has_cjk, has_cyrillic, has_arabic].iter().filter(|&&x| x).count();
 
     // Allow mixed scripts if they're in separate values (like translations)
     // but flag suspicious patterns
@@ -53,10 +51,7 @@ fn validate_json_keys(value: &Value) -> Result<()> {
         Value::Object(map) => {
             for (key, val) in map {
                 // Keys should be ASCII identifiers
-                if !key
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-                {
+                if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
                     let suggestion = sanitize_key_name(key);
                     anyhow::bail!(
                         "JSON key '{key}' contains non-identifier characters - possible language mixing.\n\

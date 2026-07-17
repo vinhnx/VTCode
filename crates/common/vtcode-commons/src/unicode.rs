@@ -49,10 +49,8 @@ impl UnicodeMonitor {
 
     /// Record unicode processing statistics
     pub fn record_processing(&self, bytes: usize, unicode_bytes: usize, contains_unicode: bool) {
-        self.total_bytes_processed
-            .fetch_add(bytes as u64, Ordering::Relaxed);
-        self.total_unicode_bytes
-            .fetch_add(unicode_bytes as u64, Ordering::Relaxed);
+        self.total_bytes_processed.fetch_add(bytes as u64, Ordering::Relaxed);
+        self.total_unicode_bytes.fetch_add(unicode_bytes as u64, Ordering::Relaxed);
         self.total_sequences.fetch_add(1, Ordering::Relaxed);
 
         if contains_unicode {
@@ -75,8 +73,7 @@ impl UnicodeMonitor {
 
     /// Record processing time in nanoseconds
     pub fn record_processing_time(&self, nanoseconds: u64) {
-        self.processing_time_ns
-            .fetch_add(nanoseconds, Ordering::Relaxed);
+        self.processing_time_ns.fetch_add(nanoseconds, Ordering::Relaxed);
     }
 
     /// Record maximum buffer size encountered

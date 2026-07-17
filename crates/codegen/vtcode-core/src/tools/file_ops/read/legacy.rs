@@ -53,9 +53,7 @@ impl FileOpsTool {
         }
 
         if input.max_tokens.is_some() || input.max_lines.is_some() || input.chunk_lines.is_some() {
-            return self
-                .read_file_chunked(file_path, input, file_metadata.len())
-                .await;
+            return self.read_file_chunked(file_path, input, file_metadata.len()).await;
         }
 
         if let Some(max_bytes) = input.max_bytes {
@@ -148,9 +146,7 @@ impl FileOpsTool {
 
         let mut tail_lines = input.chunk_lines.unwrap_or(head_lines);
         let remaining = max_lines.saturating_sub(head_lines);
-        tail_lines = tail_lines
-            .min(remaining)
-            .min(total_lines.saturating_sub(head_lines));
+        tail_lines = tail_lines.min(remaining).min(total_lines.saturating_sub(head_lines));
 
         let omitted = total_lines.saturating_sub(head_lines + tail_lines);
         let mut final_content = String::new();
@@ -187,8 +183,7 @@ impl FileOpsTool {
             "chunk_lines": input.chunk_lines,
         });
 
-        self.log_chunking_operation(file_path, true, Some(total_lines))
-            .await?;
+        self.log_chunking_operation(file_path, true, Some(total_lines)).await?;
 
         Ok((final_content, metadata, true))
     }
@@ -205,11 +200,7 @@ impl FileOpsTool {
 async fn read_bounded_text(file_path: &Path, cap: usize) -> Result<(String, usize, bool)> {
     use tokio::io::AsyncBufReadExt;
 
-    let file = with_file_context(
-        tokio::fs::File::open(file_path).await,
-        "open file",
-        file_path,
-    )?;
+    let file = with_file_context(tokio::fs::File::open(file_path).await, "open file", file_path)?;
     let reader = tokio::io::BufReader::new(file);
     let mut split = reader.split(b'\n');
 

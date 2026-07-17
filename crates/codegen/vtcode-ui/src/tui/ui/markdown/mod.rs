@@ -37,11 +37,7 @@ pub struct MarkdownSegment {
 
 impl MarkdownSegment {
     pub(crate) fn new(style: Style, text: impl Into<String>) -> Self {
-        Self {
-            style,
-            text: text.into(),
-            link_target: None,
-        }
+        Self { style, text: text.into(), link_target: None }
     }
 
     pub(crate) fn with_link(
@@ -49,11 +45,7 @@ impl MarkdownSegment {
         text: impl Into<String>,
         link_target: Option<String>,
     ) -> Self {
-        Self {
-            style,
-            text: text.into(),
-            link_target,
-        }
+        Self { style, text: text.into(), link_target }
     }
 }
 
@@ -84,21 +76,15 @@ impl MarkdownLine {
             last.text.push_str(text);
             return;
         }
-        self.segments
-            .push(MarkdownSegment::with_link(style, text, link_target));
+        self.segments.push(MarkdownSegment::with_link(style, text, link_target));
     }
 
     pub fn is_empty(&self) -> bool {
-        self.segments
-            .iter()
-            .all(|segment| segment.text.trim().is_empty())
+        self.segments.iter().all(|segment| segment.text.trim().is_empty())
     }
 
     pub(crate) fn width(&self) -> usize {
-        self.segments
-            .iter()
-            .map(|seg| UnicodeWidthStr::width(seg.text.as_str()))
-            .sum()
+        self.segments.iter().map(|seg| UnicodeWidthStr::width(seg.text.as_str())).sum()
     }
 }
 
@@ -209,8 +195,7 @@ pub fn render_markdown_to_lines_with_options(
             }
             Event::TaskListMarker(checked) => {
                 ctx.ensure_prefix();
-                ctx.current_line
-                    .push_segment(base_style, if checked { "[x] " } else { "[ ] " });
+                ctx.current_line.push_segment(base_style, if checked { "[x] " } else { "[ ] " });
             }
             Event::Html(html) | Event::InlineHtml(html) => append_text(&html, &mut ctx),
             Event::FootnoteReference(r) => append_text(&format!("[^{r}]"), &mut ctx),

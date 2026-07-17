@@ -29,11 +29,7 @@ fn line_text(rendered: &TranscriptLine) -> String {
 }
 
 fn all_text(transcript: &[TranscriptLine]) -> String {
-    transcript
-        .iter()
-        .map(line_text)
-        .collect::<Vec<_>>()
-        .join("\n")
+    transcript.iter().map(line_text).collect::<Vec<_>>().join("\n")
 }
 
 #[test]
@@ -142,13 +138,7 @@ fn toggle_updates_reflow_cache() {
     let window = session.collect_transcript_window_cached(100, 0, 200);
     let window_text = window
         .iter()
-        .map(|line| {
-            line.line
-                .spans
-                .iter()
-                .map(|span| span.content.to_string())
-                .collect::<String>()
-        })
+        .map(|line| line.line.spans.iter().map(|span| span.content.to_string()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
     assert!(
@@ -183,13 +173,7 @@ fn click_on_summary_expands_via_event_handler() {
     let window = session.collect_transcript_window_cached(100, 0, 200);
     let window_text = window
         .iter()
-        .map(|line| {
-            line.line
-                .spans
-                .iter()
-                .map(|span| span.content.to_string())
-                .collect::<String>()
-        })
+        .map(|line| line.line.spans.iter().map(|span| span.content.to_string()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
     assert!(
@@ -284,15 +268,8 @@ fn expanded_thinking_wraps_within_width() {
 
     let narrow = session.reflow_message_lines(start, 30, true);
     let narrow_text: Vec<String> = narrow.iter().map(line_text).collect();
-    let max_cols = narrow_text
-        .iter()
-        .map(|line| display_width(line))
-        .max()
-        .unwrap();
-    assert!(
-        max_cols <= 30,
-        "wrapped thinking body overflowed width: {max_cols} > 30"
-    );
+    let max_cols = narrow_text.iter().map(|line| display_width(line)).max().unwrap();
+    assert!(max_cols <= 30, "wrapped thinking body overflowed width: {max_cols} > 30");
 }
 
 /// Visible column width of a rendered line (sum of unicode widths of its spans).
@@ -326,11 +303,7 @@ fn trailing_empty_policy_line_removed_when_non_policy_arrives_via_append_inline(
 
     // Before the Agent line arrives, there's a dangling empty Policy line.
     let last = session.lines.last().unwrap();
-    assert_eq!(
-        last.kind,
-        InlineMessageKind::Policy,
-        "trailing empty line is Policy"
-    );
+    assert_eq!(last.kind, InlineMessageKind::Policy, "trailing empty line is Policy");
     assert!(last.segments.is_empty(), "trailing line should be empty");
 
     // When non-Policy content arrives via append_inline, the trailing empty
@@ -352,11 +325,7 @@ fn trailing_empty_policy_line_removed_when_non_policy_arrives_via_append_inline(
     }
 
     // The Policy content should remain and be followed directly by Agent content.
-    let policy_count = session
-        .lines
-        .iter()
-        .filter(|l| l.kind == InlineMessageKind::Policy)
-        .count();
+    let policy_count = session.lines.iter().filter(|l| l.kind == InlineMessageKind::Policy).count();
     assert_eq!(policy_count, 2, "both reasoning lines should remain");
 }
 
@@ -377,10 +346,7 @@ fn expanded_view_skips_trailing_empty_policy_line() {
 
     assert_eq!(body[0], "Thinking", "header should be Thinking");
     // The two content lines should be rendered.
-    assert!(
-        body.iter().any(|l| l.contains("reasoning one")),
-        "first reasoning line should appear"
-    );
+    assert!(body.iter().any(|l| l.contains("reasoning one")), "first reasoning line should appear");
     assert!(
         body.iter().any(|l| l.contains("reasoning two")),
         "second reasoning line should appear"
@@ -463,11 +429,8 @@ fn expanded_thinking_continuation_lines_match_first_line_width() {
 
     let narrow = session.reflow_message_lines(start, 40, true);
     let narrow_text: Vec<String> = narrow.iter().map(line_text).collect();
-    let body_widths: Vec<usize> = narrow_text
-        .iter()
-        .skip(1)
-        .map(|line| display_width(line))
-        .collect();
+    let body_widths: Vec<usize> =
+        narrow_text.iter().skip(1).map(|line| display_width(line)).collect();
     assert!(
         body_widths.iter().all(|&w| w <= 40),
         "no body line must exceed viewport width: {body_widths:?}"

@@ -143,11 +143,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
                     .and_then(|metadata| metadata.get("slash_alias"))
                     .and_then(|value| value.as_str())
                     .unwrap_or("-");
-                let _ = writeln!(
-                    content,
-                    "| `{}` | {} | `{}` |",
-                    manifest.name, desc, slash_alias
-                );
+                let _ = writeln!(content, "| `{}` | {} | `{}` |", manifest.name, desc, slash_alias);
             }
             content.push('\n');
         }
@@ -195,11 +191,8 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
                 );
             } else {
                 let skill_md = skill_ctx.path().join("SKILL.md");
-                let _ = writeln!(
-                    content,
-                    "- **Type**: Skill\n- **Path**: `{}`\n",
-                    skill_md.display()
-                );
+                let _ =
+                    writeln!(content, "- **Type**: Skill\n- **Path**: `{}`\n", skill_md.display());
             }
         }
 
@@ -225,10 +218,7 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
     )
     .await
     .with_context(|| {
-        format!(
-            "Failed to write comprehensive skills index: {}",
-            index_path.display()
-        )
+        format!("Failed to write comprehensive skills index: {}", index_path.display())
     })?;
 
     Ok(index_path)

@@ -14,9 +14,7 @@ pub(crate) fn tool_calls_per_minute_from_env() -> Option<usize> {
 }
 
 pub(crate) fn positive_rate_limit_from_env(name: &str) -> Option<usize> {
-    env::var(name)
-        .ok()
-        .and_then(|raw| parse_positive_rate_limit(&raw))
+    env::var(name).ok().and_then(|raw| parse_positive_rate_limit(&raw))
 }
 
 pub(crate) fn parse_positive_rate_limit(raw: &str) -> Option<usize> {

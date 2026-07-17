@@ -18,9 +18,7 @@ pub struct ThemeConfigParser {
 impl ThemeConfigParser {
     /// Create a new ThemeConfigParser
     pub fn new() -> Self {
-        Self {
-            cached_parser: CachedStyleParser::new(),
-        }
+        Self { cached_parser: CachedStyleParser::new() }
     }
 }
 

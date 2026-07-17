@@ -30,9 +30,7 @@ impl Default for OutputStyleManager {
 
 impl OutputStyleManager {
     pub fn new() -> Self {
-        Self {
-            styles: HashMap::new(),
-        }
+        Self { styles: HashMap::new() }
     }
 
     pub fn load_from_directory(_directory: &Path) -> anyhow::Result<Self> {

@@ -6,7 +6,7 @@ This document describes the refactoring of `prompt_user_for_tool()` to be TUI-on
 
 ## Problem Statement
 
-The original `prompt_user_for_tool()` function in `vtcode-core/src/tool_policy.rs` contained CLI-specific code with a guard to prevent execution in TUI mode. This created several issues:
+The original `prompt_user_for_tool()` function in `crates/codegen/vtcode-core/src/tool_policy.rs` contained CLI-specific code with a guard to prevent execution in TUI mode. This created several issues:
 
 1. The function could corrupt the terminal if accidentally called in TUI mode
 2. It contained dialoguer (CLI) dependencies in the library crate
@@ -157,8 +157,8 @@ The refactoring maintains backward compatibility:
 
 ## Files Modified
 
-- `vtcode-core/src/tool_policy.rs`: Main refactoring location
-- `vtcode-core/src/tool_policy_handlers.rs`: New file with example implementations (optional)
+- `crates/codegen/vtcode-core/src/tool_policy.rs`: Main refactoring location
+- `crates/codegen/vtcode-core/src/tool_policy_handlers.rs`: New file with example implementations (optional)
 
 ## Migration Guide
 

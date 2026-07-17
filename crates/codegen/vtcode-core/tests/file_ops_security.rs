@@ -8,11 +8,7 @@ use vtcode_core::tools::grep_file::GrepSearchManager;
 #[tokio::test]
 async fn create_file_rejects_workspace_escape() {
     let workspace = TempDir::new().expect("temp workspace");
-    let outside = workspace
-        .path()
-        .parent()
-        .expect("temp dir parent")
-        .join("outside.txt");
+    let outside = workspace.path().parent().expect("temp dir parent").join("outside.txt");
     if outside.exists() {
         let _ = tokio::fs::remove_file(&outside).await;
     }
@@ -24,20 +20,14 @@ async fn create_file_rejects_workspace_escape() {
         "path": "../outside.txt",
         "content": "blocked"
     });
-    let value = file_tool
-        .create_file(args)
-        .await
-        .expect_err("tool should reject escapes");
+    let value = file_tool.create_file(args).await.expect_err("tool should reject escapes");
 
     let message = value.to_string();
     assert!(
         message.contains("outside the workspace"),
         "expected workspace guard in error, got: {message}"
     );
-    assert!(
-        !outside.exists(),
-        "create_file must not materialize escaped paths"
-    );
+    assert!(!outside.exists(), "create_file must not materialize escaped paths");
 }
 
 #[tokio::test]
@@ -66,10 +56,7 @@ async fn move_file_rejects_workspace_escape_source() {
         .to_string();
 
     assert!(error.contains("outside the workspace"));
-    assert!(
-        outside.exists(),
-        "source file outside workspace should remain untouched"
-    );
+    assert!(outside.exists(), "source file outside workspace should remain untouched");
     assert!(
         !workspace.path().join("moved.txt").exists(),
         "destination should not be created for blocked move"
@@ -106,14 +93,8 @@ async fn copy_file_rejects_workspace_escape_destination() {
         .to_string();
 
     assert!(error.contains("outside the workspace"));
-    assert!(
-        !outside.exists(),
-        "destination outside workspace should not be created"
-    );
-    assert!(
-        inside.exists(),
-        "source file should remain in workspace after blocked copy"
-    );
+    assert!(!outside.exists(), "destination outside workspace should not be created");
+    assert!(inside.exists(), "source file should remain in workspace after blocked copy");
 }
 
 #[tokio::test]
@@ -146,14 +127,8 @@ async fn move_file_rejects_workspace_escape_destination() {
         .to_string();
 
     assert!(error.contains("outside the workspace"));
-    assert!(
-        !outside.exists(),
-        "outside destination should not be created by blocked move"
-    );
-    assert!(
-        source.exists(),
-        "source should remain in workspace after blocked move"
-    );
+    assert!(!outside.exists(), "outside destination should not be created by blocked move");
+    assert!(source.exists(), "source should remain in workspace after blocked move");
 }
 
 #[tokio::test]
@@ -190,8 +165,5 @@ async fn copy_file_rejects_workspace_escape_source() {
         !inside_destination.exists(),
         "blocked copy should not create destination in workspace"
     );
-    assert!(
-        outside.exists(),
-        "outside source file should remain untouched after blocked copy"
-    );
+    assert!(outside.exists(), "outside source file should remain untouched after blocked copy");
 }

@@ -73,8 +73,7 @@ impl CompletionCache {
 
     fn cleanup_expired(&mut self) {
         let now = Instant::now();
-        self.cache
-            .retain(|_, entry| now.duration_since(entry.created_at) < self.ttl);
+        self.cache.retain(|_, entry| now.duration_since(entry.created_at) < self.ttl);
     }
 
     fn evict_lru(&mut self) {

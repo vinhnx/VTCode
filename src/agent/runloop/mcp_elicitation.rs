@@ -156,35 +156,25 @@ mod tests {
 
     #[test]
     fn elicitation_reject_policy_defaults_to_prompting() {
-        assert!(!elicitation_is_rejected_by_policy(
-            AskForApproval::OnFailure
-        ));
-        assert!(!elicitation_is_rejected_by_policy(
-            AskForApproval::OnRequest
-        ));
-        assert!(!elicitation_is_rejected_by_policy(
-            AskForApproval::UnlessTrusted
-        ));
-        assert!(!elicitation_is_rejected_by_policy(AskForApproval::Reject(
-            RejectConfig {
-                sandbox_approval: false,
-                rules: false,
-                request_permissions: false,
-                mcp_elicitations: false,
-            }
-        )));
+        assert!(!elicitation_is_rejected_by_policy(AskForApproval::OnFailure));
+        assert!(!elicitation_is_rejected_by_policy(AskForApproval::OnRequest));
+        assert!(!elicitation_is_rejected_by_policy(AskForApproval::UnlessTrusted));
+        assert!(!elicitation_is_rejected_by_policy(AskForApproval::Reject(RejectConfig {
+            sandbox_approval: false,
+            rules: false,
+            request_permissions: false,
+            mcp_elicitations: false,
+        })));
     }
 
     #[test]
     fn elicitation_reject_policy_respects_never_and_reject_config() {
         assert!(elicitation_is_rejected_by_policy(AskForApproval::Never));
-        assert!(elicitation_is_rejected_by_policy(AskForApproval::Reject(
-            RejectConfig {
-                sandbox_approval: false,
-                rules: false,
-                request_permissions: false,
-                mcp_elicitations: true,
-            }
-        )));
+        assert!(elicitation_is_rejected_by_policy(AskForApproval::Reject(RejectConfig {
+            sandbox_approval: false,
+            rules: false,
+            request_permissions: false,
+            mcp_elicitations: true,
+        })));
     }
 }

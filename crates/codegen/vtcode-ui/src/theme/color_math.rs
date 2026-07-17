@@ -109,11 +109,7 @@ pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
             as u8
     };
 
-    RgbColor(
-        blend(color.0, target.0),
-        blend(color.1, target.1),
-        blend(color.2, target.2),
-    )
+    RgbColor(blend(color.0, target.0), blend(color.1, target.1), blend(color.2, target.2))
 }
 
 pub(crate) fn lighten(color: RgbColor, ratio: f32) -> RgbColor {

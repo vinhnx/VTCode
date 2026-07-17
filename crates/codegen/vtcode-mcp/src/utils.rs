@@ -18,10 +18,7 @@ static TEST_ENV_OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
 
 #[cfg(test)]
 fn get_test_env_override(key: &str) -> Option<Option<String>> {
-    TEST_ENV_OVERRIDES
-        .lock()
-        .ok()
-        .and_then(|map| map.get(key).cloned())
+    TEST_ENV_OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())
 }
 
 fn read_env_var(key: &str) -> Option<String> {
@@ -122,9 +119,7 @@ pub fn schema_requires_field(schema: &Value, field: &str) -> bool {
 
             for keyword in ["allOf", "anyOf", "oneOf"] {
                 if let Some(subschemas) = map.get(keyword).and_then(Value::as_array)
-                    && subschemas
-                        .iter()
-                        .any(|subschema| schema_requires_field(subschema, field))
+                    && subschemas.iter().any(|subschema| schema_requires_field(subschema, field))
                 {
                     return true;
                 }

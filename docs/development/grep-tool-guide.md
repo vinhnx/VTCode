@@ -292,7 +292,7 @@ A wholly lower-case query matches without case sensitivity. A query containing
 an upper-case character is case-sensitive. Query punctuation is literal.
 
 ```json
-{"query":"ToolRegistration","path":"vtcode-core/src/tools","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
+{"query":"ToolRegistration","path":"crates/codegen/vtcode-core/src/tools","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
 ```
 
 Each search component is bounded. `truncated: true` means further candidates

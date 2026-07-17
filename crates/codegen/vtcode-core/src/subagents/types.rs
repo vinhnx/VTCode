@@ -441,15 +441,7 @@ impl ChildRecord {
     /// Build the hook payload for a terminal run (no more queued prompts).
     pub(crate) fn build_hook_payload(
         &self,
-    ) -> (
-        String,
-        String,
-        String,
-        String,
-        bool,
-        String,
-        Option<PathBuf>,
-    ) {
+    ) -> (String, String, String, String, bool, String, Option<PathBuf>) {
         (
             self.parent_thread_id.clone(),
             self.session_id.clone(),
@@ -457,9 +449,7 @@ impl ChildRecord {
             self.display_label.clone(),
             self.background,
             self.status.as_str().to_string(),
-            self.transcript_path
-                .clone()
-                .or_else(|| self.archive_path.clone()),
+            self.transcript_path.clone().or_else(|| self.archive_path.clone()),
         )
     }
 }

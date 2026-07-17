@@ -49,19 +49,12 @@ pub(super) fn has_summary_prefix(text: &str) -> bool {
 }
 
 pub(super) fn is_tool_summary_line(message: &MessageLine) -> bool {
-    let text: String = message
-        .segments
-        .iter()
-        .map(|segment| segment.text.as_str())
-        .collect();
+    let text: String = message.segments.iter().map(|segment| segment.text.as_str()).collect();
     has_summary_prefix(&text)
 }
 
 pub(super) fn agent_code_continuation_prefix(message: &MessageLine) -> Option<String> {
-    let first_segment = message
-        .segments
-        .iter()
-        .find(|segment| !segment.text.is_empty())?;
+    let first_segment = message.segments.iter().find(|segment| !segment.text.is_empty())?;
     if !first_segment.style.effects.contains(Effects::DIMMED) {
         return None;
     }
@@ -158,8 +151,6 @@ pub(super) fn split_tool_spans(spans: Vec<Span<'static>>) -> Vec<Vec<Span<'stati
 }
 
 pub(super) fn is_info_box_line(message: &MessageLine) -> bool {
-    matches!(
-        message.kind,
-        InlineMessageKind::Error | InlineMessageKind::Warning
-    ) || (message.kind == InlineMessageKind::Info && !is_tool_summary_line(message))
+    matches!(message.kind, InlineMessageKind::Error | InlineMessageKind::Warning)
+        || (message.kind == InlineMessageKind::Info && !is_tool_summary_line(message))
 }

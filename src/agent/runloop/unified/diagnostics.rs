@@ -61,10 +61,8 @@ pub(crate) async fn run_checkup_diagnostics(
         MessageStyle::Status,
         "═══════════════════════════════════════════════════════════════",
     )?;
-    renderer.line(
-        MessageStyle::Status,
-        &format!("VT Code Doctor v{}", env!("CARGO_PKG_VERSION")),
-    )?;
+    renderer
+        .line(MessageStyle::Status, &format!("VT Code Doctor v{}", env!("CARGO_PKG_VERSION")))?;
     renderer.line(
         MessageStyle::Status,
         "═══════════════════════════════════════════════════════════════",
@@ -125,19 +123,11 @@ pub(crate) async fn run_checkup_diagnostics(
             } else {
                 cfg.agent.small_model.model.clone()
             };
-            format!(
-                "{} (+ lightweight model: {})",
-                cfg.agent.default_model, lightweight_model
-            )
+            format!("{} (+ lightweight model: {})", cfg.agent.default_model, lightweight_model)
         } else {
             cfg.agent.default_model.clone()
         };
-        render_doctor_check(
-            renderer,
-            &mut summary,
-            "Model",
-            DoctorCheckOutcome::Pass(model_info),
-        )?;
+        render_doctor_check(renderer, &mut summary, "Model", DoctorCheckOutcome::Pass(model_info))?;
 
         render_doctor_check(
             renderer,
@@ -395,10 +385,8 @@ pub(crate) async fn run_checkup_diagnostics(
             if skills.is_empty() {
                 renderer.line(MessageStyle::Output, "  No skills loaded in session")?;
             } else {
-                renderer.line(
-                    MessageStyle::Output,
-                    &format!("  {} loaded skill(s):", skills.len()),
-                )?;
+                renderer
+                    .line(MessageStyle::Output, &format!("  {} loaded skill(s):", skills.len()))?;
                 let mut sorted_skills: Vec<_> = skills.iter().collect();
                 sorted_skills.sort_by(|(name_a, _), (name_b, _)| name_a.cmp(name_b));
                 for (idx, (name, skill)) in sorted_skills.iter().enumerate() {
@@ -442,10 +430,8 @@ pub(crate) async fn run_checkup_diagnostics(
             "[WARN] Core checks passed, but there are warnings to review.",
         )?;
     } else {
-        renderer.line(
-            MessageStyle::Status,
-            "[OK] All checks passed. You are ready to use VT Code.",
-        )?;
+        renderer
+            .line(MessageStyle::Status, "[OK] All checks passed. You are ready to use VT Code.")?;
     }
 
     renderer.line(MessageStyle::Info, "")?;
@@ -635,10 +621,7 @@ fn canonical_provider_name(raw: &str) -> String {
 }
 
 fn provider_requires_api_key(provider: &str) -> bool {
-    !matches!(
-        provider,
-        "ollama" | "lmstudio" | "llamacpp" | "llama.cpp" | "llama-cpp"
-    )
+    !matches!(provider, "ollama" | "lmstudio" | "llamacpp" | "llama.cpp" | "llama-cpp")
 }
 
 fn api_key_env_hint(provider: &str) -> String {
@@ -669,11 +652,7 @@ fn detect_command_version(command: &str, args: &[&str]) -> std::result::Result<S
                 let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
                 let version_text = if !stdout.is_empty() { stdout } else { stderr };
                 if version_text.is_empty() {
-                    Err(format!(
-                        "{} {} returned no version output",
-                        command,
-                        args.join(" ")
-                    ))
+                    Err(format!("{} {} returned no version output", command, args.join(" ")))
                 } else {
                     Ok(version_text)
                 }
@@ -684,12 +663,7 @@ fn detect_command_version(command: &str, args: &[&str]) -> std::result::Result<S
                 } else {
                     output.status.to_string()
                 };
-                Err(format!(
-                    "{} {} exited with error: {}",
-                    command,
-                    args.join(" "),
-                    reason
-                ))
+                Err(format!("{} {} exited with error: {}", command, args.join(" "), reason))
             }
         }
         Err(err) => {

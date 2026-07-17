@@ -171,11 +171,7 @@ impl AuthCodeCallbackServer {
     ) -> Result<Self> {
         let (result_tx, result_rx) = mpsc::channel::<AuthCallbackOutcome>(1);
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-        let state = Arc::new(AuthCallbackState {
-            page,
-            expected_state,
-            result_tx,
-        });
+        let state = Arc::new(AuthCallbackState { page, expected_state, result_tx });
 
         let app = Router::new()
             .route("/callback", get(handle_callback))
@@ -292,10 +288,7 @@ async fn handle_callback(
             Some(actual_state) if actual_state == expected_state => {}
             _ => {
                 let message = "OAuth error: state mismatch".to_string();
-                let _ = state
-                    .result_tx
-                    .send(AuthCallbackOutcome::Error(message.clone()))
-                    .await;
+                let _ = state.result_tx.send(AuthCallbackOutcome::Error(message.clone())).await;
                 return Html(error_html(state.page, &message));
             }
         }
@@ -308,19 +301,13 @@ async fn handle_callback(
             }
             _ => format!("OAuth error: {error}"),
         };
-        let _ = state
-            .result_tx
-            .send(AuthCallbackOutcome::Error(message.clone()))
-            .await;
+        let _ = state.result_tx.send(AuthCallbackOutcome::Error(message.clone())).await;
         return Html(error_html(state.page, &message));
     }
 
     let Some(code) = params.code else {
         let message = "Missing authorization code".to_string();
-        let _ = state
-            .result_tx
-            .send(AuthCallbackOutcome::Error(message.clone()))
-            .await;
+        let _ = state.result_tx.send(AuthCallbackOutcome::Error(message.clone())).await;
         return Html(error_html(state.page, &message));
     };
 
@@ -345,25 +332,11 @@ fn success_html(page: OAuthCallbackPage) -> String {
 }
 
 fn error_html(page: OAuthCallbackPage, error: &str) -> String {
-    base_html(
-        "Authentication Failed",
-        page.failure_subtitle(),
-        None,
-        "✕",
-        "#ef4444",
-        Some(error),
-    )
+    base_html("Authentication Failed", page.failure_subtitle(), None, "✕", "#ef4444", Some(error))
 }
 
 fn cancelled_html(page: OAuthCallbackPage) -> String {
-    base_html(
-        "Authentication Cancelled",
-        page.retry_hint(),
-        None,
-        "—",
-        "#71717a",
-        None,
-    )
+    base_html("Authentication Cancelled", page.retry_hint(), None, "—", "#71717a", None)
 }
 
 fn base_html(
@@ -516,10 +489,7 @@ fn base_html(
 }
 
 fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
+    value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
 fn callback_timeout(timeout_secs: u64) -> Duration {
@@ -539,10 +509,7 @@ mod tests {
     #[test]
     fn oauth_provider_parses_known_providers() {
         assert_eq!("openai".parse::<OAuthProvider>(), Ok(OAuthProvider::OpenAi));
-        assert_eq!(
-            "openrouter".parse::<OAuthProvider>(),
-            Ok(OAuthProvider::OpenRouter)
-        );
+        assert_eq!("openrouter".parse::<OAuthProvider>(), Ok(OAuthProvider::OpenRouter));
         assert!("other".parse::<OAuthProvider>().is_err());
     }
 
@@ -602,10 +569,7 @@ mod tests {
         )
         .await
         .expect("start callback server");
-        let client = Client::builder()
-            .no_proxy()
-            .build()
-            .expect("build http client");
+        let client = Client::builder().no_proxy().build().expect("build http client");
 
         let health = client
             .get(format!("http://127.0.0.1:{port}/health"))

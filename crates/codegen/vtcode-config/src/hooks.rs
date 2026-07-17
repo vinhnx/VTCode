@@ -146,9 +146,7 @@ pub struct HookCommandConfig {
 
 impl HooksConfig {
     pub fn validate(&self) -> Result<()> {
-        self.lifecycle
-            .validate()
-            .context("Invalid lifecycle hooks configuration")
+        self.lifecycle.validate().context("Invalid lifecycle hooks configuration")
     }
 }
 

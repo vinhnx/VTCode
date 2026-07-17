@@ -79,19 +79,14 @@ impl AgentRunner {
         is_simple_task: bool,
     ) -> Result<(String, crate::prompts::system::SystemPromptReport)> {
         if !is_simple_task {
-            return Ok((
-                self.system_prompt.clone(),
-                self.system_prompt_report.clone(),
-            ));
+            return Ok((self.system_prompt.clone(), self.system_prompt_report.clone()));
         }
 
         let mut config = self.config().clone();
         config.agent.system_prompt_mode = SystemPromptMode::Minimal;
         let mut prompt_context = PromptContext::from_workspace_tools(
             self._workspace.as_path(),
-            prompt_tools
-                .iter()
-                .map(|tool| tool.function_name().to_string()),
+            prompt_tools.iter().map(|tool| tool.function_name().to_string()),
         );
         prompt_context.load_available_skills();
 
@@ -111,23 +106,15 @@ impl AgentRunner {
     ) -> Result<RuntimePromptBundle> {
         let tool_snapshot = self.build_universal_tool_snapshot().await?;
         let request_tools = tool_snapshot.snapshot.clone();
-        let prompt_tools = request_tools
-            .clone()
-            .unwrap_or_else(|| Arc::new(Vec::new()));
-        let (mut system_prompt, system_prompt_report) = self
-            .compose_task_system_prompt(prompt_tools, is_simple_task)
-            .await?;
+        let prompt_tools = request_tools.clone().unwrap_or_else(|| Arc::new(Vec::new()));
+        let (mut system_prompt, system_prompt_report) =
+            self.compose_task_system_prompt(prompt_tools, is_simple_task).await?;
         self.append_active_primary_agent_context(&mut system_prompt);
 
         let planning_active = self.tool_registry.is_planning_active();
-        let request_user_input_enabled = self
-            .features()
-            .request_user_input_enabled(planning_active, false);
-        let full_auto_active = self
-            .tool_registry
-            .current_full_auto_allowlist()
-            .await
-            .is_some();
+        let request_user_input_enabled =
+            self.features().request_user_input_enabled(planning_active, false);
+        let full_auto_active = self.tool_registry.current_full_auto_allowlist().await.is_some();
 
         append_runtime_mode_sections(
             &mut system_prompt,
@@ -143,11 +130,7 @@ impl AgentRunner {
             self.config().agent.harness.max_tool_wall_clock_secs,
             self.config().agent.harness.max_tool_retries,
         );
-        let shell_profile = self
-            .config()
-            .agent
-            .shell_prompt_profile
-            .resolve_for_current_platform();
+        let shell_profile = self.config().agent.shell_prompt_profile.resolve_for_current_platform();
         append_runtime_tool_prompt_sections_for_profile(
             &mut system_prompt,
             &tool_snapshot,
@@ -195,10 +178,8 @@ impl AgentRunner {
             system_prompt.push_str("\n- Agent model: ");
             system_prompt.push_str(model);
         }
-        if let Some(reasoning_effort) = active_primary_agent
-            .reasoning_effort
-            .as_ref()
-            .map(|e| e.as_str())
+        if let Some(reasoning_effort) =
+            active_primary_agent.reasoning_effort.as_ref().map(|e| e.as_str())
         {
             system_prompt.push_str("\n- Agent reasoning effort: ");
             system_prompt.push_str(reasoning_effort);
@@ -219,9 +200,8 @@ impl AgentRunner {
             |runner| Box::pin((*runner).build_runtime_prompt_bundle(is_simple_task)),
             |runner, bundle| {
                 let planning_active = runner.tool_registry.is_planning_active();
-                let request_user_input_enabled = runner
-                    .features()
-                    .request_user_input_enabled(planning_active, false);
+                let request_user_input_enabled =
+                    runner.features().request_user_input_enabled(planning_active, false);
                 prompt_alignment::validate_prompt_catalog_alignment(
                     &bundle.system_instruction,
                     &bundle.tool_snapshot,
@@ -250,9 +230,7 @@ impl AgentRunner {
             new_version = current_version,
             "Tool catalog changed mid-task; refreshing runtime prompt bundle"
         );
-        *bundle = self
-            .build_validated_runtime_prompt_bundle(is_simple_task)
-            .await?;
+        *bundle = self.build_validated_runtime_prompt_bundle(is_simple_task).await?;
         Ok(true)
     }
 
@@ -386,10 +364,7 @@ impl AgentRunner {
                 "workdir": self._workspace.display().to_string(),
                 "yield_time_ms": 1000,
             });
-            let result = self
-                .tool_registry
-                .execute_harness_command_session(payload)
-                .await?;
+            let result = self.tool_registry.execute_harness_command_session(payload).await?;
             let exit_code = result
                 .get("exit_code")
                 .and_then(serde_json::Value::as_i64)
@@ -447,9 +422,7 @@ impl AgentRunner {
         if let Some(failure) = results.iter().find(|result| !result.success) {
             event_recorder.harness_event(
                 HarnessEventKind::VerificationFailed,
-                Some(super::continuation::build_verification_failure_payload(
-                    failure,
-                )),
+                Some(super::continuation::build_verification_failure_payload(failure)),
                 Some(failure.command.clone()),
                 None,
                 failure.exit_code,
@@ -501,10 +474,7 @@ impl AgentRunner {
 
         let result = {
             for turn in 0..self.max_turns {
-                if matches!(
-                    runtime.poll_turn_control().await,
-                    RuntimeControl::StopRequested
-                ) {
+                if matches!(runtime.poll_turn_control().await, RuntimeControl::StopRequested) {
                     self.runner_println(format_args!(
                         "{} {}",
                         agent_prefix,
@@ -604,13 +574,8 @@ impl AgentRunner {
 
                 let parallel_tool_config = if self.model.len() < 20 {
                     None
-                } else if self
-                    .provider_client
-                    .supports_parallel_tool_config(&turn_model)
-                {
-                    Some(Box::new(
-                        crate::llm::provider::ParallelToolConfig::anthropic_optimized(),
-                    ))
+                } else if self.provider_client.supports_parallel_tool_config(&turn_model) {
+                    Some(Box::new(crate::llm::provider::ParallelToolConfig::anthropic_optimized()))
                 } else {
                     None
                 };
@@ -632,10 +597,7 @@ impl AgentRunner {
                         .map(|content| {
                             let mut text = String::new();
                             for part in &content.parts {
-                                if let Part::Text {
-                                    text: part_text, ..
-                                } = part
-                                {
+                                if let Part::Text { text: part_text, .. } = part {
                                     if !text.is_empty() {
                                         text.push('\n');
                                     }
@@ -676,10 +638,8 @@ impl AgentRunner {
                 }
 
                 let temperature = if reasoning_effort.is_some()
-                    && matches!(
-                        provider_kind,
-                        ModelProvider::Anthropic | ModelProvider::Minimax
-                    ) {
+                    && matches!(provider_kind, ModelProvider::Anthropic | ModelProvider::Minimax)
+                {
                     None
                 } else {
                     Some(0.7)
@@ -688,8 +648,7 @@ impl AgentRunner {
                 let (request_messages, previous_response_id) = prepare_responses_request_messages(
                     &mut runtime.state.previous_response_chains,
                     &provider_name,
-                    self.provider_client
-                        .supports_responses_compaction(&turn_model),
+                    self.provider_client.supports_responses_compaction(&turn_model),
                     &turn_model,
                     &runtime.state.messages,
                 );
@@ -712,11 +671,7 @@ impl AgentRunner {
                         && !prompt_bundle.tool_snapshot.active_tool_names.is_empty())
                     .then(|| {
                         ToolChoice::allowed_tools_auto(
-                            prompt_bundle
-                                .tool_snapshot
-                                .active_tool_names
-                                .as_ref()
-                                .clone(),
+                            prompt_bundle.tool_snapshot.active_tool_names.as_ref().clone(),
                         )
                     }),
                     parallel_tool_config,
@@ -729,12 +684,7 @@ impl AgentRunner {
                         provider_name.eq_ignore_ascii_case("openai")
                             && self.config().prompt_cache.enabled
                             && self.config().prompt_cache.providers.openai.enabled,
-                        &self
-                            .config()
-                            .prompt_cache
-                            .providers
-                            .openai
-                            .prompt_cache_key_mode,
+                        &self.config().prompt_cache.providers.openai.prompt_cache_key_mode,
                         Some(&self.session_id),
                     ),
                     prompt_cache_profile: None,
@@ -812,8 +762,7 @@ impl AgentRunner {
                 }
                 if supports_responses_chaining(
                     &provider_name,
-                    self.provider_client
-                        .supports_responses_compaction(&turn_model),
+                    self.provider_client.supports_responses_compaction(&turn_model),
                 ) {
                     runtime.state.set_previous_response_chain(
                         &provider_name,
@@ -887,10 +836,7 @@ impl AgentRunner {
                 self.warn_on_empty_response(
                     &agent_prefix,
                     response.content.as_deref().unwrap_or(""),
-                    response
-                        .tool_calls
-                        .as_ref()
-                        .is_some_and(|tool_calls| !tool_calls.is_empty()),
+                    response.tool_calls.as_ref().is_some_and(|tool_calls| !tool_calls.is_empty()),
                 );
 
                 let response_text = response.content_string();
@@ -1040,9 +986,7 @@ impl AgentRunner {
                 }
 
                 if !runtime.state.is_completed
-                    && effective_tool_calls
-                        .as_ref()
-                        .is_none_or(|tool_calls| tool_calls.is_empty())
+                    && effective_tool_calls.as_ref().is_none_or(|tool_calls| tool_calls.is_empty())
                     && !response.content_text().is_empty()
                 {
                     if check_for_response_loop(response.content_text(), &mut runtime.state) {
@@ -1188,17 +1132,13 @@ impl AgentRunner {
                 let had_effective_shell_tool_call =
                     effective_tool_calls.as_ref().is_some_and(|calls| {
                         calls.iter().any(|call| {
-                            call.function
-                                .as_ref()
-                                .map(|function| function.name.as_str())
+                            call.function.as_ref().map(|function| function.name.as_str())
                                 == Some(tools::UNIFIED_EXEC)
                         })
                     });
-                let had_tool_call = response
-                    .tool_calls
-                    .as_ref()
-                    .is_some_and(|tool_calls| !tool_calls.is_empty())
-                    || had_effective_shell_tool_call;
+                let had_tool_call =
+                    response.tool_calls.as_ref().is_some_and(|tool_calls| !tool_calls.is_empty())
+                        || had_effective_shell_tool_call;
 
                 if had_tool_call {
                     let loops = runtime.state.register_tool_loop();
@@ -1297,8 +1237,7 @@ impl AgentRunner {
             };
 
             let outcome = runtime.state.outcome.clone();
-            self.thread_handle
-                .replace_messages(runtime.state.messages.as_ref().clone());
+            self.thread_handle.replace_messages(runtime.state.messages.as_ref().clone());
             let summary = self.generate_task_summary(
                 &effective_task,
                 &runtime.state.modified_files,
@@ -1373,17 +1312,10 @@ impl AgentRunner {
                 &self.session_id,
                 runtime.state.outcome.thread_completion_subtype(),
                 runtime.state.outcome.code(),
-                runtime
-                    .state
-                    .outcome
-                    .is_success()
-                    .then_some(summary.as_str()),
+                runtime.state.outcome.is_success().then_some(summary.as_str()),
                 runtime.state.stop_reason.as_deref(),
                 total_usage,
-                runtime
-                    .state
-                    .total_cost_usd
-                    .and_then(serde_json::Number::from_f64),
+                runtime.state.total_cost_usd.and_then(serde_json::Number::from_f64),
                 runtime.state.stats.turns_executed,
             );
             let thread_events = event_recorder.into_events();
@@ -1398,10 +1330,7 @@ impl AgentRunner {
                 ),
             );
 
-            Ok((
-                state.into_results(summary, thread_events, total_duration_ms),
-                steering_receiver,
-            ))
+            Ok((state.into_results(summary, thread_events, total_duration_ms), steering_receiver))
         };
 
         let result = match result {

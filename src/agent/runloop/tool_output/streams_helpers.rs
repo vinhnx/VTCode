@@ -136,10 +136,7 @@ pub(super) async fn spool_output_if_needed(
     // Run blocking write in the tokio blocking pool since callers are usually async.
     let join_result = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
         ensure_dir_exists_sync(&spool_dir_clone).with_context(|| {
-            format!(
-                "Failed to create spool directory: {}",
-                spool_dir_clone.display()
-            )
+            format!("Failed to create spool directory: {}", spool_dir_clone.display())
         })?;
 
         let timestamp = std::time::SystemTime::now()
@@ -260,10 +257,7 @@ mod markdown_block_tests {
         let lines = (0..=super::super::MAX_CODE_LINES)
             .map(|idx| format!("line-{idx}"))
             .collect::<Vec<_>>();
-        let blocks = vec![CodeFenceBlock {
-            language: Some("rust".to_string()),
-            lines,
-        }];
+        let blocks = vec![CodeFenceBlock { language: Some("rust".to_string()), lines }];
 
         render_code_fence_blocks(&mut renderer, &blocks).expect("code fence blocks should render");
 
@@ -294,10 +288,7 @@ mod ansi_stripping_tests {
         let input =
             "warning: function \u{1b}[1;33mcheck_prompt_reference_trigger\u{1b}[0m is never used";
         let result = strip_ansi_codes(input);
-        assert_eq!(
-            result,
-            "warning: function check_prompt_reference_trigger is never used"
-        );
+        assert_eq!(result, "warning: function check_prompt_reference_trigger is never used");
     }
 
     #[test]
@@ -448,10 +439,7 @@ mod tests {
 
     #[test]
     fn compact_mode_truncates_when_not_inline() {
-        let content = (1..=50)
-            .map(|index| format!("line-{index}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content = (1..=50).map(|index| format!("line-{index}")).collect::<Vec<_>>().join("\n");
         let (lines, total, truncated) =
             select_stream_lines(&content, ToolOutputMode::Compact, 10, false);
         assert_eq!(total, 50);
@@ -462,10 +450,7 @@ mod tests {
 
     #[test]
     fn inline_rendering_preserves_full_scrollback() {
-        let content = (1..=30)
-            .map(|index| format!("row-{index}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content = (1..=30).map(|index| format!("row-{index}")).collect::<Vec<_>>().join("\n");
         let (lines, total, truncated) =
             select_stream_lines(&content, ToolOutputMode::Compact, 5, true);
         assert_eq!(total, 30);

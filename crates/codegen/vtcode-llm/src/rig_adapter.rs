@@ -14,10 +14,7 @@ pub struct RigProviderCapabilities {
 impl RigProviderCapabilities {
     #[must_use]
     pub fn new(provider: Provider, model: impl Into<String>) -> Self {
-        Self {
-            provider,
-            model: model.into(),
-        }
+        Self { provider, model: model.into() }
     }
 
     /// Convert a VT Code reasoning effort level to provider-specific parameters

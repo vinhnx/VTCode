@@ -19,39 +19,24 @@ pub(super) struct PendingFileConflictStatus {
 
 impl PendingFileConflictStatus {
     pub(super) fn from_output(output: Value) -> Option<Self> {
-        if output
-            .get(FILE_CONFLICT_DETECTED_FIELD)
-            .and_then(Value::as_bool)
-            != Some(true)
-        {
+        if output.get(FILE_CONFLICT_DETECTED_FIELD).and_then(Value::as_bool) != Some(true) {
             return None;
         }
 
-        let display_path = output
-            .get(FILE_CONFLICT_PATH_FIELD)
-            .and_then(Value::as_str)?
-            .to_string();
+        let display_path =
+            output.get(FILE_CONFLICT_PATH_FIELD).and_then(Value::as_str)?.to_string();
         let message = output
             .get("message")
             .and_then(Value::as_str)
             .unwrap_or("File changed on disk since the agent last read it.")
             .to_string();
-        let approved_snapshot = output
-            .get("disk_snapshot")
-            .cloned()
-            .filter(Value::is_object);
-        let disk_content = output
-            .get("disk_content")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned);
-        let intended_content = output
-            .get("intended_content")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned);
-        let emit_hitl_notification = output
-            .get("emit_hitl_notification")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let approved_snapshot = output.get("disk_snapshot").cloned().filter(Value::is_object);
+        let disk_content =
+            output.get("disk_content").and_then(Value::as_str).map(ToOwned::to_owned);
+        let intended_content =
+            output.get("intended_content").and_then(Value::as_str).map(ToOwned::to_owned);
+        let emit_hitl_notification =
+            output.get("emit_hitl_notification").and_then(Value::as_bool).unwrap_or(false);
 
         Some(Self {
             output,
@@ -81,16 +66,8 @@ pub(super) fn into_runtime_tool_execution(
     }
 
     match status {
-        ToolExecutionStatus::Success {
-            output,
-            stdout,
-            modified_files,
-            command_success,
-        } => {
-            if output
-                .get(FILE_CONFLICT_DETECTED_FIELD)
-                .and_then(Value::as_bool)
-                == Some(true)
+        ToolExecutionStatus::Success { output, stdout, modified_files, command_success } => {
+            if output.get(FILE_CONFLICT_DETECTED_FIELD).and_then(Value::as_bool) == Some(true)
                 && let Some(conflict) = PendingFileConflictStatus::from_output(output.clone())
             {
                 return RuntimeToolExecution::PendingFileConflict(conflict);

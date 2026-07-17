@@ -61,10 +61,7 @@ impl StreamAssemblyError {
     pub fn into_llm_error(self, provider: &str) -> LLMError {
         let message = self.to_string();
         let formatted = error_display::format_llm_error(provider, &message);
-        LLMError::Provider {
-            message: formatted,
-            metadata: None,
-        }
+        LLMError::Provider { message: formatted, metadata: None }
     }
 }
 
@@ -99,9 +96,7 @@ impl StreamDelta {
 
         match self.fragments.last_mut() {
             Some(StreamFragment::Content(existing)) => existing.push_str(text),
-            _ => self
-                .fragments
-                .push(StreamFragment::Content(text.to_string())),
+            _ => self.fragments.push(StreamFragment::Content(text.to_string())),
         }
     }
 
@@ -112,9 +107,7 @@ impl StreamDelta {
 
         match self.fragments.last_mut() {
             Some(StreamFragment::Reasoning(existing)) => existing.push_str(text),
-            _ => self
-                .fragments
-                .push(StreamFragment::Reasoning(text.to_string())),
+            _ => self.fragments.push(StreamFragment::Reasoning(text.to_string())),
         }
     }
 
@@ -187,12 +180,7 @@ impl ToolCallBuilder {
             self.arguments
         };
 
-        Some(ToolCall::function_with_namespace(
-            id,
-            self.namespace,
-            name,
-            arguments,
-        ))
+        Some(ToolCall::function_with_namespace(id, self.namespace, name, arguments))
     }
 }
 
@@ -216,10 +204,7 @@ pub fn update_tool_calls(builders: &mut Vec<ToolCallBuilder>, deltas: &[Value]) 
 }
 
 pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCall>> {
-    let calls: Vec<ToolCall> = builders
-        .into_iter()
-        .filter_map(ToolCallBuilder::finalize)
-        .collect();
+    let calls: Vec<ToolCall> = builders.into_iter().filter_map(ToolCallBuilder::finalize).collect();
 
     (!calls.is_empty()).then_some(calls)
 }
@@ -315,9 +300,7 @@ fn function_output_items_from_parts(parts: &[ContentPart]) -> Vec<FunctionOutput
                 }
                 items.push(FunctionOutputContentItem::InputText { text: text.clone() });
             }
-            ContentPart::Image {
-                data, mime_type, ..
-            } => {
+            ContentPart::Image { data, mime_type, .. } => {
                 items.push(FunctionOutputContentItem::InputImage {
                     image_url: format!("data:{mime_type};base64,{data}"),
                 });
@@ -335,10 +318,7 @@ pub(crate) fn tool_result_content_from_message_content(content: &MessageContent)
                 return Vec::new();
             }
             if let Some(items) = parse_function_output_content_items_text(text) {
-                return items
-                    .iter()
-                    .map(FunctionOutputContentItem::to_tool_result_json)
-                    .collect();
+                return items.iter().map(FunctionOutputContentItem::to_tool_result_json).collect();
             }
             vec![serde_json::json!({
                 "type": "output_text",
@@ -361,10 +341,7 @@ fn function_output_value_from_items(items: Vec<FunctionOutputContentItem>) -> Va
         .any(|item| matches!(item, FunctionOutputContentItem::InputImage { .. }));
     if has_image {
         return Value::Array(
-            items
-                .iter()
-                .map(FunctionOutputContentItem::to_function_output_json)
-                .collect(),
+            items.iter().map(FunctionOutputContentItem::to_function_output_json).collect(),
         );
     }
     Value::String(text_from_function_output_items(&items).unwrap_or_default())
@@ -464,29 +441,18 @@ fn parse_function_call_item(item: &Value) -> Option<ToolCall> {
         .unwrap_or("tool_call_compacted")
         .to_string();
 
-    let arguments_value = function_obj
-        .and_then(|f| f.get("arguments"))
-        .or_else(|| item.get("arguments"));
+    let arguments_value =
+        function_obj.and_then(|f| f.get("arguments")).or_else(|| item.get("arguments"));
     let arguments = arguments_value.map_or_else(
         || "{}".to_string(),
-        |value| {
-            value
-                .as_str()
-                .map(ToOwned::to_owned)
-                .unwrap_or_else(|| value.to_string())
-        },
+        |value| value.as_str().map(ToOwned::to_owned).unwrap_or_else(|| value.to_string()),
     );
 
-    Some(ToolCall::function_with_namespace(
-        id, namespace, name, arguments,
-    ))
+    Some(ToolCall::function_with_namespace(id, namespace, name, arguments))
 }
 
 fn parse_message_item(item: &Value) -> Option<Message> {
-    let role = item
-        .get("role")
-        .and_then(Value::as_str)
-        .unwrap_or("assistant");
+    let role = item.get("role").and_then(Value::as_str).unwrap_or("assistant");
     let content_value = item.get("content").unwrap_or(&Value::Null);
     let content = output_item_text(content_value).trim().to_string();
 
@@ -504,28 +470,23 @@ fn parse_message_item(item: &Value) -> Option<Message> {
         })
         .collect();
 
-    let tool_result = content_value
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find_map(|part| {
-            let part_type = part.get("type").and_then(Value::as_str).unwrap_or("");
-            if part_type != "tool_result" {
-                return None;
-            }
+    let tool_result = content_value.as_array().into_iter().flatten().find_map(|part| {
+        let part_type = part.get("type").and_then(Value::as_str).unwrap_or("");
+        if part_type != "tool_result" {
+            return None;
+        }
 
-            let tool_call_id = part
-                .get("tool_call_id")
-                .and_then(Value::as_str)
-                .or_else(|| item.get("tool_call_id").and_then(Value::as_str))
-                .or_else(|| item.get("call_id").and_then(Value::as_str))
-                .map(ToOwned::to_owned)?;
+        let tool_call_id = part
+            .get("tool_call_id")
+            .and_then(Value::as_str)
+            .or_else(|| item.get("tool_call_id").and_then(Value::as_str))
+            .or_else(|| item.get("call_id").and_then(Value::as_str))
+            .map(ToOwned::to_owned)?;
 
-            let tool_output = output_item_text(part.get("content").unwrap_or(&Value::Null))
-                .trim()
-                .to_string();
-            Some((tool_call_id, tool_output))
-        });
+        let tool_output =
+            output_item_text(part.get("content").unwrap_or(&Value::Null)).trim().to_string();
+        Some((tool_call_id, tool_output))
+    });
 
     let assistant_phase = item
         .get("phase")
@@ -587,10 +548,7 @@ pub(crate) fn parse_compacted_output_messages(output: &[Value]) -> Vec<Message> 
             }
             "function_call" | "tool_call" => {
                 if let Some(tool_call) = parse_function_call_item(item) {
-                    messages.push(Message::assistant_with_tools(
-                        String::new(),
-                        vec![tool_call],
-                    ));
+                    messages.push(Message::assistant_with_tools(String::new(), vec![tool_call]));
                 }
             }
             "function_call_output" => {
@@ -648,12 +606,10 @@ fn emit_reasoning_delta(
     // fallback order (e.g. `["reasoning", "reasoning_content"]`).
     // Empty strings are skipped so that a present-but-empty primary field
     // does not block fallback to the next candidate.
-    let Some(reasoning) = reasoning_fields.iter().find_map(|field| {
-        delta
-            .get(*field)
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-    }) else {
+    let Some(reasoning) = reasoning_fields
+        .iter()
+        .find_map(|field| delta.get(*field).and_then(Value::as_str).filter(|s| !s.is_empty()))
+    else {
         return;
     };
     let Some(delta) = aggregator.handle_reasoning(reasoning) else {
@@ -756,10 +712,7 @@ impl StreamAggregator {
         self.reasoning_details = details
             .iter()
             .map(|detail| {
-                detail
-                    .as_str()
-                    .map(ToOwned::to_owned)
-                    .unwrap_or_else(|| detail.to_string())
+                detail.as_str().map(ToOwned::to_owned).unwrap_or_else(|| detail.to_string())
             })
             .collect();
     }
@@ -1143,10 +1096,7 @@ fn apply_tool_call_delta_with_index(
         .and_then(|value| value.as_u64())
         .or_else(|| container.get("index").and_then(|value| value.as_u64()));
 
-    let index = explicit_index
-        .map(|value| value as usize)
-        .or(fallback_index)
-        .unwrap_or(0);
+    let index = explicit_index.map(|value| value as usize).or(fallback_index).unwrap_or(0);
 
     let current_id = extract_tool_call_id(container).or_else(|| fallback_id.clone());
 
@@ -1171,9 +1121,7 @@ fn apply_tool_call_delta_with_index(
         delta_map.insert("id".to_string(), id_value);
     }
 
-    if let Some(function_value) = delta_source
-        .get("function")
-        .or_else(|| container.get("function"))
+    if let Some(function_value) = delta_source.get("function").or_else(|| container.get("function"))
     {
         delta_map.insert("function".to_string(), function_value.clone());
     }
@@ -1216,17 +1164,10 @@ mod tests {
         let second =
             finalize_tool_calls(vec![idless_builder(), idless_builder()]).expect("calls expected");
 
-        let ids: Vec<&str> = first
-            .iter()
-            .chain(second.iter())
-            .map(|call| call.id.as_str())
-            .collect();
+        let ids: Vec<&str> =
+            first.iter().chain(second.iter()).map(|call| call.id.as_str()).collect();
         let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
-        assert_eq!(
-            unique.len(),
-            ids.len(),
-            "fabricated ids must be unique across responses"
-        );
+        assert_eq!(unique.len(), ids.len(), "fabricated ids must be unique across responses");
 
         for id in ids {
             let hex = id.strip_prefix("call_").expect("fabricated id prefix");
@@ -1257,10 +1198,7 @@ mod tests {
             &telemetry,
         );
         assert_eq!(aggregated, "Hello");
-        assert_eq!(
-            delta.into_fragments(),
-            vec![StreamFragment::Content("Hello".into())]
-        );
+        assert_eq!(delta.into_fragments(), vec![StreamFragment::Content("Hello".into())]);
     }
 
     #[test]
@@ -1276,10 +1214,7 @@ mod tests {
         .unwrap();
         apply_tool_call_delta_from_content(&mut builders, &container, &telemetry);
         let calls = finalize_tool_calls(builders).expect("call expected");
-        let func = calls[0]
-            .function
-            .as_ref()
-            .expect("function call should be present");
+        let func = calls[0].function.as_ref().expect("function call should be present");
         assert_eq!(func.name, "foo");
     }
 
@@ -1308,10 +1243,7 @@ mod tests {
         let calls = finalize_tool_calls(builders).expect("call expected");
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].id, "call-1");
-        let func = calls[0]
-            .function
-            .as_ref()
-            .expect("function call should be present");
+        let func = calls[0].function.as_ref().expect("function call should be present");
         assert_eq!(func.arguments, "{\"value\":1}");
     }
 

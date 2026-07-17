@@ -37,9 +37,7 @@ pub struct IdeContextProviderConfig {
 
 impl Default for IdeContextProviderConfig {
     fn default() -> Self {
-        Self {
-            enabled: default_provider_enabled(),
-        }
+        Self { enabled: default_provider_enabled() }
     }
 }
 

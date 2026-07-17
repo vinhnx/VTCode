@@ -190,10 +190,7 @@ mod tests {
 
         // This test checks the logic in style_for_path which calls determine_file_type_key internally
         // For directory paths, it should try to match with "di" key
-        assert_eq!(
-            colorizer.determine_file_type_key(Path::new("/tmp/dir/")),
-            "di"
-        );
+        assert_eq!(colorizer.determine_file_type_key(Path::new("/tmp/dir/")), "di");
     }
 
     #[test]
@@ -228,17 +225,8 @@ mod tests {
             has_ls_colors: true,
         };
 
-        assert_eq!(
-            colorizer.determine_file_type_key(Path::new("/tmp/script.sh")),
-            "ex"
-        );
-        assert_eq!(
-            colorizer.determine_file_type_key(Path::new("/tmp/main.py")),
-            "ex"
-        );
-        assert_eq!(
-            colorizer.determine_file_type_key(Path::new("/tmp/main.rb")),
-            "ex"
-        );
+        assert_eq!(colorizer.determine_file_type_key(Path::new("/tmp/script.sh")), "ex");
+        assert_eq!(colorizer.determine_file_type_key(Path::new("/tmp/main.py")), "ex");
+        assert_eq!(colorizer.determine_file_type_key(Path::new("/tmp/main.rb")), "ex");
     }
 }

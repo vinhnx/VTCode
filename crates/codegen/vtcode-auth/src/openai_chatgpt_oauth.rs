@@ -103,10 +103,9 @@ enum OpenAIChatGptAuthRefreshStrategy {
 impl fmt::Debug for OpenAIChatGptAuthRefreshStrategy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Stored { storage_mode } => f
-                .debug_struct("Stored")
-                .field("storage_mode", storage_mode)
-                .finish(),
+            Self::Stored { storage_mode } => {
+                f.debug_struct("Stored").field("storage_mode", storage_mode).finish()
+            }
             Self::External { .. } => f.debug_struct("External").finish_non_exhaustive(),
         }
     }
@@ -165,8 +164,7 @@ impl OpenAIChatGptAuthHandle {
     }
 
     pub fn current_api_key(&self) -> Result<String> {
-        self.snapshot()
-            .map(|session| active_api_bearer_token(&session).to_string())
+        self.snapshot().map(|session| active_api_bearer_token(&session).to_string())
     }
 
     pub fn provider_label(&self) -> &'static str {
@@ -208,17 +206,12 @@ impl OpenAIChatGptAuthHandle {
 
     #[must_use]
     pub fn using_external_tokens(&self) -> bool {
-        matches!(
-            self.refresh_strategy,
-            OpenAIChatGptAuthRefreshStrategy::External { .. }
-        )
+        matches!(self.refresh_strategy, OpenAIChatGptAuthRefreshStrategy::External { .. })
     }
 
     fn replace_session(&self, session: OpenAIChatGptSession) -> Result<()> {
-        let mut guard = self
-            .session
-            .lock()
-            .map_err(|_| anyhow!("openai chatgpt auth mutex poisoned"))?;
+        let mut guard =
+            self.session.lock().map_err(|_| anyhow!("openai chatgpt auth mutex poisoned"))?;
         *guard = session;
         Ok(())
     }
@@ -308,10 +301,7 @@ pub fn get_openai_chatgpt_auth_url(
                 .to_string(),
         ),
         ("code_challenge", challenge.code_challenge.clone()),
-        (
-            "code_challenge_method",
-            challenge.code_challenge_method.clone(),
-        ),
+        ("code_challenge_method", challenge.code_challenge_method.clone()),
         ("id_token_add_organizations", "true".to_string()),
         ("codex_cli_simplified_flow", "true".to_string()),
         ("state", state.to_string()),
@@ -474,9 +464,7 @@ pub fn get_openai_chatgpt_auth_status_with_mode(
             .or_else(|| session.plan.clone())
             .or_else(|| session.account_id.clone()),
         age_seconds: now.saturating_sub(session.obtained_at),
-        expires_in: session
-            .expires_at
-            .map(|expires_at| expires_at.saturating_sub(now)),
+        expires_in: session.expires_at.map(|expires_at| expires_at.saturating_sub(now)),
     })
 }
 
@@ -524,13 +512,9 @@ async fn refresh_openai_chatgpt_session_without_lock(
         .send()
         .await
         .context("failed to refresh openai chatgpt token")?;
-    response
-        .error_for_status_ref()
-        .map_err(classify_refresh_error)?;
-    let token_response: OpenAITokenResponse = response
-        .json()
-        .await
-        .context("failed to parse openai refresh response")?;
+    response.error_for_status_ref().map_err(classify_refresh_error)?;
+    let token_response: OpenAITokenResponse =
+        response.json().await.context("failed to parse openai refresh response")?;
 
     let session = build_session_from_token_response(token_response).await?;
     save_openai_chatgpt_session_with_mode(&session, storage_mode)?;
@@ -561,20 +545,13 @@ async fn build_session_from_token_response(
             .as_ref()
             .and_then(|claims| claims.account_id.clone())
             .or(id_claims.account_id),
-        email: id_claims.email.or_else(|| {
-            access_claims
-                .as_ref()
-                .and_then(|claims| claims.email.clone())
-        }),
-        plan: access_claims
-            .as_ref()
-            .and_then(|claims| claims.plan.clone())
-            .or(id_claims.plan),
+        email: id_claims
+            .email
+            .or_else(|| access_claims.as_ref().and_then(|claims| claims.email.clone())),
+        plan: access_claims.as_ref().and_then(|claims| claims.plan.clone()).or(id_claims.plan),
         obtained_at: now,
         refreshed_at: now,
-        expires_at: token_response
-            .expires_in
-            .map(|secs| now.saturating_add(secs)),
+        expires_at: token_response.expires_in.map(|secs| now.saturating_add(secs)),
     })
 }
 
@@ -665,13 +642,8 @@ fn parse_jwt_claims(jwt: &str) -> Result<ParsedIdTokenClaims> {
         serde_json::from_slice(&payload).context("failed to parse openai id token payload")?;
 
     Ok(ParsedIdTokenClaims {
-        email: claims
-            .email
-            .or_else(|| claims.profile.and_then(|profile| profile.email)),
-        account_id: claims
-            .auth
-            .as_ref()
-            .and_then(|auth| auth.chatgpt_account_id.clone()),
+        email: claims.email.or_else(|| claims.profile.and_then(|profile| profile.email)),
+        account_id: claims.auth.as_ref().and_then(|auth| auth.chatgpt_account_id.clone()),
         plan: claims.auth.and_then(|auth| auth.chatgpt_plan_type),
     })
 }
@@ -683,11 +655,7 @@ fn extract_query_value(query: &str, key: &str) -> Option<String> {
         .filter_map(|pair| {
             let (pair_key, pair_value) = pair.split_once('=')?;
             (pair_key == key)
-                .then(|| {
-                    urlencoding::decode(pair_value)
-                        .ok()
-                        .map(|value| value.into_owned())
-                })
+                .then(|| urlencoding::decode(pair_value).ok().map(|value| value.into_owned()))
                 .flatten()
         })
         .find(|value| !value.is_empty())
@@ -722,8 +690,7 @@ async fn acquire_refresh_lock() -> Result<RefreshLockGuard> {
         .open(&path)
         .with_context(|| format!("failed to open openai refresh lock {}", path.display()))?;
     let file = tokio::task::spawn_blocking(move || {
-        file.lock_exclusive()
-            .context("failed to acquire openai refresh lock")?;
+        file.lock_exclusive().context("failed to acquire openai refresh lock")?;
         Ok::<_, anyhow::Error>(file)
     })
     .await
@@ -762,10 +729,7 @@ fn clear_session_from_all_stores() -> Result<()> {
     if errors.is_empty() {
         Ok(())
     } else {
-        Err(anyhow!(
-            "failed to clear openai session from all stores: {}",
-            errors.join("; ")
-        ))
+        Err(anyhow!("failed to clear openai session from all stores: {}", errors.join("; ")))
     }
 }
 
@@ -813,9 +777,7 @@ fn decode_session_from_keyring(serialized: String) -> Result<OpenAIChatGptSessio
 }
 
 fn load_session_from_keyring_decoded() -> Result<Option<OpenAIChatGptSession>> {
-    load_session_from_keyring()?
-        .map(decode_session_from_keyring)
-        .transpose()
+    load_session_from_keyring()?.map(decode_session_from_keyring).transpose()
 }
 
 fn load_preferred_openai_chatgpt_session(
@@ -863,9 +825,7 @@ fn clear_session_from_keyring() -> Result<()> {
 
     match entry.delete_credential() {
         Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
-        Err(err) => Err(anyhow!(
-            "failed to clear openai session keyring entry: {err}"
-        )),
+        Err(err) => Err(anyhow!("failed to clear openai session keyring entry: {err}")),
     }
 }
 
@@ -914,8 +874,7 @@ fn encrypt_session(session: &OpenAIChatGptSession) -> Result<EncryptedSession> {
     let key = derive_encryption_key()?;
     let rng = SystemRandom::new();
     let mut nonce_bytes = [0u8; NONCE_LEN];
-    rng.fill(&mut nonce_bytes)
-        .map_err(|_| anyhow!("failed to generate nonce"))?;
+    rng.fill(&mut nonce_bytes).map_err(|_| anyhow!("failed to generate nonce"))?;
 
     let mut ciphertext =
         serde_json::to_vec(session).context("failed to serialize openai session for encryption")?;
@@ -947,11 +906,7 @@ fn decrypt_session(encrypted: &EncryptedSession) -> Result<OpenAIChatGptSession>
 
     let key = derive_encryption_key()?;
     let plaintext = key
-        .open_in_place(
-            Nonce::assume_unique_for_key(nonce_array),
-            Aad::empty(),
-            &mut ciphertext,
-        )
+        .open_in_place(Nonce::assume_unique_for_key(nonce_array), Aad::empty(), &mut ciphertext)
         .map_err(|_| anyhow!("failed to decrypt openai session"))?;
     serde_json::from_slice(plaintext).context("failed to parse decrypted openai session")
 }
@@ -1029,10 +984,7 @@ mod tests {
                 temp_dir.path().to_path_buf(),
             ))
             .expect("set temp auth dir override");
-            Self {
-                temp_dir: Some(temp_dir),
-                previous,
-            }
+            Self { temp_dir: Some(temp_dir), previous }
         }
     }
 
@@ -1120,10 +1072,7 @@ mod tests {
 
         handle.force_refresh().await.expect("force refresh");
 
-        assert_eq!(
-            handle.current_api_key().expect("current api key"),
-            "oauth-access-refreshed"
-        );
+        assert_eq!(handle.current_api_key().expect("current api key"), "oauth-access-refreshed");
         assert!(
             load_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
                 .expect("load session")
@@ -1162,9 +1111,7 @@ mod tests {
         let handle = OpenAIChatGptAuthHandle::new_external(
             session,
             true,
-            Arc::new(CountingExternalRefresher {
-                calls: Arc::clone(&calls),
-            }),
+            Arc::new(CountingExternalRefresher { calls: Arc::clone(&calls) }),
         );
 
         let first = handle.clone();
@@ -1179,10 +1126,7 @@ mod tests {
             1,
             "concurrent refresh_if_needed calls should share one refresh"
         );
-        assert_eq!(
-            handle.current_api_key().expect("current api key"),
-            "oauth-access-refreshed"
-        );
+        assert_eq!(handle.current_api_key().expect("current api key"), "oauth-access-refreshed");
     }
 
     #[test]
@@ -1303,10 +1247,7 @@ mod tests {
             Some("api-key".to_string()),
         )
         .expect("overview");
-        assert_eq!(
-            overview.active_source,
-            Some(OpenAIResolvedAuthSource::ChatGpt)
-        );
+        assert_eq!(overview.active_source, Some(OpenAIResolvedAuthSource::ChatGpt));
         assert!(overview.notice.is_some());
         assert!(overview.recommendation.is_some());
         clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
@@ -1329,10 +1270,7 @@ mod tests {
             Some("api-key".to_string()),
         )
         .expect("overview");
-        assert_eq!(
-            overview.active_source,
-            Some(OpenAIResolvedAuthSource::ApiKey)
-        );
+        assert_eq!(overview.active_source, Some(OpenAIResolvedAuthSource::ApiKey));
         clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File)
             .expect("clear session");
     }
@@ -1446,11 +1384,7 @@ mod tests {
     fn parse_manual_callback_input_rejects_bare_code() {
         let error = parse_openai_chatgpt_manual_callback_input("auth-code", "test-state")
             .expect_err("bare code should be rejected");
-        assert!(
-            error
-                .to_string()
-                .contains("full redirect url or query string")
-        );
+        assert!(error.to_string().contains("full redirect url or query string"));
     }
 
     #[test]

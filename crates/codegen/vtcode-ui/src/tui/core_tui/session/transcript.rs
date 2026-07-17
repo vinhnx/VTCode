@@ -131,13 +131,7 @@ impl TranscriptReflowCache {
 
             // Optimize: avoid enumerate(), just use skip()
             let target_count = remaining_rows - result.len();
-            result.extend(
-                msg.lines
-                    .iter()
-                    .skip(skip_lines)
-                    .take(target_count)
-                    .cloned(),
-            );
+            result.extend(msg.lines.iter().skip(skip_lines).take(target_count).cloned());
 
             if result.len() >= remaining_rows {
                 break;
@@ -286,10 +280,7 @@ mod tests {
     };
 
     fn line(text: impl Into<Line<'static>>) -> TranscriptLine {
-        TranscriptLine {
-            line: text.into(),
-            explicit_links: Vec::new(),
-        }
+        TranscriptLine { line: text.into(), explicit_links: Vec::new() }
     }
 
     fn segment(text: &str) -> InlineSegment {
@@ -446,10 +437,7 @@ mod tests {
     fn visible_window_cache_respects_viewport_rows() {
         let mut session = Session::new(InlineTheme::default(), None, 20);
         for index in 0..6 {
-            session.push_line(
-                InlineMessageKind::Agent,
-                vec![segment(&format!("line {index}"))],
-            );
+            session.push_line(InlineMessageKind::Agent, vec![segment(&format!("line {index}"))]);
         }
 
         let first = session.collect_transcript_window_cached(80, 0, 2);

@@ -36,13 +36,11 @@ impl EventChannels {
     }
 
     pub(super) fn pause(&self) {
-        self.rx_paused
-            .store(true, std::sync::atomic::Ordering::Release);
+        self.rx_paused.store(true, std::sync::atomic::Ordering::Release);
     }
 
     pub(super) fn resume(&self) {
-        self.rx_paused
-            .store(false, std::sync::atomic::Ordering::Release);
+        self.rx_paused.store(false, std::sync::atomic::Ordering::Release);
     }
 
     /// Record that user input was received (updates last input timestamp)

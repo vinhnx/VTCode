@@ -94,14 +94,13 @@ impl FilePalette {
             self.current_dir = parent.to_path_buf();
         }
         self.rebuild_dir_listing();
-        if let Some(name) = child {
-            if let Some(pos) = self
+        if let Some(name) = child
+            && let Some(pos) = self
                 .filtered_files
                 .iter()
                 .position(|e| e.is_dir && !e.is_parent && e.display_name == format!("{name}/"))
-            {
-                self.selected = Some(pos);
-            }
+        {
+            self.selected = Some(pos);
         }
     }
 

@@ -44,9 +44,7 @@ pub(crate) fn interpret_permission_request(
                     command.command
                 )));
             } else if allow_plain_success_stdout(result, quiet_success_output) {
-                outcome
-                    .messages
-                    .push(HookMessage::info(result.stdout.trim().to_owned()));
+                outcome.messages.push(HookMessage::info(result.stdout.trim().to_owned()));
             }
         }
         return;
@@ -73,11 +71,7 @@ pub(crate) fn interpret_permission_request(
         _ => None,
     };
 
-    if let Some(message) = spec
-        .get("message")
-        .and_then(Value::as_str)
-        .and_then(trimmed_non_empty)
-    {
+    if let Some(message) = spec.get("message").and_then(Value::as_str).and_then(trimmed_non_empty) {
         outcome.messages.push(HookMessage::info(message));
     }
 
@@ -129,10 +123,7 @@ fn parse_permission_updates(value: Option<&Value>) -> Vec<PermissionUpdateReques
         other => vec![other],
     };
 
-    updates
-        .into_iter()
-        .filter_map(parse_permission_update)
-        .collect()
+    updates.into_iter().filter_map(parse_permission_update).collect()
 }
 
 fn parse_permission_update(value: &Value) -> Option<PermissionUpdateRequest> {

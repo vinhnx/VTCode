@@ -124,10 +124,7 @@ pub(crate) fn exact_declaration_name_range(
     } else {
         name_text.to_lowercase() == outline_name.to_lowercase()
     };
-    matches.then_some(SourceByteRange {
-        start: name.start_byte(),
-        end: name.end_byte(),
-    })
+    matches.then_some(SourceByteRange { start: name.start_byte(), end: name.end_byte() })
 }
 
 static TREE_SITTER_PARSERS: OnceLock<
@@ -144,9 +141,7 @@ pub(crate) fn prewarm_workspace_languages<'a>(
             continue;
         };
 
-        if !ready
-            .iter()
-            .any(|current| current == language.display_name())
+        if !ready.iter().any(|current| current == language.display_name())
             && prewarm_language(language).is_ok()
         {
             ready.push(language.display_name().to_string());
@@ -283,10 +278,7 @@ mod tests {
     #[test]
     fn tree_sitter_usage_allowlist_is_frozen() {
         let expected = [
-            (
-                AstGrepLanguage::Rust,
-                &["identifier", "type_identifier", "field_identifier"][..],
-            ),
+            (AstGrepLanguage::Rust, &["identifier", "type_identifier", "field_identifier"][..]),
             (AstGrepLanguage::Python, &["identifier"][..]),
             (
                 AstGrepLanguage::JavaScript,
@@ -318,18 +310,9 @@ mod tests {
                     "type_identifier",
                 ][..],
             ),
-            (
-                AstGrepLanguage::Go,
-                &["identifier", "field_identifier", "type_identifier"][..],
-            ),
-            (
-                AstGrepLanguage::Java,
-                &["identifier", "type_identifier"][..],
-            ),
-            (
-                AstGrepLanguage::C,
-                &["identifier", "type_identifier", "field_identifier"][..],
-            ),
+            (AstGrepLanguage::Go, &["identifier", "field_identifier", "type_identifier"][..]),
+            (AstGrepLanguage::Java, &["identifier", "type_identifier"][..]),
+            (AstGrepLanguage::C, &["identifier", "type_identifier", "field_identifier"][..]),
             (
                 AstGrepLanguage::Cpp,
                 &[
@@ -400,10 +383,7 @@ mod tests {
     fn tree_sitter_definition_name_smart_case_supports_unicode_lowercase_queries() {
         let source = "fn Éclair() { Éclair(); }\n";
         let tree = parse_source(AstGrepLanguage::Rust, source).expect("Rust parses");
-        let declaration = SourceByteRange {
-            start: 0,
-            end: source.len() - 1,
-        };
+        let declaration = SourceByteRange { start: 0, end: source.len() - 1 };
         let name = exact_declaration_name_range(
             &tree,
             source,
@@ -435,10 +415,7 @@ mod tests {
             &tree,
             source,
             AstGrepLanguage::Bash,
-            SourceByteRange {
-                start: 0,
-                end: source.len(),
-            },
+            SourceByteRange { start: 0, end: source.len() },
             "Widget",
             "Widget",
         )

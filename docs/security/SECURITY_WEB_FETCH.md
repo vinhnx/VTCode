@@ -114,7 +114,7 @@ Network Request (if all checks pass)
 
 ### Code Location
 
-- **Main implementation**: `vtcode-core/src/tools/web_fetch.rs`
+- **Main implementation**: `crates/codegen/vtcode-core/src/tools/web_fetch.rs`
 - **Key functions**:
   - `validate_url()` - Entry point for validation
   - `validate_url_safety()` - Sensitive domain and pattern checks
@@ -171,7 +171,7 @@ Potential improvements:
 
 ### Adding New Blocked Domains
 
-Edit `vtcode-core/src/tools/web_fetch.rs` in the `validate_url_safety()` function's `blocked_domains` array.
+Edit `crates/codegen/vtcode-core/src/tools/web_fetch.rs` in the `validate_url_safety()` function's `blocked_domains` array.
 
 ### Updating Malicious Patterns
 

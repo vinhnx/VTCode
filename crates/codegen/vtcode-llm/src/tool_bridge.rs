@@ -129,11 +129,7 @@ impl MessageToolCorrelation {
         }
 
         // Count contributing executions
-        let contributing = self
-            .tool_executions
-            .iter()
-            .filter(|e| e.contributed_to_intent)
-            .count();
+        let contributing = self.tool_executions.iter().filter(|e| e.contributed_to_intent).count();
 
         let avg_quality = self
             .tool_executions
@@ -313,9 +309,7 @@ pub struct MessageCorrelationTracker {
 
 impl MessageCorrelationTracker {
     pub fn new() -> Self {
-        Self {
-            correlations: vec![],
-        }
+        Self { correlations: vec![] }
     }
 
     /// Add a correlation
@@ -439,10 +433,7 @@ mod tests {
 
         corr.add_execution(exec);
 
-        assert!(matches!(
-            corr.intent_fulfillment,
-            IntentFulfillment::PartiallyFulfilled
-        ));
+        assert!(matches!(corr.intent_fulfillment, IntentFulfillment::PartiallyFulfilled));
     }
 
     #[test]
@@ -467,9 +458,6 @@ mod tests {
             extract_quoted_string("grep for \"error pattern\""),
             Some("error pattern".to_owned())
         );
-        assert_eq!(
-            extract_quoted_string("find 'test.rs'"),
-            Some("test.rs".to_owned())
-        );
+        assert_eq!(extract_quoted_string("find 'test.rs'"), Some("test.rs".to_owned()));
     }
 }

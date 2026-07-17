@@ -31,9 +31,7 @@ pub struct BundledSkillsConfig {
 
 impl Default for BundledSkillsConfig {
     fn default() -> Self {
-        Self {
-            enabled: default_bundled_skills_enabled(),
-        }
+        Self { enabled: default_bundled_skills_enabled() }
     }
 }
 

@@ -37,21 +37,9 @@ impl ProviderEndpointConfig {
 
     fn extract_base_url(provider: Provider, dot_config: Option<&DotConfig>) -> Option<String> {
         let from_config = dot_config.and_then(|cfg| match provider {
-            Provider::OpenAI => cfg
-                .providers
-                .openai
-                .as_ref()
-                .and_then(|c| c.base_url.clone()),
-            Provider::Ollama => cfg
-                .providers
-                .ollama
-                .as_ref()
-                .and_then(|c| c.base_url.clone()),
-            Provider::LlamaCpp => cfg
-                .providers
-                .llamacpp
-                .as_ref()
-                .and_then(|c| c.base_url.clone()),
+            Provider::OpenAI => cfg.providers.openai.as_ref().and_then(|c| c.base_url.clone()),
+            Provider::Ollama => cfg.providers.ollama.as_ref().and_then(|c| c.base_url.clone()),
+            Provider::LlamaCpp => cfg.providers.llamacpp.as_ref().and_then(|c| c.base_url.clone()),
             _ => None,
         });
 

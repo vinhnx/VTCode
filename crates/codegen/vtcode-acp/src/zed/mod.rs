@@ -17,12 +17,7 @@ pub struct ZedAcpAdapter;
 #[async_trait(?Send)]
 impl AcpClientAdapter for ZedAcpAdapter {
     async fn serve(&self, params: AcpLaunchParams<'_>) -> Result<()> {
-        run_acp_agent(
-            params.agent_config,
-            params.runtime_config,
-            Some("Zed".to_string()),
-        )
-        .await
+        run_acp_agent(params.agent_config, params.runtime_config, Some("Zed".to_string())).await
     }
 }
 
@@ -137,10 +132,9 @@ mod tests {
             })
             .and_then(|kind| match kind {
                 SessionConfigKind::Select(select) => Some(match &select.options {
-                    SessionConfigSelectOptions::Ungrouped(options) => options
-                        .iter()
-                        .map(|option| option.value.0.as_ref().to_string())
-                        .collect(),
+                    SessionConfigSelectOptions::Ungrouped(options) => {
+                        options.iter().map(|option| option.value.0.as_ref().to_string()).collect()
+                    }
                     _ => Vec::new(),
                 }),
                 _ => None,
@@ -226,10 +220,7 @@ mod tests {
 
         let agent = build_agent(temp.path()).await;
         let uri = format!("file://{}", nested.to_string_lossy());
-        let report = agent
-            .run_list_files(&json!({ TOOL_LIST_FILES_URI_ARG: uri }))
-            .await
-            .unwrap();
+        let report = agent.run_list_files(&json!({ TOOL_LIST_FILES_URI_ARG: uri })).await.unwrap();
 
         assert!(matches!(report.status, ToolCallStatus::Completed));
         let payload = report.raw_output.unwrap();
@@ -304,10 +295,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let agent = build_agent(temp.path()).await;
 
-        let response = agent
-            .new_session(NewSessionRequest::new(temp.path()))
-            .await
-            .unwrap();
+        let response = agent.new_session(NewSessionRequest::new(temp.path())).await.unwrap();
 
         assert!(response.modes.is_none());
         let config_options = response.config_options.unwrap();
@@ -429,9 +417,7 @@ mod tests {
     #[tokio::test]
     async fn session_config_options_include_custom_primary_agent() {
         let temp = TempDir::new().unwrap();
-        fs::create_dir_all(temp.path().join(".vtcode/agents"))
-            .await
-            .unwrap();
+        fs::create_dir_all(temp.path().join(".vtcode/agents")).await.unwrap();
         fs::write(
             temp.path().join(".vtcode/agents/research.md"),
             r#"---
@@ -458,23 +444,16 @@ Research primary prompt."#,
 
         assert_eq!(
             primary_agent_select_values(&config_options),
-            ["duck", "plan", "build", "auto", "research"]
-                .map(str::to_string)
-                .to_vec()
+            ["duck", "plan", "build", "auto", "research"].map(str::to_string).to_vec()
         );
         assert!(primary_agent_select_labels(&config_options).contains(&"Research primary".into()));
-        assert_eq!(
-            primary_agent_current_value(&config_options),
-            Some("research".to_string())
-        );
+        assert_eq!(primary_agent_current_value(&config_options), Some("research".to_string()));
     }
 
     #[tokio::test]
     async fn session_config_options_use_overridden_builtin_primary_agent_metadata() {
         let temp = TempDir::new().unwrap();
-        fs::create_dir_all(temp.path().join(".vtcode/agents"))
-            .await
-            .unwrap();
+        fs::create_dir_all(temp.path().join(".vtcode/agents")).await.unwrap();
         fs::write(
             temp.path().join(".vtcode/agents/build.md"),
             r#"---
@@ -525,10 +504,7 @@ Project build prompt."#,
             .unwrap();
 
         let session = agent.session_handle(&session_id).unwrap();
-        assert_eq!(
-            session.data.lock().unwrap().reasoning_effort,
-            ReasoningEffortLevel::XHigh
-        );
+        assert_eq!(session.data.lock().unwrap().reasoning_effort, ReasoningEffortLevel::XHigh);
         assert!(response.config_options.iter().any(|option| {
             option.id == crate::acp::SessionConfigId::new(SESSION_CONFIG_THOUGHT_LEVEL_ID)
                 && matches!(
@@ -545,9 +521,8 @@ Project build prompt."#,
         let temp = TempDir::new().unwrap();
         let agent = build_agent(temp.path()).await;
         let session_id = agent.register_session();
-        let anthropic_default = ModelId::default_single_for_provider(Provider::Anthropic)
-            .as_str()
-            .into_owned();
+        let anthropic_default =
+            ModelId::default_single_for_provider(Provider::Anthropic).as_str().into_owned();
 
         let response = agent
             .set_session_config_option(SetSessionConfigOptionRequest::new(

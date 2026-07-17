@@ -176,10 +176,7 @@ mod tests {
     #[test]
     fn write_replaces_existing_key() -> Result<()> {
         let dir = tempdir()?;
-        fs::write(
-            dir.path().join(".env"),
-            "OPENAI_API_KEY=old-value\nOTHER_KEY=value\n",
-        )?;
+        fs::write(dir.path().join(".env"), "OPENAI_API_KEY=old-value\nOTHER_KEY=value\n")?;
 
         write_workspace_env_value(dir.path(), "OPENAI_API_KEY", "new-value")?;
 

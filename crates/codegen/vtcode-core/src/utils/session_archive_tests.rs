@@ -78,12 +78,8 @@ async fn session_archive_persists_snapshot() -> Result<()> {
         SessionMessage::new(MessageRole::User, "Hello world"),
         SessionMessage::new(MessageRole::Assistant, "Hi there"),
     ];
-    let path = archive.finalize(
-        transcript.clone(),
-        4,
-        vec!["tool_a".to_owned()],
-        messages.clone(),
-    )?;
+    let path =
+        archive.finalize(transcript.clone(), 4, vec!["tool_a".to_owned()], messages.clone())?;
 
     let stored = fs::read_to_string(&path)
         .with_context(|| format!("failed to read stored session: {}", path.display()))?;
@@ -114,9 +110,7 @@ async fn session_archive_persists_budget_limit_continuation_metadata() -> Result
         "dark",
         "medium",
     )
-    .with_continuation_metadata(Some(SessionContinuationMetadata::budget_limit(
-        2.5, 2.7, true,
-    )));
+    .with_continuation_metadata(Some(SessionContinuationMetadata::budget_limit(2.5, 2.7, true)));
     let archive = SessionArchive::new(metadata.clone(), None).await?;
 
     let path = archive.finalize(Vec::new(), 0, Vec::new(), Vec::new())?;
@@ -146,10 +140,7 @@ fn session_message_converts_back_and_forth() {
 
     assert_eq!(original.role, restored.role);
     assert_eq!(original.content, restored.content);
-    assert_eq!(
-        original.reasoning.as_deref(),
-        stored.reasoning.as_deref().map(|v| v.as_str())
-    );
+    assert_eq!(original.reasoning.as_deref(), stored.reasoning.as_deref().map(|v| v.as_str()));
     assert_eq!(original.reasoning, restored.reasoning);
     assert_eq!(original.tool_call_id, restored.tool_call_id);
     assert_eq!(original.phase, stored.phase);
@@ -183,15 +174,9 @@ fn session_message_preserves_tool_calls_reasoning_details_and_origin_tool() {
     let stored = SessionMessage::from(&original);
     let restored = Message::from(&stored);
 
-    assert_eq!(
-        stored.reasoning_details.as_deref(),
-        original.reasoning_details.as_ref()
-    );
+    assert_eq!(stored.reasoning_details.as_deref(), original.reasoning_details.as_ref());
     assert_eq!(stored.tool_calls.as_deref(), original.tool_calls.as_ref());
-    assert_eq!(
-        stored.origin_tool.as_deref().map(|v| v.as_str()),
-        original.origin_tool.as_deref()
-    );
+    assert_eq!(stored.origin_tool.as_deref().map(|v| v.as_str()), original.origin_tool.as_deref());
     assert_eq!(restored.reasoning_details, original.reasoning_details);
     assert_eq!(restored.tool_calls, original.tool_calls);
     assert_eq!(restored.origin_tool, original.origin_tool);
@@ -278,10 +263,7 @@ fn session_message_layout_is_smaller_than_unboxed_equivalent() {
 
 #[test]
 fn boxed_session_progress_option_is_pointer_sized() {
-    assert_eq!(
-        size_of::<Option<Box<SessionProgress>>>(),
-        size_of::<usize>()
-    );
+    assert_eq!(size_of::<Option<Box<SessionProgress>>>(), size_of::<usize>());
     assert!(size_of::<Option<SessionProgress>>() > size_of::<Option<Box<SessionProgress>>>());
 }
 
@@ -378,10 +360,7 @@ async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result
     let snapshot: SessionSnapshot =
         serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
-    assert_eq!(
-        snapshot.transcript,
-        vec!["run cargo check".to_string(), "done".to_string()]
-    );
+    assert_eq!(snapshot.transcript, vec!["run cargo check".to_string(), "done".to_string()]);
     Ok(())
 }
 
@@ -510,15 +489,9 @@ async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<
     let snapshot: SessionSnapshot =
         serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
 
-    assert_eq!(
-        snapshot.distinct_tools,
-        vec![tool_names::UNIFIED_EXEC.to_string()]
-    );
+    assert_eq!(snapshot.distinct_tools, vec![tool_names::UNIFIED_EXEC.to_string()]);
     let progress = snapshot.progress.expect("progress should exist");
-    assert_eq!(
-        progress.tool_summaries,
-        vec![tool_names::UNIFIED_EXEC.to_string()]
-    );
+    assert_eq!(progress.tool_summaries, vec![tool_names::UNIFIED_EXEC.to_string()]);
     Ok(())
 }
 
@@ -586,10 +559,7 @@ async fn session_archive_path_collision_adds_suffix() -> Result<()> {
     let second_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
 
     assert_ne!(first_path, second_path);
-    let second_name = second_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .expect("file name");
+    let second_name = second_path.file_name().and_then(|name| name.to_str()).expect("file name");
     assert!(second_name.contains("-01"));
 
     Ok(())
@@ -614,10 +584,7 @@ fn session_archive_filename_includes_microseconds_and_pid() -> Result<()> {
         .expect("nanosecond set");
 
     let path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at, None);
-    let name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .expect("file name string");
+    let name = path.file_name().and_then(|value| value.to_str()).expect("file name string");
 
     assert!(name.contains("20250925T101530Z_654321"));
     let pid_fragment = format!("{:05}", process::id());
@@ -665,10 +632,7 @@ async fn reserve_session_identifier_can_be_reused_for_archive() -> Result<()> {
         .and_then(|value| value.to_str())
         .ok_or_else(|| anyhow!("missing file stem"))?;
     assert_eq!(stem, session_id);
-    assert_eq!(
-        snapshot.metadata.debug_log_path,
-        Some("/tmp/debug-session.log".to_string())
-    );
+    assert_eq!(snapshot.metadata.debug_log_path, Some("/tmp/debug-session.log".to_string()));
 
     Ok(())
 }
@@ -808,9 +772,7 @@ fn session_archive_retention_prunes_oldest_by_count() -> Result<()> {
         .map(|entry| entry.path())
         .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("json"))
         .filter_map(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.to_string())
+            path.file_name().and_then(|name| name.to_str()).map(|name| name.to_string())
         })
         .collect::<Vec<_>>();
     remaining.sort();
@@ -847,24 +809,16 @@ fn session_archive_retention_prunes_by_total_size() -> Result<()> {
         .collect::<Vec<_>>();
 
     assert_eq!(remaining.len(), 1);
-    let remaining_name = remaining[0]
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or_default();
+    let remaining_name =
+        remaining[0].file_name().and_then(|name| name.to_str()).unwrap_or_default();
     assert_eq!(remaining_name, "session-1.json");
     Ok(())
 }
 
 #[test]
 fn listing_previews_return_first_non_empty_lines() {
-    let metadata = SessionArchiveMetadata::new(
-        "Workspace",
-        "/tmp/ws",
-        "model",
-        "provider",
-        "dark",
-        "medium",
-    );
+    let metadata =
+        SessionArchiveMetadata::new("Workspace", "/tmp/ws", "model", "provider", "dark", "medium");
     let long_response = "response snippet ".repeat(6);
     let snapshot = SessionSnapshot {
         metadata,
@@ -886,10 +840,7 @@ fn listing_previews_return_first_non_empty_lines() {
         snapshot,
     };
 
-    assert_eq!(
-        listing.first_prompt_preview(),
-        Some("prompt line".to_owned())
-    );
+    assert_eq!(listing.first_prompt_preview(), Some("prompt line".to_owned()));
     let expected = truncate_preview(&long_response, 80);
     assert_eq!(listing.first_reply_preview(), Some(expected));
 }
@@ -907,21 +858,13 @@ async fn search_sessions_finds_keyword_case_insensitively() -> Result<()> {
 
     let messages = vec![
         SessionMessage::new(MessageRole::User, "Where is the secret API key?"),
-        SessionMessage::new(
-            MessageRole::Assistant,
-            "The secret key is defined in .env.local",
-        ),
+        SessionMessage::new(MessageRole::Assistant, "The secret key is defined in .env.local"),
     ];
     archive.finalize(vec![], 2, vec![], messages)?;
 
     let results = search_sessions("SECRET KEY", 10, 5).await?;
     assert!(!results.is_empty());
-    assert!(
-        results[0]
-            .content_snippet
-            .to_lowercase()
-            .contains("secret key")
-    );
+    assert!(results[0].content_snippet.to_lowercase().contains("secret key"));
     assert_eq!(results[0].role, MessageRole::Assistant);
 
     Ok(())
@@ -952,10 +895,7 @@ async fn session_archive_skips_writes_when_history_persistence_is_disabled() -> 
     )?;
 
     assert_eq!(path, archive.path());
-    assert!(
-        !path.exists(),
-        "history disabled should not write archive files"
-    );
+    assert!(!path.exists(), "history disabled should not write archive files");
     Ok(())
 }
 

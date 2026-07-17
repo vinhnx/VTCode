@@ -42,15 +42,12 @@ impl ResultScorer for CodeSearchScorer {
                     };
 
                     metadata.relevance = 0.75;
-                    metadata.completeness = if map
-                        .get("truncated")
-                        .and_then(Value::as_bool)
-                        .unwrap_or(false)
-                    {
-                        ResultCompleteness::Partial
-                    } else {
-                        ResultCompleteness::Complete
-                    };
+                    metadata.completeness =
+                        if map.get("truncated").and_then(Value::as_bool).unwrap_or(false) {
+                            ResultCompleteness::Partial
+                        } else {
+                            ResultCompleteness::Complete
+                        };
                     metadata.false_positive_likelihood = 0.05;
                 }
             }
@@ -165,10 +162,7 @@ impl ScorerRegistry {
             CompactStr::from(tools::CODE_SEARCH),
             Box::new(CodeSearchScorer) as Box<dyn ResultScorer>,
         );
-        scorers.insert(
-            CompactStr::from("find"),
-            Box::new(FindScorer) as Box<dyn ResultScorer>,
-        );
+        scorers.insert(CompactStr::from("find"), Box::new(FindScorer) as Box<dyn ResultScorer>);
         scorers.insert(
             CompactStr::from(tools::UNIFIED_EXEC),
             Box::new(ShellScorer) as Box<dyn ResultScorer>,
@@ -179,8 +173,7 @@ impl ScorerRegistry {
 
     /// Register a custom scorer
     pub fn register(&mut self, scorer: Box<dyn ResultScorer>) {
-        self.scorers
-            .insert(CompactStr::from(scorer.tool_name()), scorer);
+        self.scorers.insert(CompactStr::from(scorer.tool_name()), scorer);
     }
 
     /// Score a tool result

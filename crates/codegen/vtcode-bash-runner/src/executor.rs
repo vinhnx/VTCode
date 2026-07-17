@@ -101,20 +101,14 @@ impl CommandStatus {
 
     #[cold]
     pub fn failure(code: Option<i32>) -> Self {
-        Self {
-            success: false,
-            code,
-        }
+        Self { success: false, code }
     }
 }
 
 impl From<std::process::ExitStatus> for CommandStatus {
     fn from(status: std::process::ExitStatus) -> Self {
         let code = status.code();
-        Self {
-            success: status.success(),
-            code,
-        }
+        Self { success: status.success(), code }
     }
 }
 
@@ -299,10 +293,7 @@ impl PureRustCommandExecutor {
     fn copy_recursive(source: &Path, dest: &Path, recursive: bool) -> Result<()> {
         if source.is_dir() {
             if !recursive {
-                bail!(
-                    "copying directory `{}` requires recursive flag",
-                    source.display()
-                );
+                bail!("copying directory `{}` requires recursive flag", source.display());
             }
             fs::create_dir_all(dest)
                 .with_context(|| format!("failed to create directory `{}`", dest.display()))?;
@@ -327,18 +318,11 @@ impl PureRustCommandExecutor {
     fn copy_file(source: &Path, dest: &Path) -> Result<()> {
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent).with_context(|| {
-                format!(
-                    "failed to prepare destination directory `{}`",
-                    parent.display()
-                )
+                format!("failed to prepare destination directory `{}`", parent.display())
             })?;
         }
         fs::copy(source, dest).with_context(|| {
-            format!(
-                "failed to copy `{}` to `{}`",
-                source.display(),
-                dest.display()
-            )
+            format!("failed to copy `{}` to `{}`", source.display(), dest.display())
         })?;
         Ok(())
     }
@@ -346,10 +330,7 @@ impl PureRustCommandExecutor {
     fn move_path(source: &Path, dest: &Path) -> Result<()> {
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent).with_context(|| {
-                format!(
-                    "failed to prepare destination directory `{}`",
-                    parent.display()
-                )
+                format!("failed to prepare destination directory `{}`", parent.display())
             })?;
         }
 
@@ -517,9 +498,7 @@ where
                 None,
             ))),
         };
-        self.emit_event(ThreadEvent::ItemStarted(ItemStartedEvent {
-            item: starting_item,
-        }));
+        self.emit_event(ThreadEvent::ItemStarted(ItemStartedEvent { item: starting_item }));
 
         match self.inner.execute(invocation) {
             Ok(output) => {
@@ -551,9 +530,7 @@ where
                         Some(&err),
                     ))),
                 };
-                self.emit_event(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                    item: failure,
-                }));
+                self.emit_event(ThreadEvent::ItemCompleted(ItemCompletedEvent { item: failure }));
                 Err(err)
             }
         }

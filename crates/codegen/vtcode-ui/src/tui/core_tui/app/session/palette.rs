@@ -227,9 +227,7 @@ impl AppSession {
                 }
             }
             KeyCode::Right | KeyCode::Enter => {
-                let action = palette
-                    .get_selected()
-                    .map(|e| (e.is_dir, e.relative_path.clone()));
+                let action = palette.get_selected().map(|e| (e.is_dir, e.relative_path.clone()));
                 match action {
                     Some((true, _)) => {
                         palette.enter_selected_dir();

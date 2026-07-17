@@ -35,18 +35,12 @@ impl SafetyValidator {
             let current_default = ModelId::default();
 
             if skip_confirmations {
-                println!(
-                    "{}",
-                    style("Using Gemini 3.1 Pro model (confirmations skipped)").cyan()
-                );
+                println!("{}", style("Using Gemini 3.1 Pro model (confirmations skipped)").cyan());
                 return Ok(requested_model.to_string());
             }
 
             if PRO_MODEL_AUTO_ACCEPT.load(Ordering::Relaxed) {
-                println!(
-                    "{}",
-                    style("Using Gemini 3.1 Pro model (auto-accept enabled)").cyan()
-                );
+                println!("{}", style("Using Gemini 3.1 Pro model (auto-accept enabled)").cyan());
                 return Ok(requested_model.to_string());
             }
 
@@ -63,10 +57,7 @@ impl SafetyValidator {
                     PRO_MODEL_AUTO_ACCEPT.store(true, Ordering::Relaxed);
                 }
                 ProModelConfirmationResult::No => {
-                    println!(
-                        "Falling back to default model: {}",
-                        current_default.display_name()
-                    );
+                    println!("Falling back to default model: {}", current_default.display_name());
                     return Ok(current_default.to_string());
                 }
             }
@@ -82,10 +73,7 @@ impl SafetyValidator {
         _skip_confirmations: bool,
     ) -> Result<AgentMode> {
         // Always use single-agent mode
-        println!(
-            "{}",
-            style("Using single-agent mode with Decision Ledger").green()
-        );
+        println!("{}", style("Using single-agent mode with Decision Ledger").green());
         Ok(AgentMode::SingleCoder)
     }
 

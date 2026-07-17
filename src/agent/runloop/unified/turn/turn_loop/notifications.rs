@@ -113,16 +113,10 @@ async fn maybe_run_external_turn_complete_notify(
         .notify
         .split_first()
         .ok_or_else(|| anyhow::anyhow!("notify command must include a program"))?;
-    let status = tokio::process::Command::new(program)
-        .args(args)
-        .arg(payload)
-        .status()
-        .await?;
+    let status = tokio::process::Command::new(program).args(args).arg(payload).status().await?;
     if status.success() {
         Ok(())
     } else {
-        Err(anyhow::anyhow!(
-            "notify command exited with status {status}"
-        ))
+        Err(anyhow::anyhow!("notify command exited with status {status}"))
     }
 }

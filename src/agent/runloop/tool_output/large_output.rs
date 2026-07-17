@@ -51,9 +51,7 @@ pub(crate) struct LargeOutputConfig {
 
 impl Default for LargeOutputConfig {
     fn default() -> Self {
-        let home = std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."));
+        let home = std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("."));
         Self {
             base_dir: home.join(".vtcode").join("tmp"),
             threshold_bytes: 50_000, // 50KB — aligned with DEFAULT_SPOOL_THRESHOLD in streams.rs
@@ -213,10 +211,7 @@ pub(super) fn generate_session_hash(session_id: Option<&str>) -> String {
     }
 
     // Include timestamp for uniqueness
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
     hasher.update(timestamp.to_le_bytes());
 
     // Include process ID for additional uniqueness
@@ -234,10 +229,7 @@ pub(super) fn generate_session_hash(session_id: Option<&str>) -> String {
 fn generate_call_id() -> String {
     let mut hasher = Sha256::new();
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
     hasher.update(timestamp.to_le_bytes());
 
     // Add some randomness using process info and address
@@ -246,12 +238,10 @@ fn generate_call_id() -> String {
 
     let result = hasher.finalize();
     // Use first 12 bytes (24 hex chars) for a shorter but still unique ID
-    result[..12]
-        .iter()
-        .fold(String::with_capacity(24), |mut output, b| {
-            let _ = std::fmt::write(&mut output, format_args!("{b:02x}"));
-            output
-        })
+    result[..12].iter().fold(String::with_capacity(24), |mut output, b| {
+        let _ = std::fmt::write(&mut output, format_args!("{b:02x}"));
+        output
+    })
 }
 
 /// Spool large output to a temporary file if it exceeds the threshold
@@ -273,10 +263,7 @@ pub(crate) fn spool_large_output(
 
     // Create session directory
     ensure_dir_exists_sync(&session_dir).with_context(|| {
-        format!(
-            "Failed to create output spool directory: {}",
-            session_dir.display()
-        )
+        format!("Failed to create output spool directory: {}", session_dir.display())
     })?;
 
     // Generate unique call ID
@@ -332,10 +319,7 @@ pub(crate) fn format_spool_notification(result: &SpoolResult) -> String {
 
     // Format with box drawing characters for visual appeal
     let mut lines = Vec::new();
-    lines.push(format!(
-        "│ Output too long ({} bytes) and was saved to:",
-        result.size_bytes
-    ));
+    lines.push(format!("│ Output too long ({} bytes) and was saved to:", result.size_bytes));
 
     // Split long paths across multiple lines if needed
     if path_str.len() > 70 {

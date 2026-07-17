@@ -181,19 +181,12 @@ async fn select_session_interactively(
 }
 
 fn maybe_choose_fork_mode(intent: ArchivedSessionIntent) -> Result<Option<ArchivedSessionIntent>> {
-    let ArchivedSessionIntent::ForkNewArchive {
-        custom_suffix,
-        summarize,
-    } = intent
-    else {
+    let ArchivedSessionIntent::ForkNewArchive { custom_suffix, summarize } = intent else {
         return Ok(Some(intent));
     };
 
     if summarize {
-        return Ok(Some(ArchivedSessionIntent::ForkNewArchive {
-            custom_suffix,
-            summarize: true,
-        }));
+        return Ok(Some(ArchivedSessionIntent::ForkNewArchive { custom_suffix, summarize: true }));
     }
 
     let options = vec![
@@ -209,14 +202,8 @@ fn maybe_choose_fork_mode(intent: ArchivedSessionIntent) -> Result<Option<Archiv
         .context("failed to select fork mode")?;
 
     match selection {
-        0 => Ok(Some(ArchivedSessionIntent::ForkNewArchive {
-            custom_suffix,
-            summarize: false,
-        })),
-        1 => Ok(Some(ArchivedSessionIntent::ForkNewArchive {
-            custom_suffix,
-            summarize: true,
-        })),
+        0 => Ok(Some(ArchivedSessionIntent::ForkNewArchive { custom_suffix, summarize: false })),
+        1 => Ok(Some(ArchivedSessionIntent::ForkNewArchive { custom_suffix, summarize: true })),
         _ => Ok(None),
     }
 }
@@ -231,14 +218,10 @@ fn maybe_choose_budget_limited_resume_mode(
         return Ok(Some(ResumeExecutionMode::Resume(Box::new(resume))));
     }
 
-    println!(
-        "{}",
-        style("This session stopped after reaching the local budget limit.").yellow()
-    );
-    if let (Some(actual_cost_usd), Some(max_budget_usd)) = (
-        continuation.actual_cost_usd(),
-        continuation.max_budget_usd(),
-    ) {
+    println!("{}", style("This session stopped after reaching the local budget limit.").yellow());
+    if let (Some(actual_cost_usd), Some(max_budget_usd)) =
+        (continuation.actual_cost_usd(), continuation.max_budget_usd())
+    {
         println!(
             "{}",
             style(format!(
@@ -282,16 +265,9 @@ fn build_budget_resume_menu(continuation: &SessionContinuationMetadata) -> Budge
     options.push("Cancel".to_string());
 
     let default_action = preferred_budget_resume_action(continuation);
-    let default_index = actions
-        .iter()
-        .position(|action| *action == default_action)
-        .unwrap_or(0);
+    let default_index = actions.iter().position(|action| *action == default_action).unwrap_or(0);
 
-    BudgetResumeMenu {
-        actions,
-        options,
-        default_index,
-    }
+    BudgetResumeMenu { actions, options, default_index }
 }
 
 fn preferred_budget_resume_action(
@@ -320,10 +296,7 @@ fn resolve_budget_resume_action(
         BudgetResumeAction::ContinueFromSummary => {
             Some(ResumeExecutionMode::Resume(Box::new(convert_listing(
                 resume.listing(),
-                ArchivedSessionIntent::ForkNewArchive {
-                    custom_suffix: None,
-                    summarize: true,
-                },
+                ArchivedSessionIntent::ForkNewArchive { custom_suffix: None, summarize: true },
             ))))
         }
         BudgetResumeAction::ContinueFullHistory => {
@@ -339,11 +312,7 @@ fn convert_listing(listing: &SessionListing, intent: ArchivedSessionIntent) -> R
 }
 
 fn format_listing(listing: &SessionListing) -> String {
-    let ended = listing
-        .snapshot
-        .ended_at
-        .with_timezone(&Local)
-        .format("%Y-%m-%d %H:%M");
+    let ended = listing.snapshot.ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
     let mut summary = format!(
         "{} · {} · {} msgs",
         ended, listing.snapshot.metadata.model, listing.snapshot.total_messages
@@ -358,11 +327,7 @@ fn format_listing(listing: &SessionListing) -> String {
 }
 
 fn print_resume_summary(resume: &ResumeSession) {
-    let ended = resume
-        .snapshot()
-        .ended_at
-        .with_timezone(&Local)
-        .format("%Y-%m-%d %H:%M");
+    let ended = resume.snapshot().ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
     println!(
         "{}",
         style(format!(
@@ -373,18 +338,11 @@ fn print_resume_summary(resume: &ResumeSession) {
         ))
         .green()
     );
-    println!(
-        "{}",
-        style(format!("Archive: {}", resume.path().display())).green()
-    );
+    println!("{}", style(format!("Archive: {}", resume.path().display())).green());
 }
 
 fn print_fork_summary(resume: &ResumeSession) {
-    let ended = resume
-        .snapshot()
-        .ended_at
-        .with_timezone(&Local)
-        .format("%Y-%m-%d %H:%M");
+    let ended = resume.snapshot().ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
     println!(
         "{}",
         style(format!(
@@ -394,10 +352,7 @@ fn print_fork_summary(resume: &ResumeSession) {
         ))
         .green()
     );
-    println!(
-        "{}",
-        style(format!("Original archive: {}", resume.path().display())).green()
-    );
+    println!("{}", style(format!("Original archive: {}", resume.path().display())).green());
     if resume.summarize_fork() {
         println!("{}", style("Fork mode: summarized history").green());
     } else {
@@ -463,9 +418,7 @@ fn resolve_resume_workspace(
     }
 
     if archived_path == config.workspace {
-        return Ok(ParsedWorkspace::Provided {
-            path: archived_path,
-        });
+        return Ok(ParsedWorkspace::Provided { path: archived_path });
     }
 
     let action = if resume.is_fork() { "fork" } else { "resume" };
@@ -526,10 +479,7 @@ mod tests {
             error_logs: Vec::new(),
         };
 
-        let listing = SessionListing {
-            path: PathBuf::new(),
-            snapshot,
-        };
+        let listing = SessionListing { path: PathBuf::new(), snapshot };
 
         let resume = convert_listing(&listing, ArchivedSessionIntent::ResumeInPlace);
         assert_eq!(resume.history().len(), 1);
@@ -561,10 +511,7 @@ mod tests {
             error_logs: Vec::new(),
         };
 
-        let listing = SessionListing {
-            path: PathBuf::new(),
-            snapshot,
-        };
+        let listing = SessionListing { path: PathBuf::new(), snapshot };
 
         let resume = convert_listing(&listing, ArchivedSessionIntent::ResumeInPlace);
         assert_eq!(resume.history().len(), 1);

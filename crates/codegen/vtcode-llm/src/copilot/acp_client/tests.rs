@@ -37,10 +37,7 @@ fn permission_render_denies_without_prompt() {
     let result = PermissionResponseFormat::CopilotCli
         .render(CopilotPermissionDecision::DeniedNoApprovalRule);
 
-    assert_eq!(
-        result["result"]["kind"],
-        "denied-no-approval-rule-and-could-not-request-from-user"
-    );
+    assert_eq!(result["result"]["kind"], "denied-no-approval-rule-and-could-not-request-from-user");
 }
 
 #[test]
@@ -208,10 +205,7 @@ fn parses_observed_tool_call_raw_output_detailed_content_fallback() {
     }))
     .expect("observed raw output fallback");
 
-    assert_eq!(
-        observed.output.as_deref(),
-        Some("\n<exited with exit code 0>")
-    );
+    assert_eq!(observed.output.as_deref(), Some("\n<exited with exit code 0>"));
 }
 
 #[tokio::test]
@@ -223,10 +217,7 @@ async fn handle_terminal_create_request_dispatches_runtime_request() {
 
     let inner = Arc::new(CopilotAcpClientInner {
         transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
-        active_prompt: StdMutex::new(Some(ActivePrompt {
-            updates,
-            runtime_requests,
-        })),
+        active_prompt: StdMutex::new(Some(ActivePrompt { updates, runtime_requests })),
         session_id: StdMutex::new(None),
         compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
     });
@@ -253,10 +244,7 @@ async fn handle_terminal_create_request_dispatches_runtime_request() {
     )
     .expect("dispatch terminal/create");
 
-    let runtime_request = runtime_requests_rx
-        .recv()
-        .await
-        .expect("runtime request available");
+    let runtime_request = runtime_requests_rx.recv().await.expect("runtime request available");
     let CopilotRuntimeRequest::TerminalCreate(request) = runtime_request else {
         panic!("expected terminal/create runtime request");
     };
@@ -271,9 +259,7 @@ async fn handle_terminal_create_request_dispatches_runtime_request() {
         }]
     );
     request
-        .respond(CopilotTerminalCreateResponse {
-            terminal_id: "run-123".to_string(),
-        })
+        .respond(CopilotTerminalCreateResponse { terminal_id: "run-123".to_string() })
         .expect("respond terminal/create");
 
     let payload = timeout(Duration::from_secs(1), write_rx.recv())
@@ -296,10 +282,7 @@ fn enqueue_runtime_request_clears_stale_active_prompt_when_receiver_is_gone() {
 
     let inner = Arc::new(CopilotAcpClientInner {
         transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
-        active_prompt: StdMutex::new(Some(ActivePrompt {
-            updates,
-            runtime_requests,
-        })),
+        active_prompt: StdMutex::new(Some(ActivePrompt { updates, runtime_requests })),
         session_id: StdMutex::new(None),
         compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
     });
@@ -313,17 +296,8 @@ fn enqueue_runtime_request_clears_stale_active_prompt_when_receiver_is_gone() {
     )
     .expect_err("closed runtime receiver should fail");
 
-    assert!(
-        err.to_string()
-            .contains("copilot runtime request channel closed")
-    );
-    assert!(
-        inner
-            .active_prompt
-            .lock()
-            .expect("active_prompt lock")
-            .is_none()
-    );
+    assert!(err.to_string().contains("copilot runtime request channel closed"));
+    assert!(inner.active_prompt.lock().expect("active_prompt lock").is_none());
 }
 
 #[test]
@@ -336,10 +310,7 @@ fn handle_permission_request_falls_back_when_runtime_receiver_is_gone() {
 
     let inner = Arc::new(CopilotAcpClientInner {
         transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
-        active_prompt: StdMutex::new(Some(ActivePrompt {
-            updates,
-            runtime_requests,
-        })),
+        active_prompt: StdMutex::new(Some(ActivePrompt { updates, runtime_requests })),
         session_id: StdMutex::new(None),
         compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
     });
@@ -381,10 +352,7 @@ async fn prompt_session_cancel_handle_cancels_active_prompt_and_aborts_completio
     let client = CopilotAcpClient {
         inner: Arc::new(CopilotAcpClientInner {
             transport: StdioTransport::new_for_testing(write_tx, Duration::from_secs(1)),
-            active_prompt: StdMutex::new(Some(ActivePrompt {
-                updates,
-                runtime_requests,
-            })),
+            active_prompt: StdMutex::new(Some(ActivePrompt { updates, runtime_requests })),
             session_id: StdMutex::new(Some("session_123".to_string())),
             compatibility_state: StdMutex::new(CopilotAcpCompatibilityState::FullTools),
         }),
@@ -409,14 +377,7 @@ async fn prompt_session_cancel_handle_cancels_active_prompt_and_aborts_completio
     let payload: Value = serde_json::from_str(&payload).expect("valid cancel payload");
     assert_eq!(payload["method"], "session/cancel");
     assert_eq!(payload["params"]["sessionId"], "session_123");
-    assert!(
-        client
-            .inner
-            .active_prompt
-            .lock()
-            .expect("active_prompt lock")
-            .is_none()
-    );
+    assert!(client.inner.active_prompt.lock().expect("active_prompt lock").is_none());
 
     let err = completion.await.expect_err("completion should be aborted");
     assert!(err.is_cancelled(), "expected cancelled task, got {err}");
@@ -428,8 +389,5 @@ fn make_inner_helper_creates_valid_inner() {
     let inner = make_inner(tx);
     assert!(inner.active_prompt.lock().unwrap().is_none());
     assert!(inner.session_id.lock().unwrap().is_none());
-    assert_eq!(
-        *inner.compatibility_state.lock().unwrap(),
-        CopilotAcpCompatibilityState::FullTools
-    );
+    assert_eq!(*inner.compatibility_state.lock().unwrap(), CopilotAcpCompatibilityState::FullTools);
 }

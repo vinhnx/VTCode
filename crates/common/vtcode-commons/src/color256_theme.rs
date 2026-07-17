@@ -27,11 +27,7 @@ fn resolve_harmony(
 /// 2. Runtime hint (typically from OSC probe cached at startup)
 /// 3. Default behavior: light themes are treated as non-harmonious for compatibility.
 fn is_harmonious_for_theme(is_light_theme: bool) -> bool {
-    resolve_harmony(
-        is_light_theme,
-        harmonious_override(),
-        harmonious_runtime_hint(),
-    )
+    resolve_harmony(is_light_theme, harmonious_override(), harmonious_runtime_hint())
 }
 
 fn harmonious_runtime_hint() -> Option<bool> {
@@ -135,9 +131,7 @@ fn parse_bool(value: &str) -> Option<bool> {
 }
 
 fn harmonious_override() -> Option<bool> {
-    std::env::var("VTCODE_256_HARMONIOUS")
-        .ok()
-        .and_then(|value| parse_bool(&value))
+    std::env::var("VTCODE_256_HARMONIOUS").ok().and_then(|value| parse_bool(&value))
 }
 
 #[cfg(test)]

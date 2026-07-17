@@ -29,10 +29,8 @@ pub(super) async fn ensure_mcp_activated(ctx: &mut SlashCommandContext<'_>) -> R
 
     if let Err(err) = manager.start_initialization() {
         warn!("Failed to start MCP initialization: {}", err);
-        ctx.renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to start MCP runtime: {err}"),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Error, &format!("Failed to start MCP runtime: {err}"))?;
         return Ok(());
     }
     // Non-blocking: start initialization and return. Tool attachment happens in
@@ -74,18 +72,15 @@ pub(super) async fn try_attach_ready_mcp(ctx: &mut SlashCommandContext<'_>) -> R
                         &deferred_tool_policy,
                     )
                     .await;
-                    ctx.tool_catalog
-                        .mark_pending_refresh("mcp_background_refresh");
+                    ctx.tool_catalog.mark_pending_refresh("mcp_background_refresh");
                 }
                 sync_mcp_context_files(ctx, &client).await?;
             }
             Ok(true)
         }
         McpInitStatus::Error { message } => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("MCP activation failed: {message}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("MCP activation failed: {message}"))?;
             Ok(false)
         }
         McpInitStatus::Disabled | McpInitStatus::Initializing { .. } => Ok(false),

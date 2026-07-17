@@ -110,9 +110,7 @@ impl AdaptiveRateLimiter {
     /// Set a priority level for a specific tool.
     pub fn set_priority(&self, tool_name: &str, priority: Priority) {
         if let Ok(mut inner) = self.inner.lock() {
-            inner
-                .tool_priorities
-                .insert(tool_name.to_string(), priority);
+            inner.tool_priorities.insert(tool_name.to_string(), priority);
         } else {
             warn!(
                 "adaptive rate limiter state lock poisoned while setting priority for '{}'",
@@ -125,18 +123,11 @@ impl AdaptiveRateLimiter {
     /// Returns Ok(()) if allowed, or Err(Duration) indicating suggested wait time.
     pub fn try_acquire(&self, tool_name: &str) -> Result<(), Duration> {
         let Ok(mut inner) = self.inner.lock() else {
-            warn!(
-                "adaptive rate limiter state lock poisoned while acquiring '{}'",
-                tool_name
-            );
+            warn!("adaptive rate limiter state lock poisoned while acquiring '{}'", tool_name);
             return Err(Duration::from_millis(100));
         };
 
-        let priority = inner
-            .tool_priorities
-            .get(tool_name)
-            .copied()
-            .unwrap_or(Priority::Normal);
+        let priority = inner.tool_priorities.get(tool_name).copied().unwrap_or(Priority::Normal);
 
         let bucket = inner
             .buckets
@@ -199,12 +190,9 @@ mod tests {
         limiter.set_priority("high", Priority::High);
         limiter.set_priority("low", Priority::Low);
 
-        let high_wait = limiter
-            .try_acquire("high")
-            .expect_err("high-priority call should be limited");
-        let low_wait = limiter
-            .try_acquire("low")
-            .expect_err("low-priority call should be limited");
+        let high_wait =
+            limiter.try_acquire("high").expect_err("high-priority call should be limited");
+        let low_wait = limiter.try_acquire("low").expect_err("low-priority call should be limited");
 
         assert!(high_wait < low_wait);
     }

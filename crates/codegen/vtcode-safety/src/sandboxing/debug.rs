@@ -60,9 +60,7 @@ pub async fn debug_sandbox(
         anyhow::bail!("Command cannot be empty");
     }
 
-    let spec = CommandSpec::new(&command[0])
-        .with_args(command[1..].to_vec())
-        .with_cwd(cwd);
+    let spec = CommandSpec::new(&command[0]).with_args(command[1..].to_vec()).with_cwd(cwd);
 
     let manager = SandboxManager::new();
     let exec_env = manager
@@ -76,10 +74,7 @@ pub async fn debug_sandbox(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    let output = cmd
-        .output()
-        .await
-        .context("Failed to execute sandboxed command")?;
+    let output = cmd.output().await.context("Failed to execute sandboxed command")?;
 
     Ok(SandboxDebugResult {
         success: output.status.success(),
@@ -102,11 +97,7 @@ pub async fn test_path_writable(
     let test_command = vec![
         "sh".to_string(),
         "-c".to_string(),
-        format!(
-            "touch '{}' && rm -f '{}'",
-            test_file.display(),
-            test_file.display()
-        ),
+        format!("touch '{}' && rm -f '{}'", test_file.display(), test_file.display()),
     ];
 
     let result = debug_sandbox(
@@ -152,10 +143,7 @@ pub fn sandbox_capabilities_summary() -> String {
     summary.push_str("VT Code Sandbox Capabilities\n");
     summary.push_str("=============================\n\n");
 
-    summary.push_str(&format!(
-        "Platform default: {:?}\n\n",
-        SandboxType::platform_default()
-    ));
+    summary.push_str(&format!("Platform default: {:?}\n\n", SandboxType::platform_default()));
 
     summary.push_str("Available sandbox types:\n");
     for sandbox_type in [
@@ -226,14 +214,8 @@ mod tests {
 
     #[test]
     fn test_debug_subcommand() {
-        assert_eq!(
-            DebugSubcommand::Seatbelt.sandbox_type(),
-            SandboxType::MacosSeatbelt
-        );
-        assert_eq!(
-            DebugSubcommand::Landlock.sandbox_type(),
-            SandboxType::LinuxLandlock
-        );
+        assert_eq!(DebugSubcommand::Seatbelt.sandbox_type(), SandboxType::MacosSeatbelt);
+        assert_eq!(DebugSubcommand::Landlock.sandbox_type(), SandboxType::LinuxLandlock);
     }
 
     #[tokio::test]

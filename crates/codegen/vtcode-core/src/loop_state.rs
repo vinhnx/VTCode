@@ -188,9 +188,7 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
 
     let temp_name = format!(
         ".{}.tmp-{}",
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("loop-state"),
+        path.file_name().and_then(|n| n.to_str()).unwrap_or("loop-state"),
         WRITE_COUNTER.fetch_add(1, Ordering::Relaxed)
     );
     let temp_path = path.with_file_name(temp_name);

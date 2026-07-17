@@ -289,9 +289,7 @@ async fn handle_set_session_config_option(
 
 async fn handle_cancel(agent: Arc<ZedAgent>, notif: CancelNotification) -> Result<(), SdkError> {
     if let Some(session) = agent.session_handle(&notif.session_id) {
-        session
-            .cancel_flag
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+        session.cancel_flag.store(true, std::sync::atomic::Ordering::Relaxed);
     }
     Ok(())
 }
@@ -329,24 +327,15 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
         return Err(SdkError::invalid_params().data(json!({ "reason": "unknown_session" })));
     };
 
-    session
-        .cancel_flag
-        .store(false, std::sync::atomic::Ordering::Relaxed);
+    session.cancel_flag.store(false, std::sync::atomic::Ordering::Relaxed);
 
     let user_message = agent.resolve_prompt(&args.session_id, &args.prompt).await?;
 
     agent.push_message(&session, Message::user(user_message.clone()));
 
     let (session_provider_name, session_model, session_reasoning_effort) = {
-        let data = session
-            .data
-            .lock()
-            .map_err(|_err| SdkError::internal_error())?;
-        (
-            data.provider.clone(),
-            data.model.clone(),
-            data.reasoning_effort,
-        )
+        let data = session.data.lock().map_err(|_err| SdkError::internal_error())?;
+        (data.provider.clone(), data.model.clone(), data.reasoning_effort)
     };
 
     let session_api_key = resolve_api_key_for_provider(&agent, &session_provider_name);
@@ -384,10 +373,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
     let client_supports_read_text_file = agent.client_supports_read_text_file();
     let provider_supports_tools = provider.supports_tools(&session_model);
     let mut primary_agent = {
-        let data = session
-            .data
-            .lock()
-            .map_err(|_err| SdkError::internal_error())?;
+        let data = session.data.lock().map_err(|_err| SdkError::internal_error())?;
         data.primary_agent.clone()
     };
     let availability =
@@ -432,17 +418,12 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
             .await
             .map_err(|err| SdkError::internal_error().data(err.to_string()))?;
 
-        let _ = agent
-            .advance_plan_to_response(&args.session_id, &mut plan)
-            .await;
+        let _ = agent.advance_plan_to_response(&args.session_id, &mut plan).await;
 
         while let Some(event) = stream.next().await {
             let event = event.map_err(|err| SdkError::internal_error().data(err.to_string()))?;
 
-            if session
-                .cancel_flag
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if session.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 stop_reason = acp::StopReason::Cancelled;
                 break;
             }
@@ -509,10 +490,7 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
     } else {
         let mut tool_loop_count = 0usize;
         loop {
-            if session
-                .cancel_flag
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if session.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 stop_reason = acp::StopReason::Cancelled;
                 break;
             }
@@ -531,25 +509,18 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                 .await
                 .map_err(|err| SdkError::internal_error().data(err.to_string()))?;
 
-            if session
-                .cancel_flag
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
+            if session.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 stop_reason = acp::StopReason::Cancelled;
                 break;
             }
 
             if tools_allowed
-                && let Some(tool_calls) = response
-                    .tool_calls
-                    .clone()
-                    .filter(|calls| !calls.is_empty())
+                && let Some(tool_calls) =
+                    response.tool_calls.clone().filter(|calls| !calls.is_empty())
             {
                 if agent.tool_loop_limit_reached(tool_loop_count) {
                     let message = agent.tool_loop_limit_message();
-                    let _ = agent
-                        .advance_plan_to_response(&args.session_id, &mut plan)
-                        .await;
+                    let _ = agent.advance_plan_to_response(&args.session_id, &mut plan).await;
                     let _ = agent
                         .send_update(
                             &args.session_id,
@@ -571,16 +542,14 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                         tool_calls.clone(),
                     ),
                 );
-                let tool_results = match agent
-                    .execute_tool_calls(&session, &args.session_id, &tool_calls)
-                    .await
-                {
-                    Ok(results) => results,
-                    Err(error) => {
-                        warn!(%error, "Tool execution failed");
-                        break;
-                    }
-                };
+                let tool_results =
+                    match agent.execute_tool_calls(&session, &args.session_id, &tool_calls).await {
+                        Ok(results) => results,
+                        Err(error) => {
+                            warn!(%error, "Tool execution failed");
+                            break;
+                        }
+                    };
                 if plan.complete_context() {
                     let _ = agent.send_plan_update(&args.session_id, &plan).await;
                 }
@@ -590,19 +559,13 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
                         Message::tool_response(result.tool_call_id, result.llm_response),
                     );
                 }
-                if session
-                    .cancel_flag
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                {
+                if session.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                     stop_reason = acp::StopReason::Cancelled;
                     break;
                 }
                 messages = agent.resolved_messages(&session);
                 primary_agent = {
-                    let data = session
-                        .data
-                        .lock()
-                        .map_err(|_err| SdkError::internal_error())?;
+                    let data = session.data.lock().map_err(|_err| SdkError::internal_error())?;
                     data.primary_agent.clone()
                 };
                 has_local_tools = agent.local_tools_available(&primary_agent);
@@ -616,41 +579,27 @@ async fn run_prompt(agent: Arc<ZedAgent>, args: PromptRequest) -> Result<PromptR
 
             if let Some(content) = &response.content {
                 if !content.is_empty() {
-                    let _ = agent
-                        .advance_plan_to_response(&args.session_id, &mut plan)
-                        .await;
-                    if session
-                        .cancel_flag
-                        .load(std::sync::atomic::Ordering::Relaxed)
-                    {
+                    let _ = agent.advance_plan_to_response(&args.session_id, &mut plan).await;
+                    if session.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                         stop_reason = acp::StopReason::Cancelled;
                         break;
                     }
                     let chunk = text_chunk(content.clone());
                     let _ = agent
-                        .send_update(
-                            &args.session_id,
-                            acp::SessionUpdate::AgentMessageChunk(chunk),
-                        )
+                        .send_update(&args.session_id, acp::SessionUpdate::AgentMessageChunk(chunk))
                         .await;
                 }
                 assistant_message = content.clone();
             }
 
             if let Some(reasoning) = response.reasoning.filter(|reasoning| !reasoning.is_empty()) {
-                if session
-                    .cancel_flag
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                {
+                if session.cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                     stop_reason = acp::StopReason::Cancelled;
                     break;
                 }
                 let chunk = text_chunk(reasoning);
                 let _ = agent
-                    .send_update(
-                        &args.session_id,
-                        acp::SessionUpdate::AgentThoughtChunk(chunk),
-                    )
+                    .send_update(&args.session_id, acp::SessionUpdate::AgentThoughtChunk(chunk))
                     .await;
             }
 

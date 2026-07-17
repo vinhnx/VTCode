@@ -58,11 +58,8 @@ pub async fn ensure_oss_ready(
 ) -> std::io::Result<()> {
     let target_model = model.unwrap_or(models::ollama::DEFAULT_MODEL);
 
-    let resolved_base_url = override_base_url(
-        urls::OLLAMA_API_BASE,
-        base_url,
-        Some(env_vars::OLLAMA_BASE_URL),
-    );
+    let resolved_base_url =
+        override_base_url(urls::OLLAMA_API_BASE, base_url, Some(env_vars::OLLAMA_BASE_URL));
 
     // Verify local Ollama is reachable
     let ollama_client = OllamaClient::try_from_base_url(&resolved_base_url).await?;
@@ -73,9 +70,7 @@ pub async fn ensure_oss_ready(
             if !existing_models.iter().any(|m| m == target_model) {
                 tracing::info!("Model '{target_model}' not found locally, pulling...");
                 let mut reporter = CliPullProgressReporter::new();
-                ollama_client
-                    .pull_with_reporter(target_model, &mut reporter)
-                    .await?;
+                ollama_client.pull_with_reporter(target_model, &mut reporter).await?;
             }
         }
         Err(e) => {
@@ -115,9 +110,7 @@ pub(super) fn ollama_model_name_from_fields<'a>(
     name: Option<&'a str>,
     model: Option<&'a str>,
 ) -> Option<&'a str> {
-    name.or(model)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    name.or(model).map(str::trim).filter(|value| !value.is_empty())
 }
 
 pub(super) const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing)\n\
@@ -127,11 +120,8 @@ pub(super) const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detec
 pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
     use vtcode_config::constants::{env_vars, urls};
 
-    let resolved_base_url = override_base_url(
-        urls::OLLAMA_API_BASE,
-        base_url,
-        Some(env_vars::OLLAMA_BASE_URL),
-    );
+    let resolved_base_url =
+        override_base_url(urls::OLLAMA_API_BASE, base_url, Some(env_vars::OLLAMA_BASE_URL));
 
     // Construct the tags endpoint URL
     let tags_url = format!("{resolved_base_url}/api/tags");
@@ -395,10 +385,7 @@ impl OllamaProvider {
                 .get("temperature")
                 .and_then(|entry| entry.as_f64())
                 .map(|value| value as f32),
-            stream: value
-                .get("stream")
-                .and_then(|entry| entry.as_bool())
-                .unwrap_or(false),
+            stream: value.get("stream").and_then(|entry| entry.as_bool()).unwrap_or(false),
             ..Default::default()
         })
     }
@@ -435,10 +422,8 @@ impl OllamaProvider {
             match message.role {
                 MessageRole::System => continue,
                 MessageRole::Tool => {
-                    let tool_name = message
-                        .tool_call_id
-                        .as_ref()
-                        .and_then(|id| tool_names.get(id).cloned());
+                    let tool_name =
+                        message.tool_call_id.as_ref().and_then(|id| tool_names.get(id).cloned());
                     let tool_name = tool_name.or_else(|| message.origin_tool.clone());
                     let tool_call_id = if minimax_tool_followup_compat && tool_name.is_some() {
                         None
@@ -600,9 +585,7 @@ impl OllamaProvider {
         }
 
         if models::ollama::REASONING_LEVEL_MODELS.contains(&model_id) {
-            request
-                .reasoning_effort
-                .map(|effort| Value::String(effort.to_string()))
+            request.reasoning_effort.map(|effort| Value::String(effort.to_string()))
         } else {
             Some(Value::Bool(true))
         }
@@ -639,9 +622,7 @@ impl OllamaProvider {
                 metadata: None,
             })?;
 
-            let arguments_value = function
-                .arguments
-                .unwrap_or_else(|| Value::Object(Map::new()));
+            let arguments_value = function.arguments.unwrap_or_else(|| Value::Object(Map::new()));
             let arguments = match arguments_value {
                 Value::String(raw) => raw,
                 other => serde_json::to_string(&other).map_err(|err| LLMError::Provider {
@@ -725,35 +706,28 @@ impl OllamaProvider {
         parsed: OllamaChatResponse,
     ) -> Result<LLMResponse, LLMError> {
         if let Some(error) = parsed.error {
-            return Err(LLMError::Provider {
-                message: error,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: error, metadata: None });
         }
 
-        let (content, reasoning, tool_calls, native_reasoning_details) =
-            if let Some(message) = parsed.message {
-                let content = message
-                    .content
-                    .and_then(|value| (!value.is_empty()).then_some(value));
-                let reasoning = message
-                    .thinking
-                    .and_then(|value| (!value.is_empty()).then_some(value));
-                let tool_calls = Self::convert_tool_calls(message.tool_calls)?;
-                let native_reasoning_details = message.reasoning_details.filter(|d| !d.is_empty());
-                (content, reasoning, tool_calls, native_reasoning_details)
-            } else {
-                (None, None, None, None)
-            };
+        let (content, reasoning, tool_calls, native_reasoning_details) = if let Some(message) =
+            parsed.message
+        {
+            let content = message.content.and_then(|value| (!value.is_empty()).then_some(value));
+            let reasoning = message.thinking.and_then(|value| (!value.is_empty()).then_some(value));
+            let tool_calls = Self::convert_tool_calls(message.tool_calls)?;
+            let native_reasoning_details = message.reasoning_details.filter(|d| !d.is_empty());
+            (content, reasoning, tool_calls, native_reasoning_details)
+        } else {
+            (None, None, None, None)
+        };
 
         let reasoning = reasoning.or_else(|| {
             native_reasoning_details
                 .as_deref()
                 .and_then(extract_reasoning_text_from_detail_values)
         });
-        let mut reasoning_details = native_reasoning_details
-            .as_deref()
-            .and_then(serialize_reasoning_detail_values);
+        let mut reasoning_details =
+            native_reasoning_details.as_deref().and_then(serialize_reasoning_detail_values);
 
         // Fallback: Extract reasoning from content if not provided natively
         // This handles MiniMax-M2.5 cloud models that use <think></think> tags
@@ -768,10 +742,7 @@ impl OllamaProvider {
                         &mut reasoning_details,
                         content_str,
                     );
-                    (
-                        Some(reasoning_parts.join("\n\n")),
-                        cleaned_content.or(content),
-                    )
+                    (Some(reasoning_parts.join("\n\n")), cleaned_content.or(content))
                 }
             } else {
                 (None, content)
@@ -823,10 +794,7 @@ impl OllamaProvider {
             let body = response.text().await.unwrap_or_default();
             let error_message = Self::extract_error(&body)
                 .unwrap_or_else(|| format!("Ollama request failed ({status}): {body}"));
-            return Err(LLMError::Provider {
-                message: error_message,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: error_message, metadata: None });
         }
 
         let parsed = response
@@ -1040,10 +1008,7 @@ impl LLMProvider for OllamaProvider {
             let body = response.text().await.unwrap_or_default();
             let error_message = Self::extract_error(&body)
                 .unwrap_or_else(|| format!("Ollama streaming request failed ({status}): {body}"));
-            return Err(LLMError::Provider {
-                message: error_message,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: error_message, metadata: None });
         }
 
         let byte_stream = response.bytes_stream();
@@ -1198,10 +1163,7 @@ impl LLMProvider for OllamaProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        models::ollama::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect()
+        models::ollama::SUPPORTED_MODELS.iter().map(|model| model.to_string()).collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
@@ -1291,11 +1253,8 @@ mod tests {
             .expect("conversion should succeed")
             .expect("calls expected");
 
-        let ids: Vec<&str> = first
-            .iter()
-            .chain(second.iter())
-            .map(|call| call.id.as_str())
-            .collect();
+        let ids: Vec<&str> =
+            first.iter().chain(second.iter()).map(|call| call.id.as_str()).collect();
         let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
         assert_eq!(
             unique.len(),
@@ -1324,10 +1283,7 @@ mod tests {
         assert_eq!(payload.messages.len(), 1);
         let message = &payload.messages[0];
         assert_eq!(message.content.as_deref(), Some("see "));
-        assert_eq!(
-            message.images.as_ref(),
-            Some(&vec!["BASE64DATA".to_string()])
-        );
+        assert_eq!(message.images.as_ref(), Some(&vec!["BASE64DATA".to_string()]));
     }
 
     #[test]
@@ -1375,10 +1331,7 @@ mod tests {
         let payload = provider.build_payload(&request, false).unwrap();
         assert_eq!(payload.messages.len(), 2);
         assert_eq!(payload.messages[1].role, "tool");
-        assert_eq!(
-            payload.messages[1].tool_name.as_deref(),
-            Some("exec_command")
-        );
+        assert_eq!(payload.messages[1].tool_name.as_deref(), Some("exec_command"));
         assert!(payload.messages[1].tool_call_id.is_none());
         assert!(payload.think.is_none());
     }
@@ -1411,14 +1364,8 @@ mod tests {
         let payload = provider.build_payload(&request, false).unwrap();
         assert_eq!(payload.messages.len(), 2);
         assert_eq!(payload.messages[1].role, "tool");
-        assert_eq!(
-            payload.messages[1].tool_name.as_deref(),
-            Some("exec_command")
-        );
-        assert_eq!(
-            payload.messages[1].tool_call_id.as_deref(),
-            Some(tool_call_id.as_str())
-        );
+        assert_eq!(payload.messages[1].tool_name.as_deref(), Some("exec_command"));
+        assert_eq!(payload.messages[1].tool_call_id.as_deref(), Some(tool_call_id.as_str()));
         assert_eq!(payload.think, Some(Value::String("low".to_string())));
     }
 
@@ -1464,10 +1411,7 @@ mod tests {
                 .contains("Previous turn already completed tool execution")
         );
         assert_eq!(payload.messages[1].role, "user");
-        assert_eq!(
-            payload.messages[1].content.as_deref(),
-            Some("explore architecture")
-        );
+        assert_eq!(payload.messages[1].content.as_deref(), Some("explore architecture"));
     }
 
     #[test]
@@ -1525,10 +1469,8 @@ mod tests {
             .build_payload(&request, false)
             .expect("payload should recover malformed history tool arguments");
 
-        let tool_calls = payload.messages[0]
-            .tool_calls
-            .as_ref()
-            .expect("tool calls should be present");
+        let tool_calls =
+            payload.messages[0].tool_calls.as_ref().expect("tool calls should be present");
         assert_eq!(tool_calls.len(), 1);
         assert_eq!(
             tool_calls[0].function.arguments,
@@ -1555,10 +1497,7 @@ mod tests {
 
         let payload = provider.build_payload(&request, false).unwrap();
 
-        assert_eq!(
-            payload.messages[0].content.as_deref(),
-            Some("<think>trace</think>done")
-        );
+        assert_eq!(payload.messages[0].content.as_deref(), Some("<think>trace</think>done"));
         assert!(payload.messages[0].thinking.is_none());
     }
 
@@ -1578,10 +1517,7 @@ mod tests {
         let payload = provider.build_payload(&request, false).unwrap();
 
         assert_eq!(payload.messages[0].content.as_deref(), Some("need a tool"));
-        assert_eq!(
-            payload.messages[0].thinking.as_deref(),
-            Some("reasoning trace")
-        );
+        assert_eq!(payload.messages[0].thinking.as_deref(), Some("reasoning trace"));
     }
 
     #[test]

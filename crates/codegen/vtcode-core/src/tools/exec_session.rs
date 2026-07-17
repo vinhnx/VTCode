@@ -77,10 +77,7 @@ impl PipeSessionManager {
         {
             let sessions = self.sessions.read().await;
             if sessions.contains_key(session_id.as_str()) {
-                return Err(anyhow!(
-                    "exec session '{}' already exists",
-                    session_id.as_str()
-                ));
+                return Err(anyhow!("exec session '{}' already exists", session_id.as_str()));
             }
         }
 
@@ -305,11 +302,7 @@ impl ExecSessionRecord {
         backend: ExecSessionBackend,
         pty_guard: Option<PtySessionGuard>,
     ) -> Self {
-        Self {
-            metadata,
-            backend,
-            _pty_guard: pty_guard,
-        }
+        Self { metadata, backend, _pty_guard: pty_guard }
     }
 }
 
@@ -338,12 +331,9 @@ impl ExecSessionManager {
         env: HashMap<String, String>,
     ) -> Result<VTCodeExecSession> {
         self.ensure_session_absent(&session_id).await?;
-        let metadata = self
-            .pipe_sessions
-            .create_session(session_id, command, working_dir, env)
-            .await?;
-        self.insert_session(metadata.clone(), ExecSessionBackend::Pipe, None)
-            .await?;
+        let metadata =
+            self.pipe_sessions.create_session(session_id, command, working_dir, env).await?;
+        self.insert_session(metadata.clone(), ExecSessionBackend::Pipe, None).await?;
         Ok(metadata)
     }
 
@@ -367,12 +357,8 @@ impl ExecSessionManager {
             zsh_exec_bridge,
         )?;
         let exec_metadata = VTCodeExecSession::from(metadata);
-        self.insert_session(
-            exec_metadata.clone(),
-            ExecSessionBackend::Pty,
-            Some(pty_guard),
-        )
-        .await?;
+        self.insert_session(exec_metadata.clone(), ExecSessionBackend::Pty, Some(pty_guard))
+            .await?;
         Ok(exec_metadata)
     }
 
@@ -380,24 +366,21 @@ impl ExecSessionManager {
         let record = self.session_record(session_id).await?;
         match record.backend {
             ExecSessionBackend::Pipe => {
-                self.pipe_sessions
-                    .session_record(session_id)
-                    .await
-                    .map(|r| {
-                        let mut metadata = r.metadata.clone();
-                        let exit_code = if r.handle.has_exited() {
-                            r.handle.exit_code()
-                        } else {
-                            None
-                        };
-                        metadata.exit_code = exit_code;
-                        metadata.lifecycle_state = Some(if exit_code.is_some() {
-                            crate::tools::types::VTCodeSessionLifecycleState::Exited
-                        } else {
-                            crate::tools::types::VTCodeSessionLifecycleState::Running
-                        });
-                        metadata
-                    })
+                self.pipe_sessions.session_record(session_id).await.map(|r| {
+                    let mut metadata = r.metadata.clone();
+                    let exit_code = if r.handle.has_exited() {
+                        r.handle.exit_code()
+                    } else {
+                        None
+                    };
+                    metadata.exit_code = exit_code;
+                    metadata.lifecycle_state = Some(if exit_code.is_some() {
+                        crate::tools::types::VTCodeSessionLifecycleState::Exited
+                    } else {
+                        crate::tools::types::VTCodeSessionLifecycleState::Running
+                    });
+                    metadata
+                })
             }
             ExecSessionBackend::Pty => self
                 .pty_sessions
@@ -409,10 +392,8 @@ impl ExecSessionManager {
 
     pub(crate) async fn list_sessions(&self) -> Vec<VTCodeExecSession> {
         let sessions = self.sessions.read().await;
-        let mut listed = sessions
-            .values()
-            .map(|record| record.metadata.clone())
-            .collect::<Vec<_>>();
+        let mut listed =
+            sessions.values().map(|record| record.metadata.clone()).collect::<Vec<_>>();
         listed.sort_by(|left, right| left.id.cmp(&right.id));
         listed
     }
@@ -425,14 +406,11 @@ impl ExecSessionManager {
         let record = self.session_record(session_id).await?;
         match record.backend {
             ExecSessionBackend::Pipe => {
-                self.pipe_sessions
-                    .read_session_output(session_id, drain)
-                    .await
+                self.pipe_sessions.read_session_output(session_id, drain).await
             }
-            ExecSessionBackend::Pty => self
-                .pty_sessions
-                .manager()
-                .read_session_output(session_id, drain),
+            ExecSessionBackend::Pty => {
+                self.pty_sessions.manager().read_session_output(session_id, drain)
+            }
         }
     }
 
@@ -445,9 +423,7 @@ impl ExecSessionManager {
         let record = self.session_record(session_id).await?;
         match record.backend {
             ExecSessionBackend::Pipe => {
-                self.pipe_sessions
-                    .send_input_to_session(session_id, data, append_newline)
-                    .await
+                self.pipe_sessions.send_input_to_session(session_id, data, append_newline).await
             }
             ExecSessionBackend::Pty => {
                 self.pty_sessions
@@ -471,11 +447,9 @@ impl ExecSessionManager {
     ) -> Result<Option<watch::Receiver<u64>>> {
         let record = self.session_record(session_id).await?;
         match record.backend {
-            ExecSessionBackend::Pipe => self
-                .pipe_sessions
-                .activity_receiver(session_id)
-                .await
-                .map(Some),
+            ExecSessionBackend::Pipe => {
+                self.pipe_sessions.activity_receiver(session_id).await.map(Some)
+            }
             ExecSessionBackend::Pty => Ok(None),
         }
     }
@@ -546,10 +520,7 @@ impl ExecSessionManager {
         if failures.is_empty() {
             Ok(())
         } else {
-            Err(anyhow!(
-                "failed to terminate all exec sessions: {}",
-                failures.join("; ")
-            ))
+            Err(anyhow!("failed to terminate all exec sessions: {}", failures.join("; ")))
         }
     }
 
@@ -562,14 +533,11 @@ impl ExecSessionManager {
         let mut sessions = self.sessions.write().await;
         use hashbrown::hash_map::Entry;
         match sessions.entry(metadata.id.clone()) {
-            Entry::Occupied(_) => Err(anyhow!(
-                "exec session '{}' already exists",
-                metadata.id.as_str()
-            )),
+            Entry::Occupied(_) => {
+                Err(anyhow!("exec session '{}' already exists", metadata.id.as_str()))
+            }
             Entry::Vacant(entry) => {
-                entry.insert(Arc::new(ExecSessionRecord::new(
-                    metadata, backend, pty_guard,
-                )));
+                entry.insert(Arc::new(ExecSessionRecord::new(metadata, backend, pty_guard)));
                 Ok(())
             }
         }
@@ -611,10 +579,7 @@ mod tests {
         let workspace_root = canonicalize_workspace(temp_dir.path());
         let pty_sessions = PtySessionManager::new(
             workspace_root.clone(),
-            PtyConfig {
-                max_sessions: 1,
-                ..Default::default()
-            },
+            PtyConfig { max_sessions: 1, ..Default::default() },
         );
         let manager = ExecSessionManager::new(workspace_root.clone(), pty_sessions);
         let size = PtySize {
@@ -654,12 +619,7 @@ mod tests {
             )
             .await;
         assert!(second.is_err());
-        assert!(
-            second
-                .unwrap_err()
-                .to_string()
-                .contains("Maximum PTY sessions")
-        );
+        assert!(second.unwrap_err().to_string().contains("Maximum PTY sessions"));
 
         manager.close_session("run-1").await?;
         manager
@@ -708,10 +668,7 @@ mod tests {
             .expect("pipe sessions should expose activity receiver");
 
         timeout(Duration::from_secs(2), activity_rx.changed()).await??;
-        let output = manager
-            .read_session_output("run-1", true)
-            .await?
-            .expect("session output");
+        let output = manager.read_session_output("run-1", true).await?.expect("session output");
         assert!(output.contains("hello"));
 
         manager.close_session("run-1").await?;

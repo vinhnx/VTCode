@@ -29,12 +29,7 @@ impl AgentRunner {
         const TAIL_CHARS: usize = 200;
         let clean = text.trim();
         if clean.chars().count() <= MAX_CHARS {
-            println!(
-                "{} [{}]: {}",
-                style("[RESPONSE]").cyan().bold(),
-                agent,
-                clean
-            );
+            println!("{} [{}]: {}", style("[RESPONSE]").cyan().bold(), agent, clean);
             return;
         }
         let mut out = String::new();
@@ -50,11 +45,7 @@ impl AgentRunner {
         let tail: String = clean.chars().skip(start_tail).collect();
         out.push_str(&tail);
         println!("{} [{}]: {}", style("[RESPONSE]").cyan().bold(), agent, out);
-        println!(
-            "{} truncated long response ({} chars).",
-            style("[NOTE]").dim(),
-            total
-        );
+        println!("{} truncated long response ({} chars).", style("[NOTE]").dim(), total);
     }
 
     pub(super) fn emit_final_assistant_message(&self, agent: &AgentType, text: &str) {
@@ -85,22 +76,16 @@ mod tests {
 
     #[test]
     fn suppresses_stdout_message_when_both_streams_are_terminals() {
-        assert!(!AgentRunner::should_print_final_message_to_stdout(
-            true, true
-        ));
+        assert!(!AgentRunner::should_print_final_message_to_stdout(true, true));
     }
 
     #[test]
     fn prints_stdout_message_when_stdout_is_not_terminal() {
-        assert!(AgentRunner::should_print_final_message_to_stdout(
-            false, true
-        ));
+        assert!(AgentRunner::should_print_final_message_to_stdout(false, true));
     }
 
     #[test]
     fn prints_stdout_message_when_stderr_is_not_terminal() {
-        assert!(AgentRunner::should_print_final_message_to_stdout(
-            true, false
-        ));
+        assert!(AgentRunner::should_print_final_message_to_stdout(true, false));
     }
 }

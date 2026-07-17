@@ -77,13 +77,9 @@ pub fn parse_shell_commands_tree_sitter(script: &str) -> Result<Vec<Vec<String>>
 /// Parses shell script using tree-sitter bash grammar
 fn parse_with_tree_sitter(script: &str) -> Result<Vec<Vec<String>>, String> {
     let parser_guard = get_bash_parser()?;
-    let mut parser = parser_guard
-        .lock()
-        .map_err(|e| format!("Failed to lock parser: {e}"))?;
+    let mut parser = parser_guard.lock().map_err(|e| format!("Failed to lock parser: {e}"))?;
 
-    let tree = parser
-        .parse(script, None)
-        .ok_or_else(|| "Failed to parse script".to_string())?;
+    let tree = parser.parse(script, None).ok_or_else(|| "Failed to parse script".to_string())?;
 
     let mut commands = Vec::new();
     let root = tree.root_node();
@@ -144,10 +140,7 @@ fn extract_command_from_node(node: tree_sitter::Node, source: &str) -> Option<Ve
             continue;
         }
 
-        if matches!(
-            child.kind(),
-            "word" | "string" | "simple_expansion" | "variable_expansion"
-        ) {
+        if matches!(child.kind(), "word" | "string" | "simple_expansion" | "variable_expansion") {
             let text = child.utf8_text(source.as_bytes());
             if let Ok(arg) = text {
                 let trimmed = arg.trim();
@@ -288,10 +281,10 @@ mod tests {
 
     #[test]
     fn parse_loop_body_commands() {
-        let script = "cd vtcode-core/src/tools/registry && for f in *.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done";
+        let script = "cd crates/codegen/vtcode-core/src/tools/registry && for f in *.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done";
         let commands = parse_shell_commands(script).unwrap();
 
-        assert_eq!(commands[0], vec!["cd", "vtcode-core/src/tools/registry"]);
+        assert_eq!(commands[0], vec!["cd", "crates/codegen/vtcode-core/src/tools/registry"]);
         assert!(
             commands
                 .iter()
@@ -516,12 +509,8 @@ pub(crate) fn additional_dangerous_pattern(segment: &str) -> Option<&'static str
         return Some(":(){:|:&};:");
     }
 
-    let tokens = shell_words::split(segment).unwrap_or_else(|_| {
-        segment
-            .split_whitespace()
-            .map(ToString::to_string)
-            .collect()
-    });
+    let tokens = shell_words::split(segment)
+        .unwrap_or_else(|_| segment.split_whitespace().map(ToString::to_string).collect());
     let first = tokens.first()?;
     let command_name = base_command_name(strip_wrapping_quotes(first)).to_ascii_lowercase();
 
@@ -530,10 +519,7 @@ pub(crate) fn additional_dangerous_pattern(segment: &str) -> Option<&'static str
         "wget" => Some("wget"),
         "curl" => Some("curl"),
         "chmod"
-            if tokens
-                .iter()
-                .skip(1)
-                .any(|arg| strip_wrapping_quotes(arg).starts_with("777")) =>
+            if tokens.iter().skip(1).any(|arg| strip_wrapping_quotes(arg).starts_with("777")) =>
         {
             Some("chmod 777")
         }
@@ -553,11 +539,7 @@ fn strip_wrapping_quotes(token: &str) -> &str {
     token
         .strip_prefix('\'')
         .and_then(|token| token.strip_suffix('\''))
-        .or_else(|| {
-            token
-                .strip_prefix('"')
-                .and_then(|token| token.strip_suffix('"'))
-        })
+        .or_else(|| token.strip_prefix('"').and_then(|token| token.strip_suffix('"')))
         .unwrap_or(token)
 }
 

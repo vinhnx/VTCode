@@ -65,14 +65,12 @@ pub fn tool_groups(tools: &[ToolDefinition]) -> Vec<ToolGroup> {
             continue;
         };
 
-        let group = groups
-            .entry(namespace.name.clone())
-            .or_insert_with(|| ToolGroup {
-                name: namespace.name.clone(),
-                description: Some(namespace.description.clone()),
-                tool_count: 0,
-                deferred_count: 0,
-            });
+        let group = groups.entry(namespace.name.clone()).or_insert_with(|| ToolGroup {
+            name: namespace.name.clone(),
+            description: Some(namespace.description.clone()),
+            tool_count: 0,
+            deferred_count: 0,
+        });
         group.tool_count += 1;
         if tool.defer_loading == Some(true) {
             group.deferred_count += 1;
@@ -328,9 +326,7 @@ impl SessionToolCatalogState {
             .iter()
             .filter_map(|def| {
                 let name = def.function_name();
-                requested_active_tool_names
-                    .contains(name)
-                    .then(|| name.to_string())
+                requested_active_tool_names.contains(name).then(|| name.to_string())
             })
             .collect();
         let active_tool_names = Arc::new(active_tool_names);
@@ -383,9 +379,7 @@ impl SessionToolCatalogState {
         };
 
         let mut cache_guard = self.cached_sorted.write().await;
-        *cache_guard = next_snapshot
-            .as_ref()
-            .map(|snapshot| (version, Arc::clone(snapshot)));
+        *cache_guard = next_snapshot.as_ref().map(|snapshot| (version, Arc::clone(snapshot)));
         next_snapshot
     }
 }

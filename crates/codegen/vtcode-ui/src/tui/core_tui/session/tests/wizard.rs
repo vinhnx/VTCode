@@ -27,10 +27,7 @@ fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
         session.wizard_overlay().is_some(),
         "wizard should remain open after intermediate step completion"
     );
-    assert_eq!(
-        session.wizard_overlay().map(|wizard| wizard.current_step),
-        Some(1)
-    );
+    assert_eq!(session.wizard_overlay().map(|wizard| wizard.current_step), Some(1));
 
     let final_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
@@ -39,10 +36,7 @@ fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
             OverlaySubmission::Wizard(selections)
         ))) if selections.len() == 2
     ));
-    assert!(
-        session.wizard_overlay().is_none(),
-        "wizard should close after final submission"
-    );
+    assert!(session.wizard_overlay().is_none(), "wizard should close after final submission");
 }
 
 #[test]
@@ -67,10 +61,7 @@ fn wizard_multistep_defaulted_enter_advances_and_returns_default_answer() {
     let first_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(first_submit.is_none());
     assert!(session.wizard_overlay().is_some());
-    assert_eq!(
-        session.wizard_overlay().map(|wizard| wizard.current_step),
-        Some(1)
-    );
+    assert_eq!(session.wizard_overlay().map(|wizard| wizard.current_step), Some(1));
 
     let final_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     match final_submit {
@@ -127,10 +118,7 @@ fn wizard_search_paste_updates_filter_in_session_handle_event() {
                 freeform_default: None,
             }],
             current_step: 0,
-            search: Some(InlineListSearchConfig {
-                label: "Filter".to_string(),
-                placeholder: None,
-            }),
+            search: Some(InlineListSearchConfig { label: "Filter".to_string(), placeholder: None }),
             mode: WizardModalMode::MultiStep,
         })),
     });
@@ -138,10 +126,7 @@ fn wizard_search_paste_updates_filter_in_session_handle_event() {
     session.handle_event(CrosstermEvent::Paste("prio".to_string()), &tx, None);
 
     let wizard = session.wizard_overlay().expect("wizard should stay open");
-    assert_eq!(
-        wizard.search.as_ref().map(|search| search.query.as_str()),
-        Some("prio")
-    );
+    assert_eq!(wizard.search.as_ref().map(|search| search.query.as_str()), Some("prio"));
     assert_eq!(wizard.steps[0].list.visible_indices, vec![1]);
 }
 

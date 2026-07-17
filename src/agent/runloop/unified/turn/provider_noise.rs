@@ -50,9 +50,7 @@ or provide more specific guidance so I can proceed without re-reading the same r
 /// call per-delta on the hot stream path.
 #[inline]
 pub(crate) fn contains_provider_noise(text: &str) -> bool {
-    PROVIDER_NOISE_TOKENS
-        .iter()
-        .any(|token| text.contains(token))
+    PROVIDER_NOISE_TOKENS.iter().any(|token| text.contains(token))
 }
 
 /// Check if the end of `text` is a prefix of any known noise token.
@@ -136,26 +134,17 @@ mod tests {
 
     #[test]
     fn strips_single_occurrence() {
-        assert_eq!(
-            strip_provider_noise("]<]minimax[>[Here is my summary."),
-            "Here is my summary."
-        );
+        assert_eq!(strip_provider_noise("]<]minimax[>[Here is my summary."), "Here is my summary.");
     }
 
     #[test]
     fn strips_repeated_occurrences() {
-        assert_eq!(
-            strip_provider_noise("]<]minimax[>[]<]minimax[>[Real answer"),
-            "Real answer"
-        );
+        assert_eq!(strip_provider_noise("]<]minimax[>[]<]minimax[>[Real answer"), "Real answer");
     }
 
     #[test]
     fn strips_mid_text_occurrences() {
-        assert_eq!(
-            strip_provider_noise("Before ]<]minimax[>[ after"),
-            "Before  after"
-        );
+        assert_eq!(strip_provider_noise("Before ]<]minimax[>[ after"), "Before  after");
     }
 
     #[test]
@@ -178,34 +167,22 @@ mod tests {
 
     #[test]
     fn recovery_substitutes_fallback_for_noise_only() {
-        assert_eq!(
-            sanitize_recovery_answer("]<]minimax[>[".to_string()),
-            RECOVERY_NOISE_FALLBACK
-        );
+        assert_eq!(sanitize_recovery_answer("]<]minimax[>[".to_string()), RECOVERY_NOISE_FALLBACK);
     }
 
     #[test]
     fn recovery_substitutes_fallback_for_empty() {
-        assert_eq!(
-            sanitize_recovery_answer(String::new()),
-            RECOVERY_NOISE_FALLBACK
-        );
+        assert_eq!(sanitize_recovery_answer(String::new()), RECOVERY_NOISE_FALLBACK);
     }
 
     #[test]
     fn recovery_substitutes_fallback_for_whitespace() {
-        assert_eq!(
-            sanitize_recovery_answer("   \n\t ".to_string()),
-            RECOVERY_NOISE_FALLBACK
-        );
+        assert_eq!(sanitize_recovery_answer("   \n\t ".to_string()), RECOVERY_NOISE_FALLBACK);
     }
 
     #[test]
     fn recovery_preserves_legitimate_text() {
-        assert_eq!(
-            sanitize_recovery_answer("All tests pass.".to_string()),
-            "All tests pass."
-        );
+        assert_eq!(sanitize_recovery_answer("All tests pass.".to_string()), "All tests pass.");
     }
 
     #[test]

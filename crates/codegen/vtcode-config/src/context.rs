@@ -69,10 +69,7 @@ impl DynamicContextConfig {
             self.tool_output_threshold >= 1024,
             "Tool output threshold must be at least 1024 bytes"
         );
-        ensure!(
-            self.max_spooled_files > 0,
-            "Max spooled files must be greater than zero"
-        );
+        ensure!(self.max_spooled_files > 0, "Max spooled files must be greater than zero");
         ensure!(
             self.retained_user_messages > 0,
             "Retained user messages must be greater than zero"
@@ -145,10 +142,7 @@ impl Default for LedgerConfig {
 
 impl LedgerConfig {
     pub fn validate(&self) -> Result<()> {
-        ensure!(
-            self.max_entries > 0,
-            "Ledger max_entries must be greater than zero"
-        );
+        ensure!(self.max_entries > 0, "Ledger max_entries must be greater than zero");
         Ok(())
     }
 }
@@ -194,12 +188,8 @@ impl Default for ContextFeaturesConfig {
 
 impl ContextFeaturesConfig {
     pub fn validate(&self) -> Result<()> {
-        self.ledger
-            .validate()
-            .context("Invalid ledger configuration")?;
-        self.dynamic
-            .validate()
-            .context("Invalid dynamic context configuration")?;
+        self.ledger.validate().context("Invalid ledger configuration")?;
+        self.dynamic.validate().context("Invalid dynamic context configuration")?;
         Ok(())
     }
 }

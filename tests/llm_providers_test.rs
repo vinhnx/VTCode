@@ -41,22 +41,10 @@ fn test_provider_auto_detection() {
     let factory = LLMFactory::new();
 
     // Test OpenAI models
-    assert_eq!(
-        factory.provider_from_model("gpt-oss-20b"),
-        Some("openai".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("gpt-5-mini"),
-        Some("openai".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("o3"),
-        Some("openai".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("o4-mini"),
-        Some("openai".to_string())
-    );
+    assert_eq!(factory.provider_from_model("gpt-oss-20b"), Some("openai".to_string()));
+    assert_eq!(factory.provider_from_model("gpt-5-mini"), Some("openai".to_string()));
+    assert_eq!(factory.provider_from_model("o3"), Some("openai".to_string()));
+    assert_eq!(factory.provider_from_model("o4-mini"), Some("openai".to_string()));
 
     // Test Anthropic models
     assert_eq!(
@@ -73,14 +61,8 @@ fn test_provider_auto_detection() {
     );
 
     // Test Gemini models
-    assert_eq!(
-        factory.provider_from_model("gemini-3-flash-preview"),
-        Some("gemini".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("gemini-3.1-pro-preview"),
-        Some("gemini".to_string())
-    );
+    assert_eq!(factory.provider_from_model("gemini-3-flash-preview"), Some("gemini".to_string()));
+    assert_eq!(factory.provider_from_model("gemini-3.1-pro-preview"), Some("gemini".to_string()));
 
     // Test OpenRouter models
     assert_eq!(
@@ -137,12 +119,8 @@ fn test_provider_creation() {
     let openai_reasoning = create_provider_for_model("o4-mini", "test_key".to_string(), None, None);
     openai_reasoning.unwrap();
 
-    let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_6,
-        "test_key".to_string(),
-        None,
-        None,
-    );
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
     anthropic.unwrap();
 
     let openrouter = create_provider_for_model(
@@ -187,12 +165,8 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "openai");
     }
 
-    let anthropic_client = create_provider_for_model(
-        models::CLAUDE_SONNET_4_6,
-        "test_key".to_string(),
-        None,
-        None,
-    );
+    let anthropic_client =
+        create_provider_for_model(models::CLAUDE_SONNET_4_6, "test_key".to_string(), None, None);
     assert!(anthropic_client.is_ok());
     if let Ok(client) = anthropic_client {
         assert_eq!(client.name(), "anthropic");
@@ -357,9 +331,7 @@ fn test_request_validation() {
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };
-    anthropic
-        .validate_request(&valid_anthropic_request)
-        .unwrap();
+    anthropic.validate_request(&valid_anthropic_request).unwrap();
 
     let legacy_anthropic_request = LLMRequest {
         messages: Arc::new(vec![Message::user("test".to_string())]),
@@ -367,9 +339,7 @@ fn test_request_validation() {
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };
-    anthropic
-        .validate_request(&legacy_anthropic_request)
-        .unwrap();
+    anthropic.validate_request(&legacy_anthropic_request).unwrap();
 
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {
@@ -433,9 +403,6 @@ fn test_tool_definition_creation() {
     );
 
     assert_eq!(tool.function_name(), "get_weather");
-    assert_eq!(
-        tool.function.as_ref().unwrap().description,
-        "Get weather for a location"
-    );
+    assert_eq!(tool.function.as_ref().unwrap().description, "Get weather for a location");
     assert!(tool.function.as_ref().unwrap().parameters.is_object());
 }

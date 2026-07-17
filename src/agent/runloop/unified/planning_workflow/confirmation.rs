@@ -166,21 +166,13 @@ fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
     if !plan.summary.trim().is_empty() {
         append_message(handle, InlineMessageKind::Agent, plan.summary.clone());
     } else if !plan.title.trim().is_empty() {
-        append_message(
-            handle,
-            InlineMessageKind::Info,
-            format!("Plan: {}", plan.title),
-        );
+        append_message(handle, InlineMessageKind::Info, format!("Plan: {}", plan.title));
     }
 
     if let Some(path) = plan.file_path.as_deref()
         && !path.trim().is_empty()
     {
-        append_message(
-            handle,
-            InlineMessageKind::Info,
-            format!("Plan file: {path}"),
-        );
+        append_message(handle, InlineMessageKind::Info, format!("Plan file: {path}"));
     }
     append_message(
         handle,
@@ -257,10 +249,7 @@ fn render_structured_plan(plan: &PlanContent) -> Vec<String> {
 
 fn build_plan_confirmation_request(plan: &PlanContent, draft_incomplete: bool) -> TransientRequest {
     let mut lines: Vec<String> = render_structured_plan(plan);
-    lines.insert(
-        0,
-        "A plan is ready to execute. Would you like to proceed?".to_string(),
-    );
+    lines.insert(0, "A plan is ready to execute. Would you like to proceed?".to_string());
 
     let footer_hint = plan
         .file_path
@@ -526,10 +515,7 @@ mod tests {
             total_steps: 0,
             completed_steps: 0,
         };
-        assert_eq!(
-            render_structured_plan(&plan),
-            vec!["Only a title".to_string(), String::new()]
-        );
+        assert_eq!(render_structured_plan(&plan), vec!["Only a title".to_string(), String::new()]);
     }
 
     // --- C: switch outcomes (json, submission mapping, request items) -------
@@ -602,10 +588,8 @@ mod tests {
             TransientRequest::List(list) => list,
             _ => panic!("expected a list overlay request"),
         };
-        let selections: Vec<InlineListSelection> = items
-            .into_iter()
-            .filter_map(|item| item.selection)
-            .collect();
+        let selections: Vec<InlineListSelection> =
+            items.into_iter().filter_map(|item| item.selection).collect();
         assert!(
             selections
                 .iter()
@@ -616,10 +600,6 @@ mod tests {
                 .iter()
                 .any(|s| matches!(s, InlineListSelection::PlanApprovalSwitchAuto))
         );
-        assert!(
-            selections
-                .iter()
-                .any(|s| matches!(s, InlineListSelection::PlanApprovalExecute))
-        );
+        assert!(selections.iter().any(|s| matches!(s, InlineListSelection::PlanApprovalExecute)));
     }
 }

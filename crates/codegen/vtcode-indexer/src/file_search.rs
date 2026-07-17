@@ -119,11 +119,8 @@ impl FileIndex {
                 };
 
                 // Make path relative to search directory
-                if let Some(rel_path) = entry
-                    .path()
-                    .strip_prefix(&search_dir)
-                    .ok()
-                    .and_then(|p| p.to_str())
+                if let Some(rel_path) =
+                    entry.path().strip_prefix(&search_dir).ok().and_then(|p| p.to_str())
                     && !rel_path.is_empty()
                 {
                     if entry.path().is_dir() {
@@ -176,12 +173,7 @@ impl FileIndex {
         let mut heaps = Vec::new();
 
         if match_type_filter.is_none_or(|t| t == MatchType::File) {
-            heaps.push(score_paths_top_k(
-                &self.files,
-                limit,
-                pattern_text,
-                MatchType::File,
-            ));
+            heaps.push(score_paths_top_k(&self.files, limit, pattern_text, MatchType::File));
         }
 
         if match_type_filter.is_none_or(|t| t == MatchType::Directory) {
@@ -485,13 +477,7 @@ impl BestMatchesList {
             return false;
         };
 
-        push_top_match(
-            &mut self.matches,
-            self.limit,
-            score as u32,
-            path.to_string(),
-            match_type,
-        );
+        push_top_match(&mut self.matches, self.limit, score as u32, path.to_string(), match_type);
         true
     }
 }
@@ -548,10 +534,7 @@ pub async fn run_with_index(
 
     // Check cancellation
     if cancel_flag.load(Ordering::Relaxed) {
-        return Ok(FileSearchResults {
-            matches: Vec::new(),
-            total_match_count: 0,
-        });
+        return Ok(FileSearchResults { matches: Vec::new(), total_match_count: 0 });
     }
 
     // Query the index
@@ -573,10 +556,7 @@ pub async fn run_with_index(
         })
         .collect();
 
-    Ok(FileSearchResults {
-        matches,
-        total_match_count,
-    })
+    Ok(FileSearchResults { matches, total_match_count })
 }
 
 /// Run fuzzy file search with parallel traversal.
@@ -642,10 +622,7 @@ fn run_bounded_no_follow_with_visit(
             Err(_) => continue,
         };
         visit(entry.path());
-        if !entry
-            .file_type()
-            .is_some_and(|file_type| file_type.is_file())
-        {
+        if !entry.file_type().is_some_and(|file_type| file_type.is_file()) {
             continue;
         }
         let Some(relative_path) = entry
@@ -698,23 +675,13 @@ fn run_with_policy(
     let compute_indices = config.compute_indices;
     let respect_gitignore = config.respect_gitignore;
 
-    let walker = build_parallel_walker(
-        search_directory,
-        exclude,
-        threads,
-        respect_gitignore,
-        follow_links,
-    )?;
+    let walker =
+        build_parallel_walker(search_directory, exclude, threads, respect_gitignore, follow_links)?;
 
     // Create per-worker result collection using Arc + Mutex for thread safety.
     // Each worker gets exactly one instance - no sharing between workers.
     let best_matchers_per_worker: Vec<Arc<Mutex<BestMatchesList>>> = (0..threads)
-        .map(|_| {
-            Arc::new(Mutex::new(BestMatchesList::new(
-                limit,
-                &config.pattern_text,
-            )))
-        })
+        .map(|_| Arc::new(Mutex::new(BestMatchesList::new(limit, &config.pattern_text))))
         .collect();
 
     let total_match_count = Arc::new(AtomicUsize::new(0));
@@ -741,11 +708,8 @@ fn run_with_policy(
             };
 
             // Make path relative to search directory
-            let relative_path = entry
-                .path()
-                .strip_prefix(search_directory)
-                .ok()
-                .and_then(|p| p.to_str());
+            let relative_path =
+                entry.path().strip_prefix(search_directory).ok().and_then(|p| p.to_str());
 
             let path_to_match = match relative_path {
                 Some(p) if !p.is_empty() => p,
@@ -871,11 +835,8 @@ mod tests {
             |path| visited.push(path.to_path_buf()),
         )
         .expect("bounded path search");
-        let mut paths = results
-            .matches
-            .into_iter()
-            .map(|candidate| candidate.path)
-            .collect::<Vec<_>>();
+        let mut paths =
+            results.matches.into_iter().map(|candidate| candidate.path).collect::<Vec<_>>();
         paths.sort();
 
         assert_eq!(paths, vec!["a/widget.rs", "b/widget.rs"]);

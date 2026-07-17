@@ -14,11 +14,7 @@ impl<'a> InlineEventState<'a> {
         interrupts: InlineInterruptCoordinator<'a>,
         ctrl_c_notice_displayed: &'a mut bool,
     ) -> Self {
-        Self {
-            renderer,
-            interrupts,
-            ctrl_c_notice_displayed,
-        }
+        Self { renderer, interrupts, ctrl_c_notice_displayed }
     }
 
     pub(crate) fn renderer(&mut self) -> &mut AnsiRenderer {
@@ -26,7 +22,6 @@ impl<'a> InlineEventState<'a> {
     }
 
     pub(crate) fn reset_interrupt_state(&mut self) {
-        self.interrupts
-            .reset_after_user_action(self.ctrl_c_notice_displayed);
+        self.interrupts.reset_after_user_action(self.ctrl_c_notice_displayed);
     }
 }

@@ -73,17 +73,11 @@ impl ResolvedModel {
         self.catalog
             .map(|entry| entry.context_window)
             .filter(|value| *value > 0)
-            .or_else(|| {
-                self.dynamic
-                    .as_ref()
-                    .and_then(|dynamic| dynamic.context_window)
-            })
+            .or_else(|| self.dynamic.as_ref().and_then(|dynamic| dynamic.context_window))
     }
 
     pub fn input_modalities(&self) -> &'static [&'static str] {
-        self.catalog
-            .map(|entry| entry.input_modalities)
-            .unwrap_or(&[])
+        self.catalog.map(|entry| entry.input_modalities).unwrap_or(&[])
     }
 
     pub fn display_name(&self) -> Cow<'_, str> {
@@ -138,21 +132,11 @@ impl ModelResolver {
         }
 
         if let Some(provider) = provider_override.and_then(parse_provider_override) {
-            return Some(Self::resolve_for_provider(
-                provider,
-                model,
-                dynamic_models,
-                dynamic_meta,
-            ));
+            return Some(Self::resolve_for_provider(provider, model, dynamic_models, dynamic_meta));
         }
 
         if let Ok(model_id) = ModelId::from_str(model) {
-            return Some(Self::resolve_for_model_id(
-                model,
-                model_id,
-                dynamic_models,
-                dynamic_meta,
-            ));
+            return Some(Self::resolve_for_model_id(model, model_id, dynamic_models, dynamic_meta));
         }
 
         if let Some((provider, entry)) = find_catalog_provider(model) {
@@ -166,21 +150,11 @@ impl ModelResolver {
         }
 
         if let Some(provider) = find_dynamic_provider(model, dynamic_models) {
-            return Some(Self::resolve_for_provider(
-                provider,
-                model,
-                dynamic_models,
-                dynamic_meta,
-            ));
+            return Some(Self::resolve_for_provider(provider, model, dynamic_models, dynamic_meta));
         }
 
         let provider = heuristic_provider_from_model(model)?;
-        Some(Self::resolve_for_provider(
-            provider,
-            model,
-            dynamic_models,
-            dynamic_meta,
-        ))
+        Some(Self::resolve_for_provider(provider, model, dynamic_models, dynamic_meta))
     }
 
     pub fn resolve_provider(
@@ -202,19 +176,13 @@ impl ModelResolver {
         }
 
         if provider == Provider::OpenAI
-            && vtcode_config::auth::load_openai_chatgpt_session()
-                .ok()
-                .flatten()
-                .is_some()
+            && vtcode_config::auth::load_openai_chatgpt_session().ok().flatten().is_some()
         {
             return ModelAvailability::ManagedAuthAvailable;
         }
 
         if provider == Provider::OpenRouter
-            && vtcode_config::auth::load_oauth_token()
-                .ok()
-                .flatten()
-                .is_some()
+            && vtcode_config::auth::load_oauth_token().ok().flatten().is_some()
         {
             return ModelAvailability::ManagedAuthAvailable;
         }

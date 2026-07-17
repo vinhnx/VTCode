@@ -36,9 +36,7 @@ impl PanelStyles for SessionStyles {
     }
 
     fn border_active_style(&self) -> Style {
-        self.border_style()
-            .remove_modifier(Modifier::DIM)
-            .add_modifier(Modifier::BOLD)
+        self.border_style().remove_modifier(Modifier::DIM).add_modifier(Modifier::BOLD)
     }
 
     fn divider_style(&self) -> Style {

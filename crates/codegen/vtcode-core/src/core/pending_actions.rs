@@ -119,10 +119,7 @@ pub enum ExpectedOutcome {
 impl ExpectedOutcome {
     /// Returns `true` if actions with this outcome have filesystem side effects.
     pub fn has_side_effects(&self) -> bool {
-        matches!(
-            self,
-            ExpectedOutcome::FileModification { .. } | ExpectedOutcome::CommandExecution
-        )
+        matches!(self, ExpectedOutcome::FileModification { .. } | ExpectedOutcome::CommandExecution)
     }
 }
 
@@ -164,14 +161,8 @@ impl PendingActions {
             .find(|a| a.action_id == action_id && matches!(a.status, PendingActionStatus::InFlight))
         {
             action.status = match error {
-                Some(err) => PendingActionStatus::Failed {
-                    completed_at: now,
-                    error: err,
-                },
-                None => PendingActionStatus::Completed {
-                    completed_at: now,
-                    success,
-                },
+                Some(err) => PendingActionStatus::Failed { completed_at: now, error: err },
+                None => PendingActionStatus::Completed { completed_at: now, success },
             };
             self.prune();
             true
@@ -202,9 +193,7 @@ impl PendingActions {
 
     /// Returns an iterator over in-flight actions that have exceeded the timeout.
     pub fn stale(&self, timeout_secs: u64) -> impl Iterator<Item = &PendingAction> {
-        self.actions
-            .iter()
-            .filter(move |a| a.is_stale(timeout_secs))
+        self.actions.iter().filter(move |a| a.is_stale(timeout_secs))
     }
 
     /// Returns the number of in-flight actions.
@@ -312,10 +301,8 @@ mod tests {
     #[test]
     fn test_expected_outcome_side_effects() {
         assert!(
-            ExpectedOutcome::FileModification {
-                paths: vec!["a.txt".to_string()]
-            }
-            .has_side_effects()
+            ExpectedOutcome::FileModification { paths: vec!["a.txt".to_string()] }
+                .has_side_effects()
         );
         assert!(ExpectedOutcome::CommandExecution.has_side_effects());
         assert!(!ExpectedOutcome::ReadOperation.has_side_effects());

@@ -80,7 +80,7 @@ When updating an `Agent Legibility` row, make all three signals explicit in the 
 
 ## LLM System
 
-**Scope**: `vtcode-core/src/llm/`
+**Scope**: `crates/codegen/vtcode-core/src/llm/`
 **Related debt**: none open
 
 | Dimension        | Grade | Evidence / Notes                                                                                                                                       |
@@ -99,7 +99,7 @@ When updating an `Agent Legibility` row, make all three signals explicit in the 
 
 ## Tool System
 
-**Scope**: `vtcode-core/src/tools/`
+**Scope**: `crates/codegen/vtcode-core/src/tools/`
 **Related debt**: none open
 
 | Dimension        | Grade | Evidence / Notes                                                                                                                 |
@@ -156,7 +156,7 @@ When updating an `Agent Legibility` row, make all three signals explicit in the 
 
 ## MCP Integration
 
-**Scope**: `vtcode-core/src/mcp/`
+**Scope**: `crates/codegen/vtcode-core/src/mcp/`
 **Related debt**: TD-008 (in-progress)
 
 | Dimension        | Grade | Evidence / Notes                                                                                                                                                                                                  |
@@ -175,7 +175,7 @@ When updating an `Agent Legibility` row, make all three signals explicit in the 
 
 ## PTY/Exec
 
-**Scope**: `vtcode-bash-runner/`, `vtcode-core/src/exec/`
+**Scope**: `vtcode-bash-runner/`, `crates/codegen/vtcode-core/src/exec/`
 **Related debt**: TD-007 (in-progress)
 
 | Dimension        | Grade | Evidence / Notes                                                                                                                                                            |
@@ -213,7 +213,7 @@ When updating an `Agent Legibility` row, make all three signals explicit in the 
 
 ## Optimized Code Understanding & Bash Safety
 
-**Scope**: `vtcode-indexer/`, `vtcode-core/src/command_safety/`
+**Scope**: `vtcode-indexer/`, `crates/codegen/vtcode-core/src/command_safety/`
 **Related debt**: none open
 
 | Dimension        | Grade | Evidence / Notes                                                                                                               |

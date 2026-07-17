@@ -88,11 +88,8 @@ impl TaskManager {
         completed_tasks.sort_by(|a, b| a.1.cmp(&b.1));
 
         let evict_count = (self.max_tasks / 10).max(1);
-        let evicted_ids: HashSet<_> = completed_tasks
-            .into_iter()
-            .take(evict_count)
-            .map(|(id, _)| id)
-            .collect();
+        let evicted_ids: HashSet<_> =
+            completed_tasks.into_iter().take(evict_count).map(|(id, _)| id).collect();
 
         if evicted_ids.is_empty() {
             return;
@@ -288,11 +285,8 @@ impl TaskManager {
 
         let include_artifacts = params.include_artifacts == Some(true);
         let history_length = params.history_length.map(|len| len as usize);
-        let page_task_ids: Vec<_> = matching_tasks
-            .into_iter()
-            .skip(start_idx)
-            .take(page_size as usize)
-            .collect();
+        let page_task_ids: Vec<_> =
+            matching_tasks.into_iter().skip(start_idx).take(page_size as usize).collect();
         let result = if page_task_ids.is_empty() {
             Vec::new()
         } else {
@@ -321,12 +315,7 @@ impl TaskManager {
         state
             .contexts
             .get(context_id)
-            .map(|task_ids| {
-                task_ids
-                    .iter()
-                    .filter_map(|id| state.tasks.get(id).cloned())
-                    .collect()
-            })
+            .map(|task_ids| task_ids.iter().filter_map(|id| state.tasks.get(id).cloned()).collect())
             .unwrap_or_default()
     }
 
@@ -418,10 +407,8 @@ mod tests {
         let manager = TaskManager::new();
         let task = manager.create_task(None).await;
 
-        let updated = manager
-            .update_status(&task.id, TaskState::Working, None)
-            .await
-            .expect("update");
+        let updated =
+            manager.update_status(&task.id, TaskState::Working, None).await.expect("update");
         assert_eq!(updated.state(), TaskState::Working);
 
         let msg = Message::agent_text("Task completed successfully");
@@ -439,10 +426,7 @@ mod tests {
         let task = manager.create_task(None).await;
 
         let artifact = Artifact::text("art-1", "Generated content");
-        let updated = manager
-            .add_artifact(&task.id, artifact)
-            .await
-            .expect("add artifact");
+        let updated = manager.add_artifact(&task.id, artifact).await.expect("add artifact");
         assert_eq!(updated.artifacts.len(), 1);
         assert_eq!(updated.artifacts[0].id, "art-1");
     }
@@ -494,10 +478,7 @@ mod tests {
         assert!(manager.get_task(&task.id).await.is_none());
         assert!(manager.get_webhook_config(&task.id).await.is_none());
         assert!(manager.get_tasks_by_context("ctx-1").await.is_empty());
-        assert_eq!(
-            manager.get_task(&replacement.id).await.unwrap().id,
-            replacement.id
-        );
+        assert_eq!(manager.get_task(&replacement.id).await.unwrap().id, replacement.id);
     }
 
     #[tokio::test]

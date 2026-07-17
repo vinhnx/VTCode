@@ -73,10 +73,7 @@ pub(super) fn reload_state_from_disk(state: &mut SettingsPaletteState) -> Result
 }
 
 pub(super) fn no_config_source_label(workspace: &Path) -> String {
-    format!(
-        "No vtcode.toml found for {}. Draft starts from runtime defaults.",
-        workspace.display()
-    )
+    format!("No vtcode.toml found for {}. Draft starts from runtime defaults.", workspace.display())
 }
 
 pub(super) fn add_array_item(root: &mut TomlValue, path: &str) -> Result<()> {
@@ -101,10 +98,7 @@ fn default_array_item(path: &str, existing: &[TomlValue]) -> TomlValue {
         return default_custom_provider_item(existing);
     }
 
-    existing
-        .first()
-        .cloned()
-        .unwrap_or_else(|| TomlValue::String(String::new()))
+    existing.first().cloned().unwrap_or_else(|| TomlValue::String(String::new()))
 }
 
 fn default_custom_provider_item(existing: &[TomlValue]) -> TomlValue {
@@ -129,14 +123,9 @@ fn default_custom_provider_item(existing: &[TomlValue]) -> TomlValue {
 
     let mut table = toml::map::Map::new();
     table.insert("name".to_string(), TomlValue::String(name));
-    table.insert(
-        "display_name".to_string(),
-        TomlValue::String(format!("Custom Provider {suffix}")),
-    );
-    table.insert(
-        "base_url".to_string(),
-        TomlValue::String("https://llm.example/v1".to_string()),
-    );
+    table
+        .insert("display_name".to_string(), TomlValue::String(format!("Custom Provider {suffix}")));
+    table.insert("base_url".to_string(), TomlValue::String("https://llm.example/v1".to_string()));
     table.insert("api_key_env".to_string(), TomlValue::String(String::new()));
     table.insert("model".to_string(), TomlValue::String(String::new()));
     TomlValue::Table(table)
@@ -162,11 +151,9 @@ pub(super) fn apply_scalar_operation(
     path: &str,
     operation: ScalarOperation,
 ) -> Result<()> {
-    let precomputed_cycle_options = matches!(
-        operation,
-        ScalarOperation::CycleNext | ScalarOperation::CyclePrev
-    )
-    .then(|| resolve_cycle_options(Some(root), path, ""));
+    let precomputed_cycle_options =
+        matches!(operation, ScalarOperation::CycleNext | ScalarOperation::CyclePrev)
+            .then(|| resolve_cycle_options(Some(root), path, ""));
     let Some(node) = get_node_mut(root, path) else {
         return apply_missing_scalar_operation(root, path, operation);
     };
@@ -286,10 +273,7 @@ pub(super) fn resolve_cycle_options(
     }
 
     if normalize_config_path(path) == "agent.theme" {
-        return theme::available_themes()
-            .into_iter()
-            .map(str::to_string)
-            .collect();
+        return theme::available_themes().into_iter().map(str::to_string).collect();
     }
     if normalize_config_path(path) == "agent.small_model.model" {
         return lightweight_model_cycle_options(root, current);
@@ -349,9 +333,8 @@ fn lightweight_model_cycle_options(root: Option<&TomlValue>, current: &str) -> V
         deduped.push(option);
     }
 
-    if let Some(auto_index) = deduped
-        .iter()
-        .position(|value| value.eq_ignore_ascii_case(auto_model.as_str()))
+    if let Some(auto_index) =
+        deduped.iter().position(|value| value.eq_ignore_ascii_case(auto_model.as_str()))
     {
         let auto = deduped.remove(auto_index);
         deduped.insert(1, auto);
@@ -373,10 +356,7 @@ fn cycle_string_option(
     ordered.sort();
     ordered.dedup();
 
-    let current_index = ordered
-        .iter()
-        .position(|entry| entry == current)
-        .unwrap_or(0);
+    let current_index = ordered.iter().position(|entry| entry == current).unwrap_or(0);
     let next_index = match operation {
         ScalarOperation::CycleNext => (current_index + 1) % ordered.len(),
         ScalarOperation::CyclePrev => {
@@ -400,12 +380,9 @@ where
         .context("Failed to serialize draft configuration")?;
     mutator(&mut draft_value)?;
 
-    let parsed: VTCodeConfig = draft_value
-        .try_into()
-        .context("Updated draft configuration is invalid")?;
-    parsed
-        .validate()
-        .context("Updated draft configuration failed validation")?;
+    let parsed: VTCodeConfig =
+        draft_value.try_into().context("Updated draft configuration is invalid")?;
+    parsed.validate().context("Updated draft configuration failed validation")?;
 
     state.draft = parsed;
     Ok(())

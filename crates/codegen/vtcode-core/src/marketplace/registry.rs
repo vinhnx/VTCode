@@ -142,15 +142,9 @@ impl MarketplaceRegistry {
     /// Fetch manifest from a source
     async fn fetch_manifest(&self, source: &MarketplaceSource) -> Result<MarketplaceManifest> {
         match source {
-            MarketplaceSource::GitHub {
-                owner,
-                repo,
-                refspec,
-                ..
-            } => {
+            MarketplaceSource::GitHub { owner, repo, refspec, .. } => {
                 // Fetch manifest from GitHub API using the authenticated client
-                self.fetch_github_manifest(owner, repo, refspec.as_deref())
-                    .await
+                self.fetch_github_manifest(owner, repo, refspec.as_deref()).await
             }
             MarketplaceSource::Git { url, refspec, .. } => {
                 // Fetch manifest by cloning the git repository
@@ -298,10 +292,7 @@ impl MarketplaceRegistry {
             .with_context(|| format!("Failed to fetch remote manifest from {url}"))?;
 
         if !response.status().is_success() {
-            bail!(
-                "Failed to fetch remote manifest: HTTP {}",
-                response.status()
-            );
+            bail!("Failed to fetch remote manifest: HTTP {}", response.status());
         }
 
         let content = response
@@ -337,8 +328,6 @@ impl MarketplaceRegistry {
     /// Find a specific plugin across all marketplaces
     pub async fn find_plugin(&self, plugin_id: &str) -> Option<(MarketplaceId, PluginManifest)> {
         let all_plugins = self.list_all_plugins().await;
-        all_plugins
-            .into_iter()
-            .find(|(_, plugin)| plugin.id == plugin_id)
+        all_plugins.into_iter().find(|(_, plugin)| plugin.id == plugin_id)
     }
 }

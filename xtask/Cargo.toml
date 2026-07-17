@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-vtcode-core = { path = "../vtcode-core" }
+vtcode-core = { path = "../crates/codegen/vtcode-core" }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
 semver = { workspace = true }

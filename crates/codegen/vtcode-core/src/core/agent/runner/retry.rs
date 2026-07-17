@@ -48,10 +48,7 @@ impl AgentRunner {
             &policy,
             &mut ctx,
             |ctx, event| match event {
-                RetryEvent::AttemptStart {
-                    attempt,
-                    max_attempts,
-                } => {
+                RetryEvent::AttemptStart { attempt, max_attempts } => {
                     info!(
                         attempt = attempt + 1,
                         max_attempts,
@@ -73,12 +70,7 @@ impl AgentRunner {
                     );
                 }
                 RetryEvent::Success { .. } => {}
-                RetryEvent::GiveUp {
-                    attempt,
-                    error,
-                    decision,
-                    category_was_retryable,
-                } => {
+                RetryEvent::GiveUp { attempt, error, decision, category_was_retryable } => {
                     if category_was_retryable && attempt + 1 == ctx.policy_max_attempts {
                         ctx.metrics.record_retry_exhausted();
                     }
@@ -91,13 +83,7 @@ impl AgentRunner {
                         "agent task attempt failed (non-retryable)"
                     );
                 }
-                RetryEvent::Backoff {
-                    attempt,
-                    error,
-                    decision,
-                    delay,
-                    ..
-                } => {
+                RetryEvent::Backoff { attempt, error, decision, delay, .. } => {
                     warn!(
                         attempt = attempt + 1,
                         max_attempts = ctx.policy_max_attempts,

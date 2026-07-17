@@ -240,7 +240,7 @@ cargo test --lib ollama -- --nocapture
 
 ```
 vtcode/
-├── vtcode-core/src/llm/providers/
+├── crates/codegen/vtcode-core/src/llm/providers/
 │   ├── ollama.rs                  (main provider)
 │   └── ollama/                    (new modules)
 │       ├── client.rs              (high-level API)

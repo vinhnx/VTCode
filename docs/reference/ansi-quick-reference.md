@@ -308,4 +308,4 @@ for line in clean_output.lines() {
 
 -   `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
 -   `docs/reference/ansi-in-vtcode.md` - VT Code-specific usage
--   `vtcode-core/src/utils/ansi_parser.rs` - Implementation
+-   `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` - Implementation

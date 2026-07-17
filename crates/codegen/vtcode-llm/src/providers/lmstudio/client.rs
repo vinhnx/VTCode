@@ -109,10 +109,7 @@ impl LMStudioClient {
 
             Ok(models)
         } else {
-            Err(io::Error::other(format!(
-                "Failed to fetch models: {}",
-                response.status()
-            )))
+            Err(io::Error::other(format!("Failed to fetch models: {}", response.status())))
         }
     }
 
@@ -140,17 +137,11 @@ impl LMStudioClient {
                 tracing::info!("Successfully loaded model '{model}' via native API");
                 Ok(())
             } else {
-                Err(io::Error::other(format!(
-                    "Failed to load model: {}",
-                    response.status()
-                )))
+                Err(io::Error::other(format!("Failed to load model: {}", response.status())))
             }
         } else {
             // Use OpenAI-compatible endpoint with minimal chat completion
-            let url = format!(
-                "{}/v1/chat/completions",
-                self.base_url.trim_end_matches('/')
-            );
+            let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
             let request_body = serde_json::json!({
                 "model": model,
                 "messages": [{"role": "user", "content": "hi"}],
@@ -170,10 +161,7 @@ impl LMStudioClient {
                 tracing::info!("Successfully loaded model '{model}'");
                 Ok(())
             } else {
-                Err(io::Error::other(format!(
-                    "Failed to load model: {}",
-                    response.status()
-                )))
+                Err(io::Error::other(format!("Failed to load model: {}", response.status())))
             }
         }
     }
@@ -188,10 +176,7 @@ impl LMStudioClient {
             ));
         }
 
-        let url = format!(
-            "{}/api/v0/models/unload",
-            self.base_url.trim_end_matches('/')
-        );
+        let url = format!("{}/api/v0/models/unload", self.base_url.trim_end_matches('/'));
         let request_body = serde_json::json!({
             "model": model
         });
@@ -209,10 +194,7 @@ impl LMStudioClient {
             tracing::info!("Successfully unloaded model '{model}'");
             Ok(())
         } else {
-            Err(io::Error::other(format!(
-                "Failed to unload model: {}",
-                response.status()
-            )))
+            Err(io::Error::other(format!("Failed to unload model: {}", response.status())))
         }
     }
 
@@ -436,12 +418,7 @@ mod tests {
         let result = client.fetch_models().await;
 
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("No 'data' array in response")
-        );
+        assert!(result.unwrap_err().to_string().contains("No 'data' array in response"));
     }
 
     #[tokio::test]
@@ -480,11 +457,6 @@ mod tests {
 
         let result = LMStudioClient::try_from_base_url(&server.uri()).await;
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Server returned error: 404")
-        );
+        assert!(result.unwrap_err().to_string().contains("Server returned error: 404"));
     }
 }

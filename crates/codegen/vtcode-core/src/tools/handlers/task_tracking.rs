@@ -210,10 +210,7 @@ pub fn normalize_string_items(items: Option<&[String]>) -> Vec<String> {
 }
 
 pub fn normalize_optional_text(value: Option<&str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
+    value.map(str::trim).filter(|value| !value.is_empty()).map(ToOwned::to_owned)
 }
 
 pub fn append_task_step_metadata(markdown: &mut String, indent: &str, metadata: &TaskStepMetadata) {
@@ -336,12 +333,7 @@ mod tests {
     fn is_bulk_sync_update_requires_items_and_missing_single_item_fields() {
         let items = vec!["Step".to_string()];
         assert!(is_bulk_sync_update(Some(&items), None, None, None));
-        assert!(!is_bulk_sync_update(
-            Some(&items),
-            Some(1),
-            None,
-            Some("completed")
-        ));
+        assert!(!is_bulk_sync_update(Some(&items), Some(1), None, Some("completed")));
     }
 
     #[test]

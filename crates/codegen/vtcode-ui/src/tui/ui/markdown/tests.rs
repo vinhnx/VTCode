@@ -11,12 +11,7 @@ use crate::tui::utils::diff_styles::DiffColorPalette;
 fn lines_to_text(lines: &[MarkdownLine]) -> Vec<String> {
     lines
         .iter()
-        .map(|line| {
-            line.segments
-                .iter()
-                .map(|seg| seg.text.as_str())
-                .collect::<String>()
-        })
+        .map(|line| line.segments.iter().map(|seg| seg.text.as_str()).collect::<String>())
         .collect()
 }
 
@@ -51,25 +46,16 @@ fn test_markdown_inline_code_strips_backticks() {
     let markdown = "Use `code` here.";
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
-    assert!(
-        text_lines
-            .iter()
-            .any(|line| line.contains("Use code here."))
-    );
+    assert!(text_lines.iter().any(|line| line.contains("Use code here.")));
 }
 
 #[test]
 fn test_markdown_soft_break_renders_line_break() {
     let markdown = "first line\nsecond line";
     let lines = render_markdown(markdown);
-    let text_lines: Vec<String> = lines_to_text(&lines)
-        .into_iter()
-        .filter(|line| !line.is_empty())
-        .collect();
-    assert_eq!(
-        text_lines,
-        vec!["first line".to_string(), "second line".to_string()]
-    );
+    let text_lines: Vec<String> =
+        lines_to_text(&lines).into_iter().filter(|line| !line.is_empty()).collect();
+    assert_eq!(text_lines, vec!["first line".to_string(), "second line".to_string()]);
 }
 
 #[test]
@@ -85,12 +71,7 @@ fn test_markdown_unordered_list_bullets() {
     let lines = render_markdown(markdown);
     let output: String = lines
         .iter()
-        .map(|line| {
-            line.segments
-                .iter()
-                .map(|seg| seg.text.as_str())
-                .collect::<String>()
-        })
+        .map(|line| line.segments.iter().map(|seg| seg.text.as_str()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -113,12 +94,7 @@ fn test_markdown_table_box_drawing() {
     let lines = render_markdown(markdown);
     let output: String = lines
         .iter()
-        .map(|line| {
-            line.segments
-                .iter()
-                .map(|seg| seg.text.as_str())
-                .collect::<String>()
-        })
+        .map(|line| line.segments.iter().map(|seg| seg.text.as_str()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -140,26 +116,16 @@ fn test_markdown_table_renders_header_separator_and_rows() {
 
     let lines = render_markdown(markdown);
     let text_lines = lines_to_text(&lines);
-    let non_blank: Vec<&str> = text_lines
-        .iter()
-        .map(String::as_str)
-        .filter(|l| !l.is_empty())
-        .collect();
+    let non_blank: Vec<&str> =
+        text_lines.iter().map(String::as_str).filter(|l| !l.is_empty()).collect();
 
-    assert!(
-        non_blank.len() >= 4,
-        "expected header + separator + 2 rows, got: {non_blank:?}"
-    );
+    assert!(non_blank.len() >= 4, "expected header + separator + 2 rows, got: {non_blank:?}");
     assert!(
         non_blank[0].contains("File") && non_blank[0].contains("Function"),
         "first line should be the header row: {}",
         non_blank[0]
     );
-    assert!(
-        non_blank[1].contains("┼"),
-        "second line should be the separator: {}",
-        non_blank[1]
-    );
+    assert!(non_blank[1].contains("┼"), "second line should be the separator: {}", non_blank[1]);
     assert!(
         non_blank[2].contains("src/main.rs"),
         "third line should be first data row: {}",
@@ -183,12 +149,7 @@ fn test_table_inside_markdown_code_block_renders_as_table() {
     let lines = render_markdown(markdown);
     let output: String = lines
         .iter()
-        .map(|line| {
-            line.segments
-                .iter()
-                .map(|seg| seg.text.as_str())
-                .collect::<String>()
-        })
+        .map(|line| line.segments.iter().map(|seg| seg.text.as_str()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -214,10 +175,7 @@ fn test_table_inside_md_code_block_renders_as_table() {
     let lines = render_markdown(markdown);
     let output = lines_to_text(&lines).join("\n");
 
-    assert!(
-        output.contains("│"),
-        "Table inside ```md code block should render as table: {output}"
-    );
+    assert!(output.contains("│"), "Table inside ```md code block should render as table: {output}");
 }
 
 #[test]
@@ -338,12 +296,7 @@ fn test_markdown_diff_code_block_strips_backgrounds() {
                 .contains("+ new")
         })
         .expect("added line exists");
-    assert!(
-        added_line
-            .segments
-            .iter()
-            .all(|seg| seg.style.get_bg_color().is_none())
-    );
+    assert!(added_line.segments.iter().all(|seg| seg.style.get_bg_color().is_none()));
 
     let removed_line = lines
         .iter()
@@ -355,12 +308,7 @@ fn test_markdown_diff_code_block_strips_backgrounds() {
                 .contains("- old")
         })
         .expect("removed line exists");
-    assert!(
-        removed_line
-            .segments
-            .iter()
-            .all(|seg| seg.style.get_bg_color().is_none())
-    );
+    assert!(removed_line.segments.iter().all(|seg| seg.style.get_bg_color().is_none()));
 
     let context_line = lines
         .iter()
@@ -372,12 +320,7 @@ fn test_markdown_diff_code_block_strips_backgrounds() {
                 .contains(" context")
         })
         .expect("context line exists");
-    assert!(
-        context_line
-            .segments
-            .iter()
-            .all(|seg| seg.style.get_bg_color().is_none())
-    );
+    assert!(context_line.segments.iter().all(|seg| seg.style.get_bg_color().is_none()));
 }
 
 #[test]
@@ -401,12 +344,7 @@ fn test_markdown_unlabeled_diff_code_block_detects_diff() {
             .iter()
             .any(|seg| seg.style.get_fg_color() == expected_added_fg)
     );
-    assert!(
-        added_line
-            .segments
-            .iter()
-            .all(|seg| seg.style.get_bg_color().is_none())
-    );
+    assert!(added_line.segments.iter().all(|seg| seg.style.get_bg_color().is_none()));
 }
 
 #[test]
@@ -428,10 +366,7 @@ fn test_markdown_unlabeled_minimal_hunk_detects_diff() {
         .flat_map(|line| line.segments.iter())
         .find(|seg| seg.text.trim() == "@@")
         .expect("hunk header exists");
-    assert_eq!(
-        header_segment.style.get_fg_color(),
-        palette.header_style().get_fg_color()
-    );
+    assert_eq!(header_segment.style.get_fg_color(), palette.header_style().get_fg_color());
 
     let removed_segment = lines
         .iter()
@@ -472,11 +407,7 @@ fn test_markdown_unlabeled_minimal_hunk_detects_diff() {
 fn test_highlight_line_for_diff_strips_background_colors() {
     let segments = highlight_line_for_diff("let changed = true;", Some("rust"))
         .expect("highlighting should return segments");
-    assert!(
-        segments
-            .iter()
-            .all(|(style, _)| style.get_bg_color().is_none())
-    );
+    assert!(segments.iter().all(|(style, _)| style.get_bg_color().is_none()));
 }
 
 #[test]
@@ -581,16 +512,8 @@ fn test_markdown_file_link_hides_destination() {
     let text_lines = lines_to_text(&lines);
 
     // Should contain the link text but NOT the destination
-    assert!(
-        text_lines
-            .iter()
-            .any(|line| line.contains("markdown_render.rs:74"))
-    );
-    assert!(
-        !text_lines
-            .iter()
-            .any(|line| line.contains("/Users/example"))
-    );
+    assert!(text_lines.iter().any(|line| line.contains("markdown_render.rs:74")));
+    assert!(!text_lines.iter().any(|line| line.contains("/Users/example")));
 }
 
 #[test]
@@ -730,12 +653,9 @@ fn test_plain_urls_are_not_file_links() {
 fn test_quoted_file_path_with_spaces_gets_link_target() {
     let markdown = "Open \"docs/My Notes.md\" for info.";
     let lines = render_markdown(markdown);
-    let has_link_target = lines
-        .iter()
-        .flat_map(|line| line.segments.iter())
-        .any(|seg| {
-            seg.text == "docs/My Notes.md" && seg.link_target.as_deref() == Some("docs/My Notes.md")
-        });
+    let has_link_target = lines.iter().flat_map(|line| line.segments.iter()).any(|seg| {
+        seg.text == "docs/My Notes.md" && seg.link_target.as_deref() == Some("docs/My Notes.md")
+    });
     assert!(has_link_target);
 }
 
@@ -871,10 +791,7 @@ fn test_normalize_hash_location_single() {
 
 #[test]
 fn test_normalize_hash_location_range() {
-    assert_eq!(
-        normalize_hash_location("L74C3-L76C9"),
-        Some(":74:3-76:9".to_string())
-    );
+    assert_eq!(normalize_hash_location("L74C3-L76C9"), Some(":74:3-76:9".to_string()));
 }
 
 #[test]
@@ -884,10 +801,7 @@ fn test_normalize_hash_location_line_only() {
 
 #[test]
 fn test_normalize_hash_location_range_line_only() {
-    assert_eq!(
-        normalize_hash_location("L74-L76"),
-        Some(":74-76".to_string())
-    );
+    assert_eq!(normalize_hash_location("L74-L76"), Some(":74-76".to_string()));
 }
 
 #[test]

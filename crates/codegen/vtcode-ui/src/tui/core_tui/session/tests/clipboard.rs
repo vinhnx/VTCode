@@ -10,9 +10,7 @@ fn double_click_selects_transcript_word_and_copies_it() {
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
 
-    let _guard = CLIPBOARD_TEST_LOCK
-        .lock()
-        .expect("clipboard test lock should not be poisoned");
+    let _guard = CLIPBOARD_TEST_LOCK.lock().expect("clipboard test lock should not be poisoned");
 
     let temp_dir = std::env::temp_dir().join(format!(
         "vtcode-clipboard-{}-{}",
@@ -38,14 +36,10 @@ fn double_click_selects_transcript_word_and_copies_it() {
         "xclip"
     };
     let script_path = temp_dir.join(script_name);
-    fs::write(
-        &script_path,
-        format!("#!/bin/sh\ncat > '{}'\n", clipboard_file.display()),
-    )
-    .expect("write fake clipboard command");
-    let mut permissions = fs::metadata(&script_path)
-        .expect("read fake clipboard metadata")
-        .permissions();
+    fs::write(&script_path, format!("#!/bin/sh\ncat > '{}'\n", clipboard_file.display()))
+        .expect("write fake clipboard command");
+    let mut permissions =
+        fs::metadata(&script_path).expect("read fake clipboard metadata").permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&script_path, permissions).expect("make fake clipboard executable");
 
@@ -67,9 +61,7 @@ fn double_click_selects_transcript_word_and_copies_it() {
         .iter()
         .position(|line| line.contains("hello world"))
         .expect("expected hello world to be rendered");
-    let column = rendered[row]
-        .find("hello")
-        .expect("expected hello word in rendered line") as u16
+    let column = rendered[row].find("hello").expect("expected hello word in rendered line") as u16
         + transcript_area.x
         + 1;
     let row = transcript_area.y + row as u16;
@@ -134,9 +126,7 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
 
-    let _guard = CLIPBOARD_TEST_LOCK
-        .lock()
-        .expect("clipboard test lock should not be poisoned");
+    let _guard = CLIPBOARD_TEST_LOCK.lock().expect("clipboard test lock should not be poisoned");
 
     let temp_dir = std::env::temp_dir().join(format!(
         "vtcode-clipboard-{}-{}",
@@ -162,14 +152,10 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
         "xclip"
     };
     let script_path = temp_dir.join(script_name);
-    fs::write(
-        &script_path,
-        format!("#!/bin/sh\ncat > '{}'\n", clipboard_file.display()),
-    )
-    .expect("write fake clipboard command");
-    let mut permissions = fs::metadata(&script_path)
-        .expect("read fake clipboard metadata")
-        .permissions();
+    fs::write(&script_path, format!("#!/bin/sh\ncat > '{}'\n", clipboard_file.display()))
+        .expect("write fake clipboard command");
+    let mut permissions =
+        fs::metadata(&script_path).expect("read fake clipboard metadata").permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&script_path, permissions).expect("make fake clipboard executable");
 
@@ -196,9 +182,7 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
 
     let rendered = rendered_app_session_lines(&mut session, VIEW_ROWS);
     assert!(
-        rendered
-            .iter()
-            .any(|line| line.contains("Copied to clipboard")),
+        rendered.iter().any(|line| line.contains("Copied to clipboard")),
         "input copy should surface a temporary confirmation"
     );
 

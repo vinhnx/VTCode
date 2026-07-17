@@ -124,14 +124,9 @@ mod tests {
         let cache_path = dir.path().join("models_cache.json");
 
         let original = ModelsCache::new("gemini", vec![]);
-        save_cache(&cache_path, &original)
-            .await
-            .expect("save succeeds");
+        save_cache(&cache_path, &original).await.expect("save succeeds");
 
-        let loaded = load_cache(&cache_path)
-            .await
-            .expect("load succeeds")
-            .expect("cache exists");
+        let loaded = load_cache(&cache_path).await.expect("load succeeds").expect("cache exists");
 
         assert_eq!(loaded.provider, original.provider);
         assert_eq!(loaded.models.len(), original.models.len());

@@ -143,11 +143,7 @@ impl MouseSelectionState {
                 && at.saturating_duration_since(last.at) <= DOUBLE_CLICK_INTERVAL
         });
 
-        self.last_click = Some(ClickRecord {
-            column: col,
-            row,
-            at,
-        });
+        self.last_click = Some(ClickRecord { column: col, row, at });
         is_double_click
     }
 
@@ -296,10 +292,7 @@ impl MouseSelectionState {
         }
 
         // Fallback: OSC 52 escape sequence
-        let _ = execute!(
-            std::io::stderr(),
-            CopyToClipboard::to_clipboard_from(text.as_bytes())
-        );
+        let _ = execute!(std::io::stderr(), CopyToClipboard::to_clipboard_from(text.as_bytes()));
         let _ = std::io::stderr().flush();
     }
 
@@ -345,11 +338,8 @@ impl MouseSelectionState {
 fn spawn_clipboard_command(mut cmd: std::process::Command, text: &str) -> bool {
     use std::process::Stdio;
 
-    let Ok(mut child) = cmd
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+    let Ok(mut child) =
+        cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()
     else {
         return false;
     };
@@ -421,10 +411,7 @@ pub(crate) fn word_selection_range(text: &str, column: u16) -> Option<(u16, u16)
         end += 1;
     }
 
-    Some((
-        display_width_for_char_count(&chars, start),
-        display_width_for_char_count(&chars, end),
-    ))
+    Some((display_width_for_char_count(&chars, start), display_width_for_char_count(&chars, end)))
 }
 
 fn display_width_for_char_count(chars: &[char], char_count: usize) -> u16 {

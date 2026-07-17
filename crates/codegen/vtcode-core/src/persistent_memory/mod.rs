@@ -364,14 +364,9 @@ pub async fn read_persistent_memory_excerpt(
         return Ok(None);
     }
 
-    let raw = tokio::fs::read_to_string(&status.summary_file)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to read persistent memory summary {}",
-                status.summary_file.display()
-            )
-        })?;
+    let raw = tokio::fs::read_to_string(&status.summary_file).await.with_context(|| {
+        format!("Failed to read persistent memory summary {}", status.summary_file.display())
+    })?;
 
     let (contents, truncated, bytes_read, lines_read) =
         truncate_memory_excerpt(&raw, config.startup_line_limit, config.startup_byte_limit);
@@ -536,12 +531,7 @@ async fn write_classified_memory(
     .await?;
     write_if_missing(
         &files.memory_file,
-        render_memory_index(
-            &classified.preferences,
-            &classified.repository_facts,
-            &notes,
-            0,
-        ),
+        render_memory_index(&classified.preferences, &classified.repository_facts, &notes, 0),
         &mut created_files,
     )
     .await?;
@@ -555,11 +545,7 @@ async fn write_classified_memory(
     )
     .await
     .unwrap_or_else(|| {
-        render_memory_summary(
-            &classified.preferences,
-            &classified.repository_facts,
-            &notes,
-        )
+        render_memory_summary(&classified.preferences, &classified.repository_facts, &notes)
     });
     write_if_missing(&files.summary_file, summary, &mut created_files).await?;
     Ok(created_files)
@@ -679,9 +665,7 @@ pub async fn find_persistent_memory_matches(
     }
 
     let files = PersistentMemoryFiles::new(directory);
-    collect_memory_matches(&files, &normalized_query)
-        .await
-        .map(Some)
+    collect_memory_matches(&files, &normalized_query).await.map(Some)
 }
 
 pub async fn plan_remember_persistent_memory(
@@ -935,9 +919,7 @@ fn classified_facts_from_records(records: &[GroundedFactRecord]) -> ClassifiedFa
     let mut preferences = Vec::new();
     let mut repository_facts = Vec::new();
     for fact in records {
-        let topic = decode_topic_source(&fact.source)
-            .0
-            .unwrap_or_else(|| classify_fact(fact));
+        let topic = decode_topic_source(&fact.source).0.unwrap_or_else(|| classify_fact(fact));
         match topic {
             MemoryTopic::Preferences => preferences.push(fact.clone()),
             MemoryTopic::RepositoryFacts => repository_facts.push(fact.clone()),
@@ -988,18 +970,8 @@ async fn ensure_memory_layout(
         created_files,
     )
     .await?;
-    ensure_file(
-        &files.memory_file,
-        render_memory_index(&[], &[], &[], 0),
-        created_files,
-    )
-    .await?;
-    ensure_file(
-        &files.summary_file,
-        render_memory_summary(&[], &[], &[]),
-        created_files,
-    )
-    .await?;
+    ensure_file(&files.memory_file, render_memory_index(&[], &[], &[], 0), created_files).await?;
+    ensure_file(&files.summary_file, render_memory_summary(&[], &[], &[]), created_files).await?;
     Ok(())
 }
 
@@ -1032,12 +1004,7 @@ fn truncate_memory_excerpt(
     if !truncated && contents.len() > bytes_read {
         truncated = true;
     }
-    (
-        selected.trim_end().to_string(),
-        truncated,
-        bytes_read,
-        lines_read,
-    )
+    (selected.trim_end().to_string(), truncated, bytes_read, lines_read)
 }
 
 async fn read_existing_memory_lines(directory: &Path) -> Result<BTreeSet<String>> {
@@ -1130,10 +1097,7 @@ fn count_suspicious_facts_in_file(path: &Path) -> Result<usize> {
     }
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(parse_topic_file(&content)
-        .into_iter()
-        .filter(is_legacy_polluted_fact)
-        .count())
+    Ok(parse_topic_file(&content).into_iter().filter(is_legacy_polluted_fact).count())
 }
 
 fn count_suspicious_rollout_facts(rollout_dir: &Path) -> Result<usize> {
@@ -1227,24 +1191,13 @@ async fn collect_all_memory_matches(
     let notes = read_note_summaries(&files.notes_dir).await?;
 
     let mut matches = Vec::new();
-    for r in prefs
-        .into_iter()
-        .chain(repo)
-        .chain(rollout.0)
-        .chain(rollout.1)
-    {
+    for r in prefs.into_iter().chain(repo).chain(rollout.0).chain(rollout.1) {
         let (_, src) = decode_topic_source(&r.source);
-        matches.push(PersistentMemoryMatch {
-            source: src,
-            fact: r.fact,
-        });
+        matches.push(PersistentMemoryMatch { source: src, fact: r.fact });
     }
     for n in notes {
         for h in n.highlights {
-            matches.push(PersistentMemoryMatch {
-                source: n.relative_path.clone(),
-                fact: h,
-            });
+            matches.push(PersistentMemoryMatch { source: n.relative_path.clone(), fact: h });
         }
     }
 
@@ -1268,12 +1221,7 @@ async fn collect_cleanup_candidates(
     let repo =
         read_topic_records(&files.repository_facts_file, MemoryTopic::RepositoryFacts).await?;
     let rollout = read_rollout_records(&files.rollout_summaries_dir).await?;
-    Ok(prefs
-        .into_iter()
-        .chain(repo)
-        .chain(rollout.0)
-        .chain(rollout.1)
-        .collect())
+    Ok(prefs.into_iter().chain(repo).chain(rollout.0).chain(rollout.1).collect())
 }
 
 async fn write_rollout_summary_pending(
@@ -1396,21 +1344,16 @@ async fn consolidate_memory_files(
     for pending in &pending_files {
         let finalized = finalize_rollout_summary_path(pending.clone());
         if !finalized.exists() {
-            tokio::fs::rename(pending, &finalized)
-                .await
-                .with_context(|| {
-                    format!("Failed to finalize rollout summary {}", pending.display())
-                })?;
+            tokio::fs::rename(pending, &finalized).await.with_context(|| {
+                format!("Failed to finalize rollout summary {}", pending.display())
+            })?;
         } else {
             tokio::fs::remove_file(pending)
                 .await
                 .with_context(|| format!("Failed to remove {}", pending.display()))?;
         }
     }
-    Ok(ConsolidationResult {
-        created_files,
-        added_facts,
-    })
+    Ok(ConsolidationResult { created_files, added_facts })
 }
 
 async fn read_topic_records(path: &Path, topic: MemoryTopic) -> Result<Vec<GroundedFactRecord>> {
@@ -1486,10 +1429,7 @@ fn selection_key_for_record(record: &GroundedFactRecord) -> String {
 }
 
 fn selection_keys(selected: &[MemoryOpCandidate]) -> BTreeSet<String> {
-    selected
-        .iter()
-        .map(|e| normalized_selection_key(&e.source, &e.fact))
-        .collect()
+    selected.iter().map(|e| normalized_selection_key(&e.source, &e.fact)).collect()
 }
 
 async fn rewrite_topic_without_selected(
@@ -1502,10 +1442,7 @@ async fn rewrite_topic_without_selected(
     }
     let keys = selection_keys(selected);
     let facts = read_topic_records(path, topic).await?;
-    let removed = facts
-        .iter()
-        .filter(|f| keys.contains(&selection_key_for_record(f)))
-        .count();
+    let removed = facts.iter().filter(|f| keys.contains(&selection_key_for_record(f))).count();
     if removed == 0 {
         return Ok(0);
     }
@@ -1531,10 +1468,7 @@ async fn scrub_rollout_file_by_selection(
     let mut filtered = Vec::new();
     for line in contents.lines() {
         let keep = parse_fact_line(line).is_none_or(|(source, fact)| {
-            let m = keys.contains(&selection_key_for_record(&GroundedFactRecord {
-                source,
-                fact,
-            }));
+            let m = keys.contains(&selection_key_for_record(&GroundedFactRecord { source, fact }));
             if m {
                 removed += 1;
             }
@@ -1647,9 +1581,7 @@ fn selected_memory_candidates(
 }
 
 fn effective_persistent_memory_config(vt_cfg: Option<&VTCodeConfig>) -> PersistentMemoryConfig {
-    let mut config = vt_cfg
-        .map(|cfg| cfg.agent.persistent_memory.clone())
-        .unwrap_or_default();
+    let mut config = vt_cfg.map(|cfg| cfg.agent.persistent_memory.clone()).unwrap_or_default();
     if let Some(cfg) = vt_cfg {
         config.enabled = cfg.persistent_memory_enabled();
     }

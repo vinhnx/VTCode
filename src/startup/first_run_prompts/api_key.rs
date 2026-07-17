@@ -19,10 +19,7 @@ pub(crate) fn prompt_api_key_interactive(
     if provider.is_local() {
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "No API key required for {} (local provider).",
-                provider.label()
-            ),
+            &format!("No API key required for {} (local provider).", provider.label()),
         )?;
         return Ok(None);
     }
@@ -32,18 +29,11 @@ pub(crate) fn prompt_api_key_interactive(
 
     renderer.line(
         MessageStyle::Status,
-        &format!(
-            "Set up your {} API key (env: {}).",
-            provider.label(),
-            env_key
-        ),
+        &format!("Set up your {} API key (env: {}).", provider.label(), env_key),
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "The key will be saved to {} for this workspace.",
-            env_path.display()
-        ),
+        &format!("The key will be saved to {} for this workspace.", env_path.display()),
     )?;
     renderer.line(MessageStyle::Info, "It will NOT be stored in vtcode.toml.")?;
     renderer.line(
@@ -89,10 +79,7 @@ pub(crate) fn prompt_api_key_interactive(
     write_workspace_env_value(workspace, env_key, trimmed)
         .map_err(|e| anyhow::anyhow!("Failed to write API key to {}: {e}", env_path.display()))?;
 
-    renderer.line(
-        MessageStyle::Info,
-        &format!("API key saved to {}.", env_path.display()),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("API key saved to {}.", env_path.display()))?;
 
     Ok(Some(trimmed.to_string()))
 }

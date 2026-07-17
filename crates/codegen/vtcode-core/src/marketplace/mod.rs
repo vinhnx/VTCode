@@ -89,11 +89,7 @@ impl MarketplaceSystem {
         let registry = MarketplaceRegistry::new(base_dir.clone());
         let installer = PluginInstaller::new(base_dir.join("plugins"), plugin_runtime);
 
-        Self {
-            registry,
-            installer,
-            config,
-        }
+        Self { registry, installer, config }
     }
 
     /// Initialize the marketplace system with default marketplaces

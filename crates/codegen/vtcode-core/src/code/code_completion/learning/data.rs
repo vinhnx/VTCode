@@ -27,10 +27,7 @@ impl CompletionLearningData {
 
     /// Get insights for a specific context
     pub fn get_context_insights(&self, context: &str) -> HashMap<String, f64> {
-        self.context_insights
-            .get(context)
-            .cloned()
-            .unwrap_or_default()
+        self.context_insights.get(context).cloned().unwrap_or_default()
     }
 
     /// Record symbol usage frequency

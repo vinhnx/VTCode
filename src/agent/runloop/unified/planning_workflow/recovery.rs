@@ -28,10 +28,7 @@ const MAX_PLAN_SYNTHESIS_CONDENSE_ATTEMPTS: u8 = 1;
 /// what previously re-triggered the recovery loop forever.
 pub(crate) fn plan_synthesis_was_truncated(response: &uni::LLMResponse) -> bool {
     matches!(response.finish_reason, uni::FinishReason::Length)
-        && response
-            .tool_calls
-            .as_ref()
-            .is_none_or(|calls| calls.is_empty())
+        && response.tool_calls.as_ref().is_none_or(|calls| calls.is_empty())
         && response.content.as_deref().is_some_and(|text| {
             text.contains("<proposed_plan") && !text.contains("</proposed_plan>")
         })
@@ -61,9 +58,8 @@ pub(crate) fn maybe_condense_truncated_plan(
     }
 
     *attempts += 1;
-    working_history.push(uni::Message::system(
-        PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE.to_string(),
-    ));
+    working_history
+        .push(uni::Message::system(PLANNING_SYNTHESIS_TRUNCATED_CONDENSE_DIRECTIVE.to_string()));
     let _ = renderer.line(
         MessageStyle::Info,
         "Plan was truncated at the token limit; requesting a more compact spec.",

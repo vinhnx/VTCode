@@ -300,46 +300,16 @@ mod tests {
 
     #[test]
     fn normalizes_common_language_aliases() {
-        assert_eq!(
-            AstGrepLanguage::from_user_value("rs"),
-            Some(AstGrepLanguage::Rust)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("python3"),
-            Some(AstGrepLanguage::Python)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("js"),
-            Some(AstGrepLanguage::JavaScript)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("jsx"),
-            Some(AstGrepLanguage::JavaScript)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("ts"),
-            Some(AstGrepLanguage::TypeScript)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("tsx"),
-            Some(AstGrepLanguage::Tsx)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("golang"),
-            Some(AstGrepLanguage::Go)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("java"),
-            Some(AstGrepLanguage::Java)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("md"),
-            Some(AstGrepLanguage::Markdown)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("markdown"),
-            Some(AstGrepLanguage::Markdown)
-        );
+        assert_eq!(AstGrepLanguage::from_user_value("rs"), Some(AstGrepLanguage::Rust));
+        assert_eq!(AstGrepLanguage::from_user_value("python3"), Some(AstGrepLanguage::Python));
+        assert_eq!(AstGrepLanguage::from_user_value("js"), Some(AstGrepLanguage::JavaScript));
+        assert_eq!(AstGrepLanguage::from_user_value("jsx"), Some(AstGrepLanguage::JavaScript));
+        assert_eq!(AstGrepLanguage::from_user_value("ts"), Some(AstGrepLanguage::TypeScript));
+        assert_eq!(AstGrepLanguage::from_user_value("tsx"), Some(AstGrepLanguage::Tsx));
+        assert_eq!(AstGrepLanguage::from_user_value("golang"), Some(AstGrepLanguage::Go));
+        assert_eq!(AstGrepLanguage::from_user_value("java"), Some(AstGrepLanguage::Java));
+        assert_eq!(AstGrepLanguage::from_user_value("md"), Some(AstGrepLanguage::Markdown));
+        assert_eq!(AstGrepLanguage::from_user_value("markdown"), Some(AstGrepLanguage::Markdown));
     }
 
     #[test]
@@ -380,10 +350,7 @@ mod tests {
             AstGrepLanguage::from_path(Path::new("web/app.tsx")),
             Some(AstGrepLanguage::Tsx)
         );
-        assert_eq!(
-            AstGrepLanguage::from_path(Path::new("cmd/main.go")),
-            Some(AstGrepLanguage::Go)
-        );
+        assert_eq!(AstGrepLanguage::from_path(Path::new("cmd/main.go")), Some(AstGrepLanguage::Go));
         assert_eq!(
             AstGrepLanguage::from_path(Path::new("src/Main.java")),
             Some(AstGrepLanguage::Java)
@@ -405,26 +372,17 @@ mod tests {
 
     #[test]
     fn maps_workspace_language_names_back_to_supported_languages() {
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Rust"),
-            Some(AstGrepLanguage::Rust)
-        );
+        assert_eq!(AstGrepLanguage::from_workspace_language("Rust"), Some(AstGrepLanguage::Rust));
         assert_eq!(
             AstGrepLanguage::from_workspace_language("TypeScript"),
             Some(AstGrepLanguage::TypeScript)
         );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Swift"),
-            Some(AstGrepLanguage::Swift)
-        );
+        assert_eq!(AstGrepLanguage::from_workspace_language("Swift"), Some(AstGrepLanguage::Swift));
         assert_eq!(
             AstGrepLanguage::from_workspace_language("Markdown"),
             Some(AstGrepLanguage::Markdown)
         );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("md"),
-            Some(AstGrepLanguage::Markdown)
-        );
+        assert_eq!(AstGrepLanguage::from_workspace_language("md"), Some(AstGrepLanguage::Markdown));
         assert_eq!(AstGrepLanguage::Tsx.display_name(), "TypeScript");
         assert_eq!(AstGrepLanguage::Markdown.display_name(), "Markdown");
         assert_eq!(AstGrepLanguage::Markdown.as_str(), "md");
@@ -432,126 +390,39 @@ mod tests {
 
     #[test]
     fn normalizes_new_language_aliases() {
-        assert_eq!(
-            AstGrepLanguage::from_user_value("c"),
-            Some(AstGrepLanguage::C)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("cpp"),
-            Some(AstGrepLanguage::Cpp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("cc"),
-            Some(AstGrepLanguage::Cpp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("c++"),
-            Some(AstGrepLanguage::Cpp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("cs"),
-            Some(AstGrepLanguage::Csharp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("csharp"),
-            Some(AstGrepLanguage::Csharp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("css"),
-            Some(AstGrepLanguage::Css)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("html"),
-            Some(AstGrepLanguage::Html)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("htm"),
-            Some(AstGrepLanguage::Html)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("json"),
-            Some(AstGrepLanguage::Json)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("yaml"),
-            Some(AstGrepLanguage::Yaml)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("yml"),
-            Some(AstGrepLanguage::Yaml)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("rb"),
-            Some(AstGrepLanguage::Ruby)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("ruby"),
-            Some(AstGrepLanguage::Ruby)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("php"),
-            Some(AstGrepLanguage::Php)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("kt"),
-            Some(AstGrepLanguage::Kotlin)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("kotlin"),
-            Some(AstGrepLanguage::Kotlin)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("swift"),
-            Some(AstGrepLanguage::Swift)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("lua"),
-            Some(AstGrepLanguage::Lua)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("bash"),
-            Some(AstGrepLanguage::Bash)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("sh"),
-            Some(AstGrepLanguage::Bash)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("shell"),
-            Some(AstGrepLanguage::Bash)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("sql"),
-            Some(AstGrepLanguage::Sql)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("scala"),
-            Some(AstGrepLanguage::Scala)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("elixir"),
-            Some(AstGrepLanguage::Elixir)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("ex"),
-            Some(AstGrepLanguage::Elixir)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("exs"),
-            Some(AstGrepLanguage::Elixir)
-        );
+        assert_eq!(AstGrepLanguage::from_user_value("c"), Some(AstGrepLanguage::C));
+        assert_eq!(AstGrepLanguage::from_user_value("cpp"), Some(AstGrepLanguage::Cpp));
+        assert_eq!(AstGrepLanguage::from_user_value("cc"), Some(AstGrepLanguage::Cpp));
+        assert_eq!(AstGrepLanguage::from_user_value("c++"), Some(AstGrepLanguage::Cpp));
+        assert_eq!(AstGrepLanguage::from_user_value("cs"), Some(AstGrepLanguage::Csharp));
+        assert_eq!(AstGrepLanguage::from_user_value("csharp"), Some(AstGrepLanguage::Csharp));
+        assert_eq!(AstGrepLanguage::from_user_value("css"), Some(AstGrepLanguage::Css));
+        assert_eq!(AstGrepLanguage::from_user_value("html"), Some(AstGrepLanguage::Html));
+        assert_eq!(AstGrepLanguage::from_user_value("htm"), Some(AstGrepLanguage::Html));
+        assert_eq!(AstGrepLanguage::from_user_value("json"), Some(AstGrepLanguage::Json));
+        assert_eq!(AstGrepLanguage::from_user_value("yaml"), Some(AstGrepLanguage::Yaml));
+        assert_eq!(AstGrepLanguage::from_user_value("yml"), Some(AstGrepLanguage::Yaml));
+        assert_eq!(AstGrepLanguage::from_user_value("rb"), Some(AstGrepLanguage::Ruby));
+        assert_eq!(AstGrepLanguage::from_user_value("ruby"), Some(AstGrepLanguage::Ruby));
+        assert_eq!(AstGrepLanguage::from_user_value("php"), Some(AstGrepLanguage::Php));
+        assert_eq!(AstGrepLanguage::from_user_value("kt"), Some(AstGrepLanguage::Kotlin));
+        assert_eq!(AstGrepLanguage::from_user_value("kotlin"), Some(AstGrepLanguage::Kotlin));
+        assert_eq!(AstGrepLanguage::from_user_value("swift"), Some(AstGrepLanguage::Swift));
+        assert_eq!(AstGrepLanguage::from_user_value("lua"), Some(AstGrepLanguage::Lua));
+        assert_eq!(AstGrepLanguage::from_user_value("bash"), Some(AstGrepLanguage::Bash));
+        assert_eq!(AstGrepLanguage::from_user_value("sh"), Some(AstGrepLanguage::Bash));
+        assert_eq!(AstGrepLanguage::from_user_value("shell"), Some(AstGrepLanguage::Bash));
+        assert_eq!(AstGrepLanguage::from_user_value("sql"), Some(AstGrepLanguage::Sql));
+        assert_eq!(AstGrepLanguage::from_user_value("scala"), Some(AstGrepLanguage::Scala));
+        assert_eq!(AstGrepLanguage::from_user_value("elixir"), Some(AstGrepLanguage::Elixir));
+        assert_eq!(AstGrepLanguage::from_user_value("ex"), Some(AstGrepLanguage::Elixir));
+        assert_eq!(AstGrepLanguage::from_user_value("exs"), Some(AstGrepLanguage::Elixir));
     }
 
     #[test]
     fn infers_new_languages_from_file_paths() {
-        assert_eq!(
-            AstGrepLanguage::from_path(Path::new("src/main.c")),
-            Some(AstGrepLanguage::C)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_path(Path::new("src/main.h")),
-            Some(AstGrepLanguage::C)
-        );
+        assert_eq!(AstGrepLanguage::from_path(Path::new("src/main.c")), Some(AstGrepLanguage::C));
+        assert_eq!(AstGrepLanguage::from_path(Path::new("src/main.h")), Some(AstGrepLanguage::C));
         assert_eq!(
             AstGrepLanguage::from_path(Path::new("src/main.cpp")),
             Some(AstGrepLanguage::Cpp)
@@ -664,78 +535,27 @@ mod tests {
 
     #[test]
     fn maps_new_workspace_language_names() {
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("C"),
-            Some(AstGrepLanguage::C)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("C++"),
-            Some(AstGrepLanguage::Cpp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("cpp"),
-            Some(AstGrepLanguage::Cpp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("C#"),
-            Some(AstGrepLanguage::Csharp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("CSS"),
-            Some(AstGrepLanguage::Css)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("HTML"),
-            Some(AstGrepLanguage::Html)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("JSON"),
-            Some(AstGrepLanguage::Json)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("YAML"),
-            Some(AstGrepLanguage::Yaml)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("yml"),
-            Some(AstGrepLanguage::Yaml)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Ruby"),
-            Some(AstGrepLanguage::Ruby)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("PHP"),
-            Some(AstGrepLanguage::Php)
-        );
+        assert_eq!(AstGrepLanguage::from_workspace_language("C"), Some(AstGrepLanguage::C));
+        assert_eq!(AstGrepLanguage::from_workspace_language("C++"), Some(AstGrepLanguage::Cpp));
+        assert_eq!(AstGrepLanguage::from_workspace_language("cpp"), Some(AstGrepLanguage::Cpp));
+        assert_eq!(AstGrepLanguage::from_workspace_language("C#"), Some(AstGrepLanguage::Csharp));
+        assert_eq!(AstGrepLanguage::from_workspace_language("CSS"), Some(AstGrepLanguage::Css));
+        assert_eq!(AstGrepLanguage::from_workspace_language("HTML"), Some(AstGrepLanguage::Html));
+        assert_eq!(AstGrepLanguage::from_workspace_language("JSON"), Some(AstGrepLanguage::Json));
+        assert_eq!(AstGrepLanguage::from_workspace_language("YAML"), Some(AstGrepLanguage::Yaml));
+        assert_eq!(AstGrepLanguage::from_workspace_language("yml"), Some(AstGrepLanguage::Yaml));
+        assert_eq!(AstGrepLanguage::from_workspace_language("Ruby"), Some(AstGrepLanguage::Ruby));
+        assert_eq!(AstGrepLanguage::from_workspace_language("PHP"), Some(AstGrepLanguage::Php));
         assert_eq!(
             AstGrepLanguage::from_workspace_language("Kotlin"),
             Some(AstGrepLanguage::Kotlin)
         );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Swift"),
-            Some(AstGrepLanguage::Swift)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Lua"),
-            Some(AstGrepLanguage::Lua)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Bash"),
-            Some(AstGrepLanguage::Bash)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("shell"),
-            Some(AstGrepLanguage::Bash)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("SQL"),
-            Some(AstGrepLanguage::Sql)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Scala"),
-            Some(AstGrepLanguage::Scala)
-        );
+        assert_eq!(AstGrepLanguage::from_workspace_language("Swift"), Some(AstGrepLanguage::Swift));
+        assert_eq!(AstGrepLanguage::from_workspace_language("Lua"), Some(AstGrepLanguage::Lua));
+        assert_eq!(AstGrepLanguage::from_workspace_language("Bash"), Some(AstGrepLanguage::Bash));
+        assert_eq!(AstGrepLanguage::from_workspace_language("shell"), Some(AstGrepLanguage::Bash));
+        assert_eq!(AstGrepLanguage::from_workspace_language("SQL"), Some(AstGrepLanguage::Sql));
+        assert_eq!(AstGrepLanguage::from_workspace_language("Scala"), Some(AstGrepLanguage::Scala));
         assert_eq!(
             AstGrepLanguage::from_workspace_language("Elixir"),
             Some(AstGrepLanguage::Elixir)
@@ -748,46 +568,19 @@ mod tests {
             AstGrepLanguage::from_user_value("dockerfile"),
             Some(AstGrepLanguage::Dockerfile)
         );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("docker"),
-            Some(AstGrepLanguage::Dockerfile)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("toml"),
-            Some(AstGrepLanguage::Toml)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("hcl"),
-            Some(AstGrepLanguage::Hcl)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("terraform"),
-            Some(AstGrepLanguage::Hcl)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("tf"),
-            Some(AstGrepLanguage::Hcl)
-        );
+        assert_eq!(AstGrepLanguage::from_user_value("docker"), Some(AstGrepLanguage::Dockerfile));
+        assert_eq!(AstGrepLanguage::from_user_value("toml"), Some(AstGrepLanguage::Toml));
+        assert_eq!(AstGrepLanguage::from_user_value("hcl"), Some(AstGrepLanguage::Hcl));
+        assert_eq!(AstGrepLanguage::from_user_value("terraform"), Some(AstGrepLanguage::Hcl));
+        assert_eq!(AstGrepLanguage::from_user_value("tf"), Some(AstGrepLanguage::Hcl));
     }
 
     #[test]
     fn normalizes_dart_zig_protobuf_aliases() {
-        assert_eq!(
-            AstGrepLanguage::from_user_value("dart"),
-            Some(AstGrepLanguage::Dart)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("zig"),
-            Some(AstGrepLanguage::Zig)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("protobuf"),
-            Some(AstGrepLanguage::Protobuf)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("proto"),
-            Some(AstGrepLanguage::Protobuf)
-        );
+        assert_eq!(AstGrepLanguage::from_user_value("dart"), Some(AstGrepLanguage::Dart));
+        assert_eq!(AstGrepLanguage::from_user_value("zig"), Some(AstGrepLanguage::Zig));
+        assert_eq!(AstGrepLanguage::from_user_value("protobuf"), Some(AstGrepLanguage::Protobuf));
+        assert_eq!(AstGrepLanguage::from_user_value("proto"), Some(AstGrepLanguage::Protobuf));
     }
 
     #[test]
@@ -800,10 +593,7 @@ mod tests {
             AstGrepLanguage::from_path(Path::new("Cargo.toml")),
             Some(AstGrepLanguage::Toml)
         );
-        assert_eq!(
-            AstGrepLanguage::from_path(Path::new("main.tf")),
-            Some(AstGrepLanguage::Hcl)
-        );
+        assert_eq!(AstGrepLanguage::from_path(Path::new("main.tf")), Some(AstGrepLanguage::Hcl));
         assert_eq!(
             AstGrepLanguage::from_path(Path::new("vars.tfvars")),
             Some(AstGrepLanguage::Hcl)
@@ -856,14 +646,8 @@ mod tests {
             AstGrepLanguage::from_workspace_language("docker"),
             Some(AstGrepLanguage::Dockerfile)
         );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("TOML"),
-            Some(AstGrepLanguage::Toml)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("HCL"),
-            Some(AstGrepLanguage::Hcl)
-        );
+        assert_eq!(AstGrepLanguage::from_workspace_language("TOML"), Some(AstGrepLanguage::Toml));
+        assert_eq!(AstGrepLanguage::from_workspace_language("HCL"), Some(AstGrepLanguage::Hcl));
         assert_eq!(
             AstGrepLanguage::from_workspace_language("terraform"),
             Some(AstGrepLanguage::Hcl)
@@ -872,14 +656,8 @@ mod tests {
 
     #[test]
     fn maps_dart_zig_protobuf_workspace_names() {
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Dart"),
-            Some(AstGrepLanguage::Dart)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Zig"),
-            Some(AstGrepLanguage::Zig)
-        );
+        assert_eq!(AstGrepLanguage::from_workspace_language("Dart"), Some(AstGrepLanguage::Dart));
+        assert_eq!(AstGrepLanguage::from_workspace_language("Zig"), Some(AstGrepLanguage::Zig));
         assert_eq!(
             AstGrepLanguage::from_workspace_language("Protobuf"),
             Some(AstGrepLanguage::Protobuf)
@@ -892,26 +670,11 @@ mod tests {
 
     #[test]
     fn normalizes_haskell_nix_solidity_aliases() {
-        assert_eq!(
-            AstGrepLanguage::from_user_value("hs"),
-            Some(AstGrepLanguage::Haskell)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("haskell"),
-            Some(AstGrepLanguage::Haskell)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("nix"),
-            Some(AstGrepLanguage::Nix)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("solidity"),
-            Some(AstGrepLanguage::Solidity)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_user_value("sol"),
-            Some(AstGrepLanguage::Solidity)
-        );
+        assert_eq!(AstGrepLanguage::from_user_value("hs"), Some(AstGrepLanguage::Haskell));
+        assert_eq!(AstGrepLanguage::from_user_value("haskell"), Some(AstGrepLanguage::Haskell));
+        assert_eq!(AstGrepLanguage::from_user_value("nix"), Some(AstGrepLanguage::Nix));
+        assert_eq!(AstGrepLanguage::from_user_value("solidity"), Some(AstGrepLanguage::Solidity));
+        assert_eq!(AstGrepLanguage::from_user_value("sol"), Some(AstGrepLanguage::Solidity));
     }
 
     #[test]
@@ -946,14 +709,8 @@ mod tests {
             AstGrepLanguage::from_workspace_language("Haskell"),
             Some(AstGrepLanguage::Haskell)
         );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("hs"),
-            Some(AstGrepLanguage::Haskell)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_workspace_language("Nix"),
-            Some(AstGrepLanguage::Nix)
-        );
+        assert_eq!(AstGrepLanguage::from_workspace_language("hs"), Some(AstGrepLanguage::Haskell));
+        assert_eq!(AstGrepLanguage::from_workspace_language("Nix"), Some(AstGrepLanguage::Nix));
         assert_eq!(
             AstGrepLanguage::from_workspace_language("Solidity"),
             Some(AstGrepLanguage::Solidity)
@@ -967,52 +724,22 @@ mod tests {
     #[test]
     fn infers_newly_added_extensions_for_existing_languages() {
         // Python - bzl
-        assert_eq!(
-            AstGrepLanguage::from_extension("bzl"),
-            Some(AstGrepLanguage::Python)
-        );
+        assert_eq!(AstGrepLanguage::from_extension("bzl"), Some(AstGrepLanguage::Python));
         // Cpp - cu, ino
-        assert_eq!(
-            AstGrepLanguage::from_extension("cu"),
-            Some(AstGrepLanguage::Cpp)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_extension("ino"),
-            Some(AstGrepLanguage::Cpp)
-        );
+        assert_eq!(AstGrepLanguage::from_extension("cu"), Some(AstGrepLanguage::Cpp));
+        assert_eq!(AstGrepLanguage::from_extension("ino"), Some(AstGrepLanguage::Cpp));
         // Html - xhtml
-        assert_eq!(
-            AstGrepLanguage::from_extension("xhtml"),
-            Some(AstGrepLanguage::Html)
-        );
+        assert_eq!(AstGrepLanguage::from_extension("xhtml"), Some(AstGrepLanguage::Html));
         // Ruby - rbw, gemspec
-        assert_eq!(
-            AstGrepLanguage::from_extension("rbw"),
-            Some(AstGrepLanguage::Ruby)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_extension("gemspec"),
-            Some(AstGrepLanguage::Ruby)
-        );
+        assert_eq!(AstGrepLanguage::from_extension("rbw"), Some(AstGrepLanguage::Ruby));
+        assert_eq!(AstGrepLanguage::from_extension("gemspec"), Some(AstGrepLanguage::Ruby));
         // Kotlin - ktm
-        assert_eq!(
-            AstGrepLanguage::from_extension("ktm"),
-            Some(AstGrepLanguage::Kotlin)
-        );
+        assert_eq!(AstGrepLanguage::from_extension("ktm"), Some(AstGrepLanguage::Kotlin));
         // Bash - bats, ksh
-        assert_eq!(
-            AstGrepLanguage::from_extension("bats"),
-            Some(AstGrepLanguage::Bash)
-        );
-        assert_eq!(
-            AstGrepLanguage::from_extension("ksh"),
-            Some(AstGrepLanguage::Bash)
-        );
+        assert_eq!(AstGrepLanguage::from_extension("bats"), Some(AstGrepLanguage::Bash));
+        assert_eq!(AstGrepLanguage::from_extension("ksh"), Some(AstGrepLanguage::Bash));
         // Scala - sbt
-        assert_eq!(
-            AstGrepLanguage::from_extension("sbt"),
-            Some(AstGrepLanguage::Scala)
-        );
+        assert_eq!(AstGrepLanguage::from_extension("sbt"), Some(AstGrepLanguage::Scala));
     }
 
     #[test]

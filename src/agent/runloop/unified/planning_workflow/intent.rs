@@ -86,9 +86,8 @@ pub(crate) fn detect_enter_planning_intent(text: &str) -> bool {
 /// message before the last user message, then checks if it contains
 /// implementation-related cues.
 pub(crate) fn assistant_recently_prompted_implementation(working_history: &[uni::Message]) -> bool {
-    let Some(last_user_index) = working_history
-        .iter()
-        .rposition(|msg| msg.role == uni::MessageRole::User)
+    let Some(last_user_index) =
+        working_history.iter().rposition(|msg| msg.role == uni::MessageRole::User)
     else {
         return false;
     };
@@ -142,10 +141,7 @@ mod tests {
 
     #[test]
     fn detects_implement_as_exit_intent() {
-        assert_eq!(
-            detect_planning_intent("implement", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("implement", false), PlanningIntent::ExitAndImplement);
         assert_eq!(
             detect_planning_intent("Implement the plan.", false),
             PlanningIntent::ExitAndImplement
@@ -166,14 +162,8 @@ mod tests {
 
     #[test]
     fn detects_short_confirmation_with_context() {
-        assert_eq!(
-            detect_planning_intent("yes", true),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("continue", true),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("yes", true), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("continue", true), PlanningIntent::ExitAndImplement);
     }
 
     #[test]
@@ -182,30 +172,18 @@ mod tests {
             detect_planning_intent("yes", false),
             PlanningIntent::ExitAndImplement // "yes" is a direct command
         );
-        assert_eq!(
-            detect_planning_intent("continue", false),
-            PlanningIntent::None
-        );
+        assert_eq!(detect_planning_intent("continue", false), PlanningIntent::None);
     }
 
     #[test]
     fn detects_approve_as_exit_intent() {
-        assert_eq!(
-            detect_planning_intent("approve", false),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("approved", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("approve", false), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("approved", false), PlanningIntent::ExitAndImplement);
         assert_eq!(
             detect_planning_intent("approve the plan", false),
             PlanningIntent::ExitAndImplement
         );
-        assert_eq!(
-            detect_planning_intent("lgtm", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("lgtm", false), PlanningIntent::ExitAndImplement);
         assert_eq!(
             detect_planning_intent("looks good, let's go", false),
             PlanningIntent::ExitAndImplement
@@ -224,9 +202,7 @@ mod tests {
     fn detects_enter_planning_intent() {
         assert!(detect_enter_planning_intent("make a plan for this"));
         assert!(detect_enter_planning_intent("/plan"));
-        assert!(detect_enter_planning_intent(
-            "before implementing, create a plan"
-        ));
+        assert!(detect_enter_planning_intent("before implementing, create a plan"));
     }
 
     #[test]

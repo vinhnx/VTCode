@@ -1,8 +1,8 @@
 [package]
 name = "vtcode-config"
 version.workspace = true
-edition.workspace = true
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Config loader components shared across VT Code and downstream adopters"
 license.workspace = true
@@ -31,8 +31,8 @@ toml = { workspace = true }
 thiserror = { workspace = true }
 toml_edit = "0.25.12"
 tracing = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.11" }
-vtcode-auth = { path = "../vtcode-auth", version = "0.135.11" }
+vtcode-commons = { workspace = true }
+vtcode-auth = { workspace = true }
 dotenvy = { workspace = true }
 tempfile = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["indexmap2"] }

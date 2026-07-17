@@ -43,19 +43,9 @@ pub fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> Str
     let mut output = String::new();
 
     if let (Some(old_label), Some(new_label)) = (options.old_label, options.new_label) {
-        let _ = write!(
-            output,
-            "{}--- {old_label}\n{}",
-            cyan_style.render(),
-            Reset.render()
-        );
+        let _ = write!(output, "{}--- {old_label}\n{}", cyan_style.render(), Reset.render());
 
-        let _ = write!(
-            output,
-            "{}+++ {new_label}\n{}",
-            cyan_style.render(),
-            Reset.render()
-        );
+        let _ = write!(output, "{}+++ {new_label}\n{}", cyan_style.render(), Reset.render());
     }
 
     for hunk in hunks {
@@ -89,24 +79,12 @@ pub fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> Str
                 &display
             };
 
-            let _ = write!(
-                output,
-                "{}{} {}",
-                style.render(),
-                display_content,
-                Reset.render()
-            );
+            let _ = write!(output, "{}{} {}", style.render(), display_content, Reset.render());
             output.push('\n');
 
             if options.missing_newline_hint && !line.text.ends_with('\n') {
                 let eof_hint = r"\ No newline at end of file";
-                let _ = write!(
-                    output,
-                    "{}{} {}",
-                    context_style.render(),
-                    eof_hint,
-                    Reset.render()
-                );
+                let _ = write!(output, "{}{} {}", context_style.render(), eof_hint, Reset.render());
                 output.push('\n');
             }
         }
@@ -141,16 +119,8 @@ mod tests {
         assert_eq!(hunk.old_start, 1);
         assert_eq!(hunk.new_start, 1);
         assert!(bundle.formatted.contains("@@"));
-        assert!(
-            hunk.lines
-                .iter()
-                .any(|line| matches!(line.kind, DiffLineKind::Deletion))
-        );
-        assert!(
-            hunk.lines
-                .iter()
-                .any(|line| matches!(line.kind, DiffLineKind::Addition))
-        );
+        assert!(hunk.lines.iter().any(|line| matches!(line.kind, DiffLineKind::Deletion)));
+        assert!(hunk.lines.iter().any(|line| matches!(line.kind, DiffLineKind::Addition)));
     }
 
     #[test]

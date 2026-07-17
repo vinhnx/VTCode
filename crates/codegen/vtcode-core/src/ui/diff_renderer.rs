@@ -180,17 +180,11 @@ pub struct SuppressionResult {
 
 impl SuppressionResult {
     fn suppressed(check: DiffSuppressionCheck) -> Self {
-        Self {
-            check,
-            cached_diffs: None,
-        }
+        Self { check, cached_diffs: None }
     }
 
     fn not_suppressed(check: DiffSuppressionCheck, diffs: Vec<DiffCacheEntry>) -> Self {
-        Self {
-            check,
-            cached_diffs: Some(diffs),
-        }
+        Self { check, cached_diffs: Some(diffs) }
     }
 }
 
@@ -495,11 +489,7 @@ impl DiffRenderer {
         FileDiff {
             file_path: file_path.to_owned(),
             lines,
-            stats: DiffStats {
-                additions,
-                deletions,
-                changes,
-            },
+            stats: DiffStats { additions, deletions, changes },
         }
     }
 }
@@ -562,11 +552,7 @@ impl DiffChatRenderer {
         let estimated_size = changes.len() * 512; // Rough estimate per file
         let mut output = String::with_capacity(estimated_size);
 
-        let _ = write!(
-            output,
-            "\nMultiple File Changes ({} files)\n",
-            changes.len()
-        );
+        let _ = write!(output, "\nMultiple File Changes ({} files)\n", changes.len());
         output.push_str(&"═".repeat(60));
         output.push_str("\n\n");
 
@@ -615,9 +601,7 @@ impl DiffChatRenderer {
         let mut suppression_reason: Option<String> = None;
 
         for (file_path, old_content, new_content) in changes {
-            let diff = self
-                .diff_renderer
-                .generate_diff(old_content, new_content, file_path);
+            let diff = self.diff_renderer.generate_diff(old_content, new_content, file_path);
 
             total_lines += diff.lines.len();
             total_additions += diff.stats.additions;
@@ -694,11 +678,7 @@ impl DiffChatRenderer {
             total_additions += additions;
             total_deletions += deletions;
 
-            file_stats.push(FileChangeStats {
-                path: file_path.clone(),
-                additions,
-                deletions,
-            });
+            file_stats.push(FileChangeStats { path: file_path.clone(), additions, deletions });
         }
 
         (file_stats, total_additions, total_deletions)

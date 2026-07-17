@@ -192,12 +192,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/effort [--persist] [none|minimal|low|medium|high|xhigh|max]",
         "configuration"
     ),
-    built_in_command_spec!(
-        "ide",
-        "Toggle IDE context for this session",
-        "/ide",
-        "configuration"
-    ),
+    built_in_command_spec!("ide", "Toggle IDE context for this session", "/ide", "configuration"),
     built_in_command_spec!(
         "theme",
         "Switch UI theme (usage: /theme <theme-id>)",
@@ -255,12 +250,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/tasks",
         "tools"
     ),
-    built_in_command_spec!(
-        "jobs",
-        "Inspect active/background command sessions",
-        "/jobs",
-        "tools"
-    ),
+    built_in_command_spec!("jobs", "Inspect active/background command sessions", "/jobs", "tools"),
     built_in_command_spec!(
         "skills",
         "Open interactive skills manager (usage: /skills, /skills manager)",
@@ -297,12 +287,7 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/notify [message]",
         "status"
     ),
-    built_in_command_spec!(
-        "stop",
-        "Stop the active turn immediately",
-        "/stop",
-        "status"
-    ),
+    built_in_command_spec!("stop", "Stop the active turn immediately", "/stop", "status"),
     built_in_command_spec!(
         "pause",
         "Pause the active turn at the next safe boundary",
@@ -393,18 +378,8 @@ pub const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/plan [task]",
         "session"
     ),
-    built_in_command_spec!(
-        "docs",
-        "Open vtcode documentation in web browser",
-        "/docs",
-        "support"
-    ),
-    built_in_command_spec!(
-        "help",
-        "Show slash command help",
-        "/help [command]",
-        "support"
-    ),
+    built_in_command_spec!("docs", "Open vtcode documentation in web browser", "/docs", "support"),
+    built_in_command_spec!("help", "Show slash command help", "/help [command]", "support"),
     built_in_command_spec!("exit", "Exit the session", "/exit", "session"),
     built_in_command_spec!(
         "donate",
@@ -467,9 +442,7 @@ pub fn find_command_skill_by_slash_name(name: &str) -> Option<&'static CommandSk
 }
 
 pub fn find_command_skill_by_skill_name(name: &str) -> Option<&'static CommandSkillSpec> {
-    COMMAND_SKILL_SPECS
-        .iter()
-        .find(|spec| spec.skill_name == name)
+    COMMAND_SKILL_SPECS.iter().find(|spec| spec.skill_name == name)
 }
 
 pub fn is_command_skill_name(name: &str) -> bool {
@@ -513,18 +486,14 @@ pub fn merge_built_in_command_skill_contexts(skills: &mut Vec<SkillContext>) {
 }
 
 pub fn merge_built_in_command_skill_metadata(skills: &mut Vec<SkillMetadata>) {
-    skills.extend(
-        built_in_command_skill_contexts()
-            .into_iter()
-            .map(|skill_ctx| SkillMetadata {
-                name: skill_ctx.manifest().name.clone(),
-                description: skill_ctx.manifest().description.clone(),
-                short_description: None,
-                path: skill_ctx.path().clone(),
-                scope: SkillScope::System,
-                manifest: Some(skill_ctx.manifest().clone().into()),
-            }),
-    );
+    skills.extend(built_in_command_skill_contexts().into_iter().map(|skill_ctx| SkillMetadata {
+        name: skill_ctx.manifest().name.clone(),
+        description: skill_ctx.manifest().description.clone(),
+        short_description: None,
+        path: skill_ctx.path().clone(),
+        scope: SkillScope::System,
+        manifest: Some(skill_ctx.manifest().clone().into()),
+    }));
     skills.sort_by(|left, right| left.name.cmp(&right.name));
     skills.dedup_by(|left, right| left.name == right.name);
 }
@@ -542,10 +511,7 @@ fn built_in_manifest(spec: &CommandSkillSpec) -> SkillManifest {
 
 fn command_skill_metadata(spec: &CommandSkillSpec, backend: &str) -> SkillManifestMetadata {
     let mut metadata = HashMap::new();
-    metadata.insert(
-        "slash_alias".to_string(),
-        json!(format!("/{}", spec.slash_name)),
-    );
+    metadata.insert("slash_alias".to_string(), json!(format!("/{}", spec.slash_name)));
     metadata.insert("usage".to_string(), json!(spec.usage));
     metadata.insert("category".to_string(), json!(spec.category));
     metadata.insert("backend".to_string(), json!(backend));

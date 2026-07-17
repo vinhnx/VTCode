@@ -50,33 +50,21 @@ pub(super) async fn finalize_session(
     if let Some(archive) = session_archive.take() {
         let distinct_tools = session_stats.sorted_tools();
         let total_messages = conversation_history.len();
-        let session_messages: Vec<SessionMessage> = conversation_history
-            .iter()
-            .map(SessionMessage::from)
-            .collect();
+        let session_messages: Vec<SessionMessage> =
+            conversation_history.iter().map(SessionMessage::from).collect();
 
-        match archive.finalize(
-            transcript_lines,
-            total_messages,
-            distinct_tools,
-            session_messages,
-        ) {
+        match archive.finalize(transcript_lines, total_messages, distinct_tools, session_messages) {
             Ok(path) => {
                 archive_path = Some(path.clone());
                 if let Some(hooks) = lifecycle_hooks {
                     hooks.update_transcript_path(Some(path.clone())).await;
                 }
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("Session saved to {}", path.display()),
-                )?;
+                renderer
+                    .line(MessageStyle::Info, &format!("Session saved to {}", path.display()))?;
                 renderer.line_if_not_empty(MessageStyle::Output)?;
             }
             Err(err) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to save session: {err}"),
-                )?;
+                renderer.line(MessageStyle::Error, &format!("Failed to save session: {err}"))?;
                 renderer.line_if_not_empty(MessageStyle::Output)?;
             }
         }
@@ -123,10 +111,7 @@ pub(super) async fn finalize_session(
                     || error_msg.contains("Broken pipe")
                     || error_msg.contains("write EPIPE")
                 {
-                    tracing::debug!(
-                        "MCP client shutdown encountered pipe errors (normal): {}",
-                        e
-                    );
+                    tracing::debug!("MCP client shutdown encountered pipe errors (normal): {}", e);
                 } else {
                     tracing::warn!("Failed to shutdown MCP client cleanly: {}", e);
                 }

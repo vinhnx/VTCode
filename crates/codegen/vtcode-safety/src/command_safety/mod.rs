@@ -82,10 +82,8 @@ pub fn shell_string_might_be_dangerous(command: &str) -> bool {
         return true;
     }
 
-    let fallback_tokens: Vec<String> = command
-        .split_whitespace()
-        .map(ToString::to_string)
-        .collect();
+    let fallback_tokens: Vec<String> =
+        command.split_whitespace().map(ToString::to_string).collect();
     !fallback_tokens.is_empty() && command_might_be_dangerous(&fallback_tokens)
 }
 
@@ -128,8 +126,6 @@ mod tests {
 
     #[test]
     fn shell_string_detects_dangerous_sequence() {
-        assert!(shell_string_might_be_dangerous(
-            "echo ok && git reset --hard HEAD~1"
-        ));
+        assert!(shell_string_might_be_dangerous("echo ok && git reset --hard HEAD~1"));
     }
 }

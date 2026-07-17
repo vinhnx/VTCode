@@ -212,17 +212,12 @@ pub(crate) async fn search_literal_bounded(
         let Some(data) = event.get("data") else {
             continue;
         };
-        let Some(path) = data
-            .get("path")
-            .and_then(|path| path.get("text"))
-            .and_then(Value::as_str)
+        let Some(path) = data.get("path").and_then(|path| path.get("text")).and_then(Value::as_str)
         else {
             continue;
         };
-        let Some(snippet) = data
-            .get("lines")
-            .and_then(|lines| lines.get("text"))
-            .and_then(Value::as_str)
+        let Some(snippet) =
+            data.get("lines").and_then(|lines| lines.get("text")).and_then(Value::as_str)
         else {
             continue;
         };
@@ -284,18 +279,12 @@ pub(crate) async fn search_literal_bounded(
     if truncated {
         let _ = child.start_kill();
     }
-    let status = child
-        .wait()
-        .await
-        .context("failed to reap ripgrep process")?;
+    let status = child.wait().await.context("failed to reap ripgrep process")?;
     if !truncated && !matches!(status.code(), Some(0) | Some(1)) {
         anyhow::bail!("ripgrep literal search failed");
     }
 
-    Ok(LiteralSearchOutcome {
-        candidates,
-        truncated,
-    })
+    Ok(LiteralSearchOutcome { candidates, truncated })
 }
 
 /// Input parameters for ripgrep search
@@ -474,9 +463,7 @@ impl GrepSearchManager {
             if let Some(active_search) = &st.active_search
                 && !query.starts_with(&active_search.query)
             {
-                active_search
-                    .cancellation_token
-                    .store(true, Ordering::Relaxed);
+                active_search.cancellation_token.store(true, Ordering::Relaxed);
                 st.active_search = None;
             }
 
@@ -532,10 +519,8 @@ impl GrepSearchManager {
                 };
                 let query = st.latest_query.clone();
                 st.is_search_scheduled = false;
-                st.active_search = Some(ActiveSearch {
-                    query: query.clone(),
-                    cancellation_token: token,
-                });
+                st.active_search =
+                    Some(ActiveSearch { query: query.clone(), cancellation_token: token });
                 query
             };
 
@@ -568,8 +553,7 @@ impl GrepSearchManager {
         use std::process::Command;
 
         let mut cmd = Command::new("rg");
-        cmd.arg("-j")
-            .arg(optimal_search_threads().get().to_string());
+        cmd.arg("-j").arg(optimal_search_threads().get().to_string());
 
         // Add support for respecting ignore files (default is to respect them)
         if !input.respect_ignore_files.unwrap_or(true) {
@@ -720,10 +704,7 @@ impl GrepSearchManager {
         let mut match_count = 0usize;
         let mut cut_index = matches.len();
         for (i, entry) in matches.iter().enumerate() {
-            let is_match = entry
-                .get("type")
-                .and_then(Value::as_str)
-                .is_some_and(|t| t == "match");
+            let is_match = entry.get("type").and_then(Value::as_str).is_some_and(|t| t == "match");
             if is_match {
                 match_count += 1;
                 if match_count >= max_results {
@@ -1014,11 +995,8 @@ mod tests {
     #[tokio::test]
     async fn code_search_literal_stream_reaps_at_candidate_cap() {
         let workspace = TempDir::new().expect("workspace");
-        std::fs::write(
-            workspace.path().join("matches.txt"),
-            "Widget\nWidget\nWidget\n",
-        )
-        .expect("fixture");
+        std::fs::write(workspace.path().join("matches.txt"), "Widget\nWidget\nWidget\n")
+            .expect("fixture");
 
         let outcome = search_literal_bounded("Widget", workspace.path(), &[], 2)
             .await
@@ -1045,10 +1023,7 @@ mod tests {
         assert_eq!(first, second);
         assert!(first.truncated);
         assert!(
-            first
-                .candidates
-                .iter()
-                .all(|candidate| candidate.path.ends_with("a.txt")),
+            first.candidates.iter().all(|candidate| candidate.path.ends_with("a.txt")),
             "sorted cap prefix should come from a.txt: {first:?}"
         );
     }
@@ -1076,26 +1051,16 @@ mod tests {
         let mut exact_record = Vec::with_capacity(3);
         let mut exact_bytes_read = 0;
         assert_eq!(
-            read_bounded_record(
-                &mut exact_reader,
-                &mut exact_record,
-                &mut exact_bytes_read,
-                3,
-            )
-            .await
-            .expect("exact record"),
+            read_bounded_record(&mut exact_reader, &mut exact_record, &mut exact_bytes_read, 3,)
+                .await
+                .expect("exact record"),
             BoundedRecordRead::Record
         );
         exact_record.clear();
         assert_eq!(
-            read_bounded_record(
-                &mut exact_reader,
-                &mut exact_record,
-                &mut exact_bytes_read,
-                3,
-            )
-            .await
-            .expect("exact EOF probe"),
+            read_bounded_record(&mut exact_reader, &mut exact_record, &mut exact_bytes_read, 3,)
+                .await
+                .expect("exact EOF probe"),
             BoundedRecordRead::Eof
         );
 
@@ -1131,14 +1096,10 @@ mod tests {
                 && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Rust)
         }));
 
-        let dockerfile = search_literal_bounded(
-            "Widget",
-            workspace.path(),
-            &[AstGrepLanguage::Dockerfile],
-            20,
-        )
-        .await
-        .expect("uppercase Dockerfile name");
+        let dockerfile =
+            search_literal_bounded("Widget", workspace.path(), &[AstGrepLanguage::Dockerfile], 20)
+                .await
+                .expect("uppercase Dockerfile name");
         assert!(dockerfile.candidates.iter().any(|candidate| {
             candidate.path.ends_with("DOCKERFILE")
                 && AstGrepLanguage::from_path(&candidate.path) == Some(AstGrepLanguage::Dockerfile)

@@ -49,14 +49,9 @@ fn restore_exact_file_read_output(mut output: Value) -> Value {
 
 impl AgentRunner {
     pub(super) async fn resolve_executable_tool_name(&self, tool_name: &str) -> Option<String> {
-        let canonical_name = self
-            .tool_registry
-            .resolve_public_tool_name(tool_name)
-            .ok()?;
+        let canonical_name = self.tool_registry.resolve_public_tool_name(tool_name).ok()?;
 
-        self.is_tool_exposed(&canonical_name)
-            .await
-            .then_some(canonical_name)
+        self.is_tool_exposed(&canonical_name).await.then_some(canonical_name)
     }
 
     pub(super) fn admit_tool_call(
@@ -67,8 +62,7 @@ impl AgentRunner {
     ) -> Result<PreparedToolCall> {
         let normalized_args = self.normalize_tool_args(tool_name, args, session_state);
         self.ensure_active_primary_agent_allows_tool_call(tool_name, &normalized_args)?;
-        self.tool_registry
-            .admit_public_tool_call(tool_name, &normalized_args)
+        self.tool_registry.admit_public_tool_call(tool_name, &normalized_args)
     }
 
     fn ensure_active_primary_agent_allows_tool_call(
@@ -212,11 +206,7 @@ impl AgentRunner {
             }
         }
 
-        if self
-            .tool_registry
-            .current_full_auto_allowlist()
-            .await
-            .is_some()
+        if self.tool_registry.current_full_auto_allowlist().await.is_some()
             && !self.tool_registry.is_allowed_in_full_auto(tool_name).await
         {
             return false;
@@ -253,10 +243,8 @@ impl AgentRunner {
         if let Some(cmd_text) = shell_command {
             let cfg = self.config();
 
-            let agent_prefix = format!(
-                "VTCODE_{}_COMMANDS_",
-                self.agent_type.to_string().to_uppercase()
-            );
+            let agent_prefix =
+                format!("VTCODE_{}_COMMANDS_", self.agent_type.to_string().to_uppercase());
 
             let deny_regex_patterns = crate::utils::merge_env_patterns(
                 &cfg.commands.deny_regex,
@@ -295,8 +283,7 @@ impl AgentRunner {
             let budget = std::time::Duration::from_secs(wall_clock_secs);
             match tokio::time::timeout(
                 budget,
-                self.tool_registry
-                    .execute_prepared_public_tool_request(prepared, policy),
+                self.tool_registry.execute_prepared_public_tool_request(prepared, policy),
             )
             .await
             {
@@ -319,9 +306,7 @@ impl AgentRunner {
                 }
             }
         } else {
-            self.tool_registry
-                .execute_prepared_public_tool_request(prepared, policy)
-                .await
+            self.tool_registry.execute_prepared_public_tool_request(prepared, policy).await
         };
         let attempts = outcome.attempts;
         match (outcome.output, outcome.error) {
@@ -343,10 +328,8 @@ impl AgentRunner {
         tool_name: &str,
         args: &Value,
     ) -> std::result::Result<Value, ToolExecutionError> {
-        let prepared = self
-            .tool_registry
-            .admit_public_tool_call(tool_name, args)
-            .map_err(|error| {
+        let prepared =
+            self.tool_registry.admit_public_tool_call(tool_name, args).map_err(|error| {
                 ToolExecutionError::from_anyhow(
                     tool_name,
                     &error,
@@ -397,24 +380,15 @@ mod tests {
 
         let policy_err = anyhow::anyhow!("tool denied by policy");
         let decision = policy.decision_for_anyhow(&policy_err, 0, Some("test_tool"));
-        assert!(
-            !decision.retryable,
-            "policy violations should not be retryable"
-        );
+        assert!(!decision.retryable, "policy violations should not be retryable");
 
         let auth_err = anyhow::anyhow!("invalid api key");
         let decision = policy.decision_for_anyhow(&auth_err, 0, Some("test_tool"));
-        assert!(
-            !decision.retryable,
-            "authentication errors should not be retryable"
-        );
+        assert!(!decision.retryable, "authentication errors should not be retryable");
 
         let param_err = anyhow::anyhow!("invalid arguments: missing required field");
         let decision = policy.decision_for_anyhow(&param_err, 0, Some("test_tool"));
-        assert!(
-            !decision.retryable,
-            "invalid parameter errors should not be retryable"
-        );
+        assert!(!decision.retryable, "invalid parameter errors should not be retryable");
     }
 
     /// Verify that retryable decisions include backoff delays.

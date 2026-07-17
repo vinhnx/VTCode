@@ -4,7 +4,7 @@ This document outlines all commands that VT Code allows agents to execute, organ
 
 ## Overview
 
-VT Code maintains a comprehensive allow-list of safe commands that the agent can execute. The list is defined in `vtcode-config/src/constants.rs` and can be customized via `vtcode.toml`.
+VT Code maintains a comprehensive allow-list of safe commands that the agent can execute. The list is defined in `crates/codegen/vtcode-config/src/constants.rs` and can be customized via `vtcode.toml`.
 
 **Total Allowed Commands**: 380+ (as of v0.43.3)
 
@@ -369,4 +369,4 @@ If a command runs but shows permission errors:
 -   `docs/development/EXECUTION_POLICY.md` - Detailed execution policy documentation
 -   `docs/guides/security.md` - Security best practices
 -   `docs/environment/PATH_VISIBILITY_FIX.md` - Details on the PATH inheritance fix
--   `vtcode-config/src/constants.rs` - Source of truth for command lists
+-   `crates/codegen/vtcode-config/src/constants.rs` - Source of truth for command lists

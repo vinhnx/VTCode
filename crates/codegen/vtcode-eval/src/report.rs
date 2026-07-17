@@ -30,10 +30,7 @@ impl EvalReport {
         out.push_str("# Eval Report\n\n");
         for s in &self.suites {
             out.push_str(&format!("## {}\n\n", s.suite_name));
-            out.push_str(&format!(
-                "- Aggregate: pass@k={:.1}%\n",
-                s.aggregate.pass_at_k * 100.0
-            ));
+            out.push_str(&format!("- Aggregate: pass@k={:.1}%\n", s.aggregate.pass_at_k * 100.0));
             out.push_str("| Task | Category | pass@k | passed/total |\n");
             out.push_str("|------|----------|--------|-------------|\n");
             for t in &s.task_reports {

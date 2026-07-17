@@ -19,9 +19,7 @@ pub fn render_skills_section(skills: &[SkillMetadata]) -> Option<String> {
     );
 
     if overflow > 0 {
-        lines.push(format!(
-            "(+{overflow} more skills available{SKILL_OVERFLOW_SUFFIX})"
-        ));
+        lines.push(format!("(+{overflow} more skills available{SKILL_OVERFLOW_SUFFIX})"));
     }
 
     lines.push(render_skills_usage_rules().to_string());
@@ -57,9 +55,7 @@ pub fn render_prompt_skills_section(skills: &[SkillMetadata]) -> Option<String> 
     }
 
     if overflow > 0 {
-        lines.push(format!(
-            "(+{overflow} more skills available{SKILL_OVERFLOW_SUFFIX})"
-        ));
+        lines.push(format!("(+{overflow} more skills available{SKILL_OVERFLOW_SUFFIX})"));
     }
 
     Some(lines.join("\n"))
@@ -120,11 +116,7 @@ fn render_skill_line(skill: &SkillMetadata) -> String {
 }
 
 fn render_prompt_skill_line(skill: &SkillMetadata) -> String {
-    format!(
-        "- {}: {}",
-        skill.name,
-        prompt_skill_summary(skill).trim_end_matches('.')
-    )
+    format!("- {}: {}", skill.name, prompt_skill_summary(skill).trim_end_matches('.'))
 }
 
 fn prompt_skill_summary(skill: &SkillMetadata) -> String {

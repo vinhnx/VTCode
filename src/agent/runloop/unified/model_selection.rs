@@ -199,10 +199,8 @@ pub(crate) async fn finalize_model_selection(
             )?;
         }
         ModelSwitchCompactionOutcome::AlreadyCompact => {
-            renderer.line(
-                MessageStyle::Info,
-                "Model switched; conversation was already compact.",
-            )?;
+            renderer
+                .line(MessageStyle::Info, "Model switched; conversation was already compact.")?;
         }
         ModelSwitchCompactionOutcome::Failed(err) => {
             renderer.line(
@@ -260,10 +258,7 @@ pub(crate) async fn finalize_model_selection(
     if using_chatgpt_auth {
         renderer.line(MessageStyle::Info, "Using ChatGPT subscription for OpenAI.")?;
     } else if selection.provider_enum == Some(Provider::Copilot) {
-        renderer.line(
-            MessageStyle::Info,
-            "Using GitHub Copilot managed authentication.",
-        )?;
+        renderer.line(MessageStyle::Info, "Using GitHub Copilot managed authentication.")?;
     } else if selection.provider_enum == Some(Provider::MiMo) {
         if let Some(method) = selection.mimo_auth_method {
             renderer.line(
@@ -282,10 +277,7 @@ pub(crate) async fn finalize_model_selection(
     } else if selection.requires_api_key {
         renderer.line(
             MessageStyle::Info,
-            &format!(
-                "Using environment variable {} for authentication.",
-                selection.env_key
-            ),
+            &format!("Using environment variable {} for authentication.", selection.env_key),
         )?;
     }
 
@@ -317,22 +309,16 @@ pub(crate) async fn finalize_lightweight_model_selection(
     let effective_route = match resolution.source {
         LightweightRouteSource::MainModel => config.model.clone(),
         _ => match resolution.fallback_to_main_model() {
-            Some(fallback) => format!(
-                "{} -> fallback {}",
-                resolution.primary.model, fallback.model
-            ),
+            Some(fallback) => {
+                format!("{} -> fallback {}", resolution.primary.model, fallback.model)
+            }
             None => resolution.primary.model.clone(),
         },
     };
 
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Lightweight model set to {configured_label}."),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Effective lightweight route: {effective_route}."),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("Lightweight model set to {configured_label}."))?;
+    renderer
+        .line(MessageStyle::Info, &format!("Effective lightweight route: {effective_route}."))?;
     if let Some(warning) = resolution.warning {
         renderer.line(MessageStyle::Warning, &warning)?;
     }
@@ -402,9 +388,7 @@ async fn resolve_runtime_api_key(
             return Ok((String::new(), None));
         }
 
-        let storage_mode = vt_cfg
-            .map(|cfg| cfg.agent.credential_storage_mode)
-            .unwrap_or_default();
+        let storage_mode = vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default();
         if let Ok(Some(key)) = CustomApiKeyStorage::new(&selection.provider).load(storage_mode) {
             return Ok((key, None));
         }
@@ -448,9 +432,7 @@ fn sync_runtime_custom_api_key(config: &mut CoreAgentConfig, selection: &ModelSe
     }
 
     if selection.api_key.is_some() {
-        config
-            .custom_api_keys
-            .insert(selection.provider.clone(), String::new());
+        config.custom_api_keys.insert(selection.provider.clone(), String::new());
         return;
     }
 
@@ -513,13 +495,7 @@ mod tests {
         let dir = tempdir().expect("temp dir");
         std::fs::write(dir.path().join(".env"), "OPENAI_API_KEY=workspace-key\n")
             .expect("workspace env");
-        let selection = selection(
-            "openai",
-            Some(Provider::OpenAI),
-            "OPENAI_API_KEY",
-            None,
-            true,
-        );
+        let selection = selection("openai", Some(Provider::OpenAI), "OPENAI_API_KEY", None, true);
 
         let resolved = tokio::runtime::Runtime::new()
             .expect("runtime")
@@ -532,13 +508,8 @@ mod tests {
     #[test]
     fn resolve_runtime_api_key_writes_user_supplied_key_to_workspace_env() {
         let dir = tempdir().expect("temp dir");
-        let selection = selection(
-            "openai",
-            Some(Provider::OpenAI),
-            "OPENAI_API_KEY",
-            Some("user-key"),
-            true,
-        );
+        let selection =
+            selection("openai", Some(Provider::OpenAI), "OPENAI_API_KEY", Some("user-key"), true);
 
         let resolved = tokio::runtime::Runtime::new()
             .expect("runtime")
@@ -568,32 +539,26 @@ mod tests {
     fn resolve_runtime_api_key_accepts_custom_provider_command_auth_without_key() {
         let dir = tempdir().expect("temp dir");
         let mut config = VTCodeConfig::default();
-        config
-            .custom_providers
-            .push(vtcode_config::core::CustomProviderConfig {
-                name: "mycorp".to_string(),
-                display_name: "MyCorp".to_string(),
-                base_url: "https://llm.example/v1".to_string(),
-                api_key_env: String::new(),
-                auth: Some(vtcode_config::core::CustomProviderCommandAuthConfig {
-                    command: "print-token".to_string(),
-                    args: Vec::new(),
-                    cwd: None,
-                    timeout_ms: 1_000,
-                    refresh_interval_ms: 60_000,
-                }),
-                model: "gpt-5-mini".to_string(),
-                models: Vec::new(),
-            });
+        config.custom_providers.push(vtcode_config::core::CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorp".to_string(),
+            base_url: "https://llm.example/v1".to_string(),
+            api_key_env: String::new(),
+            auth: Some(vtcode_config::core::CustomProviderCommandAuthConfig {
+                command: "print-token".to_string(),
+                args: Vec::new(),
+                cwd: None,
+                timeout_ms: 1_000,
+                refresh_interval_ms: 60_000,
+            }),
+            model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
+        });
         let selection = selection("mycorp", None, "", None, false);
 
         let resolved = tokio::runtime::Runtime::new()
             .expect("runtime")
-            .block_on(resolve_runtime_api_key(
-                dir.path(),
-                Some(&config),
-                &selection,
-            ))
+            .block_on(resolve_runtime_api_key(dir.path(), Some(&config), &selection))
             .expect("command-auth custom provider should not require a static key");
 
         assert!(resolved.0.is_empty());

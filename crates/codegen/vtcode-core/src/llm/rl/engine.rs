@@ -114,33 +114,21 @@ mod tests {
     fn select_prefers_learned_success_over_untried() {
         let mut engine = RlEngine::from_config(&cfg());
         let actions = vec![
-            Action {
-                id: "edge".to_string(),
-            },
-            Action {
-                id: "cloud".to_string(),
-            },
+            Action { id: "edge".to_string() },
+            Action { id: "cloud".to_string() },
         ];
         let ctx = PolicyContext { exploration: 0.0 };
         // Both untried → first (UCB INFINITY) wins; learn that "cloud" fails.
         assert_eq!(engine.select(&actions, &ctx), Some(0));
         engine.apply_reward(
             "cloud",
-            RewardSignal {
-                success: false,
-                latency_secs: 5.0,
-                cost_usd: 0.1,
-            },
+            RewardSignal { success: false, latency_secs: 5.0, cost_usd: 0.1 },
         );
         // Now "edge" (untried) should be preferred over the failed "cloud".
         assert_eq!(engine.select(&actions, &ctx), Some(0));
         engine.apply_reward(
             "edge",
-            RewardSignal {
-                success: true,
-                latency_secs: 0.2,
-                cost_usd: 0.001,
-            },
+            RewardSignal { success: true, latency_secs: 0.2, cost_usd: 0.001 },
         );
         assert_eq!(engine.select(&actions, &ctx), Some(0));
     }
@@ -148,23 +136,13 @@ mod tests {
     #[test]
     fn empty_actions_returns_none() {
         let engine = RlEngine::from_config(&cfg());
-        assert_eq!(
-            engine.select(&[], &PolicyContext { exploration: 0.1 }),
-            None
-        );
+        assert_eq!(engine.select(&[], &PolicyContext { exploration: 0.1 }), None);
     }
 
     #[test]
     fn snapshot_reports_recorded_count() {
         let mut engine = RlEngine::from_config(&cfg());
-        engine.apply_reward(
-            "x",
-            RewardSignal {
-                success: true,
-                latency_secs: 0.1,
-                cost_usd: 0.0,
-            },
-        );
+        engine.apply_reward("x", RewardSignal { success: true, latency_secs: 0.1, cost_usd: 0.0 });
         let snap = engine.snapshot();
         assert_eq!(snap.recorded, 1);
         assert_eq!(snap.strategy, "Bandit");

@@ -53,10 +53,7 @@ pub fn assert_provider_exposes_tool(snapshot: &SessionToolCatalogSnapshot, tool_
         "provider-facing snapshot should include {tool_name}; got {names:?}"
     );
     assert!(
-        snapshot
-            .active_tool_names
-            .iter()
-            .any(|active_name| active_name == tool_name),
+        snapshot.active_tool_names.iter().any(|active_name| active_name == tool_name),
         "active tool names should include {tool_name}"
     );
 }
@@ -68,10 +65,7 @@ pub fn assert_provider_hides_tool(snapshot: &SessionToolCatalogSnapshot, tool_na
         "provider-facing snapshot should hide {tool_name}; got {names:?}"
     );
     assert!(
-        !snapshot
-            .active_tool_names
-            .iter()
-            .any(|active_name| active_name == tool_name),
+        !snapshot.active_tool_names.iter().any(|active_name| active_name == tool_name),
         "active tool names should hide {tool_name}"
     );
 }
@@ -86,10 +80,7 @@ pub fn assert_provider_catalogues_inactive_tool(
         "stable provider catalogue should include {tool_name}; got {names:?}"
     );
     assert!(
-        !snapshot
-            .active_tool_names
-            .iter()
-            .any(|active_name| active_name == tool_name),
+        !snapshot.active_tool_names.iter().any(|active_name| active_name == tool_name),
         "active tool names should hide {tool_name}"
     );
 }
@@ -101,9 +92,7 @@ pub struct QueuedProvider {
 
 impl QueuedProvider {
     pub fn new(responses: Vec<LLMResponse>) -> Self {
-        Self {
-            responses: Arc::new(Mutex::new(responses.into())),
-        }
+        Self { responses: Arc::new(Mutex::new(responses.into())) }
     }
 }
 
@@ -114,13 +103,10 @@ impl LLMProvider for QueuedProvider {
     }
 
     async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        self.responses
-            .lock()
-            .pop_front()
-            .ok_or(LLMError::InvalidRequest {
-                message: "QueuedProvider has no queued responses".to_string(),
-                metadata: None,
-            })
+        self.responses.lock().pop_front().ok_or(LLMError::InvalidRequest {
+            message: "QueuedProvider has no queued responses".to_string(),
+            metadata: None,
+        })
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -175,13 +161,10 @@ impl LLMProvider for RecordingQueuedProvider {
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         self.requests.lock().push(request);
-        self.responses
-            .lock()
-            .pop_front()
-            .ok_or(LLMError::InvalidRequest {
-                message: "RecordingQueuedProvider has no queued responses".to_string(),
-                metadata: None,
-            })
+        self.responses.lock().pop_front().ok_or(LLMError::InvalidRequest {
+            message: "RecordingQueuedProvider has no queued responses".to_string(),
+            metadata: None,
+        })
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -215,11 +198,7 @@ pub enum HarnessRole {
 }
 
 pub fn harness_role_of(request: &LLMRequest) -> HarnessRole {
-    let sys = request
-        .system_prompt
-        .as_ref()
-        .map(|s| s.as_str())
-        .unwrap_or("");
+    let sys = request.system_prompt.as_ref().map(|s| s.as_str()).unwrap_or("");
     if sys.contains("harness replanner") {
         HarnessRole::Replanner
     } else if sys.contains("harness evaluator") {
@@ -280,11 +259,9 @@ fn default_response_for(role: HarnessRole) -> LLMResponse {
     match role {
         HarnessRole::Planner => json_response(planner_response_json("pwd")),
         HarnessRole::Build => text_response("All requested changes have been applied."),
-        HarnessRole::Evaluator => json_response(evaluator_response_json(
-            "pass",
-            "default evaluator response",
-            0,
-        )),
+        HarnessRole::Evaluator => {
+            json_response(evaluator_response_json("pass", "default evaluator response", 0))
+        }
         HarnessRole::Replanner => text_response("Revision 1: task is complete."),
     }
 }
@@ -424,9 +401,7 @@ pub fn tool_call_response_with_request_id(
 }
 
 pub fn workspace_root(temp: &TempDir) -> PathBuf {
-    temp.path()
-        .canonicalize()
-        .unwrap_or_else(|_| temp.path().to_path_buf())
+    temp.path().canonicalize().unwrap_or_else(|_| temp.path().to_path_buf())
 }
 
 pub async fn make_runner(temp: &TempDir, vt_cfg: VTCodeConfig, session_id: &str) -> AgentRunner {
@@ -445,10 +420,7 @@ pub async fn make_runner_for_model(
         "test-key".to_string(),
         workspace_root(temp),
         session_id.to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(vt_cfg),

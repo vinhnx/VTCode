@@ -155,10 +155,8 @@ pub fn build_sanitized_env(
         }
 
         if !writable_roots.is_empty() {
-            let roots: Vec<String> = writable_roots
-                .iter()
-                .map(|p| p.display().to_string())
-                .collect();
+            let roots: Vec<String> =
+                writable_roots.iter().map(|p| p.display().to_string()).collect();
             sanitized.insert(VTCODE_SANDBOX_WRITABLE_ROOTS.to_string(), roots.join(":"));
         }
     }
@@ -281,14 +279,8 @@ mod tests {
 
         // Sandbox markers should be set
         assert_eq!(sanitized.get(VTCODE_SANDBOX_ACTIVE), Some(&"1".to_string()));
-        assert_eq!(
-            sanitized.get(VTCODE_SANDBOX_NETWORK_DISABLED),
-            Some(&"1".to_string())
-        );
-        assert_eq!(
-            sanitized.get(VTCODE_SANDBOX_TYPE),
-            Some(&"MacosSeatbelt".to_string())
-        );
+        assert_eq!(sanitized.get(VTCODE_SANDBOX_NETWORK_DISABLED), Some(&"1".to_string()));
+        assert_eq!(sanitized.get(VTCODE_SANDBOX_TYPE), Some(&"MacosSeatbelt".to_string()));
     }
 
     #[test]

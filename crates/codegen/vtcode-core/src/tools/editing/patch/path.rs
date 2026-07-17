@@ -14,10 +14,7 @@ pub(crate) fn validate_patch_path(
         });
     }
 
-    if raw_path
-        .chars()
-        .any(|c| matches!(c, '\0' | '\r' | '\n' | '\t'))
-    {
+    if raw_path.chars().any(|c| matches!(c, '\0' | '\r' | '\n' | '\t')) {
         return Err(PatchError::InvalidPath {
             operation,
             path: raw_path.to_string(),

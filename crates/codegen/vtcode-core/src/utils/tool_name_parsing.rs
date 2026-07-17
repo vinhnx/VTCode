@@ -78,9 +78,8 @@ fn sanitize_tool_segment(input: &str) -> Cow<'_, str> {
         return Cow::Borrowed("tool");
     }
 
-    let first_bad = input
-        .bytes()
-        .position(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'-');
+    let first_bad =
+        input.bytes().position(|b| !b.is_ascii_alphanumeric() && b != b'_' && b != b'-');
 
     match first_bad {
         None => Cow::Borrowed(input),
@@ -127,10 +126,7 @@ mod tests {
 
     #[test]
     fn legacy_mcp_tool_name_basic() {
-        assert_eq!(
-            legacy_mcp_tool_name("mcp_github_list_issues"),
-            Some("github_list_issues")
-        );
+        assert_eq!(legacy_mcp_tool_name("mcp_github_list_issues"), Some("github_list_issues"));
         assert_eq!(legacy_mcp_tool_name("read_file"), None);
     }
 

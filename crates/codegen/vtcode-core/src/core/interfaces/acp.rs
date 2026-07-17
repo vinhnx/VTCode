@@ -13,10 +13,7 @@ pub struct AcpLaunchParams<'a> {
 
 impl<'a> AcpLaunchParams<'a> {
     pub fn new(agent_config: &'a CoreAgentConfig, runtime_config: &'a VTCodeConfig) -> Self {
-        Self {
-            agent_config,
-            runtime_config,
-        }
+        Self { agent_config, runtime_config }
     }
 }
 

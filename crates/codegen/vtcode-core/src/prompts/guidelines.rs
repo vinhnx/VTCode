@@ -46,13 +46,9 @@ pub fn generate_tool_guidelines_for_profile(
     if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_apply_patch) {
         lines.push(mode_line.to_string());
     }
-    if let Some(browse_guidance) = browse_tool_guidance(
-        has_exec,
-        has_search,
-        has_list_files,
-        has_read_file,
-        shell_profile,
-    ) {
+    if let Some(browse_guidance) =
+        browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file, shell_profile)
+    {
         lines.push(browse_guidance);
     }
     if has_apply_patch {
@@ -165,9 +161,7 @@ pub fn append_deferred_tools_prompt_section(prompt: &mut String, tools: &[ToolDe
         .filter(|tool| tool.namespace.is_none() && tool.defer_loading == Some(true))
         .count();
     if unnamespaced_deferred > 0 {
-        lines.push(format!(
-            "- {unnamespaced_deferred} additional deferred tools"
-        ));
+        lines.push(format!("- {unnamespaced_deferred} additional deferred tools"));
     }
 
     if lines.is_empty() {
@@ -222,22 +216,15 @@ fn generate_runtime_tool_guidelines_for_profile(
     let has_search = available_tools.iter().any(|tool| tool == TOOL_CODE_SEARCH);
     let has_read_file = available_tools.iter().any(|tool| tool == TOOL_READ_FILE);
     let has_list_files = available_tools.iter().any(|tool| tool == TOOL_LIST_FILES);
-    let has_request_user_input = available_tools
-        .iter()
-        .any(|tool| tool == TOOL_REQUEST_USER_INPUT);
-    let has_task_tracker = available_tools
-        .iter()
-        .any(|tool| matches!(tool.as_str(), TOOL_TASK_TRACKER));
+    let has_request_user_input = available_tools.iter().any(|tool| tool == TOOL_REQUEST_USER_INPUT);
+    let has_task_tracker =
+        available_tools.iter().any(|tool| matches!(tool.as_str(), TOOL_TASK_TRACKER));
 
     let mut lines =
         vec!["- Planning workflow active: stay within the read-safe tool list.".to_string()];
-    if let Some(browse_guidance) = browse_tool_guidance(
-        has_exec,
-        has_search,
-        has_list_files,
-        has_read_file,
-        shell_profile,
-    ) {
+    if let Some(browse_guidance) =
+        browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file, shell_profile)
+    {
         lines.push(browse_guidance);
     }
     if has_exec {
@@ -632,14 +619,8 @@ mod tests {
             None,
             ResolvedShellPromptProfile::UnixLike,
         );
-        assert!(
-            guidelines.contains("parallel"),
-            "Should include parallel tool call guidance"
-        );
-        assert!(
-            guidelines.contains("inputs do not depend"),
-            "Should mention independent inputs"
-        );
+        assert!(guidelines.contains("parallel"), "Should include parallel tool call guidance");
+        assert!(guidelines.contains("inputs do not depend"), "Should mention independent inputs");
     }
 
     #[test]

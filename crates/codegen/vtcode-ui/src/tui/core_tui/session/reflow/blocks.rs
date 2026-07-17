@@ -36,22 +36,13 @@ impl Session {
         if digits_len == 0 {
             return None;
         }
-        let mut offset = idx
-            + rest
-                .chars()
-                .take(digits_len)
-                .map(char::len_utf8)
-                .sum::<usize>();
+        let mut offset = idx + rest.chars().take(digits_len).map(char::len_utf8).sum::<usize>();
         let after_digits = line_text.get(offset..)?;
         let space_after_digits = after_digits.chars().take_while(|c| *c == ' ').count();
         if space_after_digits == 0 {
             return None;
         }
-        offset += after_digits
-            .chars()
-            .take(space_after_digits)
-            .map(char::len_utf8)
-            .sum::<usize>();
+        offset += after_digits.chars().take(space_after_digits).map(char::len_utf8).sum::<usize>();
 
         let marker = line_text.get(offset..)?.chars().next()?;
         if !matches!(marker, '+' | '-') {
@@ -64,11 +55,7 @@ impl Session {
         if space_after_marker == 0 {
             return None;
         }
-        offset += after_marker
-            .chars()
-            .take(space_after_marker)
-            .map(char::len_utf8)
-            .sum::<usize>();
+        offset += after_marker.chars().take(space_after_marker).map(char::len_utf8).sum::<usize>();
 
         let prefix_width = UnicodeWidthStr::width(line_text.get(..offset)?);
         Some(" ".repeat(prefix_width))
@@ -263,10 +250,7 @@ impl Session {
         let detail_border_style = border_style.add_modifier(Modifier::DIM);
 
         for line_spans in split_lines {
-            let line_text: String = line_spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect();
+            let line_text: String = line_spans.iter().map(|span| span.content.as_ref()).collect();
             let is_summary = has_summary_prefix(&line_text);
 
             if is_summary {
@@ -339,21 +323,12 @@ impl Session {
         }
 
         if start > end || end >= self.lines.len() {
-            tracing::warn!(
-                "invalid range: start={}, end={}, len={}",
-                start,
-                end,
-                self.lines.len()
-            );
+            tracing::warn!("invalid range: start={}, end={}, len={}", start, end, self.lines.len());
             return false;
         }
 
         for line in &self.lines[start..=end] {
-            if line
-                .segments
-                .iter()
-                .any(|segment| !segment.text.trim().is_empty())
-            {
+            if line.segments.iter().any(|segment| !segment.text.trim().is_empty()) {
                 return true;
             }
         }
@@ -401,9 +376,7 @@ impl Session {
         // Render body content - strip ANSI codes to ensure plain text output.
         // Use the session PTY fallback chain (pty_body -> tool_body -> foreground)
         // and apply a consistent dimmed style for terminal output.
-        let pty_fallback = self
-            .text_fallback(InlineMessageKind::Pty)
-            .or(self.theme.foreground);
+        let pty_fallback = self.text_fallback(InlineMessageKind::Pty).or(self.theme.foreground);
 
         // Command header lines ("• Ran ...") use full-brightness styling so
         // the command name and arguments are visually distinct.
@@ -459,11 +432,7 @@ fn build_pty_transcript_lines(
         } else {
             continuation_prefix
         };
-        let full_text: String = line
-            .spans
-            .iter()
-            .map(|span| span.content.as_ref())
-            .collect();
+        let full_text: String = line.spans.iter().map(|span| span.content.as_ref()).collect();
         let body_text = full_text.strip_prefix(prefix).unwrap_or(full_text.as_str());
         let body_end = combined_offset + body_text.len();
         let mut explicit_links = Vec::new();
@@ -493,10 +462,7 @@ fn build_pty_transcript_lines(
             });
         }
 
-        transcript_lines.push(TranscriptLine {
-            line,
-            explicit_links,
-        });
+        transcript_lines.push(TranscriptLine { line, explicit_links });
         combined_offset = body_end;
     }
 

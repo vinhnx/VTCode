@@ -35,13 +35,13 @@ pub struct OpenResponsesProvider {
 
 impl OpenResponsesProvider {
     fn parse_native_response_payload(json: Value, model: String) -> Result<LLMResponse, LLMError> {
-        let output = json
-            .get("output")
-            .and_then(|o| o.as_array())
-            .ok_or_else(|| LLMError::Provider {
-                message: "Invalid response from OpenResponses: missing output".to_string(),
-                metadata: None,
-            })?;
+        let output =
+            json.get("output")
+                .and_then(|o| o.as_array())
+                .ok_or_else(|| LLMError::Provider {
+                    message: "Invalid response from OpenResponses: missing output".to_string(),
+                    metadata: None,
+                })?;
 
         let mut content = String::new();
         let mut tool_calls = Vec::new();
@@ -67,27 +67,17 @@ impl OpenResponsesProvider {
                     }
                 }
                 "function_call" => {
-                    let id = item_val
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let name = item_val
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
+                    let id = item_val.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let name =
+                        item_val.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
                     let arguments = item_val
                         .get("arguments")
                         .map(|v| v.to_string())
                         .unwrap_or_else(|| "{}".to_string());
-                    let namespace = item_val
-                        .get("namespace")
-                        .and_then(|v| v.as_str())
-                        .map(ToOwned::to_owned);
-                    tool_calls.push(ToolCall::function_with_namespace(
-                        id, namespace, name, arguments,
-                    ));
+                    let namespace =
+                        item_val.get("namespace").and_then(|v| v.as_str()).map(ToOwned::to_owned);
+                    tool_calls
+                        .push(ToolCall::function_with_namespace(id, namespace, name, arguments));
                 }
                 "tool_search_output" => {
                     collect_tool_references_from_tool_search_output(item_val, &mut tool_references);
@@ -107,10 +97,7 @@ impl OpenResponsesProvider {
                     &mut reasoning_details,
                     &content,
                 );
-                (
-                    Some(reasoning_parts.join("\n\n")),
-                    cleaned_content.or(Some(content)),
-                )
+                (Some(reasoning_parts.join("\n\n")), cleaned_content.or(Some(content)))
             }
         } else {
             (reasoning, Some(content))
@@ -135,10 +122,7 @@ impl OpenResponsesProvider {
             reasoning: final_reasoning,
             reasoning_details,
             tool_references,
-            request_id: json
-                .get("id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+            request_id: json.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()),
             organization_id: None,
             compaction: None,
         })
@@ -245,10 +229,7 @@ impl OpenResponsesProvider {
             ..Default::default()
         };
         let native_payload = self.build_native_payload(&request, false)?;
-        let input = native_payload
-            .get("input")
-            .cloned()
-            .unwrap_or_else(|| json!([]));
+        let input = native_payload.get("input").cloned().unwrap_or_else(|| json!([]));
         let compact_payload = json!({
             "model": resolved_model,
             "input": input,
@@ -270,25 +251,19 @@ impl OpenResponsesProvider {
                 "OpenResponses",
                 &format!("Compaction endpoint error (HTTP {status}): {body}"),
             );
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: formatted_error, metadata: None });
         }
 
-        let json: Value = response
-            .json()
-            .await
-            .map_err(|e| format_parse_error("OpenResponses", &e))?;
-        let output = json
-            .get("output")
-            .and_then(|value| value.as_array())
-            .ok_or_else(|| LLMError::Provider {
+        let json: Value =
+            response.json().await.map_err(|e| format_parse_error("OpenResponses", &e))?;
+        let output = json.get("output").and_then(|value| value.as_array()).ok_or_else(|| {
+            LLMError::Provider {
                 message:
                     "Invalid response from OpenResponses compact endpoint: missing output array"
                         .to_string(),
                 metadata: None,
-            })?;
+            }
+        })?;
 
         let compacted = parse_compacted_output_messages(output);
         if compacted.is_empty() {
@@ -348,9 +323,7 @@ impl OpenResponsesProvider {
                                         content.push(ContentPart::input_text(text.as_str()));
                                     }
                                 }
-                                crate::provider::ContentPart::Image {
-                                    data, mime_type, ..
-                                } => {
+                                crate::provider::ContentPart::Image { data, mime_type, .. } => {
                                     content.push(ContentPart::InputImage(InputImageContent {
                                         image_url: format!("data:{mime_type};base64,{data}"),
                                         detail: Some(ImageDetail::Auto),
@@ -555,16 +528,11 @@ impl OpenResponsesProvider {
             let body = response.text().await.unwrap_or_default();
             let formatted_error =
                 error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: formatted_error, metadata: None });
         }
 
-        let json: Value = response
-            .json()
-            .await
-            .map_err(|e| format_parse_error("OpenResponses", &e))?;
+        let json: Value =
+            response.json().await.map_err(|e| format_parse_error("OpenResponses", &e))?;
 
         let choice = json
             .get("choices")
@@ -580,10 +548,7 @@ impl OpenResponsesProvider {
             metadata: None,
         })?;
 
-        let content = message
-            .get("content")
-            .and_then(|c| c.as_str())
-            .map(|s| s.to_string());
+        let content = message.get("content").and_then(|c| c.as_str()).map(|s| s.to_string());
 
         let tool_calls = message
             .get("tool_calls")
@@ -632,10 +597,7 @@ impl OpenResponsesProvider {
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
-            request_id: json
-                .get("id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+            request_id: json.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()),
             organization_id: None,
             compaction: None,
         })
@@ -660,10 +622,7 @@ impl OpenResponsesProvider {
             let body = response.text().await.unwrap_or_default();
             let formatted_error =
                 error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: formatted_error, metadata: None });
         }
 
         let stream = try_stream! {
@@ -835,16 +794,11 @@ impl LLMProvider for OpenResponsesProvider {
             let body = response.text().await.unwrap_or_default();
             let formatted_error =
                 error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: formatted_error, metadata: None });
         }
 
-        let json: Value = response
-            .json()
-            .await
-            .map_err(|e| format_parse_error("OpenResponses", &e))?;
+        let json: Value =
+            response.json().await.map_err(|e| format_parse_error("OpenResponses", &e))?;
 
         Self::parse_native_response_payload(json, model)
     }
@@ -876,10 +830,7 @@ impl LLMProvider for OpenResponsesProvider {
             let body = response.text().await.unwrap_or_default();
             let formatted_error =
                 error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: formatted_error, metadata: None });
         }
 
         let stream = try_stream! {
@@ -995,10 +946,7 @@ impl LLMProvider for OpenResponsesProvider {
             let body = response.text().await.unwrap_or_default();
             let formatted_error =
                 error_display::format_llm_error("OpenResponses", &format!("HTTP {status}: {body}"));
-            return Err(LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::Provider { message: formatted_error, metadata: None });
         }
 
         let emit_reasoning = self.supports_reasoning(&model);
@@ -1050,10 +998,8 @@ mod tests {
     }
 
     fn test_provider(base_url: &str) -> OpenResponsesProvider {
-        let http_client = reqwest::Client::builder()
-            .no_proxy()
-            .build()
-            .expect("test client should build");
+        let http_client =
+            reqwest::Client::builder().no_proxy().build().expect("test client should build");
         OpenResponsesProvider::new_with_client(
             String::new(),
             "gpt-5".to_string(),
@@ -1087,10 +1033,7 @@ mod tests {
             Some("resp_prev_1")
         );
         assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
-        let include = payload
-            .get("include")
-            .and_then(Value::as_array)
-            .expect("include must exist");
+        let include = payload.get("include").and_then(Value::as_array).expect("include must exist");
         assert_eq!(include.len(), 2);
     }
 
@@ -1153,14 +1096,8 @@ mod tests {
             .expect("input should be an array");
 
         assert_eq!(input.len(), 1);
-        assert_eq!(
-            input[0].get("type").and_then(Value::as_str),
-            Some("compaction")
-        );
-        assert_eq!(
-            input[0].get("encrypted_content").and_then(Value::as_str),
-            Some("opaque_state")
-        );
+        assert_eq!(input[0].get("type").and_then(Value::as_str), Some("compaction"));
+        assert_eq!(input[0].get("encrypted_content").and_then(Value::as_str), Some("opaque_state"));
     }
 
     #[test]
@@ -1185,10 +1122,7 @@ mod tests {
             .expect("input should be an array");
 
         assert_eq!(input.len(), 1);
-        assert_eq!(
-            input[0].get("type").and_then(Value::as_str),
-            Some("compaction")
-        );
+        assert_eq!(input[0].get("type").and_then(Value::as_str), Some("compaction"));
     }
 
     #[test]

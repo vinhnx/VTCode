@@ -17,10 +17,8 @@ pub(crate) fn display_error(
     error: &anyhow::Error,
 ) -> Result<()> {
     renderer.line_if_not_empty(MessageStyle::Output)?;
-    renderer.line(
-        MessageStyle::Error,
-        &format!("{}: {}", category, error_message_for_user(error)),
-    )?;
+    renderer
+        .line(MessageStyle::Error, &format!("{}: {}", category, error_message_for_user(error)))?;
     // For local-inference readiness failures, surface the managed recovery path
     // (the error message already contains the exact `ollama pull`/`lms load`/
     // `/local start` command — this adds the interactive `/local` entrypoint).
@@ -276,10 +274,7 @@ mod tests {
 
     #[test]
     fn raw_body_none_when_no_metadata() {
-        let llm_err = LLMError::Provider {
-            message: "some error".to_string(),
-            metadata: None,
-        };
+        let llm_err = LLMError::Provider { message: "some error".to_string(), metadata: None };
         assert!(llm_error_raw_body(&llm_err).is_none());
     }
 }

@@ -26,11 +26,7 @@ use crate::llm::provider::Usage as ProviderUsage;
 pub fn estimate_tool_definition_tokens(tools: &[ToolDefinition]) -> u64 {
     let total_bytes: u64 = tools
         .iter()
-        .map(|tool| {
-            serde_json::to_string(tool)
-                .map(|json| json.len() as u64)
-                .unwrap_or(0)
-        })
+        .map(|tool| serde_json::to_string(tool).map(|json| json.len() as u64).unwrap_or(0))
         .sum();
     total_bytes.div_ceil(4)
 }
@@ -44,10 +40,7 @@ pub fn estimate_tool_definition_tokens(tools: &[ToolDefinition]) -> u64 {
 /// report `prompt_tokens` as a total that already includes cached tokens, so
 /// no adjustment is needed for them.
 pub fn provider_reports_exclusive_input(provider: &str) -> bool {
-    matches!(
-        provider.trim().to_ascii_lowercase().as_str(),
-        "anthropic" | "minimax"
-    )
+    matches!(provider.trim().to_ascii_lowercase().as_str(), "anthropic" | "minimax")
 }
 
 /// Build a per-turn harness `Usage` sample from raw provider usage, applying
@@ -132,10 +125,7 @@ pub fn estimate_session_costs_with_pricing(
         + creation_tokens * write_rate
         + output_tokens * output_rate;
 
-    Some(SessionCostEstimate {
-        raw_usd,
-        effective_usd,
-    })
+    Some(SessionCostEstimate { raw_usd, effective_usd })
 }
 
 #[cfg(test)]
@@ -256,10 +246,7 @@ mod tests {
         // raw: all 1000 input tokens at full rate + output.
         approx_eq(estimate.raw_usd, 1_000.0 * 0.01 + 100.0 * 0.02);
         // effective: 200 uncached @ input rate + 800 cached @ read rate + output.
-        approx_eq(
-            estimate.effective_usd,
-            200.0 * 0.01 + 800.0 * 0.001 + 100.0 * 0.02,
-        );
+        approx_eq(estimate.effective_usd, 200.0 * 0.01 + 800.0 * 0.001 + 100.0 * 0.02);
         assert!(estimate.effective_usd < estimate.raw_usd);
     }
 
@@ -339,21 +326,9 @@ mod tests {
         // 0.5 -> Ok
         assert_eq!(budget.record(0.5), BudgetStatus::Ok);
         // 0.3 -> 0.8 >= 0.75 cap -> Warning
-        assert_eq!(
-            budget.record(0.3),
-            BudgetStatus::Warning {
-                spent: 0.8,
-                max: 1.0
-            }
-        );
+        assert_eq!(budget.record(0.3), BudgetStatus::Warning { spent: 0.8, max: 1.0 });
         // 0.3 -> 1.1 >= cap -> Exceeded
-        assert_eq!(
-            budget.record(0.3),
-            BudgetStatus::Exceeded {
-                spent: 1.1,
-                max: 1.0
-            }
-        );
+        assert_eq!(budget.record(0.3), BudgetStatus::Exceeded { spent: 1.1, max: 1.0 });
         assert!((budget.spent_usd() - 1.1).abs() < 1e-9);
         assert!((budget.remaining_usd().unwrap() - 0.0).abs() < 1e-9);
     }
@@ -370,17 +345,11 @@ mod tests {
         // Unlimited.
         assert_eq!(BudgetStatus::classify(999.0, None, 0.75), BudgetStatus::Ok);
         // Under warning.
-        assert_eq!(
-            BudgetStatus::classify(0.5, Some(1.0), 0.75),
-            BudgetStatus::Ok
-        );
+        assert_eq!(BudgetStatus::classify(0.5, Some(1.0), 0.75), BudgetStatus::Ok);
         // At/above warning, within cap.
         assert_eq!(
             BudgetStatus::classify(0.8, Some(1.0), 0.75),
-            BudgetStatus::Warning {
-                spent: 0.8,
-                max: 1.0
-            }
+            BudgetStatus::Warning { spent: 0.8, max: 1.0 }
         );
         // Exactly at cap is NOT exceeded (strict `>`), matching runner semantics.
         assert!(!BudgetStatus::classify(1.0, Some(1.0), 0.75).is_exceeded());
@@ -389,10 +358,7 @@ mod tests {
         // Configurable threshold.
         assert_eq!(
             BudgetStatus::classify(0.6, Some(1.0), 0.5),
-            BudgetStatus::Warning {
-                spent: 0.6,
-                max: 1.0
-            }
+            BudgetStatus::Warning { spent: 0.6, max: 1.0 }
         );
     }
 }
@@ -444,15 +410,9 @@ impl BudgetStatus {
             return BudgetStatus::Ok;
         };
         if spent_usd > max {
-            BudgetStatus::Exceeded {
-                spent: spent_usd,
-                max,
-            }
+            BudgetStatus::Exceeded { spent: spent_usd, max }
         } else if spent_usd >= warning_threshold * max {
-            BudgetStatus::Warning {
-                spent: spent_usd,
-                max,
-            }
+            BudgetStatus::Warning { spent: spent_usd, max }
         } else {
             BudgetStatus::Ok
         }
@@ -492,11 +452,7 @@ impl SessionBudget {
     /// `agent.harness.budget_warning_threshold`).
     #[must_use]
     pub fn with_warning_threshold(max_usd: Option<f64>, warning_threshold: f64) -> Self {
-        Self {
-            max_usd,
-            warning_threshold,
-            spent_usd: 0.0,
-        }
+        Self { max_usd, warning_threshold, spent_usd: 0.0 }
     }
 
     /// Record a turn's spend and return the resulting status.

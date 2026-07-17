@@ -24,11 +24,7 @@ const SNAPSHOT_DIR: &str = "tests/snapshots/tool_schemas";
 fn generate_tool_schema_hash(tool_name: &str, schema: &Value) -> Result<String> {
     let canonical = canonicalize_json(schema)?;
 
-    Ok(format!(
-        "{}-{}",
-        tool_name,
-        calculate_sha256(canonical.as_bytes())
-    ))
+    Ok(format!("{}-{}", tool_name, calculate_sha256(canonical.as_bytes())))
 }
 
 fn canonicalize_json(value: &Value) -> Result<String> {
@@ -269,10 +265,7 @@ fn validate_encoding_invariants(schema: &Value) -> Result<()> {
     }
 
     // Check for control characters that shouldn't be in schemas
-    if schema_str
-        .chars()
-        .any(|c| c.is_control() && c != '\n' && c != '\t')
-    {
+    if schema_str.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
         anyhow::bail!("Tool schema contains unexpected control characters");
     }
 
@@ -307,10 +300,7 @@ mod tests {
         let schema = json!({"name": "test", "description": "Test tool"});
         let hash = generate_tool_schema_hash("test", &schema).unwrap();
 
-        assert_eq!(
-            hash,
-            "test-364379e79bc97f346a9a8298dabe07c8f0ca5913c791bdbd93fe0d55b87d945f"
-        );
+        assert_eq!(hash, "test-364379e79bc97f346a9a8298dabe07c8f0ca5913c791bdbd93fe0d55b87d945f");
     }
 
     #[test]
@@ -407,12 +397,7 @@ mod tests {
 
         let result = validate_encoding_invariants(&schema_with_spaces);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("leading/trailing whitespace")
-        );
+        assert!(result.unwrap_err().to_string().contains("leading/trailing whitespace"));
     }
 
     #[test]
@@ -432,10 +417,7 @@ mod tests {
         let schemas = snapshot_current_tool_schemas().unwrap();
 
         for (tool_name, schema) in &schemas {
-            assert!(
-                schema.get("name").is_some(),
-                "Tool {tool_name} missing 'name' field"
-            );
+            assert!(schema.get("name").is_some(), "Tool {tool_name} missing 'name' field");
             assert!(
                 schema.get("description").is_some(),
                 "Tool {tool_name} missing 'description' field"
@@ -453,10 +435,7 @@ mod tests {
 
         for (tool_name, schema) in &schemas {
             let params = schema.get("parameters").expect("missing parameters");
-            assert!(
-                params.get("type").is_some(),
-                "Tool {tool_name} parameters missing 'type'"
-            );
+            assert!(params.get("type").is_some(), "Tool {tool_name} parameters missing 'type'");
             assert!(
                 params.get("properties").is_some(),
                 "Tool {tool_name} parameters missing 'properties'"
@@ -555,10 +534,7 @@ mod integration_tests {
         let _registry2 = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         // Basic consistency check: registries should be creatable
-        assert!(
-            temp_dir.path().exists(),
-            "Tool registries should be consistently creatable"
-        );
+        assert!(temp_dir.path().exists(), "Tool registries should be consistently creatable");
     }
 
     #[test]
@@ -572,11 +548,7 @@ mod integration_tests {
 
         for (tool_name, schema) in schemas {
             if let Some(desc) = schema.get("description").and_then(|v| v.as_str()) {
-                assert_eq!(
-                    desc.trim(),
-                    desc,
-                    "Tool '{tool_name}' description should be trimmed"
-                );
+                assert_eq!(desc.trim(), desc, "Tool '{tool_name}' description should be trimmed");
             }
         }
     }
@@ -591,10 +563,7 @@ mod integration_tests {
                 .get("parameters")
                 .unwrap_or_else(|| panic!("Tool '{tool_name}' missing parameters"));
 
-            assert!(
-                params.get("type").is_some(),
-                "Tool '{tool_name}' parameters missing type"
-            );
+            assert!(params.get("type").is_some(), "Tool '{tool_name}' parameters missing type");
 
             assert!(
                 params.get("properties").is_some(),

@@ -69,10 +69,8 @@ pub(crate) fn interpret_user_prompt(
         if let Some(decision) = common.decision.as_deref()
             && decision.eq_ignore_ascii_case("block")
         {
-            if let Some(reason) = common
-                .decision_reason
-                .clone()
-                .and_then(|reason| trimmed_non_empty(&reason))
+            if let Some(reason) =
+                common.decision_reason.clone().and_then(|reason| trimmed_non_empty(&reason))
             {
                 outcome.allow_prompt = false;
                 outcome.block_reason = Some(reason);
@@ -86,20 +84,14 @@ pub(crate) fn interpret_user_prompt(
 
         if let Some(Value::Object(spec)) = common.hook_specific
             && matches_hook_event(&spec, "UserPromptSubmit")
-            && let Some(additional) = spec
-                .get("additionalContext")
-                .and_then(|value| value.as_str())
+            && let Some(additional) = spec.get("additionalContext").and_then(|value| value.as_str())
             && !additional.trim().is_empty()
         {
-            outcome
-                .additional_context
-                .push(additional.trim().to_owned());
+            outcome.additional_context.push(additional.trim().to_owned());
         }
 
         if !common.suppress_stdout
-            && let Some(text) = json
-                .get("additional_context")
-                .and_then(|value| value.as_str())
+            && let Some(text) = json.get("additional_context").and_then(|value| value.as_str())
             && !text.trim().is_empty()
         {
             outcome.additional_context.push(text.trim().to_owned());
@@ -118,9 +110,7 @@ pub(crate) fn interpret_user_prompt(
                 command.command
             )));
         } else if allow_plain_success_stdout(result, quiet_success_output) {
-            outcome
-                .additional_context
-                .push(result.stdout.trim().to_owned());
+            outcome.additional_context.push(result.stdout.trim().to_owned());
         }
     }
 }

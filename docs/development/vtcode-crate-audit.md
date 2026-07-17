@@ -96,7 +96,7 @@
 - vtcode-bash-runner optionally depends on exec-events; it already depends on commons
 - Moving exec-events into `vtcode-commons::exec_events` module would eliminate a crate and resolve the dual-Usage conflict
 
-**Merged location**: `vtcode-commons/src/exec_events/` module
+**Merged location**: `crates/common/vtcode-commons/src/exec_events/` module
 
 **Risk**: Low. Pure schema types with no complex logic. The u32->u64 Usage migration needs careful type width audit.
 
@@ -114,7 +114,7 @@
 - vtcode-indexer implements its own `MarkdownIndexStorage` instead of reusing this -- the consolidation in MERGE 1 would bring this into the combined search crate anyway
 - `SimpleCache` (feature-gated) overlaps conceptually with vtcode-core's `UnifiedCache`
 
-**Merged location**: `vtcode-commons/src/markdown_store/` module
+**Merged location**: `crates/common/vtcode-commons/src/markdown_store/` module
 
 **Risk**: Low. Self-contained, no complex dependencies.
 
@@ -272,9 +272,9 @@ The following merges from this audit have been implemented:
 
 ### What changed:
 - **vtcode-process-hardening**: Moved to `src/process_hardening.rs` in root binary crate
-- **vtcode-terminal-detection**: Moved to `vtcode-commons/src/terminal_detection.rs`
-- **vtcode-vim**: Moved to `vtcode-ui/src/vim/` module
-- **vtcode-pods**: Moved to `vtcode-core/src/pods/` module
+- **vtcode-terminal-detection**: Moved to `crates/common/vtcode-commons/src/terminal_detection.rs`
+- **vtcode-vim**: Moved to `crates/codegen/vtcode-ui/src/vim/` module
+- **vtcode-pods**: Moved to `crates/codegen/vtcode-core/src/pods/` module
 - **vtcode-tool-types**: Merged into `vtcode-commons` (tool_types, model_family modules)
 - **vtcode-file-search + vtcode-markdown-store**: Merged into vtcode-indexer (prior session)
 

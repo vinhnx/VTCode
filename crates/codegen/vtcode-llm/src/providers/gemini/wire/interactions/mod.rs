@@ -104,10 +104,7 @@ pub struct InteractionTool {
 
 impl InteractionTool {
     pub fn built_in(tool_type: &str, config: Option<&Value>) -> Self {
-        let extra = config
-            .and_then(Value::as_object)
-            .cloned()
-            .unwrap_or_default();
+        let extra = config.and_then(Value::as_object).cloned().unwrap_or_default();
         Self {
             tool_type: tool_type.to_string(),
             name: None,
@@ -137,10 +134,7 @@ pub struct InteractionToolChoice {
 
 impl InteractionToolChoice {
     pub fn new(mode: impl Into<String>) -> Self {
-        Self {
-            mode: mode.into(),
-            tools: None,
-        }
+        Self { mode: mode.into(), tools: None }
     }
 }
 
@@ -177,11 +171,9 @@ impl From<InteractionGenerationConfig> for GenerationConfig {
             top_p: value.top_p,
             max_output_tokens: value.max_output_tokens,
             stop_sequences: value.stop_sequences,
-            thinking_config: value
-                .thinking_level
-                .map(|thinking_level| super::ThinkingConfig {
-                    thinking_level: Some(thinking_level),
-                }),
+            thinking_config: value.thinking_level.map(|thinking_level| super::ThinkingConfig {
+                thinking_level: Some(thinking_level),
+            }),
             ..Default::default()
         }
     }

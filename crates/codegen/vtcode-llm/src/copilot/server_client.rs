@@ -35,33 +35,19 @@ pub async fn list_available_models(
         let mut writer = stdin;
         let mut reader = BufReader::new(stdout);
 
-        send_request(
-            &mut writer,
-            1,
-            "ping",
-            Some(json!({ "message": "vtcode model discovery" })),
-        )
-        .await
-        .context("copilot cli ping")?;
-        let ping = read_response(&mut reader, 1)
+        send_request(&mut writer, 1, "ping", Some(json!({ "message": "vtcode model discovery" })))
             .await
             .context("copilot cli ping")?;
-        let protocol_version = ping
-            .get("protocolVersion")
-            .and_then(Value::as_i64)
-            .unwrap_or(0);
+        let ping = read_response(&mut reader, 1).await.context("copilot cli ping")?;
+        let protocol_version = ping.get("protocolVersion").and_then(Value::as_i64).unwrap_or(0);
         if protocol_version <= 0 {
-            return Err(anyhow!(
-                "copilot cli server did not report a protocol version"
-            ));
+            return Err(anyhow!("copilot cli server did not report a protocol version"));
         }
 
         send_request(&mut writer, 2, "models.list", None)
             .await
             .context("copilot cli models.list")?;
-        let payload = read_response(&mut reader, 2)
-            .await
-            .context("copilot cli models.list")?;
+        let payload = read_response(&mut reader, 2).await.context("copilot cli models.list")?;
         let models = payload
             .get("models")
             .and_then(Value::as_array)
@@ -144,10 +130,7 @@ where
         .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
         .await
         .context("copilot cli write header failed")?;
-    writer
-        .write_all(&payload)
-        .await
-        .context("copilot cli write payload failed")?;
+    writer.write_all(&payload).await.context("copilot cli write payload failed")?;
     writer.flush().await.context("copilot cli flush failed")?;
     Ok(())
 }
@@ -164,14 +147,8 @@ async fn read_response(reader: &mut BufReader<ChildStdout>, expected_id: i64) ->
         }
 
         if let Some(error) = object.get("error") {
-            let code = error
-                .get("code")
-                .and_then(Value::as_i64)
-                .unwrap_or_default();
-            let detail = error
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown error");
+            let code = error.get("code").and_then(Value::as_i64).unwrap_or_default();
+            let detail = error.get("message").and_then(Value::as_str).unwrap_or("unknown error");
             return Err(anyhow!("copilot cli rpc error {code}: {detail}"));
         }
 
@@ -199,10 +176,7 @@ async fn read_message(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
     let mut content_length = None;
     loop {
         let mut line = String::new();
-        let read = reader
-            .read_line(&mut line)
-            .await
-            .context("copilot cli header read failed")?;
+        let read = reader.read_line(&mut line).await.context("copilot cli header read failed")?;
         if read == 0 {
             return Err(anyhow!("copilot cli server closed the stdio stream"));
         }

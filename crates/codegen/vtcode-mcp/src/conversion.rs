@@ -5,7 +5,7 @@
 //! [`McpToolInfo`](crate::types::McpToolInfo)) and have to be projected into the
 //! unified `ToolDefinition` so the runloop can hand them to whichever provider
 //! formatter is active. Historically this conversion happened inline inside the
-//! core registry (`vtcode-core/src/tools/registry/mcp_facade.rs`); this module
+//! core registry (`crates/codegen/vtcode-core/src/tools/registry/mcp_facade.rs`); this module
 //! factors it into a named, testable adapter.
 //!
 //! See *The Hitchhiker's Guide to Agentic AI* §18.4.5 for the underlying MCP
@@ -21,13 +21,13 @@ use vtcode_llm::provider::ToolDefinition;
 /// built-in tools in the unified catalog.
 ///
 /// The separator mirrors the runtime convention used in
-/// `vtcode-core/src/tools/mcp.rs::build_mcp_registration` (i.e. `mcp::provider::tool`)
+/// `crates/codegen/vtcode-core/src/tools/mcp.rs::build_mcp_registration` (i.e. `mcp::provider::tool`)
 /// so the tool catalog stays consistent end-to-end.
 pub const DEFAULT_MCP_TOOL_NAME_PREFIX: &str = "mcp";
 
 /// Separator used between `prefix`, `provider`, and `tool_name` segments in the
 /// canonical MCP tool name. Kept in sync with the parser in
-/// `vtcode-core/src/tools/mcp.rs::parse_canonical_mcp_tool_name`.
+/// `crates/codegen/vtcode-core/src/tools/mcp.rs::parse_canonical_mcp_tool_name`.
 pub const MCP_TOOL_NAME_SEPARATOR: &str = "::";
 
 /// Convert an MCP tool descriptor into the canonical `ToolDefinition`.

@@ -96,21 +96,14 @@ impl McpEvent {
     /// Get the compact title for this event
     #[cfg(test)]
     pub fn compact_title(&self) -> String {
-        format!(
-            "[{}] MCP {} `{}`",
-            self.status.symbol(),
-            self.provider,
-            self.method
-        )
+        format!("[{}] MCP {} `{}`", self.status.symbol(), self.provider, self.method)
     }
 
     /// Get the detailed title for this event
     #[cfg(test)]
     pub fn detailed_title(&self) -> String {
-        let duration = self
-            .duration_ms
-            .map(|ms| format!(" (duration: {ms}ms)"))
-            .unwrap_or_default();
+        let duration =
+            self.duration_ms.map(|ms| format!(" (duration: {ms}ms)")).unwrap_or_default();
 
         format!(
             "[{}] MCP {} `{}` - {}{}",
@@ -207,21 +200,13 @@ impl McpPanelState {
             return None;
         }
 
-        let pending_count = self
-            .events
-            .iter()
-            .filter(|e| e.status == McpEventStatus::Pending)
-            .count();
+        let pending_count =
+            self.events.iter().filter(|e| e.status == McpEventStatus::Pending).count();
 
         if pending_count > 0 {
-            let latest_pending = self
-                .events
-                .iter()
-                .find(|e| e.status == McpEventStatus::Pending)?;
-            Some(format!(
-                "[~] MCP {} `{}`",
-                latest_pending.provider, latest_pending.method
-            ))
+            let latest_pending =
+                self.events.iter().find(|e| e.status == McpEventStatus::Pending)?;
+            Some(format!("[~] MCP {} `{}`", latest_pending.provider, latest_pending.method))
         } else {
             None
         }
@@ -287,10 +272,7 @@ mod tests {
         panel.add_event(event);
 
         assert_eq!(panel.event_count(), 1);
-        assert_eq!(
-            panel.compact_status(),
-            Some("[~] MCP provider `method`".to_string())
-        );
+        assert_eq!(panel.compact_status(), Some("[~] MCP provider `method`".to_string()));
     }
 
     #[test]

@@ -57,9 +57,7 @@ impl TurnHistoryCheckpoint {
         use std::hash::{Hash, Hasher};
 
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        serde_json::to_string(history)
-            .unwrap_or_default()
-            .hash(&mut hasher);
+        serde_json::to_string(history).unwrap_or_default().hash(&mut hasher);
         hasher.finish()
     }
 }
@@ -132,9 +130,7 @@ pub(super) fn append_transient_turn_notes(
     let mut transient_system_notes = Vec::with_capacity(2);
 
     if let Some(note) = {
-        let stale_paths = tool_registry
-            .edited_file_monitor_ref()
-            .stale_tracked_paths();
+        let stale_paths = tool_registry.edited_file_monitor_ref().stale_tracked_paths();
         build_tracked_file_freshness_note(workspace, &stale_paths)
     } {
         transient_system_notes.push(note.clone());
@@ -172,9 +168,7 @@ pub(super) fn latest_assistant_result_text(
 pub(super) fn take_pending_resumed_user_prompt(
     history: &mut Vec<vtcode_core::llm::provider::Message>,
 ) -> Option<String> {
-    let user_index = history
-        .iter()
-        .rposition(|message| message.role == MessageRole::User)?;
+    let user_index = history.iter().rposition(|message| message.role == MessageRole::User)?;
     if history
         .iter()
         .skip(user_index + 1)

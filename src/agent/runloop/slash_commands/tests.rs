@@ -118,9 +118,7 @@ async fn share_defaults_to_json_and_html_export() {
 
     assert!(matches!(
         outcome,
-        SlashCommandOutcome::ShareLog {
-            format: SessionLogExportFormat::Both
-        }
+        SlashCommandOutcome::ShareLog { format: SessionLogExportFormat::Both }
     ));
 }
 
@@ -135,9 +133,7 @@ async fn share_alias_routes_html_export() {
 
     assert!(matches!(
         outcome,
-        SlashCommandOutcome::ShareLog {
-            format: SessionLogExportFormat::Html
-        }
+        SlashCommandOutcome::ShareLog { format: SessionLogExportFormat::Html }
     ));
 }
 
@@ -297,9 +293,7 @@ async fn agent_command_opens_active_agents_inspector() {
 
     assert!(matches!(
         outcome,
-        SlashCommandOutcome::ManageAgents {
-            action: AgentManagerAction::Threads
-        }
+        SlashCommandOutcome::ManageAgents { action: AgentManagerAction::Threads }
     ));
 }
 
@@ -355,10 +349,7 @@ async fn agents_create_and_edit_commands_parse_guided_forms() {
     assert!(matches!(
         create_default,
         SlashCommandOutcome::ManageAgents {
-            action: AgentManagerAction::Create {
-                scope: None,
-                name: None,
-            }
+            action: AgentManagerAction::Create { scope: None, name: None }
         }
     ));
 
@@ -394,9 +385,7 @@ async fn agents_create_and_edit_commands_parse_guided_forms() {
         .expect("agents edit should parse");
     assert!(matches!(
         edit_default,
-        SlashCommandOutcome::ManageAgents {
-            action: AgentManagerAction::Edit { name: None }
-        }
+        SlashCommandOutcome::ManageAgents { action: AgentManagerAction::Edit { name: None } }
     ));
 
     let edit_named = handle_slash_command("agents edit reviewer", &mut renderer, &workspace)
@@ -420,9 +409,7 @@ async fn subprocesses_command_supports_toggle_and_refresh() {
         .expect("toggle command should parse");
     assert!(matches!(
         toggle,
-        SlashCommandOutcome::ManageSubprocesses {
-            action: SubprocessManagerAction::ToggleDefault
-        }
+        SlashCommandOutcome::ManageSubprocesses { action: SubprocessManagerAction::ToggleDefault }
     ));
 
     let refresh = handle_slash_command("subprocesses refresh", &mut renderer, &workspace)
@@ -430,9 +417,7 @@ async fn subprocesses_command_supports_toggle_and_refresh() {
         .expect("refresh command should parse");
     assert!(matches!(
         refresh,
-        SlashCommandOutcome::ManageSubprocesses {
-            action: SubprocessManagerAction::Refresh
-        }
+        SlashCommandOutcome::ManageSubprocesses { action: SubprocessManagerAction::Refresh }
     ));
 }
 
@@ -498,10 +483,7 @@ async fn title_command_is_interactive_only() {
         .await
         .expect("title should parse");
 
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::StartTerminalTitleSetup
-    ));
+    assert!(matches!(outcome, SlashCommandOutcome::StartTerminalTitleSetup));
 }
 
 #[tokio::test]
@@ -512,10 +494,7 @@ async fn interactive_mode_commands_parse_to_expected_outcomes() {
     let suggest = handle_slash_command("suggest", &mut renderer, &workspace)
         .await
         .expect("suggest should parse");
-    assert!(matches!(
-        suggest,
-        SlashCommandOutcome::TriggerPromptSuggestions
-    ));
+    assert!(matches!(suggest, SlashCommandOutcome::TriggerPromptSuggestions));
 
     let tasks = handle_slash_command("tasks", &mut renderer, &workspace)
         .await
@@ -530,10 +509,7 @@ async fn interactive_mode_commands_parse_to_expected_outcomes() {
     let mode_no_args = handle_slash_command("mode", &mut renderer, &workspace)
         .await
         .expect("mode should parse");
-    assert!(matches!(
-        mode_no_args,
-        SlashCommandOutcome::StartModePalette
-    ));
+    assert!(matches!(mode_no_args, SlashCommandOutcome::StartModePalette));
 
     let mode_with_arg = handle_slash_command("mode auto", &mut renderer, &workspace)
         .await
@@ -554,10 +530,7 @@ async fn plan_command_still_routes_to_planning_workflow() {
         .expect("plan should parse");
     assert!(matches!(
         toggle,
-        SlashCommandOutcome::TogglePlanningWorkflow {
-            enable: None,
-            prompt: None
-        }
+        SlashCommandOutcome::TogglePlanningWorkflow { enable: None, prompt: None }
     ));
 
     let with_prompt = handle_slash_command("plan implement auth checks", &mut renderer, &workspace)
@@ -654,13 +627,10 @@ async fn prompt_template_invocation_replaces_editor_input() {
     .expect("template");
 
     let mut renderer = renderer_for_tests();
-    let outcome = handle_slash_command(
-        "review-template src/lib.rs main",
-        &mut renderer,
-        workspace.path(),
-    )
-    .await
-    .expect("review template should parse");
+    let outcome =
+        handle_slash_command("review-template src/lib.rs main", &mut renderer, workspace.path())
+            .await
+            .expect("review template should parse");
 
     assert!(matches!(
         outcome,
@@ -783,13 +753,10 @@ async fn unknown_slash_command_falls_back_to_normal_prompt_submission() {
     let workspace = tempfile::TempDir::new().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let outcome = handle_slash_command(
-        "totally-unknown keep this raw",
-        &mut renderer,
-        workspace.path(),
-    )
-    .await
-    .expect("unknown slash should pass through");
+    let outcome =
+        handle_slash_command("totally-unknown keep this raw", &mut renderer, workspace.path())
+            .await
+            .expect("unknown slash should pass through");
 
     assert!(matches!(
         outcome,
@@ -819,10 +786,7 @@ async fn init_slash_command_parses_force_flag() {
         .await
         .expect("init should parse");
 
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::InitializeWorkspace { force: true }
-    ));
+    assert!(matches!(outcome, SlashCommandOutcome::InitializeWorkspace { force: true }));
 }
 
 #[tokio::test]
@@ -851,14 +815,10 @@ use super::LocalServerAction;
 async fn local_no_args_returns_interactive() {
     let mut renderer = renderer_for_tests();
     let workspace = std::path::PathBuf::from("/tmp");
-    let outcome = handle_slash_command("local", &mut renderer, &workspace)
-        .await
-        .unwrap();
+    let outcome = handle_slash_command("local", &mut renderer, &workspace).await.unwrap();
     assert!(matches!(
         outcome,
-        SlashCommandOutcome::ManageLocalServer {
-            action: LocalServerAction::Interactive
-        }
+        SlashCommandOutcome::ManageLocalServer { action: LocalServerAction::Interactive }
     ));
 }
 
@@ -866,9 +826,7 @@ async fn local_no_args_returns_interactive() {
 async fn local_status_all() {
     let mut renderer = renderer_for_tests();
     let workspace = std::path::PathBuf::from("/tmp");
-    let outcome = handle_slash_command("local status", &mut renderer, &workspace)
-        .await
-        .unwrap();
+    let outcome = handle_slash_command("local status", &mut renderer, &workspace).await.unwrap();
     assert!(matches!(
         outcome,
         SlashCommandOutcome::ManageLocalServer {
@@ -964,9 +922,7 @@ async fn local_configure_provider() {
 async fn local_provider_name_only() {
     let mut renderer = renderer_for_tests();
     let workspace = std::path::PathBuf::from("/tmp");
-    let outcome = handle_slash_command("local ollama", &mut renderer, &workspace)
-        .await
-        .unwrap();
+    let outcome = handle_slash_command("local ollama", &mut renderer, &workspace).await.unwrap();
     assert!(matches!(
         outcome,
         SlashCommandOutcome::ManageLocalServer {
@@ -998,8 +954,6 @@ async fn local_provider_then_action() {
 async fn local_help_renders_usage() {
     let mut renderer = renderer_for_tests();
     let workspace = std::path::PathBuf::from("/tmp");
-    let outcome = handle_slash_command("local help", &mut renderer, &workspace)
-        .await
-        .unwrap();
+    let outcome = handle_slash_command("local help", &mut renderer, &workspace).await.unwrap();
     assert!(matches!(outcome, SlashCommandOutcome::Handled));
 }

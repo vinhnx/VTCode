@@ -21,12 +21,7 @@ async fn is_time_server_available() -> bool {
     match Command::new("uvx").arg("--help").output().await {
         Ok(_) => {
             // Try to check if mcp-server-time is available
-            match Command::new("uvx")
-                .arg("mcp-server-time")
-                .arg("--help")
-                .output()
-                .await
-            {
+            match Command::new("uvx").arg("mcp-server-time").arg("--help").output().await {
                 Ok(output) => output.status.success(),
                 Err(_) => false,
             }
@@ -122,31 +117,17 @@ mod tests {
 
         // Look for the get_current_time tool
         let time_tool = tools.iter().find(|tool| tool.name == "get_current_time");
-        assert!(
-            time_tool.is_some(),
-            "get_current_time tool should be available"
-        );
+        assert!(time_tool.is_some(), "get_current_time tool should be available");
 
         // Execute the get_current_time tool
-        let result = mcp_client
-            .execute_tool("get_current_time", serde_json::json!({}))
-            .await;
-        assert!(
-            result.is_ok(),
-            "get_current_time tool should execute successfully"
-        );
+        let result = mcp_client.execute_tool("get_current_time", serde_json::json!({})).await;
+        assert!(result.is_ok(), "get_current_time tool should execute successfully");
 
         let result_value = result.unwrap();
-        assert!(
-            result_value.get("time").is_some(),
-            "Result should contain time field"
-        );
+        assert!(result_value.get("time").is_some(), "Result should contain time field");
 
         println!("MCP time server integration test passed!");
-        println!(
-            "Current time: {}",
-            result_value["time"].as_str().unwrap_or("unknown")
-        );
+        println!("Current time: {}", result_value["time"].as_str().unwrap_or("unknown"));
     }
 
     #[tokio::test]
@@ -202,17 +183,12 @@ max_concurrent_requests = 2
         assert!(registry.mcp_client().is_none());
 
         // Create a mock MCP client config
-        let mcp_config = McpClientConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let mcp_config = McpClientConfig { enabled: true, ..Default::default() };
 
         let mcp_client = McpClient::new(mcp_config);
 
         // Add MCP client to registry
-        registry = registry
-            .with_mcp_client(std::sync::Arc::new(mcp_client))
-            .await;
+        registry = registry.with_mcp_client(std::sync::Arc::new(mcp_client)).await;
 
         // Should now have MCP client
         assert!(registry.mcp_client().is_some());
@@ -319,10 +295,7 @@ max_concurrent_requests = 1
         };
 
         assert_eq!(provider_config.env.len(), 2);
-        assert_eq!(
-            provider_config.env.get("API_KEY"),
-            Some(&"secret_key".to_string())
-        );
+        assert_eq!(provider_config.env.get("API_KEY"), Some(&"secret_key".to_string()));
         assert_eq!(provider_config.env.get("DEBUG"), Some(&"true".to_string()));
     }
 
@@ -369,29 +342,20 @@ max_concurrent_requests = 1
         let tools = mcp_client.list_tools().await.unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "echo");
-        assert_eq!(
-            mcp_client.provider_for_tool("echo").as_deref(),
-            Some("mock")
-        );
+        assert_eq!(mcp_client.provider_for_tool("echo").as_deref(), Some("mock"));
 
         let result = mcp_client
             .execute_tool("echo", serde_json::json!({ "message": "hello" }))
             .await
             .unwrap();
 
-        assert_eq!(
-            result.get("provider").and_then(|v| v.as_str()),
-            Some("mock")
-        );
+        assert_eq!(result.get("provider").and_then(|v| v.as_str()), Some("mock"));
         assert_eq!(result.get("tool").and_then(|v| v.as_str()), Some("echo"));
         let content = result
             .get("content")
             .and_then(|v| v.as_array())
             .expect("tool result should contain content");
-        let first_text = content
-            .first()
-            .and_then(|v| v.get("text"))
-            .and_then(|v| v.as_str());
+        let first_text = content.first().and_then(|v| v.get("text")).and_then(|v| v.as_str());
         assert_eq!(first_text, Some("echo:hello"));
 
         mcp_client.shutdown().await.unwrap();
@@ -467,10 +431,7 @@ max_concurrent_requests = 1
             .get("content")
             .and_then(|v| v.as_array())
             .expect("tool result should contain content");
-        let first_text = content
-            .first()
-            .and_then(|v| v.get("text"))
-            .and_then(|v| v.as_str());
+        let first_text = content.first().and_then(|v| v.get("text")).and_then(|v| v.as_str());
         assert_eq!(first_text, Some("echo:again"));
     }
 

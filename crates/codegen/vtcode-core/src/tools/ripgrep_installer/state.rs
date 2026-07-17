@@ -51,12 +51,7 @@ impl InstallationCache {
     }
 
     fn save(&self) -> Result<()> {
-        save_json_cache(
-            &Self::state_dir(),
-            &Self::cache_path(),
-            self,
-            "ripgrep installation cache",
-        )
+        save_json_cache(&Self::state_dir(), &Self::cache_path(), self, "ripgrep installation cache")
     }
 
     pub(super) fn mark_failed(method: &str, reason: &str) {

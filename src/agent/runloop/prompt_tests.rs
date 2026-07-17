@@ -51,9 +51,7 @@ async fn test_prompt_refinement_applies_to_gemini_when_flag_disabled() {
 fn test_should_attempt_refinement_skips_short_inputs() {
     assert!(!should_attempt_refinement("hi"));
     assert!(!should_attempt_refinement("add docs"));
-    assert!(should_attempt_refinement(
-        "summarize the latest commit changes"
-    ));
+    assert!(should_attempt_refinement("summarize the latest commit changes"));
 }
 
 #[test]

@@ -162,11 +162,7 @@ impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
     /// Convert a [`ProviderConfig`] into the factory configuration while
     /// applying workspace-aware prompt cache resolution and telemetry hooks.
     pub fn apply_to(&self, source: &dyn ProviderConfig) -> crate::factory_types::ProviderConfig {
-        HookedConfigProjectionCtx {
-            source,
-            hooks: self,
-        }
-        .project_factory_config()
+        HookedConfigProjectionCtx { source, hooks: self }.project_factory_config()
     }
 
     fn enrich_prompt_cache(&self, prompt_cache: &mut PromptCachingConfig) {
@@ -179,10 +175,7 @@ impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
 
         // Set the prompt cache dir (borrows from `resolved`) then move `resolved` into the event
         prompt_cache.cache_dir = resolved.to_string_lossy().into_owned();
-        self.record_event(AdapterEvent::PromptCacheResolved {
-            scope,
-            cache_dir: resolved,
-        });
+        self.record_event(AdapterEvent::PromptCacheResolved { scope, cache_dir: resolved });
 
         if !is_abs {
             let error = Error::msg(format!(
@@ -199,11 +192,7 @@ impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
     }
 
     fn capture_error_message(&self, error: &Error) -> String {
-        let message = self
-            .hooks
-            .error_formatter()
-            .format_error(error)
-            .into_owned();
+        let message = self.hooks.error_formatter().format_error(error).into_owned();
         let _ = self.hooks.error_reporter().capture(error);
         message
     }
@@ -212,18 +201,12 @@ impl<'a, Hooks: AdapterHooksProvider> AdapterHooks<'a, Hooks> {
         let message = self.capture_error_message(&error);
         // Best-effort recording of the formatted message; ignore additional
         // failures to avoid recursive error handling loops.
-        let _ = self
-            .hooks
-            .telemetry()
-            .record(&AdapterEvent::AdapterError { message });
+        let _ = self.hooks.telemetry().record(&AdapterEvent::AdapterError { message });
     }
 
     fn handle_error(&self, error: Error) {
         let message = self.capture_error_message(&error);
-        let _ = self
-            .hooks
-            .telemetry()
-            .record(&AdapterEvent::TelemetryFailure { message });
+        let _ = self.hooks.telemetry().record(&AdapterEvent::TelemetryFailure { message });
     }
 }
 
@@ -441,11 +424,7 @@ mod tests {
         std::fs::create_dir_all(&cache).unwrap();
 
         let hooks = TestHooks {
-            paths: TestPaths {
-                root,
-                config,
-                cache,
-            },
+            paths: TestPaths { root, config, cache },
             telemetry: RecordingTelemetry::default(),
             reporter: RecordingReporter::default(),
             formatter: RecordingFormatter::default(),
@@ -484,11 +463,7 @@ mod tests {
         std::fs::create_dir_all(&cache).unwrap();
 
         let hooks = FailingHooks {
-            paths: TestPaths {
-                root,
-                config,
-                cache,
-            },
+            paths: TestPaths { root, config, cache },
             telemetry: {
                 let t = FailingTelemetry::default();
                 *t.fail_next.lock().unwrap() = true;
@@ -597,10 +572,7 @@ mod tests {
             model: Some("gpt-5".to_string()),
             prompt_cache: Some(PromptCachingConfig::default()),
             timeouts: Some(TimeoutsConfig::default()),
-            openai: Some(OpenAIConfig {
-                websocket_mode: true,
-                ..OpenAIConfig::default()
-            }),
+            openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
             anthropic: Some(AnthropicConfig {
                 count_tokens_enabled: true,
                 ..AnthropicConfig::default()
@@ -625,10 +597,7 @@ mod tests {
     fn owned_provider_config_keeps_provider_specific_fields() {
         let config = OwnedProviderConfig::new()
             .with_timeouts(TimeoutsConfig::default())
-            .with_openai(OpenAIConfig {
-                websocket_mode: true,
-                ..OpenAIConfig::default()
-            })
+            .with_openai(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() })
             .with_anthropic(AnthropicConfig {
                 count_tokens_enabled: true,
                 ..AnthropicConfig::default()
@@ -636,10 +605,7 @@ mod tests {
 
         let adapted = as_factory_config(&config);
 
-        assert_eq!(
-            adapted.timeouts.as_ref().unwrap().streaming_ceiling_seconds,
-            600
-        );
+        assert_eq!(adapted.timeouts.as_ref().unwrap().streaming_ceiling_seconds, 600);
         assert!(adapted.openai.as_ref().unwrap().websocket_mode);
         assert!(adapted.anthropic.as_ref().unwrap().count_tokens_enabled);
     }

@@ -124,27 +124,15 @@ pub async fn handle_auto_task_command(
         .context("Failed to execute autonomous task after retries")?;
 
     if !result.summary.trim().is_empty() {
-        println!(
-            "{} {}",
-            style("[SUMMARY]").green().bold(),
-            result.summary.trim()
-        );
+        println!("{} {}", style("[SUMMARY]").green().bold(), result.summary.trim());
     }
 
     if !result.modified_files.is_empty() {
-        println!(
-            "{} {}",
-            style("[FILES]").cyan().bold(),
-            result.modified_files.join(", ")
-        );
+        println!("{} {}", style("[FILES]").cyan().bold(), result.modified_files.join(", "));
     }
 
     if !result.executed_commands.is_empty() {
-        println!(
-            "{} {}",
-            style("[COMMANDS]").cyan().bold(),
-            result.executed_commands.join(", ")
-        );
+        println!("{} {}", style("[COMMANDS]").cyan().bold(), result.executed_commands.join(", "));
     }
 
     if !result.warnings.is_empty() {

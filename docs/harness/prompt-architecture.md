@@ -16,7 +16,7 @@ Architecture)* of the agentic-AI guide:
    when-to-use guidance, when-NOT-to-use guidance, and a constraints cue
    (rate-limit, max size, side-effect, permission). The
    `tool_descriptions_satisfy_documented_contract` test in
-   `vtcode-core/src/tools/registry/builtins.rs::tests` enforces this
+   `crates/codegen/vtcode-core/src/tools/registry/builtins.rs::tests` enforces this
    contract at `cargo test` time.
 
 ## Assembly order
@@ -138,4 +138,4 @@ vocabularies.
 Run `cargo test -p vtcode-core tools::registry::builtins::tests::tool_descriptions_satisfy_documented_contract`
 to validate any description change before merging.
 
-[`DEFAULT_FEW_SHOT_BUDGET_TOKENS`]: ../vtcode-core/src/prompts/few_shot.rs
+[`DEFAULT_FEW_SHOT_BUDGET_TOKENS`]: ../crates/codegen/vtcode-core/src/prompts/few_shot.rs

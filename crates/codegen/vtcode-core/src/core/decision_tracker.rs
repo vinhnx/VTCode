@@ -214,10 +214,7 @@ impl DecisionTracker {
 
     /// Get decision context for error recovery
     pub fn get_decision_context(&self, decision_id: &str) -> Option<&DecisionContext> {
-        self.decisions
-            .iter()
-            .find(|d| d.id == decision_id)
-            .map(|d| &d.context)
+        self.decisions.iter().find(|d| d.id == decision_id).map(|d| &d.context)
     }
 
     pub fn get_current_context(&self) -> &DecisionContext {
@@ -265,18 +262,12 @@ impl DecisionTracker {
                     };
                     format!("- [turn {turn}] tool:{name} args={arg_preview} (t={ts})")
                 }
-                Action::Response {
-                    response_type,
-                    content,
-                } => {
+                Action::Response { response_type, content } => {
                     let preview =
                         vtcode_commons::formatting::truncate_byte_budget(content, 120, "…");
                     format!("- [turn {turn}] response:{response_type:?} {preview} (t={ts})")
                 }
-                Action::ErrorRecovery {
-                    error_type,
-                    recovery_strategy,
-                } => {
+                Action::ErrorRecovery { error_type, recovery_strategy } => {
                     format!(
                         "- [turn {turn}] recovery {error_type} via {recovery_strategy} (t={ts})"
                     )

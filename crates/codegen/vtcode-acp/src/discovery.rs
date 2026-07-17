@@ -50,9 +50,7 @@ pub struct AgentRegistry {
 impl AgentRegistry {
     /// Create a new agent registry
     pub fn new() -> Self {
-        Self {
-            agents: Arc::new(RwLock::new(HashMap::new())),
-        }
+        Self { agents: Arc::new(RwLock::new(HashMap::new())) }
     }
 
     /// Register an agent

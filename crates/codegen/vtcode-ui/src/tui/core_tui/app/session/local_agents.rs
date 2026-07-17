@@ -26,10 +26,7 @@ pub(super) enum LocalAgentsKeyResult {
 impl LocalAgentsState {
     pub(super) fn set_entries(&mut self, entries: Vec<LocalAgentEntry>) -> LocalAgentsUpdate {
         let previous_id = self.selected_entry().map(|entry| entry.id.clone());
-        let next_active_ids = entries
-            .iter()
-            .map(|entry| entry.id.clone())
-            .collect::<HashSet<_>>();
+        let next_active_ids = entries.iter().map(|entry| entry.id.clone()).collect::<HashSet<_>>();
         let has_new_delegated_entries = entries.iter().any(|entry| {
             entry.kind == crate::tui::core_tui::types::LocalAgentKind::Delegated
                 && !self.active_ids.contains(entry.id.as_str())
@@ -39,27 +36,18 @@ impl LocalAgentsState {
         self.active_ids = next_active_ids;
 
         if self.entries.is_empty() {
-            return LocalAgentsUpdate {
-                has_new_delegated_entries,
-            };
+            return LocalAgentsUpdate { has_new_delegated_entries };
         }
 
         if let Some(previous_id) = previous_id
-            && let Some(index) = self
-                .entries
-                .iter()
-                .position(|entry| entry.id == previous_id)
+            && let Some(index) = self.entries.iter().position(|entry| entry.id == previous_id)
         {
             self.navigator.select_index(index);
-            return LocalAgentsUpdate {
-                has_new_delegated_entries,
-            };
+            return LocalAgentsUpdate { has_new_delegated_entries };
         }
 
         self.navigator.select_first();
-        LocalAgentsUpdate {
-            has_new_delegated_entries,
-        }
+        LocalAgentsUpdate { has_new_delegated_entries }
     }
 
     pub(super) fn entries(&self) -> &[LocalAgentEntry] {

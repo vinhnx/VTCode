@@ -144,15 +144,10 @@ where
     /// several builders, and index-based ids collide across responses.
     fn fabricated_call_id(&mut self, output_index: Option<usize>) -> String {
         match output_index {
-            Some(index) => self
-                .fabricated_ids
-                .entry(index)
-                .or_insert_with(generate_tool_call_id)
-                .clone(),
-            None => self
-                .fabricated_fallback_id
-                .get_or_insert_with(generate_tool_call_id)
-                .clone(),
+            Some(index) => {
+                self.fabricated_ids.entry(index).or_insert_with(generate_tool_call_id).clone()
+            }
+            None => self.fabricated_fallback_id.get_or_insert_with(generate_tool_call_id).clone(),
         }
     }
 
@@ -323,9 +318,7 @@ where
         if let Some(usage) = response.usage.clone() {
             events.push(NormalizedStreamEvent::Usage { usage });
         }
-        events.push(NormalizedStreamEvent::Done {
-            response: Box::new(response),
-        });
+        events.push(NormalizedStreamEvent::Done { response: Box::new(response) });
         Ok(events)
     }
 
@@ -436,22 +429,10 @@ where
 }
 
 fn streamed_response_is_usable(response: &LLMResponse) -> bool {
-    response
-        .content
-        .as_deref()
-        .is_some_and(|content| !content.is_empty())
-        || response
-            .tool_calls
-            .as_ref()
-            .is_some_and(|tool_calls| !tool_calls.is_empty())
-        || response
-            .reasoning
-            .as_deref()
-            .is_some_and(|reasoning| !reasoning.is_empty())
-        || response
-            .reasoning_details
-            .as_ref()
-            .is_some_and(|details| !details.is_empty())
+    response.content.as_deref().is_some_and(|content| !content.is_empty())
+        || response.tool_calls.as_ref().is_some_and(|tool_calls| !tool_calls.is_empty())
+        || response.reasoning.as_deref().is_some_and(|reasoning| !reasoning.is_empty())
+        || response.reasoning_details.as_ref().is_some_and(|details| !details.is_empty())
 }
 
 fn final_response_output_is_empty(final_response: &Value) -> bool {
@@ -553,10 +534,7 @@ fn parse_responses_usage(
 
 fn provider_error(provider_name: &str, message: impl Into<String>) -> LLMError {
     let message = error_display::format_llm_error(provider_name, &message.into());
-    LLMError::Provider {
-        message,
-        metadata: None,
-    }
+    LLMError::Provider { message, metadata: None }
 }
 
 #[cfg(test)]
@@ -739,10 +717,7 @@ mod tests {
     #[test]
     fn tool_call_deltas_emit_start_and_finish_with_assembled_tool_call() {
         let mut processor = ResponsesNormalizedStreamProcessor::new(options(), |_| {
-            Ok(LLMResponse {
-                model: "gpt-5".to_string(),
-                ..Default::default()
-            })
+            Ok(LLMResponse { model: "gpt-5".to_string(), ..Default::default() })
         });
 
         let started = processor
@@ -805,10 +780,7 @@ mod tests {
             [NormalizedStreamEvent::Done { response }] => response,
             _ => panic!("expected done event"),
         };
-        let tool_calls = response
-            .tool_calls
-            .as_ref()
-            .expect("tool call should be assembled");
+        let tool_calls = response.tool_calls.as_ref().expect("tool call should be assembled");
         assert_eq!(
             tool_calls,
             &vec![ToolCall::function(
@@ -822,10 +794,7 @@ mod tests {
     #[test]
     fn tool_call_delta_without_ids_fabricates_and_reuses_id() {
         let mut processor = ResponsesNormalizedStreamProcessor::new(options(), |_| {
-            Ok(LLMResponse {
-                model: "gpt-5".to_string(),
-                ..Default::default()
-            })
+            Ok(LLMResponse { model: "gpt-5".to_string(), ..Default::default() })
         });
 
         let delta_payload = |fragment: &str| {
@@ -844,9 +813,7 @@ mod tests {
         let first_id = match first.as_slice() {
             [
                 NormalizedStreamEvent::ToolCallStart { call_id, .. },
-                NormalizedStreamEvent::ToolCallDelta {
-                    call_id: delta_id, ..
-                },
+                NormalizedStreamEvent::ToolCallDelta { call_id: delta_id, .. },
             ] => {
                 assert_eq!(call_id, delta_id);
                 call_id.clone()
@@ -868,10 +835,7 @@ mod tests {
     fn tool_call_delta_without_ids_fabricates_distinct_ids_per_processor() {
         let make_id = || {
             let mut processor = ResponsesNormalizedStreamProcessor::new(options(), |_| {
-                Ok(LLMResponse {
-                    model: "gpt-5".to_string(),
-                    ..Default::default()
-                })
+                Ok(LLMResponse { model: "gpt-5".to_string(), ..Default::default() })
             });
             let events = processor
                 .handle_payload(json!({
@@ -888,20 +852,13 @@ mod tests {
             }
         };
 
-        assert_ne!(
-            make_id(),
-            make_id(),
-            "fabricated ids must differ across responses"
-        );
+        assert_ne!(make_id(), make_id(), "fabricated ids must differ across responses");
     }
 
     #[test]
     fn tool_call_deltas_use_provider_call_id_when_item_id_differs() {
         let mut processor = ResponsesNormalizedStreamProcessor::new(options(), |_| {
-            Ok(LLMResponse {
-                model: "gpt-5".to_string(),
-                ..Default::default()
-            })
+            Ok(LLMResponse { model: "gpt-5".to_string(), ..Default::default() })
         });
 
         let started = processor
@@ -958,10 +915,7 @@ mod tests {
             [NormalizedStreamEvent::Done { response }] => response,
             _ => panic!("expected done event"),
         };
-        let tool_calls = response
-            .tool_calls
-            .as_ref()
-            .expect("tool call should be assembled");
+        let tool_calls = response.tool_calls.as_ref().expect("tool call should be assembled");
         assert_eq!(
             tool_calls,
             &vec![ToolCall::function(
@@ -990,11 +944,7 @@ mod tests {
                         .and_then(Value::as_str)
                         .unwrap_or_default()
                         .to_string(),
-                    custom_call
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
+                    custom_call.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
                     custom_call
                         .get("input")
                         .and_then(Value::as_str)
@@ -1063,10 +1013,7 @@ mod tests {
         assert!(tool_calls[0].is_custom());
         assert_eq!(tool_calls[0].id, "call_patch_1");
         assert_eq!(tool_calls[0].tool_name(), Some("apply_patch"));
-        assert_eq!(
-            tool_calls[0].raw_input(),
-            Some("*** Begin Patch\n*** End Patch\n")
-        );
+        assert_eq!(tool_calls[0].raw_input(), Some("*** Begin Patch\n*** End Patch\n"));
     }
 
     #[test]
@@ -1132,9 +1079,7 @@ mod tests {
             json!({"type": "error", "error": {"message": "errored"}}),
         ] {
             let mut processor = ResponsesNormalizedStreamProcessor::new(options(), parse_response);
-            let error = processor
-                .handle_payload(payload)
-                .expect_err("error payload should fail");
+            let error = processor.handle_payload(payload).expect_err("error payload should fail");
             assert!(
                 error.to_string().contains("failed")
                     || error.to_string().contains("incomplete")
@@ -1164,10 +1109,7 @@ mod tests {
             .expect("documented code interpreter value-bearing event should be ignored downstream");
 
         let finished = processor.finish().expect("finish should succeed");
-        assert!(matches!(
-            finished.as_slice(),
-            [NormalizedStreamEvent::Done { .. }]
-        ));
+        assert!(matches!(finished.as_slice(), [NormalizedStreamEvent::Done { .. }]));
     }
 
     #[test]

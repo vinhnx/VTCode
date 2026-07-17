@@ -251,10 +251,7 @@ impl CredentialStorage {
     /// * `service` - The service name (e.g., "vtcode", "openrouter", "github")
     /// * `user` - The user/account identifier (e.g., "api_key", "oauth_token")
     pub fn new(service: impl Into<String>, user: impl Into<String>) -> Self {
-        Self {
-            service: service.into(),
-            user: user.into(),
-        }
+        Self { service: service.into(), user: user.into() }
     }
 
     /// Store a credential using the specified mode.
@@ -276,8 +273,7 @@ impl CredentialStorage {
                         self.user,
                         err
                     );
-                    self.store_file(value)
-                        .context("failed to store credential in encrypted file")
+                    self.store_file(value).context("failed to store credential in encrypted file")
                 }
             },
             AuthCredentialsStoreMode::File => self.store_file(value),
@@ -295,15 +291,9 @@ impl CredentialStorage {
         let entry =
             keyring_entry(&self.service, &self.user).context("Failed to access OS keyring")?;
 
-        entry
-            .set_password(value)
-            .context("Failed to store credential in OS keyring")?;
+        entry.set_password(value).context("Failed to store credential in OS keyring")?;
 
-        tracing::debug!(
-            "Credential stored in OS keyring for {}/{}",
-            self.service,
-            self.user
-        );
+        tracing::debug!("Credential stored in OS keyring for {}/{}", self.service, self.user);
         Ok(())
     }
 
@@ -559,12 +549,10 @@ fn decrypt_credential(encrypted: &EncryptedCredential) -> Result<String> {
         return Err(anyhow!("unsupported encrypted credential format"));
     }
 
-    let nonce_bytes = STANDARD
-        .decode(&encrypted.nonce)
-        .context("failed to decode credential nonce")?;
-    let nonce_array: [u8; NONCE_LEN] = nonce_bytes
-        .try_into()
-        .map_err(|_| anyhow!("invalid credential nonce length"))?;
+    let nonce_bytes =
+        STANDARD.decode(&encrypted.nonce).context("failed to decode credential nonce")?;
+    let nonce_array: [u8; NONCE_LEN] =
+        nonce_bytes.try_into().map_err(|_| anyhow!("invalid credential nonce length"))?;
     let mut ciphertext = STANDARD
         .decode(&encrypted.ciphertext)
         .context("failed to decode credential ciphertext")?;
@@ -572,11 +560,7 @@ fn decrypt_credential(encrypted: &EncryptedCredential) -> Result<String> {
     // Backward-compatible: older files won't have a salt (version 1 format).
     let key = derive_file_encryption_key(encrypted.salt.as_deref())?;
     let plaintext = key
-        .open_in_place(
-            Nonce::assume_unique_for_key(nonce_array),
-            Aad::empty(),
-            &mut ciphertext,
-        )
+        .open_in_place(Nonce::assume_unique_for_key(nonce_array), Aad::empty(), &mut ciphertext)
         .map_err(|_| anyhow!("failed to decrypt credential"))?;
 
     String::from_utf8(plaintext.to_vec()).context("failed to parse decrypted credential")
@@ -676,18 +660,11 @@ pub fn migrate_custom_api_keys_to_keyring(
         let storage = CustomApiKeyStorage::new(provider);
         match storage.store(api_key, mode) {
             Ok(()) => {
-                tracing::info!(
-                    "Migrated API key for provider '{}' to secure storage",
-                    provider
-                );
+                tracing::info!("Migrated API key for provider '{}' to secure storage", provider);
                 migration_results.insert(provider.clone(), true);
             }
             Err(e) => {
-                tracing::warn!(
-                    "Failed to migrate API key for provider '{}': {}",
-                    provider,
-                    e
-                );
+                tracing::warn!("Failed to migrate API key for provider '{}': {}", provider, e);
                 migration_results.insert(provider.clone(), false);
             }
         }
@@ -758,10 +735,7 @@ mod tests {
             ))
             .expect("set auth dir override");
 
-            Self {
-                temp_dir: Some(temp_dir),
-                previous,
-            }
+            Self { temp_dir: Some(temp_dir), previous }
         }
     }
 
@@ -777,10 +751,7 @@ mod tests {
 
     #[test]
     fn test_storage_mode_default_is_keyring() {
-        assert_eq!(
-            AuthCredentialsStoreMode::default(),
-            AuthCredentialsStoreMode::Keyring
-        );
+        assert_eq!(AuthCredentialsStoreMode::default(), AuthCredentialsStoreMode::Keyring);
     }
 
     #[test]
@@ -789,10 +760,7 @@ mod tests {
             AuthCredentialsStoreMode::Keyring.effective_mode(),
             AuthCredentialsStoreMode::Keyring
         );
-        assert_eq!(
-            AuthCredentialsStoreMode::File.effective_mode(),
-            AuthCredentialsStoreMode::File
-        );
+        assert_eq!(AuthCredentialsStoreMode::File.effective_mode(), AuthCredentialsStoreMode::File);
 
         // Auto should resolve to either Keyring or File
         let auto_permission = AuthCredentialsStoreMode::Auto.effective_mode();
@@ -935,9 +903,7 @@ mod tests {
         .expect("write legacy auth file");
 
         let storage = CustomApiKeyStorage::new("openai");
-        let loaded = storage
-            .load(AuthCredentialsStoreMode::File)
-            .expect("load migrated api key");
+        let loaded = storage.load(AuthCredentialsStoreMode::File).expect("load migrated api key");
         assert_eq!(loaded.as_deref(), Some("legacy-secret"));
         assert!(!legacy_path.exists());
 

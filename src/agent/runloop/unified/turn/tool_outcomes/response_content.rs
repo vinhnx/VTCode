@@ -31,22 +31,17 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
         return output;
     };
 
-    let next_continue_args = obj
-        .get("next_continue_args")
-        .and_then(PtyContinuationArgs::from_value);
-    let next_read_args = obj
-        .get("next_read_args")
-        .and_then(ReadChunkContinuationArgs::from_value);
+    let next_continue_args =
+        obj.get("next_continue_args").and_then(PtyContinuationArgs::from_value);
+    let next_read_args = obj.get("next_read_args").and_then(ReadChunkContinuationArgs::from_value);
     let session_id = obj.get("session_id").and_then(serde_json::Value::as_str);
     let process_session_id = session_id.or_else(|| {
         next_continue_args
             .as_ref()
             .map(|next_continue| next_continue.session_id.as_str())
     });
-    let loop_detected = obj
-        .get("loop_detected")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
+    let loop_detected =
+        obj.get("loop_detected").and_then(serde_json::Value::as_bool).unwrap_or(false);
     let is_exec_like = obj.contains_key("command")
         || obj.contains_key("working_directory")
         || session_id.is_some()
@@ -64,14 +59,8 @@ pub(crate) fn compact_model_tool_payload(output: serde_json::Value) -> serde_jso
         || should_keep_recoverable_failure_next_action(obj)
         || should_keep_search_recovery_success_next_action(obj)
         || loop_detected;
-    let has_stderr = obj
-        .get("stderr")
-        .and_then(serde_json::Value::as_str)
-        .is_some();
-    let output_trimmed = obj
-        .get("output")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim_end);
+    let has_stderr = obj.get("stderr").and_then(serde_json::Value::as_str).is_some();
+    let output_trimmed = obj.get("output").and_then(serde_json::Value::as_str).map(str::trim_end);
 
     let mut sanitized = serde_json::Map::with_capacity(obj.len());
     for (key, value) in obj {
@@ -181,10 +170,7 @@ fn apply_spool_reference_only(compacted: &mut serde_json::Value, original: &serd
             .or_insert_with(|| serde_json::Value::String(truncate_stderr_preview(stderr)));
     }
 
-    if let Some(spool_path) = original
-        .get("spool_path")
-        .and_then(serde_json::Value::as_str)
-    {
+    if let Some(spool_path) = original.get("spool_path").and_then(serde_json::Value::as_str) {
         obj.entry("spool_path".to_string())
             .or_insert_with(|| serde_json::Value::String(spool_path.to_string()));
     }
@@ -234,10 +220,7 @@ pub(super) async fn maybe_inline_spooled_with_preview(
                     if !preview.trim().is_empty()
                         && let Some(obj) = compacted.as_object_mut()
                     {
-                        obj.insert(
-                            "tail_preview".to_string(),
-                            serde_json::Value::String(preview),
-                        );
+                        obj.insert("tail_preview".to_string(), serde_json::Value::String(preview));
                     }
                 }
                 Err(err) => {
@@ -469,9 +452,7 @@ async fn summarize_tool_output_with_route(
     serialized_output: &str,
 ) -> Result<String> {
     let same_runtime_provider = !ctx.config.provider.trim().is_empty()
-        && route
-            .provider_name
-            .eq_ignore_ascii_case(ctx.config.provider.as_str())
+        && route.provider_name.eq_ignore_ascii_case(ctx.config.provider.as_str())
         && route.model == ctx.config.model;
     if same_runtime_provider {
         return summarize_tool_output_with_provider(
@@ -508,20 +489,11 @@ fn summarized_tool_response_payload(
         obj.remove("content");
         obj.remove("stdout");
         obj.remove("stderr");
-        obj.insert(
-            "summary".to_string(),
-            serde_json::Value::String(summary.to_string()),
-        );
-        obj.insert(
-            "summarized_for_model".to_string(),
-            serde_json::Value::Bool(true),
-        );
+        obj.insert("summary".to_string(), serde_json::Value::String(summary.to_string()));
+        obj.insert("summarized_for_model".to_string(), serde_json::Value::Bool(true));
 
         // Add read-once guidance for file reads to prevent redundant re-reads
-        let action = args_val
-            .get("action")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("");
+        let action = args_val.get("action").and_then(serde_json::Value::as_str).unwrap_or("");
         let is_file_read = (tool_name == tool_names::UNIFIED_FILE
             || tool_name == tool_names::READ_FILE)
             && (action == "read" || action.is_empty());
@@ -548,11 +520,7 @@ pub(super) async fn prepare_tool_response_content(
     output: &serde_json::Value,
 ) -> String {
     // Skip LLM summarization when raw=true is requested
-    if args_val
-        .get("raw")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false)
-    {
+    if args_val.get("raw").and_then(serde_json::Value::as_bool).unwrap_or(false) {
         let workspace_root = ctx.tool_registry.workspace_root().clone();
         return maybe_inline_spooled_with_preview(workspace_root.as_path(), tool_name, output)
             .await;
@@ -704,10 +672,7 @@ fn has_error_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
 
 fn is_recoverable_failure_payload(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
     has_error_payload(obj)
-        && obj
-            .get("is_recoverable")
-            .and_then(serde_json::Value::as_bool)
-            == Some(true)
+        && obj.get("is_recoverable").and_then(serde_json::Value::as_bool) == Some(true)
 }
 
 fn should_keep_exec_success_critical_note(
@@ -735,10 +700,7 @@ fn should_keep_search_recovery_success_next_action(
 ) -> bool {
     !has_error_payload(obj)
         && obj.get("backend").and_then(serde_json::Value::as_str) == Some("ast-grep")
-        && obj
-            .get("is_recoverable")
-            .and_then(serde_json::Value::as_bool)
-            == Some(true)
+        && obj.get("is_recoverable").and_then(serde_json::Value::as_bool) == Some(true)
         && obj
             .get("matches")
             .and_then(serde_json::Value::as_array)
@@ -765,10 +727,7 @@ mod tests {
             &big_read_output(),
             10_000,
         );
-        assert!(matches!(
-            feature,
-            Some(LightweightFeature::LargeReadSummary)
-        ));
+        assert!(matches!(feature, Some(LightweightFeature::LargeReadSummary)));
     }
 
     #[test]
@@ -783,10 +742,7 @@ mod tests {
             &big_read_output(),
             10_000,
         );
-        assert!(
-            feature.is_none(),
-            "bounded reads must be returned verbatim, not summarized"
-        );
+        assert!(feature.is_none(), "bounded reads must be returned verbatim, not summarized");
     }
 
     #[test]
@@ -814,10 +770,7 @@ mod tests {
         });
         let feature =
             tool_output_summary_feature(tool_names::UNIFIED_FILE, &args, &output, 200_000);
-        assert!(matches!(
-            feature,
-            Some(LightweightFeature::LargeReadSummary)
-        ));
+        assert!(matches!(feature, Some(LightweightFeature::LargeReadSummary)));
     }
 
     #[test]

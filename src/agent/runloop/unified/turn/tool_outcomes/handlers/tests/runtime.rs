@@ -19,10 +19,7 @@ async fn blocked_tool_call_guard_emits_tool_and_system_messages() {
         );
     }
 
-    assert!(matches!(
-        outcome,
-        Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))
-    ));
+    assert!(matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))));
     assert!(
         ctx.working_history
             .iter()
@@ -51,18 +48,12 @@ async fn blocked_tool_call_guard_allows_configured_consecutive_cap() {
             tool_names::READ_FILE,
             &args,
         );
-        assert!(
-            outcome.is_none(),
-            "blocked call {idx} should stay under cap"
-        );
+        assert!(outcome.is_none(), "blocked call {idx} should stay under cap");
     }
 
     let outcome =
         enforce_blocked_tool_call_guard(&mut ctx, "blocked_over_cap", tool_names::READ_FILE, &args);
-    assert!(matches!(
-        outcome,
-        Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))
-    ));
+    assert!(matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))));
 }
 
 #[tokio::test]
@@ -79,10 +70,7 @@ async fn blocked_tool_call_guard_caps_non_consecutive_total_churn() {
             tool_names::READ_FILE,
             &args,
         );
-        assert!(
-            outcome.is_none(),
-            "blocked total {idx} should stay under cap"
-        );
+        assert!(outcome.is_none(), "blocked total {idx} should stay under cap");
         ctx.reset_blocked_tool_call_streak();
     }
 
@@ -92,10 +80,7 @@ async fn blocked_tool_call_guard_caps_non_consecutive_total_churn() {
         tool_names::READ_FILE,
         &args,
     );
-    assert!(matches!(
-        outcome,
-        Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))
-    ));
+    assert!(matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))));
     assert!(
         ctx.working_history
             .iter()
@@ -130,9 +115,7 @@ async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
     )
     .await;
 
-    backing
-        .autonomous_executor
-        .set_loop_limit(tool_names::READ_FILE, 2);
+    backing.autonomous_executor.set_loop_limit(tool_names::READ_FILE, 2);
     let seeded_args = json!({"path": valid_file.to_string_lossy()});
     assert!(
         backing
@@ -147,11 +130,7 @@ async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
         .autonomous_executor
         .record_tool_call(tool_names::READ_FILE, &seeded_args);
     assert!(warning.is_some());
-    assert!(
-        backing
-            .autonomous_executor
-            .is_hard_limit_exceeded(tool_names::READ_FILE)
-    );
+    assert!(backing.autonomous_executor.is_hard_limit_exceeded(tool_names::READ_FILE));
 
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
@@ -173,17 +152,12 @@ async fn unified_validation_ignores_preseeded_legacy_loop_detector_state() {
 
     assert!(outcome.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
-    assert!(!outcome_ctx.ctx.working_history.iter().any(|message| {
-        message
-            .content
-            .as_text()
-            .contains("Loop detector stopped repeated")
-    }));
     assert!(
-        backing
-            .autonomous_executor
-            .is_hard_limit_exceeded(tool_names::READ_FILE)
+        !outcome_ctx.ctx.working_history.iter().any(|message| {
+            message.content.as_text().contains("Loop detector stopped repeated")
+        })
     );
+    assert!(backing.autonomous_executor.is_hard_limit_exceeded(tool_names::READ_FILE));
 }
 
 #[tokio::test]
@@ -203,12 +177,11 @@ async fn active_primary_agent_policy_blocks_hallucinated_denied_tool_call() {
         .expect("validation should complete");
 
     assert!(matches!(result, ValidationResult::Blocked));
-    assert!(ctx.working_history.iter().any(|message| {
-        message
-            .content
-            .as_text()
-            .contains("active primary agent policy")
-    }));
+    assert!(
+        ctx.working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("active primary agent policy") })
+    );
     assert_eq!(ctx.harness_state.tool_calls, 0);
 }
 
@@ -270,9 +243,7 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
     let sample_path = backing.sample_file.to_string_lossy().to_string();
     let mut ctx = backing.turn_processing_context();
     ctx.harness_state.turn_started_at = Instant::now()
-        .checked_sub(Duration::from_secs(
-            ctx.harness_state.max_tool_wall_clock.as_secs() + 1,
-        ))
+        .checked_sub(Duration::from_secs(ctx.harness_state.max_tool_wall_clock.as_secs() + 1))
         .unwrap();
 
     let result = validate_tool_call(
@@ -331,16 +302,10 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
         .iter()
         .filter(|message| {
             message.role == uni::MessageRole::System
-                && message
-                    .content
-                    .as_text()
-                    .contains("Synthesize your final answer now")
+                && message.content.as_text().contains("Synthesize your final answer now")
         })
         .count();
-    assert_eq!(
-        directive_count, 1,
-        "synthesis directive must be pushed once"
-    );
+    assert_eq!(directive_count, 1, "synthesis directive must be pushed once");
 
     // The flush must also arm the tool-free recovery pass so the next request
     // strips tool definitions at the API level — the directive alone is
@@ -362,10 +327,7 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
         .iter()
         .filter(|message| {
             message.role == uni::MessageRole::System
-                && message
-                    .content
-                    .as_text()
-                    .contains("Synthesize your final answer now")
+                && message.content.as_text().contains("Synthesize your final answer now")
         })
         .count();
     assert_eq!(directive_count_after, 1, "directive must not be duplicated");
@@ -455,14 +417,10 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
         turn_modified_files: &mut turn_modified_files,
     };
 
-    let first = handle_single_tool_call(
-        &mut outcome_ctx,
-        "read_once",
-        tool_names::READ_FILE,
-        args.clone(),
-    )
-    .await
-    .expect("first readonly call should succeed");
+    let first =
+        handle_single_tool_call(&mut outcome_ctx, "read_once", tool_names::READ_FILE, args.clone())
+            .await
+            .expect("first readonly call should succeed");
 
     assert!(first.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
@@ -476,18 +434,20 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
     assert!(second.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
     assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), 1);
-    assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
-        message
-            .content
-            .as_text()
-            .contains("\"reused_recent_result\":true")
-    }));
-    assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
-        message
-            .content
-            .as_text()
-            .contains("\"result_ref_only\":true")
-    }));
+    assert!(
+        outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("\"reused_recent_result\":true") })
+    );
+    assert!(
+        outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("\"result_ref_only\":true") })
+    );
 }
 
 #[tokio::test]
@@ -501,13 +461,8 @@ async fn repeated_same_file_paginated_reads_do_not_trip_read_family_cap() {
     let mut backing = TestContextBacking::new(read_family_cap).await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
-    std::fs::write(
-        &sample_file,
-        (1..=16)
-            .map(|idx| format!("line {idx}\n"))
-            .collect::<String>(),
-    )
-    .expect("rewrite sample file");
+    std::fs::write(&sample_file, (1..=16).map(|idx| format!("line {idx}\n")).collect::<String>())
+        .expect("rewrite sample file");
     let sample_path = sample_file.to_string_lossy().to_string();
 
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -539,20 +494,13 @@ async fn repeated_same_file_paginated_reads_do_not_trip_read_family_cap() {
         .await
         .expect("paginated read variant should complete");
 
-        assert!(
-            outcome.is_none(),
-            "paginated read {idx} must not be blocked by the family cap"
-        );
+        assert!(outcome.is_none(), "paginated read {idx} must not be blocked by the family cap");
     }
 
     // No pagination burst should have tripped recovery: the streak resets on
     // every distinct slice, so it never reaches the cap.
     assert_eq!(
-        outcome_ctx
-            .ctx
-            .harness_state
-            .consecutive_same_file_read_family_calls,
-        1,
+        outcome_ctx.ctx.harness_state.consecutive_same_file_read_family_calls, 1,
         "paginated reads must reset the family streak, not accumulate it"
     );
     assert!(
@@ -577,13 +525,8 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
     let mut backing = TestContextBacking::new(read_family_cap).await;
     backing.select_build_primary_agent();
     let sample_file = backing.sample_file.clone();
-    std::fs::write(
-        &sample_file,
-        (1..=16)
-            .map(|idx| format!("line {idx}\n"))
-            .collect::<String>(),
-    )
-    .expect("rewrite sample file");
+    std::fs::write(&sample_file, (1..=16).map(|idx| format!("line {idx}\n")).collect::<String>())
+        .expect("rewrite sample file");
     let sample_path = sample_file.to_string_lossy().to_string();
 
     let mut repeated_tool_attempts = LoopTracker::new();
@@ -614,10 +557,7 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
         assert!(outcome.is_none(), "read {idx} below cap should not block");
     }
     assert_eq!(
-        outcome_ctx
-            .ctx
-            .harness_state
-            .consecutive_same_file_read_family_calls,
+        outcome_ctx.ctx.harness_state.consecutive_same_file_read_family_calls,
         read_family_cap - 1,
     );
 
@@ -638,15 +578,9 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
         outcome_ctx.ctx.tool_registry.execution_history_len(),
         execution_history_len_before_block
     );
+    assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, tool_calls_before_block);
     assert_eq!(
-        outcome_ctx.ctx.harness_state.tool_calls,
-        tool_calls_before_block
-    );
-    assert_eq!(
-        outcome_ctx
-            .ctx
-            .harness_state
-            .consecutive_same_file_read_family_calls,
+        outcome_ctx.ctx.harness_state.consecutive_same_file_read_family_calls,
         read_family_cap
     );
     assert!(outcome_ctx.ctx.is_recovery_active());
@@ -682,23 +616,20 @@ async fn denied_tool_permission_emits_policy_response_without_budget_burn() {
         turn_modified_files: &mut turn_modified_files,
     };
 
-    let outcome = handle_single_tool_call(
-        &mut outcome_ctx,
-        "denied",
-        tool_names::READ_FILE,
-        denial_args,
-    )
-    .await
-    .expect("denied permission should be handled");
+    let outcome =
+        handle_single_tool_call(&mut outcome_ctx, "denied", tool_names::READ_FILE, denial_args)
+            .await
+            .expect("denied permission should be handled");
 
     assert!(outcome.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 0);
-    assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
-        message
-            .content
-            .as_text()
-            .contains("execution denied by policy")
-    }));
+    assert!(
+        outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .any(|message| { message.content.as_text().contains("execution denied by policy") })
+    );
 }
 
 #[tokio::test]
@@ -737,23 +668,18 @@ async fn prepared_tool_calls_respect_unlimited_budget_when_cap_disabled() {
     assert!(outcome.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
     assert!(!outcome_ctx.ctx.harness_state.tool_budget_exhausted());
-    assert!(!outcome_ctx.ctx.working_history.iter().any(|message| {
-        message
-            .content
-            .as_text()
-            .contains("exceeded max tool calls per turn")
-    }));
+    assert!(
+        !outcome_ctx.ctx.working_history.iter().any(|message| {
+            message.content.as_text().contains("exceeded max tool calls per turn")
+        })
+    );
 }
 
 #[tokio::test]
 async fn multiple_prepared_tool_calls_respect_unlimited_budget_when_cap_disabled() {
     let mut backing = TestContextBacking::new(0).await;
     backing.select_build_primary_agent();
-    let second_file = backing
-        .sample_file
-        .parent()
-        .expect("temp workspace root")
-        .join("other.txt");
+    let second_file = backing.sample_file.parent().expect("temp workspace root").join("other.txt");
     std::fs::write(&second_file, "world\n").expect("write second sample file");
 
     let tool_calls = vec![
@@ -791,12 +717,11 @@ async fn multiple_prepared_tool_calls_respect_unlimited_budget_when_cap_disabled
     assert!(outcome.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 2);
     assert!(!outcome_ctx.ctx.harness_state.tool_budget_exhausted());
-    assert!(!outcome_ctx.ctx.working_history.iter().any(|message| {
-        message
-            .content
-            .as_text()
-            .contains("exceeded max tool calls per turn")
-    }));
+    assert!(
+        !outcome_ctx.ctx.working_history.iter().any(|message| {
+            message.content.as_text().contains("exceeded max tool calls per turn")
+        })
+    );
 }
 
 #[tokio::test]
@@ -834,14 +759,10 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     .expect("first blocked call should not fail hard");
     assert!(first.is_none());
 
-    let second = handle_single_tool_call(
-        &mut outcome_ctx,
-        "blocked_2",
-        tool_names::READ_FILE,
-        blocked_args,
-    )
-    .await
-    .expect("second blocked call should not fail hard");
+    let second =
+        handle_single_tool_call(&mut outcome_ctx, "blocked_2", tool_names::READ_FILE, blocked_args)
+            .await
+            .expect("second blocked call should not fail hard");
     assert!(second.is_none());
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 0);
     assert!(!outcome_ctx.ctx.harness_state.tool_budget_exhausted());
@@ -858,14 +779,10 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
     assert!(outcome_ctx.ctx.harness_state.tool_budget_exhausted());
 
-    let exhausted = handle_single_tool_call(
-        &mut outcome_ctx,
-        "exhausted",
-        tool_names::READ_FILE,
-        valid_args,
-    )
-    .await
-    .expect("exhausted-budget call should return structured outcome");
+    let exhausted =
+        handle_single_tool_call(&mut outcome_ctx, "exhausted", tool_names::READ_FILE, valid_args)
+            .await
+            .expect("exhausted-budget call should return structured outcome");
     // Tool-call budget exhaustion must NOT break the turn as `Blocked` — that
     // skips the synthesis pass. It rejects the call with a policy-violation
     // tool response and lets the post-batch flush push a single synthesis
@@ -874,10 +791,7 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     assert!(exhausted.is_none());
     assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
         message.role == uni::MessageRole::Tool
-            && message
-                .content
-                .as_text()
-                .contains("exceeded max tool calls per turn")
+            && message.content.as_text().contains("exceeded max tool calls per turn")
     }));
 }
 
@@ -923,16 +837,10 @@ async fn repeated_read_only_guard_dedups_plan_file_in_planning_mode() {
         handle_single_tool_call(&mut outcome_ctx, "read_plan_2", tool_names::READ_FILE, args)
             .await
             .expect("second plan-file read should be deduplicated");
-    assert!(
-        second.is_none(),
-        "duplicate read should be handled by guard"
-    );
+    assert!(second.is_none(), "duplicate read should be handled by guard");
 
     assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
         message.role == uni::MessageRole::Tool
-            && message
-                .content
-                .as_text()
-                .contains("\"reused_recent_result\":true")
+            && message.content.as_text().contains("\"reused_recent_result\":true")
     }));
 }

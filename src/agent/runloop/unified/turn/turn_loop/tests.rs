@@ -395,10 +395,7 @@ async fn complete_turn_after_failed_tool_free_recovery_prefers_salvaged_prose() 
     )
     .await;
     assert!(matches!(outcome, TurnLoopResult::Completed));
-    assert_eq!(
-        history.last().unwrap().content.as_text(),
-        RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER
-    );
+    assert_eq!(history.last().unwrap().content.as_text(), RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER);
 }
 
 #[tokio::test]
@@ -531,10 +528,7 @@ async fn plan_mode_recovery_exhausted_finalizes_instead_of_reforcing_interview()
         !text.contains("Do NOT attempt more tool calls"),
         "model directive must not leak into the user-visible final answer"
     );
-    assert!(
-        text.contains("`implement`"),
-        "final answer must include the plan-confirmation hint"
-    );
+    assert!(text.contains("`implement`"), "final answer must include the plan-confirmation hint");
 }
 
 #[tokio::test]
@@ -677,11 +671,7 @@ async fn turn_loop_preserves_legacy_loop_detector_state() {
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.set_loop_limit(tool_names::READ_FILE, 2);
     let seeded_args = json!({"path":"sample.txt"});
-    assert!(
-        backing
-            .record_tool_call(tool_names::READ_FILE, &seeded_args)
-            .is_none()
-    );
+    assert!(backing.record_tool_call(tool_names::READ_FILE, &seeded_args).is_none());
     let _ = backing.record_tool_call(tool_names::READ_FILE, &seeded_args);
     let warning = backing.record_tool_call(tool_names::READ_FILE, &seeded_args);
     assert!(warning.is_some());
@@ -715,15 +705,11 @@ fn count_assistant_text_responses_in_turn_skips_tool_call_messages() {
         )],
     ));
     // Second assistant message is plain text -> counted
-    history.push(uni::Message::assistant(
-        "Functions and structs.".to_string(),
-    ));
+    history.push(uni::Message::assistant("Functions and structs.".to_string()));
     // System message -> not counted
     history.push(uni::Message::system("Tools disabled.".to_string()));
     // Third assistant message is plain text -> counted
-    history.push(uni::Message::assistant(
-        "Functions and structs again.".to_string(),
-    ));
+    history.push(uni::Message::assistant("Functions and structs again.".to_string()));
     // Empty assistant content -> not counted
     history.push(uni::Message::assistant(String::new()));
     // Whitespace-only assistant content -> not counted
@@ -753,10 +739,7 @@ fn count_assistant_text_responses_in_turn_ignores_history_before_baseline() {
     );
 
     history.push(uni::Message::assistant("current answer one".to_string()));
-    assert_eq!(
-        count_assistant_text_responses_in_turn(&history, turn_history_start_len),
-        1
-    );
+    assert_eq!(count_assistant_text_responses_in_turn(&history, turn_history_start_len), 1);
 
     history.push(uni::Message::assistant_with_tools(
         String::new(),
@@ -784,9 +767,7 @@ fn count_assistant_text_responses_in_turn_counts_after_compaction_rebase() {
     ];
     let rebased_turn_history_start_len = compacted_history.len();
 
-    compacted_history.push(uni::Message::assistant(
-        "current answer after compaction".to_string(),
-    ));
+    compacted_history.push(uni::Message::assistant("current answer after compaction".to_string()));
 
     assert_eq!(
         count_assistant_text_responses_in_turn(&compacted_history, stale_turn_history_start_len),
@@ -834,12 +815,9 @@ fn count_assistant_text_responses_for_guard_counts_post_compaction_growth_above_
     let rebased_turn_history_start_len = compacted_history.len();
     let recorded_text_responses_in_turn = 1;
 
-    compacted_history.push(uni::Message::assistant(
-        "current answer after compaction".to_string(),
-    ));
-    compacted_history.push(uni::Message::assistant(
-        "second current answer after compaction".to_string(),
-    ));
+    compacted_history.push(uni::Message::assistant("current answer after compaction".to_string()));
+    compacted_history
+        .push(uni::Message::assistant("second current answer after compaction".to_string()));
 
     assert_eq!(
         count_assistant_text_responses_for_guard(
@@ -861,7 +839,7 @@ fn count_assistant_text_responses_in_turn_matches_observed_pattern() {
     let mut history: Vec<uni::Message> = Vec::new();
     for _ in 0..4 {
         history.push(uni::Message::assistant(
-            "# Functions and Structs in vtcode-core/src/tools/registry\n\
+            "# Functions and Structs in crates/codegen/vtcode-core/src/tools/registry\n\
              \n\
              The directory has 70 files, 23 structs, 69 functions, 11 enums.\n\
              \n\
@@ -970,10 +948,7 @@ async fn tool_free_recovery_retries_on_contract_violation_then_salvages() {
         .find(|m| m.role == uni::MessageRole::Assistant)
         .map(|m| m.content.as_text().to_string())
         .unwrap_or_default();
-    assert!(
-        final_text.contains("Here is my plan:"),
-        "expected salvaged prose, got: {final_text}"
-    );
+    assert!(final_text.contains("Here is my plan:"), "expected salvaged prose, got: {final_text}");
     assert!(
         !final_text.contains(RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER),
         "must not emit canned fallback when salvage is available"
@@ -1117,9 +1092,7 @@ async fn planning_synthesis_truncated_retries_with_compact_spec() {
     let calls = Arc::new(AtomicUsize::new(0));
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.activate_planning_for_test();
-    backing.set_provider(Box::new(TruncateThenCompactProvider {
-        calls: calls.clone(),
-    }));
+    backing.set_provider(Box::new(TruncateThenCompactProvider { calls: calls.clone() }));
 
     let mut history = vec![uni::Message::user(
         "make a plan to improve launch time".to_string(),

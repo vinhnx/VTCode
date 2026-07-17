@@ -43,10 +43,7 @@ impl FilteringMetrics {
         self.total_input_bytes += input_size;
         self.total_output_bytes += output_size;
 
-        *self
-            .operation_distribution
-            .entry(operation.clone())
-            .or_insert(0) += 1;
+        *self.operation_distribution.entry(operation.clone()).or_insert(0) += 1;
 
         let record = FilteringRecord {
             operation,
@@ -72,19 +69,14 @@ impl FilteringMetrics {
 
     /// Estimate tokens saved based on rough conversion (1 token ≈ 4 bytes)
     pub fn estimated_tokens_saved(&self) -> u64 {
-        let bytes_saved = self
-            .total_input_bytes
-            .saturating_sub(self.total_output_bytes);
+        let bytes_saved = self.total_input_bytes.saturating_sub(self.total_output_bytes);
         bytes_saved / 4 // Rough estimate
     }
 
     pub fn avg_duration_ms(&self) -> u64 {
         if self.total_operations > 0 {
             let total: u64 = self.recent_operations.iter().map(|r| r.duration_ms).sum();
-            total
-                / self
-                    .total_operations
-                    .min(self.recent_operations.len() as u64)
+            total / self.total_operations.min(self.recent_operations.len() as u64)
         } else {
             0
         }

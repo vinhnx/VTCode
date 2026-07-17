@@ -402,7 +402,7 @@ let token = exchange_code_for_token(
 4. **Storage**: Use `CredentialStorage` for secure storage
 5. **Configuration**: Add provider config to `AuthConfig`
 
-See `vtcode-auth/src/openrouter_oauth.rs` for a reference implementation.
+See `crates/codegen/vtcode-auth/src/openrouter_oauth.rs` for a reference implementation.
 
 ## See Also
 

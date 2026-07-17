@@ -136,10 +136,9 @@ impl ScheduleSpec {
         match self {
             Self::Cron5(spec) => format!("cron {}", spec.expression),
             Self::FixedInterval(spec) => spec.human_description(),
-            Self::OneShot(spec) => format!(
-                "once at {}",
-                spec.at.with_timezone(&Local).format("%Y-%m-%d %H:%M")
-            ),
+            Self::OneShot(spec) => {
+                format!("once at {}", spec.at.with_timezone(&Local).format("%Y-%m-%d %H:%M"))
+            }
         }
     }
 
@@ -245,9 +244,7 @@ impl FixedInterval {
         if duration.as_secs() < 60 {
             bail!("Fixed intervals must be at least 1 minute");
         }
-        Ok(Self {
-            seconds: duration.as_secs(),
-        })
+        Ok(Self { seconds: duration.as_secs() })
     }
 
     pub fn chrono_duration(&self) -> Result<ChronoDuration> {
@@ -384,9 +381,7 @@ pub struct SessionScheduler {
 impl SessionScheduler {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            tasks: BTreeMap::new(),
-        }
+        Self { tasks: BTreeMap::new() }
     }
 
     #[must_use]
@@ -419,20 +414,14 @@ impl SessionScheduler {
             expires_at,
         )?;
         let runtime = initialize_runtime_state(&definition)?;
-        let record = ScheduledTaskRecord {
-            definition: definition.clone(),
-            runtime,
-        };
+        let record = ScheduledTaskRecord { definition: definition.clone(), runtime };
         let summary = record.summary();
         self.tasks.insert(definition.id.clone(), record);
         Ok(summary)
     }
 
     pub fn list(&self) -> Vec<ScheduledTaskSummary> {
-        self.tasks
-            .values()
-            .map(ScheduledTaskRecord::summary)
-            .collect()
+        self.tasks.values().map(ScheduledTaskRecord::summary).collect()
     }
 
     pub fn delete(&mut self, query: &str) -> Option<ScheduledTaskSummary> {
@@ -444,11 +433,7 @@ impl SessionScheduler {
             return Some(record.summary());
         }
         let key = self.tasks.iter().find_map(|(id, record)| {
-            record
-                .definition
-                .name
-                .eq_ignore_ascii_case(query)
-                .then(|| id.clone())
+            record.definition.name.eq_ignore_ascii_case(query).then(|| id.clone())
         })?;
         self.tasks.remove(&key).map(|record| record.summary())
     }
@@ -550,9 +535,7 @@ impl ScheduleCreateInput {
         if matches!(action, ScheduledTaskAction::Prompt { .. })
             && workspace.as_ref().is_some_and(|path| !path.is_dir())
         {
-            let workspace = workspace
-                .as_ref()
-                .context("prompt workspace should exist")?;
+            let workspace = workspace.as_ref().context("prompt workspace should exist")?;
             bail!(
                 "Prompt task workspace does not exist or is not a directory: {}",
                 workspace.display()
@@ -595,9 +578,7 @@ fn expand_scheduled_workspace_home(path: &Path, home_dir: Option<&Path>) -> Path
     };
 
     if raw == "~" {
-        return home_dir
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| path.to_path_buf());
+        return home_dir.map(Path::to_path_buf).unwrap_or_else(|| path.to_path_buf());
     }
 
     if let Some(rest) = raw.strip_prefix("~/")
@@ -623,10 +604,7 @@ impl SchedulerPaths {
         let data_root = get_data_dir()
             .ok_or_else(|| anyhow!("Failed to resolve VT Code data directory"))?
             .join(DURABLE_STORE_DIR);
-        Ok(Self {
-            config_root,
-            data_root,
-        })
+        Ok(Self { config_root, data_root })
     }
 
     #[must_use]
@@ -682,9 +660,7 @@ impl SchedulerPaths {
 
     #[must_use]
     pub fn artifact_dir(&self, id: &str, run_at: DateTime<Utc>) -> PathBuf {
-        self.runs_dir()
-            .join(id)
-            .join(run_at.format("%Y%m%dT%H%M%SZ").to_string())
+        self.runs_dir().join(id).join(run_at.format("%Y%m%dT%H%M%SZ").to_string())
     }
 }
 
@@ -700,9 +676,7 @@ impl DurableTaskStore {
     }
 
     pub fn new_default() -> Result<Self> {
-        Ok(Self {
-            paths: SchedulerPaths::new_default()?,
-        })
+        Ok(Self { paths: SchedulerPaths::new_default()? })
     }
 
     #[must_use]
@@ -720,11 +694,7 @@ impl DurableTaskStore {
         let runtime = initialize_runtime_state(&definition)?;
         self.write_definition(&definition)?;
         self.write_runtime(&definition.id, &runtime)?;
-        Ok(ScheduledTaskRecord {
-            definition,
-            runtime,
-        }
-        .summary())
+        Ok(ScheduledTaskRecord { definition, runtime }.summary())
     }
 
     pub fn create_from_input(
@@ -763,10 +733,7 @@ impl DurableTaskStore {
             Some(runtime) => runtime,
             None => initialize_runtime_state(&definition)?,
         };
-        Ok(Some(ScheduledTaskRecord {
-            definition,
-            runtime,
-        }))
+        Ok(Some(ScheduledTaskRecord { definition, runtime }))
     }
 
     pub fn update_runtime(&self, record: &ScheduledTaskRecord) -> Result<()> {
@@ -781,10 +748,7 @@ impl DurableTaskStore {
             let runtime = self
                 .read_runtime(&definition.id)?
                 .unwrap_or(initialize_runtime_state(&definition)?);
-            records.push(ScheduledTaskRecord {
-                definition,
-                runtime,
-            });
+            records.push(ScheduledTaskRecord { definition, runtime });
         }
         Ok(records)
     }
@@ -808,10 +772,7 @@ impl DurableTaskStore {
     fn write_definition(&self, definition: &ScheduledTaskDefinition) -> Result<()> {
         let serialized =
             toml::to_string_pretty(definition).context("Failed to serialize task definition")?;
-        atomic_write(
-            &self.paths.definition_path(&definition.id),
-            serialized.as_bytes(),
-        )
+        atomic_write(&self.paths.definition_path(&definition.id), serialized.as_bytes())
     }
 
     fn read_runtime(&self, id: &str) -> Result<Option<ScheduledTaskRuntimeState>> {
@@ -842,10 +803,7 @@ pub struct SchedulerDaemon {
 impl SchedulerDaemon {
     #[must_use]
     pub fn new(store: DurableTaskStore, executable_path: PathBuf) -> Self {
-        Self {
-            store,
-            executable_path,
-        }
+        Self { store, executable_path }
     }
 
     pub async fn serve_forever(&self) -> Result<()> {
@@ -912,23 +870,15 @@ impl SchedulerDaemon {
                 })
             }
             ScheduledTaskAction::Prompt { prompt } => {
-                let artifact_dir = self
-                    .store
-                    .paths()
-                    .artifact_dir(&record.definition.id, run_at);
+                let artifact_dir = self.store.paths().artifact_dir(&record.definition.id, run_at);
                 let events_file = artifact_dir.join("events.jsonl");
                 let last_message_file = artifact_dir.join("last-message.txt");
                 let workspace_label = scheduled_workspace_label(&record.definition);
                 let workspace = resolve_scheduled_task_workspace(&record.definition);
                 let execution = async {
-                    tokio::fs::create_dir_all(&artifact_dir)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "Failed to create run artifact dir {}",
-                                artifact_dir.display()
-                            )
-                        })?;
+                    tokio::fs::create_dir_all(&artifact_dir).await.with_context(|| {
+                        format!("Failed to create run artifact dir {}", artifact_dir.display())
+                    })?;
 
                     let mut command = Command::new(&self.executable_path);
                     command
@@ -961,9 +911,7 @@ impl SchedulerDaemon {
                     Ok(status) => TaskRunStatus::Failed {
                         message: format!("vtcode exec exited with {status}"),
                     },
-                    Err(error) => TaskRunStatus::Failed {
-                        message: format!("{error:#}"),
-                    },
+                    Err(error) => TaskRunStatus::Failed { message: format!("{error:#}") },
                 };
                 Ok(RunOutcome {
                     ran_at: run_at,
@@ -1023,11 +971,7 @@ pub fn render_service_install_plan(executable_path: &Path) -> Result<ServiceInst
         ServiceManager::Launchd => render_launchd_plist(executable_path),
         ServiceManager::SystemdUser => render_systemd_unit(executable_path),
     };
-    Ok(ServiceInstallPlan {
-        manager,
-        path,
-        contents,
-    })
+    Ok(ServiceInstallPlan { manager, path, contents })
 }
 
 pub fn install_service_file(executable_path: &Path) -> Result<ServiceInstallPlan> {
@@ -1123,18 +1067,13 @@ pub fn parse_session_language_command(
         return None;
     }
 
-    let normalized = trimmed
-        .trim_end_matches(['?', '.', '!'])
-        .to_ascii_lowercase();
+    let normalized = trimmed.trim_end_matches(['?', '.', '!']).to_ascii_lowercase();
     if normalized == "what scheduled tasks do i have" {
         return Some(Ok(SessionLanguageCommand::ListTasks));
     }
 
     if let Some(captures) = REMIND_AT_RE.captures(trimmed) {
-        let when = captures
-            .name("when")
-            .map(|value| value.as_str())
-            .unwrap_or_default();
+        let when = captures.name("when").map(|value| value.as_str()).unwrap_or_default();
         let prompt = captures
             .name("prompt")
             .map(|value| value.as_str().trim().to_string())
@@ -1161,9 +1100,7 @@ pub fn parse_session_language_command(
     }
 
     if let Some(query) = trimmed.strip_prefix("cancel ") {
-        return Some(Ok(SessionLanguageCommand::CancelTask {
-            query: query.trim().to_string(),
-        }));
+        return Some(Ok(SessionLanguageCommand::CancelTask { query: query.trim().to_string() }));
     }
 
     None
@@ -1222,23 +1159,13 @@ pub fn parse_schedule_create_tokens(tokens: &[String]) -> Result<ScheduleCreateI
         index += 1;
     }
 
-    Ok(ScheduleCreateInput {
-        name,
-        prompt,
-        reminder,
-        every,
-        cron,
-        at,
-        workspace,
-    })
+    Ok(ScheduleCreateInput { name, prompt, reminder, every, cron, at, workspace })
 }
 
 fn initialize_runtime_state(
     definition: &ScheduledTaskDefinition,
 ) -> Result<ScheduledTaskRuntimeState> {
-    let next_base_run_at = definition
-        .schedule
-        .first_base_fire_at(definition.created_at)?;
+    let next_base_run_at = definition.schedule.first_base_fire_at(definition.created_at)?;
     let next_run_at = next_base_run_at
         .map(|base| definition.schedule.jittered_fire_at(&definition.id, base))
         .transpose()?;
@@ -1279,17 +1206,12 @@ fn next_scheduled_run(
         return Ok(None);
     };
 
-    if definition
-        .expires_at
-        .is_some_and(|expiry| next_base_run_at > expiry)
-    {
+    if definition.expires_at.is_some_and(|expiry| next_base_run_at > expiry) {
         return Ok(None);
     }
 
     Ok(Some(NextScheduledRun {
-        fire_at: definition
-            .schedule
-            .jittered_fire_at(&definition.id, next_base_run_at)?,
+        fire_at: definition.schedule.jittered_fire_at(&definition.id, next_base_run_at)?,
         base_fire_at: next_base_run_at,
     }))
 }
@@ -1382,9 +1304,7 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
 
     let temp_name = format!(
         ".{}.tmp-{}",
-        path.file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("task"),
+        path.file_name().and_then(|value| value.to_str()).unwrap_or("task"),
         NEXT_TASK_COUNTER.fetch_add(1, Ordering::Relaxed)
     );
     let temp_path = path.with_file_name(temp_name);
@@ -1522,10 +1442,7 @@ pub fn parse_local_datetime(raw: &str, now: DateTime<Local>) -> Result<DateTime<
         if minute >= 60 {
             bail!("Invalid minute in time value");
         }
-        if let Some(ampm) = captures
-            .name("ampm")
-            .map(|value| value.as_str().to_ascii_lowercase())
-        {
+        if let Some(ampm) = captures.name("ampm").map(|value| value.as_str().to_ascii_lowercase()) {
             if hour == 0 || hour > 12 {
                 bail!("Invalid 12-hour clock value");
             }
@@ -1725,10 +1642,7 @@ impl CronField {
             values.extend(base_values);
         }
 
-        Ok(Self {
-            values,
-            is_wildcard,
-        })
+        Ok(Self { values, is_wildcard })
     }
 
     fn contains(&self, value: u32) -> bool {
@@ -1737,9 +1651,7 @@ impl CronField {
 }
 
 fn parse_cron_number(raw: &str, min: u32, max: u32, is_day_of_week: bool) -> Result<u32> {
-    let mut value = raw
-        .parse::<u32>()
-        .with_context(|| format!("Invalid cron value '{raw}'"))?;
+    let mut value = raw.parse::<u32>().with_context(|| format!("Invalid cron value '{raw}'"))?;
     if is_day_of_week && value == 7 {
         value = 0;
     }

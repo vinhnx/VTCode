@@ -187,9 +187,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         if let Some(action) = modal.hotkey_action(&key, modal_modifiers) {
             session.close_overlay();
             session.mark_dirty();
-            return Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-                OverlaySubmission::Hotkey(action),
-            )));
+            return Some(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Hotkey(
+                action,
+            ))));
         }
 
         // Text-only modals (no list): close on Esc or any keypress.

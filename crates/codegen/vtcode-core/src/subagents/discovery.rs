@@ -37,17 +37,12 @@ async fn discover_plugin_agent_files(workspace_root: &Path) -> Result<Vec<(Strin
             }
 
             let manifest: PluginManifest = serde_json::from_str(
-                &tokio::fs::read_to_string(&manifest_path)
-                    .await
-                    .with_context(|| {
-                        format!("Failed to read plugin manifest {}", manifest_path.display())
-                    })?,
+                &tokio::fs::read_to_string(&manifest_path).await.with_context(|| {
+                    format!("Failed to read plugin manifest {}", manifest_path.display())
+                })?,
             )
             .with_context(|| {
-                format!(
-                    "Failed to parse plugin manifest {}",
-                    manifest_path.display()
-                )
+                format!("Failed to parse plugin manifest {}", manifest_path.display())
             })?;
             for agent_path in AgentsHandler::process_agents(&path, manifest.agents.clone()).await? {
                 files.push((manifest.name.clone(), agent_path));

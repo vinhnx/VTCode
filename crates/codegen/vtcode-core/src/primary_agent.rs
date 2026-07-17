@@ -197,11 +197,7 @@ pub fn resolve_primary_agent(
     specs
         .iter()
         .find(|spec| spec.is_primary() && spec.name.eq_ignore_ascii_case(requested))
-        .or_else(|| {
-            specs
-                .iter()
-                .find(|spec| spec.is_primary() && spec.matches_name(requested))
-        })
+        .or_else(|| specs.iter().find(|spec| spec.is_primary() && spec.matches_name(requested)))
         .map(ActivePrimaryAgent::from_spec)
         .ok_or_else(|| PrimaryAgentResolutionError::UnknownAgent {
             requested: requested.to_string(),
@@ -258,11 +254,10 @@ pub fn primary_agent_allows_tool(agent: &ActivePrimaryAgent, tool_name: &str) ->
         return true;
     }
 
-    let allow_list_allows = agent.tools.as_ref().is_none_or(|tools| {
-        tools
-            .iter()
-            .any(|allowed| normalise_tool_name(allowed) == tool_name)
-    });
+    let allow_list_allows = agent
+        .tools
+        .as_ref()
+        .is_none_or(|tools| tools.iter().any(|allowed| normalise_tool_name(allowed) == tool_name));
     if !allow_list_allows {
         return false;
     }
@@ -376,12 +371,7 @@ fn merge_primary_mcp_servers(config: &mut VTCodeConfig, servers: &[SubagentMcpSe
             SubagentMcpServer::Named(_) => {}
             SubagentMcpServer::Inline(definition) => {
                 for (name, value) in definition {
-                    if config
-                        .mcp
-                        .providers
-                        .iter()
-                        .any(|provider| provider.name == *name)
-                    {
+                    if config.mcp.providers.iter().any(|provider| provider.name == *name) {
                         continue;
                     }
                     if let Some(provider) = inline_mcp_provider(name, value) {
@@ -399,47 +389,23 @@ fn merge_active_primary_hooks(config: &mut HooksConfig, hooks: Option<&HooksConf
     };
 
     config.lifecycle.quiet_success_output |= hooks.lifecycle.quiet_success_output;
-    append_hook_groups(
-        &mut config.lifecycle.session_start,
-        &hooks.lifecycle.session_start,
-    );
-    append_hook_groups(
-        &mut config.lifecycle.session_end,
-        &hooks.lifecycle.session_end,
-    );
-    append_hook_groups(
-        &mut config.lifecycle.subagent_start,
-        &hooks.lifecycle.subagent_start,
-    );
-    append_hook_groups(
-        &mut config.lifecycle.subagent_stop,
-        &hooks.lifecycle.subagent_stop,
-    );
+    append_hook_groups(&mut config.lifecycle.session_start, &hooks.lifecycle.session_start);
+    append_hook_groups(&mut config.lifecycle.session_end, &hooks.lifecycle.session_end);
+    append_hook_groups(&mut config.lifecycle.subagent_start, &hooks.lifecycle.subagent_start);
+    append_hook_groups(&mut config.lifecycle.subagent_stop, &hooks.lifecycle.subagent_stop);
     append_hook_groups(
         &mut config.lifecycle.user_prompt_submit,
         &hooks.lifecycle.user_prompt_submit,
     );
-    append_hook_groups(
-        &mut config.lifecycle.pre_tool_use,
-        &hooks.lifecycle.pre_tool_use,
-    );
-    append_hook_groups(
-        &mut config.lifecycle.post_tool_use,
-        &hooks.lifecycle.post_tool_use,
-    );
+    append_hook_groups(&mut config.lifecycle.pre_tool_use, &hooks.lifecycle.pre_tool_use);
+    append_hook_groups(&mut config.lifecycle.post_tool_use, &hooks.lifecycle.post_tool_use);
     append_hook_groups(
         &mut config.lifecycle.permission_request,
         &hooks.lifecycle.permission_request,
     );
-    append_hook_groups(
-        &mut config.lifecycle.pre_compact,
-        &hooks.lifecycle.pre_compact,
-    );
+    append_hook_groups(&mut config.lifecycle.pre_compact, &hooks.lifecycle.pre_compact);
     append_hook_groups(&mut config.lifecycle.stop, &hooks.lifecycle.stop);
-    append_hook_groups(
-        &mut config.lifecycle.notification,
-        &hooks.lifecycle.notification,
-    );
+    append_hook_groups(&mut config.lifecycle.notification, &hooks.lifecycle.notification);
 }
 
 fn append_hook_groups(target: &mut Vec<HookGroupConfig>, source: &[HookGroupConfig]) {
@@ -449,10 +415,7 @@ fn append_hook_groups(target: &mut Vec<HookGroupConfig>, source: &[HookGroupConf
 fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProviderConfig> {
     let object = value.as_object()?;
     let mut payload = serde_json::Map::with_capacity(object.len().saturating_add(1));
-    payload.insert(
-        "name".to_string(),
-        serde_json::Value::String(name.to_string()),
-    );
+    payload.insert("name".to_string(), serde_json::Value::String(name.to_string()));
     for (key, value) in object {
         if key == "type" {
             continue;
@@ -506,20 +469,14 @@ mod tests {
         let current = test_spec("current");
         let specs = vec![current.clone()];
         let mut state = ActivePrimaryAgentState::default();
-        let original = state
-            .select_from_specs(&specs, "current")
-            .expect("initial selection")
-            .clone();
+        let original =
+            state.select_from_specs(&specs, "current").expect("initial selection").clone();
 
-        let error = state
-            .select_from_specs(&specs, "missing")
-            .expect_err("unknown agent");
+        let error = state.select_from_specs(&specs, "missing").expect_err("unknown agent");
 
         assert_eq!(
             error,
-            PrimaryAgentResolutionError::UnknownAgent {
-                requested: "missing".to_string()
-            }
+            PrimaryAgentResolutionError::UnknownAgent { requested: "missing".to_string() }
         );
         assert_eq!(state.active(), &original);
     }
@@ -573,10 +530,7 @@ mod tests {
         assert_eq!(active.model.as_deref(), Some("gpt-5.1"));
         assert_eq!(active.reasoning_effort, Some(ReasoningEffortLevel::High));
         assert_eq!(active.skills, vec!["rust".to_string()]);
-        assert_eq!(
-            active.mcp_servers,
-            vec![SubagentMcpServer::Named("filesystem".to_string())]
-        );
+        assert_eq!(active.mcp_servers, vec![SubagentMcpServer::Named("filesystem".to_string())]);
         assert_eq!(active.memory, Some(SubagentMemoryScope::Project));
     }
 
@@ -629,9 +583,7 @@ mod tests {
         assert_eq!(state.active().identity.name, "build");
         assert_eq!(state.active().identity.source, SubagentSource::Builtin);
 
-        state
-            .select_from_specs(&[test_spec("worker")], "worker")
-            .expect("selected");
+        state.select_from_specs(&[test_spec("worker")], "worker").expect("selected");
         assert_eq!(state.active().identity.name, "worker");
 
         state.reset_to_default_from_specs(&[]);
@@ -717,22 +669,10 @@ mod tests {
     fn default_build_agent_allows_baseline_read_and_exec_tools() {
         let active = ActivePrimaryAgentState::default();
 
-        assert!(primary_agent_allows_tool(
-            active.active(),
-            tools::CODE_SEARCH
-        ));
-        assert!(primary_agent_allows_tool(
-            active.active(),
-            tools::EXEC_COMMAND
-        ));
-        assert!(primary_agent_allows_tool(
-            active.active(),
-            tools::APPLY_PATCH
-        ));
-        assert!(primary_agent_allows_tool(
-            active.active(),
-            tools::RUN_PTY_CMD
-        ));
+        assert!(primary_agent_allows_tool(active.active(), tools::CODE_SEARCH));
+        assert!(primary_agent_allows_tool(active.active(), tools::EXEC_COMMAND));
+        assert!(primary_agent_allows_tool(active.active(), tools::APPLY_PATCH));
+        assert!(primary_agent_allows_tool(active.active(), tools::RUN_PTY_CMD));
         assert_eq!(active.active().permissions.default, PermissionDefault::Ask);
     }
 
@@ -750,10 +690,7 @@ mod tests {
                 primary_agent_allows_tool(&active, tools::EXEC_COMMAND),
                 "{name} should expose exec_command"
             );
-            assert!(primary_agent_allows_tool(
-                &active,
-                tools::REQUEST_USER_INPUT
-            ));
+            assert!(primary_agent_allows_tool(&active, tools::REQUEST_USER_INPUT));
 
             assert!(
                 !primary_agent_allows_tool(&active, tools::APPLY_PATCH),
@@ -828,10 +765,7 @@ mod tests {
         assert!(!primary_agent_allows_tool(&active, "command_session"));
         assert!(!primary_agent_allows_tool(&active, "file_operation"));
         assert!(!primary_agent_allows_tool(&active, tools::SPAWN_AGENT));
-        assert!(!primary_agent_allows_tool(
-            &active,
-            tools::SPAWN_BACKGROUND_SUBPROCESS
-        ));
+        assert!(!primary_agent_allows_tool(&active, tools::SPAWN_BACKGROUND_SUBPROCESS));
         assert!(!primary_agent_allows_tool(&active, tools::SEND_INPUT));
         assert!(!primary_agent_allows_tool(&active, tools::RESUME_AGENT));
 
@@ -944,9 +878,7 @@ mod tests {
         let workspace = TempDir::new().expect("workspace");
         let current_dir = workspace.path();
 
-        state
-            .select_from_specs(&builtins, "auto")
-            .expect("auto primary");
+        state.select_from_specs(&builtins, "auto").expect("auto primary");
         let exec = build_permission_request(
             workspace.path(),
             current_dir,
@@ -964,9 +896,7 @@ mod tests {
             ResolvedPermissionDecision::Auto
         );
 
-        state
-            .select_from_specs(&builtins, "plan")
-            .expect("plan primary");
+        state.select_from_specs(&builtins, "plan").expect("plan primary");
         let edit = build_permission_request(
             workspace.path(),
             current_dir,
@@ -992,17 +922,13 @@ mod tests {
         let initial_model = state.active().model.clone();
         let initial_tools = state.active().tools.clone();
 
-        state
-            .select_from_specs(&builtins, "auto")
-            .expect("auto primary");
+        state.select_from_specs(&builtins, "auto").expect("auto primary");
         assert_eq!(state.active().identity.name, "auto");
         assert_eq!(state.active().permissions.default, PermissionDefault::Auto);
         assert_eq!(state.active().model, initial_model);
         assert_eq!(state.active().tools, initial_tools);
 
-        state
-            .select_from_specs(&builtins, "duck")
-            .expect("duck primary");
+        state.select_from_specs(&builtins, "duck").expect("duck primary");
         assert_eq!(state.active().identity.name, "duck");
         assert_eq!(state.active().permissions.default, PermissionDefault::Deny);
         assert_eq!(state.active().model, initial_model);
@@ -1039,22 +965,13 @@ mod tests {
             &merged.lifecycle.user_prompt_submit,
             &["global-user", "primary-user"],
         );
-        assert_hook_commands(
-            &merged.lifecycle.pre_tool_use,
-            &["global-pre", "primary-pre"],
-        );
-        assert_hook_commands(
-            &merged.lifecycle.post_tool_use,
-            &["global-post", "primary-post"],
-        );
+        assert_hook_commands(&merged.lifecycle.pre_tool_use, &["global-pre", "primary-pre"]);
+        assert_hook_commands(&merged.lifecycle.post_tool_use, &["global-post", "primary-post"]);
         assert_hook_commands(
             &merged.lifecycle.permission_request,
             &["global-permission", "primary-permission"],
         );
-        assert_hook_commands(
-            &merged.lifecycle.pre_compact,
-            &["global-compact", "primary-compact"],
-        );
+        assert_hook_commands(&merged.lifecycle.pre_compact, &["global-compact", "primary-compact"]);
         assert_hook_commands(&merged.lifecycle.stop, &["global-stop", "primary-stop"]);
         assert_hook_commands(
             &merged.lifecycle.notification,
@@ -1081,10 +998,7 @@ mod tests {
 
         assert_hook_commands(&merged.lifecycle.session_start, &["primary-session-start"]);
         assert_hook_commands(&merged.lifecycle.session_end, &["primary-session-end"]);
-        assert_hook_commands(
-            &merged.lifecycle.subagent_start,
-            &["primary-subagent-start"],
-        );
+        assert_hook_commands(&merged.lifecycle.subagent_start, &["primary-subagent-start"]);
         assert_hook_commands(&merged.lifecycle.subagent_stop, &["primary-subagent-stop"]);
         assert!(merged.lifecycle.task_completion.is_empty());
         assert!(merged.lifecycle.task_completed.is_empty());
@@ -1106,15 +1020,11 @@ mod tests {
         let specs = vec![first, second];
         let mut state = ActivePrimaryAgentState::default();
 
-        state
-            .select_from_specs(&specs, "first")
-            .expect("selected first");
+        state.select_from_specs(&specs, "first").expect("selected first");
         let first_config = build_primary_agent_hook_config(&global, state.active());
         assert_hook_commands(&first_config.lifecycle.pre_tool_use, &["first-pre"]);
 
-        state
-            .select_from_specs(&specs, "second")
-            .expect("selected second");
+        state.select_from_specs(&specs, "second").expect("selected second");
         let second_config = build_primary_agent_hook_config(&global, state.active());
         assert_hook_commands(&second_config.lifecycle.pre_tool_use, &["second-pre"]);
     }
@@ -1137,9 +1047,7 @@ mod tests {
         let specs = vec![first, second];
         let mut state = ActivePrimaryAgentState::default();
 
-        state
-            .select_from_specs(&specs, "one")
-            .expect("selected first by alias");
+        state.select_from_specs(&specs, "one").expect("selected first by alias");
         assert_eq!(state.active().identity.name, "first");
         assert_eq!(state.active().description, "First metadata");
         assert_eq!(state.active().color.as_deref(), Some("red"));
@@ -1147,9 +1055,7 @@ mod tests {
         assert_eq!(state.active().skills, vec!["rust".to_string()]);
         assert_eq!(state.active().mcp_servers.len(), 1);
 
-        state
-            .select_from_specs(&specs, "second")
-            .expect("selected second");
+        state.select_from_specs(&specs, "second").expect("selected second");
         assert_eq!(state.active().identity.name, "second");
         assert_eq!(state.active().description, "second description");
         assert_eq!(state.active().color.as_deref(), Some("blue"));

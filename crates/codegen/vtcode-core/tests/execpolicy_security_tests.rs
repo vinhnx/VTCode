@@ -119,10 +119,7 @@ async fn test_absolute_path_outside_workspace_blocked() {
     let command = vec!["cat".to_string(), "/etc/passwd".to_string()];
 
     let result = validate_command(&command, &root, &working_dir, false).await;
-    assert!(
-        result.is_err(),
-        "absolute path outside workspace should be blocked"
-    );
+    assert!(result.is_err(), "absolute path outside workspace should be blocked");
 }
 
 #[tokio::test]
@@ -152,10 +149,7 @@ async fn test_git_diff_blocked() {
 
     let result = validate_command(&command, &root, &working_dir, false).await;
     // git diff is allowed as it's a read-only operation
-    assert!(
-        result.is_ok(),
-        "git diff should be allowed as read-only operation"
-    );
+    assert!(result.is_ok(), "git diff should be allowed as read-only operation");
 }
 
 #[tokio::test]
@@ -179,10 +173,7 @@ async fn test_cp_without_recursive_flag_for_directory() {
     // Cleanup
     let _ = std::fs::remove_dir_all(&test_dir);
 
-    assert!(
-        result.is_err(),
-        "copying directory without -r should be blocked"
-    );
+    assert!(result.is_err(), "copying directory without -r should be blocked");
     assert!(
         result.unwrap_err().to_string().contains("recursive"),
         "error should mention recursive flag"
@@ -203,10 +194,7 @@ async fn test_ls_safe_usage() {
     ];
 
     let result = validate_command(&command, &root, &working_dir, false).await;
-    assert!(
-        result.is_ok(),
-        "safe ls usage should be allowed: {result:?}"
-    );
+    assert!(result.is_ok(), "safe ls usage should be allowed: {result:?}");
 }
 
 #[tokio::test]
@@ -252,10 +240,7 @@ async fn test_git_reset_hard_requires_confirm() {
 
     let command = vec!["git".to_string(), "reset".to_string(), "--hard".to_string()];
     let result = validate_command(&command, &root, &working_dir, false).await;
-    assert!(
-        result.is_err(),
-        "git reset --hard should be blocked without confirm"
-    );
+    assert!(result.is_err(), "git reset --hard should be blocked without confirm");
 
     let result_confirmed = validate_command(&command, &root, &working_dir, true).await;
     eprintln!("Result with confirm=true: {result_confirmed:?}");
@@ -272,16 +257,10 @@ async fn test_cargo_publish_requires_confirm() {
 
     let command = vec!["cargo".to_string(), "publish".to_string()];
     let result = validate_command(&command, &root, &working_dir, false).await;
-    assert!(
-        result.is_err(),
-        "cargo publish should be blocked without confirm"
-    );
+    assert!(result.is_err(), "cargo publish should be blocked without confirm");
 
     let result_confirmed = validate_command(&command, &root, &working_dir, true).await;
-    assert!(
-        result_confirmed.is_ok(),
-        "cargo publish should be allowed with confirm=true"
-    );
+    assert!(result_confirmed.is_ok(), "cargo publish should be allowed with confirm=true");
 }
 
 #[tokio::test]

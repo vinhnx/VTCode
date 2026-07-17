@@ -136,35 +136,20 @@ mod tests {
             resolve_agent_color(AGENT_COLOR_PLAN, fallback, true),
             resolve_agent_color(AGENT_COLOR_DUCK, fallback, true),
         ];
-        assert_eq!(
-            light,
-            [Color::Red, Color::Green, Color::Blue, Color::Magenta]
-        );
+        assert_eq!(light, [Color::Red, Color::Green, Color::Blue, Color::Magenta]);
         // The four modes must remain visually distinct in both appearances.
-        assert_eq!(
-            dark.iter().collect::<std::collections::HashSet<_>>().len(),
-            4
-        );
-        assert_eq!(
-            light.iter().collect::<std::collections::HashSet<_>>().len(),
-            4
-        );
+        assert_eq!(dark.iter().collect::<std::collections::HashSet<_>>().len(), 4);
+        assert_eq!(light.iter().collect::<std::collections::HashSet<_>>().len(), 4);
     }
 
     #[test]
     fn agent_color_style_accepts_raw_hue_names_and_hex() {
         let fallback = Color::LightMagenta;
         // Raw standard ANSI hue name (as emitted by the plan-approval overlay).
-        assert_eq!(
-            resolve_agent_color("green", fallback, false),
-            Color::LightGreen
-        );
+        assert_eq!(resolve_agent_color("green", fallback, false), Color::LightGreen);
         assert_eq!(resolve_agent_color("blue", fallback, true), Color::Blue);
         // Legacy hex still resolves.
-        assert_eq!(
-            resolve_agent_color("#FF0000", fallback, false),
-            Color::Rgb(255, 0, 0)
-        );
+        assert_eq!(resolve_agent_color("#FF0000", fallback, false), Color::Rgb(255, 0, 0));
     }
 
     #[test]

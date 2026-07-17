@@ -84,12 +84,7 @@ impl<'a> InlineEventContext<'a> {
             },
         );
 
-        Self {
-            state,
-            modal,
-            ctrl_c_state,
-            ctrl_c_notify,
-        }
+        Self { state, modal, ctrl_c_state, ctrl_c_notify }
     }
 
     pub(crate) async fn process_event(
@@ -101,8 +96,7 @@ impl<'a> InlineEventContext<'a> {
             InlineEvent::Submit(text) => self.input_processor().submit(text),
             InlineEvent::QueueSubmit(text) => {
                 let primary_agent = self.modal.active_primary_agent_name();
-                self.input_processor()
-                    .queue_submit(text, queue, primary_agent)
+                self.input_processor().queue_submit(text, queue, primary_agent)
             }
             InlineEvent::ProcessLatestQueued => {
                 self.state.reset_interrupt_state();
@@ -132,9 +126,9 @@ impl<'a> InlineEventContext<'a> {
                 InlineLoopAction::Continue
             }
             InlineEvent::Transient(overlay_event) => match overlay_event {
-                TransientEvent::SelectionChanged(TransientSelectionChange::List(selection)) => self
-                    .modal
-                    .handle_preview(self.state.renderer(), selection)?,
+                TransientEvent::SelectionChanged(TransientSelectionChange::List(selection)) => {
+                    self.modal.handle_preview(self.state.renderer(), selection)?
+                }
                 TransientEvent::SelectionChanged(TransientSelectionChange::DiffTrustMode {
                     ..
                 }) => {
@@ -143,9 +137,7 @@ impl<'a> InlineEventContext<'a> {
                 }
                 TransientEvent::Submitted(TransientSubmission::Selection(selection)) => {
                     self.state.reset_interrupt_state();
-                    self.modal
-                        .handle_submit(self.state.renderer(), selection)
-                        .await?
+                    self.modal.handle_submit(self.state.renderer(), selection).await?
                 }
                 TransientEvent::Submitted(TransientSubmission::Wizard(_)) => {
                     self.state.reset_interrupt_state();
@@ -229,9 +221,9 @@ impl<'a> InlineEventContext<'a> {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::OpenTranscriptReviewScrollback(text)
             }
-            InlineEvent::OpenFileInEditor(path) => self
-                .input_processor()
-                .submit(format!("/edit {path}").into()),
+            InlineEvent::OpenFileInEditor(path) => {
+                self.input_processor().submit(format!("/edit {path}").into())
+            }
             InlineEvent::OpenUrl(url) => {
                 self.state.reset_interrupt_state();
                 self.modal.request_url_guard(self.state.renderer(), url)?

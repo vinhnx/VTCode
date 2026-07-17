@@ -55,10 +55,7 @@ fn read_only_mutating_command_requires_approval_and_workspace_write() {
     )
     .unwrap();
     assert!(plan.approval_reason.is_some());
-    assert!(matches!(
-        plan.sandbox_policy,
-        Some(SandboxPolicy::WorkspaceWrite { .. })
-    ));
+    assert!(matches!(plan.sandbox_policy, Some(SandboxPolicy::WorkspaceWrite { .. })));
 }
 
 #[test]
@@ -79,10 +76,7 @@ fn read_only_non_mutating_command_stays_read_only_without_prompt() {
     )
     .unwrap();
     assert!(plan.approval_reason.is_none());
-    assert!(matches!(
-        plan.sandbox_policy,
-        Some(SandboxPolicy::ReadOnly { .. })
-    ));
+    assert!(matches!(plan.sandbox_policy, Some(SandboxPolicy::ReadOnly { .. })));
 }
 
 #[test]
@@ -305,10 +299,9 @@ fn with_additional_permissions_preserves_read_only_network_access() {
     let merged = sandbox_policy_with_additional_permissions(base_policy, &additional_permissions);
 
     assert!(merged.has_full_network_access());
-    assert!(merged.is_path_writable(
-        &extra_path.join("file.txt"),
-        PathBuf::from("/tmp/ws").as_path()
-    ));
+    assert!(
+        merged.is_path_writable(&extra_path.join("file.txt"), PathBuf::from("/tmp/ws").as_path())
+    );
 }
 
 #[test]
@@ -325,10 +318,9 @@ fn with_additional_permissions_preserves_read_only_network_allowlist() {
 
     assert!(merged.has_network_allowlist());
     assert!(merged.is_network_allowed("api.github.com", 443));
-    assert!(merged.is_path_writable(
-        &extra_path.join("file.txt"),
-        PathBuf::from("/tmp/ws").as_path()
-    ));
+    assert!(
+        merged.is_path_writable(&extra_path.join("file.txt"), PathBuf::from("/tmp/ws").as_path())
+    );
 }
 
 #[test]
@@ -400,13 +392,8 @@ fn prepare_exec_command_wraps_when_shell_is_missing() {
     let payload = payload.as_object().expect("payload object");
     let command = vec!["echo".to_string(), "hi".to_string()];
 
-    let prepared = prepare_exec_command(
-        payload,
-        "/bin/zsh",
-        true,
-        command.clone(),
-        Some("echo hi".into()),
-    );
+    let prepared =
+        prepare_exec_command(payload, "/bin/zsh", true, command.clone(), Some("echo hi".into()));
 
     assert_eq!(prepared.requested_command, command);
     assert_eq!(

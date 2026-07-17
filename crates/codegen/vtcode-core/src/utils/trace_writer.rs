@@ -36,9 +36,7 @@ impl FlushableWriter {
             .open(path)
             .with_context(|| format!("Failed to open trace log file: {}", path.display()))?;
         let writer = BufWriter::with_capacity(BUF_CAPACITY, file);
-        let flushable = Self {
-            inner: Arc::new(Mutex::new(writer)),
-        };
+        let flushable = Self { inner: Arc::new(Mutex::new(writer)) };
         // Store globally so `flush_trace_log` works from anywhere.
         let _ = GLOBAL_WRITER.set(flushable.clone());
         // Register the flush hook in vtcode-commons so crates that don't

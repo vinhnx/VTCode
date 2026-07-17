@@ -128,10 +128,7 @@ pub struct SessionStats {
 impl SessionStats {
     pub fn merge_usage(&mut self, usage: crate::llm::provider::Usage) {
         self.total_usage
-            .add(&crate::llm::usage_cost::normalized_turn_usage(
-                &self.provider_name,
-                &usage,
-            ));
+            .add(&crate::llm::usage_cost::normalized_turn_usage(&self.provider_name, &usage));
     }
 }
 
@@ -156,11 +153,7 @@ impl AgentSessionState {
             conversation: Vec::new(),
             messages: Arc::new(Vec::new()),
             stats: SessionStats::default(),
-            constraints: SessionConstraints {
-                max_turns,
-                max_tool_loops,
-                max_context_tokens,
-            },
+            constraints: SessionConstraints { max_turns, max_tool_loops, max_context_tokens },
             outcome: TaskOutcome::Unknown,
             stop_reason: None,
             total_cost_usd: None,
@@ -305,10 +298,7 @@ impl AgentSessionState {
 
         self.previous_response_chains.insert(
             key,
-            ResponsesContinuationState {
-                response_id: response_id.to_string(),
-                messages,
-            },
+            ResponsesContinuationState { response_id: response_id.to_string(), messages },
         );
     }
 
@@ -345,10 +335,7 @@ impl AgentSessionState {
 
     /// Add a user message to the history with metadata.
     pub fn add_user_message(&mut self, text: String) {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let tokens = text.len().saturating_div(4); // rough estimate: ~4 chars per token
         let metadata = crate::core::message_metadata::MessageMetadata::user_input(now, tokens);
         self.conversation.push(Content::user_text(text.as_str()));
@@ -365,11 +352,8 @@ impl AgentSessionState {
     /// Compute a hash of the current assistant response content for progress tracking.
     fn assistant_response_hash(&self) -> Option<u64> {
         use crate::llm::provider::{MessageContent, MessageRole};
-        let last_assistant = self
-            .messages
-            .iter()
-            .rev()
-            .find(|m| m.role == MessageRole::Assistant)?;
+        let last_assistant =
+            self.messages.iter().rev().find(|m| m.role == MessageRole::Assistant)?;
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         match &last_assistant.content {
@@ -407,10 +391,8 @@ impl AgentSessionState {
     /// to annotate LLM responses and tool results after they are pushed.
     pub fn attach_metadata_to_last(&mut self, source: &str, estimated_tokens: usize) {
         if let Some(last) = self.messages_mut().last_mut() {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+            let now =
+                SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
             let metadata = match source {
                 "llm_response" => crate::core::message_metadata::MessageMetadata::llm_response(
                     now,
@@ -464,13 +446,11 @@ impl AgentSessionState {
     pub fn adjust_token_count(&mut self, delta: isize) {
         if delta >= 0 {
             // `delta >= 0` is checked above, so the conversion is infallible
-            self.cached_total_tokens = self
-                .cached_total_tokens
-                .saturating_add(usize::try_from(delta).unwrap());
+            self.cached_total_tokens =
+                self.cached_total_tokens.saturating_add(usize::try_from(delta).unwrap());
         } else {
-            self.cached_total_tokens = self
-                .cached_total_tokens
-                .saturating_sub(delta.unsigned_abs());
+            self.cached_total_tokens =
+                self.cached_total_tokens.saturating_sub(delta.unsigned_abs());
         }
     }
 
@@ -487,10 +467,7 @@ impl AgentSessionState {
         tool_def_tokens: usize,
         reserved_output_tokens: usize,
     ) -> (bool, usize, usize) {
-        let budget = self
-            .constraints
-            .max_context_tokens
-            .saturating_sub(reserved_output_tokens);
+        let budget = self.constraints.max_context_tokens.saturating_sub(reserved_output_tokens);
         let estimated = self
             .total_tokens()
             .saturating_add(system_prompt_tokens)
@@ -747,13 +724,8 @@ mod tests {
         state.push_tool_error("call_1".to_string(), "read_file", &payload, true);
 
         match &state.conversation[0].parts[0] {
-            Part::FunctionResponse {
-                function_response, ..
-            } => {
-                assert_eq!(
-                    function_response.response["error"]["message"],
-                    "missing file"
-                );
+            Part::FunctionResponse { function_response, .. } => {
+                assert_eq!(function_response.response["error"]["message"], "missing file");
             }
             other => panic!("expected function response, got {other:?}"),
         }
@@ -784,11 +756,7 @@ mod tests {
         );
 
         // Cached value should match direct computation
-        let direct = state
-            .messages
-            .iter()
-            .map(|m| m.estimate_tokens())
-            .sum::<usize>();
+        let direct = state.messages.iter().map(|m| m.estimate_tokens()).sum::<usize>();
         assert_eq!(state.total_tokens(), direct);
         assert!(state.total_tokens() > 0);
     }
@@ -800,9 +768,7 @@ mod tests {
         let before = state.total_tokens();
 
         // Simulate external mutation (bypassing push methods)
-        state
-            .messages_mut()
-            .push(Message::assistant("extra response".to_string()));
+        state.messages_mut().push(Message::assistant("extra response".to_string()));
         assert_ne!(
             state.total_tokens(),
             before + Message::assistant("extra response".to_string()).estimate_tokens()
@@ -810,32 +776,19 @@ mod tests {
 
         // Reconcile should fix it
         state.reconcile_token_count();
-        let expected = state
-            .messages
-            .iter()
-            .map(|m| m.estimate_tokens())
-            .sum::<usize>();
+        let expected = state.messages.iter().map(|m| m.estimate_tokens()).sum::<usize>();
         assert_eq!(state.total_tokens(), expected);
     }
 
     #[test]
     fn clear_conversation_history_resets_all_state() {
         let mut state = AgentSessionState::new("session".to_string(), 4, 4, 16_000);
-        state
-            .messages_mut()
-            .push(Message::user("hello".to_string()));
-        state
-            .messages_mut()
-            .push(Message::assistant("hi".to_string()));
-        state
-            .conversation
-            .push(crate::llm::providers::gemini::wire::Content {
-                role: "user".to_string(),
-                parts: vec![Part::Text {
-                    text: "hello".to_string(),
-                    thought_signature: None,
-                }],
-            });
+        state.messages_mut().push(Message::user("hello".to_string()));
+        state.messages_mut().push(Message::assistant("hi".to_string()));
+        state.conversation.push(crate::llm::providers::gemini::wire::Content {
+            role: "user".to_string(),
+            parts: vec![Part::Text { text: "hello".to_string(), thought_signature: None }],
+        });
         state.reconcile_token_count();
         state.last_processed_message_idx = 2;
         state.progress_hashes.push(123);

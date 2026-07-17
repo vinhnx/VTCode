@@ -6,11 +6,11 @@ This document explains how vtcode implements the loop engineering pattern descri
 
 | # | Primitive | vtcode Module | Purpose |
 |---|-----------|--------------|---------|
-| 1 | **Automations** | `vtcode-config/src/core/automation.rs` | `LoopEngineConfig` controls `enabled`, `max_iterations`, `reconcile_on_complete`, `preload_skills`. The `loop_engine_enabled()` function gates the loop with an env-var override (`VTCODE_DISABLE_LOOP_ENGINE`). |
-| 2 | **Worktrees** | `vtcode-core/src/git/worktree.rs` | `WorktreeManager` wraps `git worktree add/list/remove` to give each loop iteration an isolated working tree under `.vtcode/worktrees/`. Parallel loops never collide on the working tree. |
-| 3 | **Skills** | `vtcode-core/src/skills/manager.rs` | `SkillsManager::loop_skills()` preloads named skills into the agent's context. `resolve_skill_by_name()` resolves a single skill on demand. Skills become a structured runtime input, not just a file listing. |
-| 4 | **Sub-agents** | `vtcode-core/src/subagents/mod.rs` (+ `controller_spawn_run.rs` / `controller_verify.rs`) | `SubagentController` spawns child agents with `spawn_with_spec()`. When `isolation == "worktree"`, the child runs in a git worktree. After the child finishes, `run_worktree_reconciliation()` runs a verify-then-merge cycle. |
-| 5 | **Memory** | `vtcode-core/src/loop_memory.rs` | `LoopMemoryStore` trait with `MarkdownLoopMemory` (default) and `SqliteLoopMemory` (behind `sqlite` feature). Stores loop-level notes and decisions that survive across invocations. |
+| 1 | **Automations** | `crates/codegen/vtcode-config/src/core/automation.rs` | `LoopEngineConfig` controls `enabled`, `max_iterations`, `reconcile_on_complete`, `preload_skills`. The `loop_engine_enabled()` function gates the loop with an env-var override (`VTCODE_DISABLE_LOOP_ENGINE`). |
+| 2 | **Worktrees** | `crates/codegen/vtcode-core/src/git/worktree.rs` | `WorktreeManager` wraps `git worktree add/list/remove` to give each loop iteration an isolated working tree under `.vtcode/worktrees/`. Parallel loops never collide on the working tree. |
+| 3 | **Skills** | `crates/codegen/vtcode-core/src/skills/manager.rs` | `SkillsManager::loop_skills()` preloads named skills into the agent's context. `resolve_skill_by_name()` resolves a single skill on demand. Skills become a structured runtime input, not just a file listing. |
+| 4 | **Sub-agents** | `crates/codegen/vtcode-core/src/subagents/mod.rs` (+ `controller_spawn_run.rs` / `controller_verify.rs`) | `SubagentController` spawns child agents with `spawn_with_spec()`. When `isolation == "worktree"`, the child runs in a git worktree. After the child finishes, `run_worktree_reconciliation()` runs a verify-then-merge cycle. |
+| 5 | **Memory** | `crates/codegen/vtcode-core/src/loop_memory.rs` | `LoopMemoryStore` trait with `MarkdownLoopMemory` (default) and `SqliteLoopMemory` (behind `sqlite` feature). Stores loop-level notes and decisions that survive across invocations. |
 
 ## Reconcile Flow
 

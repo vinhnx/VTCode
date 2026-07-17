@@ -62,12 +62,9 @@ pub(super) fn interview_need_state(
     response_text: Option<&str>,
     plan_session: &PlanningWorkflowSessionState,
 ) -> InterviewNeedState {
-    let response_has_plan = response_text
-        .map(|text| text.contains("<proposed_plan>"))
-        .unwrap_or(false);
-    let has_open_decisions = response_text
-        .map(has_open_decision_markers)
-        .unwrap_or(false);
+    let response_has_plan =
+        response_text.map(|text| text.contains("<proposed_plan>")).unwrap_or(false);
+    let has_open_decisions = response_text.map(has_open_decision_markers).unwrap_or(false);
     let has_completed_interview = plan_session.interview_cycles_completed() > 0;
     let interview_cancelled = plan_session.last_interview_cancelled();
 

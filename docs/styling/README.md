@@ -81,12 +81,12 @@ TUI Rendering (Terminal Output)
 
 ## Related Code Locations
 
-- Theme definitions: `vtcode-core/src/ui/theme.rs`
-- Style conversion: `vtcode-core/src/ui/tui/style.rs`
-- Style types: `vtcode-core/src/ui/tui/types.rs`
-- File coloring: `vtcode-core/src/ui/tui/session/file_palette.rs`
-- Diff rendering: `vtcode-core/src/ui/diff_renderer.rs`
-- Main theme: `vtcode-core/src/ui/styled.rs`
+- Theme definitions: `crates/codegen/vtcode-core/src/ui/theme.rs`
+- Style conversion: `crates/codegen/vtcode-core/src/ui/tui/style.rs`
+- Style types: `crates/codegen/vtcode-core/src/ui/tui/types.rs`
+- File coloring: `crates/codegen/vtcode-core/src/ui/tui/session/file_palette.rs`
+- Diff rendering: `crates/codegen/vtcode-core/src/ui/diff_renderer.rs`
+- Main theme: `crates/codegen/vtcode-core/src/ui/styled.rs`
 
 ## Getting Started
 
@@ -116,4 +116,4 @@ TUI Rendering (Terminal Output)
 For implementation questions, refer to:
 - Phase 1 checklist in `implementation-phase1.md`
 - Test examples in same file
-- Existing code patterns in `vtcode-core/src/ui/`
+- Existing code patterns in `crates/codegen/vtcode-core/src/ui/`

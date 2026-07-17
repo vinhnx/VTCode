@@ -322,14 +322,12 @@ impl SessionConfig {
         // parsing and validation for different configuration types
         match key {
             "behavior.max_input_lines" => {
-                self.behavior.max_input_lines = value
-                    .parse()
-                    .map_err(|_| format!("Cannot parse '{value}' as number"))?;
+                self.behavior.max_input_lines =
+                    value.parse().map_err(|_| format!("Cannot parse '{value}' as number"))?;
             }
             "performance.lru_cache_size" => {
-                self.performance.lru_cache_size = value
-                    .parse()
-                    .map_err(|_| format!("Cannot parse '{value}' as number"))?;
+                self.performance.lru_cache_size =
+                    value.parse().map_err(|_| format!("Cannot parse '{value}' as number"))?;
             }
             _ => return Err(format!("Unknown configuration key: {key}")),
         }
@@ -379,26 +377,17 @@ mod tests {
     fn test_default_config() {
         let config = SessionConfig::new();
         assert_eq!(config.behavior.history_size, 100);
-        assert_eq!(
-            config.appearance.reasoning_display_mode,
-            ReasoningDisplayMode::Toggle
-        );
+        assert_eq!(config.appearance.reasoning_display_mode, ReasoningDisplayMode::Toggle);
         assert!(config.appearance.reasoning_visible_default);
         assert!(config.appearance.reasoning_visible());
-        assert_eq!(
-            config.appearance.thinking_display,
-            ThinkingBlockState::Collapsed
-        );
+        assert_eq!(config.appearance.thinking_display, ThinkingBlockState::Collapsed);
         assert!(config.appearance.thinking_collapsed_by_default());
     }
 
     #[test]
     fn test_thinking_display_default_collapsed() {
         let config = SessionConfig::new();
-        assert_eq!(
-            config.appearance.thinking_display,
-            ThinkingBlockState::Collapsed
-        );
+        assert_eq!(config.appearance.thinking_display, ThinkingBlockState::Collapsed);
         assert!(config.appearance.thinking_collapsed_by_default());
     }
 
@@ -423,20 +412,13 @@ mod tests {
         config.set_value("behavior.max_input_lines", "15").unwrap();
         assert_eq!(config.behavior.max_input_lines, 15);
 
-        assert!(
-            config
-                .set_value("behavior.max_input_lines", "not_a_number")
-                .is_err()
-        );
+        assert!(config.set_value("behavior.max_input_lines", "not_a_number").is_err());
     }
 
     #[test]
     fn test_config_value_getting() {
         let config = SessionConfig::new();
-        assert_eq!(
-            config.get_value("behavior.max_input_lines"),
-            Some("10".to_owned())
-        );
+        assert_eq!(config.get_value("behavior.max_input_lines"), Some("10".to_owned()));
     }
 
     #[test]

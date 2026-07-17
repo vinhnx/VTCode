@@ -165,7 +165,7 @@ Short replacements:
 ```
 
 ```json
-{"query":"ToolRegistration","path":"vtcode-core/src/tools","file_types":["rust"],"result_types":["definition"]}
+{"query":"ToolRegistration","path":"crates/codegen/vtcode-core/src/tools","file_types":["rust"],"result_types":["definition"]}
 ```
 
 ## Related Docs

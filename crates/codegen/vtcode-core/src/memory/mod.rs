@@ -109,9 +109,7 @@ impl MemoryMonitor {
             }
         }
 
-        Err(MemoryError::Parse(
-            "VmRSS not found in /proc/self/status".to_string(),
-        ))
+        Err(MemoryError::Parse("VmRSS not found in /proc/self/status".to_string()))
     }
 
     /// Get current RSS in bytes on macOS using /proc/self/stat or sysctl
@@ -238,10 +236,7 @@ impl MemoryMonitor {
 
     /// Get number of recorded checkpoints
     pub fn checkpoint_count(&self) -> usize {
-        self.state
-            .lock()
-            .map(|state| state.checkpoints.len())
-            .unwrap_or(0)
+        self.state.lock().map(|state| state.checkpoints.len()).unwrap_or(0)
     }
 }
 

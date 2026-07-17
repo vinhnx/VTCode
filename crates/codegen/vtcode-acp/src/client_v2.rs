@@ -204,10 +204,8 @@ impl AcpClientV2 {
 
         match status {
             StatusCode::OK => {
-                let body = response
-                    .text()
-                    .await
-                    .map_err(|e| AcpError::NetworkError(e.to_string()))?;
+                let body =
+                    response.text().await.map_err(|e| AcpError::NetworkError(e.to_string()))?;
 
                 trace!(body_len = body.len(), "Received JSON-RPC response");
 
@@ -341,10 +339,7 @@ impl AcpClientV2 {
 
         // Track session locally
         let session = AcpSession::new(&result.session_id);
-        self.sessions
-            .write()
-            .await
-            .insert(result.session_id.clone(), session);
+        self.sessions.write().await.insert(result.session_id.clone(), session);
 
         debug!(session_id = %result.session_id, "Session created");
 
@@ -359,9 +354,7 @@ impl AcpClientV2 {
             ));
         }
 
-        let params = SessionLoadParams {
-            session_id: session_id.to_string(),
-        };
+        let params = SessionLoadParams { session_id: session_id.to_string() };
 
         let result: SessionLoadResult = self.call("session/load", Some(params)).await?;
 
@@ -371,11 +364,7 @@ impl AcpClientV2 {
             .await
             .insert(session_id.to_string(), result.session.clone());
 
-        debug!(
-            session_id = session_id,
-            turns = result.history.len(),
-            "Session loaded"
-        );
+        debug!(session_id = session_id, turns = result.history.len(), "Session loaded");
 
         Ok(result)
     }
@@ -517,11 +506,7 @@ impl AcpClientV2 {
     ) -> AcpResult<mpsc::Receiver<SessionUpdateNotification>> {
         let (tx, rx) = mpsc::channel(100);
 
-        let url = format!(
-            "{}/sse/session/{}",
-            self.base_url.trim_end_matches('/'),
-            session_id
-        );
+        let url = format!("{}/sse/session/{}", self.base_url.trim_end_matches('/'), session_id);
 
         let _http_client = self.http_client.clone();
         let auth_token = self.auth_token.read().await.clone();

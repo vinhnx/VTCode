@@ -127,10 +127,8 @@ pub trait ProviderConfig {
         Self::PromptCacheSettings: Send + Sync + 'static,
     {
         let _ = prompt_cache_settings;
-        let prompt_cache = prompt_cache_enabled.then(|| PromptCachingConfig {
-            enabled: true,
-            ..Default::default()
-        });
+        let prompt_cache = prompt_cache_enabled
+            .then(|| PromptCachingConfig { enabled: true, ..Default::default() });
 
         match crate::llm::provider_config::create_provider_unified(
             Self::PROVIDER_KEY,
@@ -141,11 +139,9 @@ pub trait ProviderConfig {
             Some(timeouts),
         ) {
             Ok(provider) => provider,
-            Err(error) => panic!(
-                "provider config invariant violated for `{}`: {}",
-                Self::PROVIDER_KEY,
-                error
-            ),
+            Err(error) => {
+                panic!("provider config invariant violated for `{}`: {}", Self::PROVIDER_KEY, error)
+            }
         }
     }
 

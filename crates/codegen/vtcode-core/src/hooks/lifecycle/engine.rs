@@ -65,9 +65,7 @@ impl LifecycleHookEngine {
                 session_id: session_id.into(),
                 trigger,
                 hooks: compiled,
-                state: Mutex::new(LifecycleHookState {
-                    transcript_path: None,
-                }),
+                state: Mutex::new(LifecycleHookState { transcript_path: None }),
             }),
         }))
     }
@@ -77,10 +75,7 @@ impl LifecycleHookEngine {
         let mut additional_context = Vec::new();
 
         if self.inner.hooks.session_start.is_empty() {
-            return Ok(SessionStartHookOutcome {
-                messages,
-                additional_context,
-            });
+            return Ok(SessionStartHookOutcome { messages, additional_context });
         }
 
         let trigger_value = self.inner.trigger.as_str().to_owned();
@@ -92,10 +87,7 @@ impl LifecycleHookEngine {
             }
 
             for command in &group.commands {
-                match self
-                    .execute_command("SessionStart", command, &payload)
-                    .await
-                {
+                match self.execute_command("SessionStart", command, &payload).await {
                     Ok(result) => interpret_session_start(
                         command,
                         &result,
@@ -111,10 +103,7 @@ impl LifecycleHookEngine {
             }
         }
 
-        Ok(SessionStartHookOutcome {
-            messages,
-            additional_context,
-        })
+        Ok(SessionStartHookOutcome { messages, additional_context })
     }
 
     pub async fn run_session_end(
@@ -190,10 +179,7 @@ impl LifecycleHookEngine {
             }
 
             for command in &group.commands {
-                match self
-                    .execute_command("SubagentStart", command, &payload)
-                    .await
-                {
+                match self.execute_command("SubagentStart", command, &payload).await {
                     Ok(result) => interpret_session_end(
                         command,
                         &result,
@@ -246,10 +232,7 @@ impl LifecycleHookEngine {
             }
 
             for command in &group.commands {
-                match self
-                    .execute_command("SubagentStop", command, &payload)
-                    .await
-                {
+                match self.execute_command("SubagentStop", command, &payload).await {
                     Ok(result) => interpret_session_end(
                         command,
                         &result,
@@ -287,10 +270,7 @@ impl LifecycleHookEngine {
             }
 
             for command in &group.commands {
-                match self
-                    .execute_command("UserPromptSubmit", command, &payload)
-                    .await
-                {
+                match self.execute_command("UserPromptSubmit", command, &payload).await {
                     Ok(result) => {
                         interpret_user_prompt(
                             command,
@@ -342,10 +322,7 @@ impl LifecycleHookEngine {
             }
 
             for command in &group.commands {
-                match self
-                    .execute_command("PermissionRequest", command, &payload)
-                    .await
-                {
+                match self.execute_command("PermissionRequest", command, &payload).await {
                     Ok(result) => {
                         interpret_permission_request(
                             command,
@@ -381,9 +358,7 @@ impl LifecycleHookEngine {
             return Ok(outcome);
         }
 
-        let payload = self
-            .build_pre_tool_payload(tool_name, tool_input, tool_call_id)
-            .await?;
+        let payload = self.build_pre_tool_payload(tool_name, tool_input, tool_call_id).await?;
 
         for group in &self.inner.hooks.pre_tool_use {
             if !group.matcher.matches(tool_name) {
@@ -524,9 +499,7 @@ impl LifecycleHookEngine {
             return Ok(messages);
         }
 
-        let payload = self
-            .build_notification_payload(notification_type, title, message)
-            .await?;
+        let payload = self.build_notification_payload(notification_type, title, message).await?;
         let matcher_value = notification_type.as_str().to_owned();
 
         for group in &self.inner.hooks.notification {
@@ -535,10 +508,7 @@ impl LifecycleHookEngine {
             }
 
             for command in &group.commands {
-                match self
-                    .execute_command("Notification", command, &payload)
-                    .await
-                {
+                match self.execute_command("Notification", command, &payload).await {
                     Ok(result) => interpret_session_end(
                         command,
                         &result,
@@ -568,9 +538,7 @@ impl LifecycleHookEngine {
             return Ok(outcome);
         }
 
-        let payload = self
-            .build_stop_payload(last_assistant_message, stop_hook_active)
-            .await?;
+        let payload = self.build_stop_payload(last_assistant_message, stop_hook_active).await?;
 
         for group in &self.inner.hooks.stop {
             if !group.matcher.matches("stop") {
@@ -651,20 +619,11 @@ impl LifecycleHookEngine {
                 .write_all(&payload_bytes)
                 .await
                 .context("failed to write lifecycle hook payload")?;
-            stdin
-                .shutdown()
-                .await
-                .context("failed to close lifecycle hook stdin")?;
+            stdin.shutdown().await.context("failed to close lifecycle hook stdin")?;
         }
 
-        let mut stdout_pipe = child
-            .stdout
-            .take()
-            .context("lifecycle hook missing stdout pipe")?;
-        let mut stderr_pipe = child
-            .stderr
-            .take()
-            .context("lifecycle hook missing stderr pipe")?;
+        let mut stdout_pipe = child.stdout.take().context("lifecycle hook missing stdout pipe")?;
+        let mut stderr_pipe = child.stderr.take().context("lifecycle hook missing stderr pipe")?;
 
         let stdout_task = tokio::spawn(async move {
             let mut buffer = Vec::new();
@@ -675,10 +634,7 @@ impl LifecycleHookEngine {
             stderr_pipe.read_to_end(&mut buffer).await.map(|_| buffer)
         });
 
-        let timeout_secs = command
-            .timeout_seconds
-            .unwrap_or(DEFAULT_TIMEOUT_SECS)
-            .max(1);
+        let timeout_secs = command.timeout_seconds.unwrap_or(DEFAULT_TIMEOUT_SECS).max(1);
         let wait_result = time::timeout(Duration::from_secs(timeout_secs), child.wait()).await;
 
         let (exit_code, timed_out) = match wait_result {
@@ -693,14 +649,8 @@ impl LifecycleHookEngine {
             }
         };
 
-        let stdout_bytes = stdout_task
-            .await
-            .unwrap_or_else(|_| Ok(Vec::new()))
-            .unwrap_or_default();
-        let stderr_bytes = stderr_task
-            .await
-            .unwrap_or_else(|_| Ok(Vec::new()))
-            .unwrap_or_default();
+        let stdout_bytes = stdout_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
+        let stderr_bytes = stderr_task.await.unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
 
         Ok(HookCommandResult {
             exit_code,
@@ -713,10 +663,7 @@ impl LifecycleHookEngine {
 
     async fn current_transcript_path(&self) -> Option<String> {
         let state = self.inner.state.lock().await;
-        state
-            .transcript_path
-            .as_ref()
-            .and_then(|path| path_to_string(path))
+        state.transcript_path.as_ref().and_then(|path| path_to_string(path))
     }
 }
 

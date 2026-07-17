@@ -57,11 +57,9 @@ impl ModelsDatabase {
                     if let Some(models_obj) = provider_obj.get("models").and_then(|v| v.as_object())
                     {
                         for (model_id, model_data) in models_obj {
-                            let context_window = model_data
-                                .get("context")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0)
-                                as usize;
+                            let context_window =
+                                model_data.get("context").and_then(|v| v.as_u64()).unwrap_or(0)
+                                    as usize;
 
                             models.insert(model_id.clone(), ModelInfo { context_window });
                         }
@@ -81,10 +79,9 @@ impl ModelsDatabase {
             Self::Generated => supported_models_for_provider(provider)
                 .map(|models| models.contains(&model))
                 .unwrap_or(false),
-            Self::File { providers } => providers
-                .get(provider)
-                .map(|p| p.models.contains_key(model))
-                .unwrap_or(false),
+            Self::File { providers } => {
+                providers.get(provider).map(|p| p.models.contains_key(model)).unwrap_or(false)
+            }
         }
     }
 
@@ -110,9 +107,7 @@ pub struct ConfigValidator {
 impl ConfigValidator {
     /// Create a validator backed by the build-generated model catalog.
     pub fn generated() -> Self {
-        Self {
-            models_db: ModelsDatabase::generated(),
-        }
+        Self { models_db: ModelsDatabase::generated() }
     }
 
     /// Create a new validator from models database file
@@ -135,9 +130,7 @@ impl ConfigValidator {
         if !is_custom_provider
             && !is_codex_provider
             && !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
-            && !self
-                .models_db
-                .model_exists(&config.agent.provider, &config.agent.default_model)
+            && !self.models_db.model_exists(&config.agent.provider, &config.agent.default_model)
         {
             result.errors.push(format!(
                 "Model '{}' not found for provider '{}'. Check docs/models.json.",
@@ -187,9 +180,7 @@ impl ConfigValidator {
         if let Ok(cwd) = std::env::current_dir() {
             // Basic check only, actual workspace validation happens in StartupContext
             if !cwd.exists() {
-                result
-                    .warnings
-                    .push("Current working directory does not exist".to_owned());
+                result.warnings.push("Current working directory does not exist".to_owned());
             }
         }
 
@@ -206,9 +197,7 @@ impl ConfigValidator {
         if !is_custom_provider
             && !is_codex_provider
             && !is_managed_auth_model(managed_auth_provider, &config.agent.default_model)
-            && !self
-                .models_db
-                .model_exists(&config.agent.provider, &config.agent.default_model)
+            && !self.models_db.model_exists(&config.agent.provider, &config.agent.default_model)
         {
             bail!(
                 "Model '{}' not found for provider '{}'. Check docs/models.json.",
@@ -375,10 +364,7 @@ mod tests {
         let dir = create_test_models_db();
         let db = ModelsDatabase::from_file(&dir.path().join("models.json")).unwrap();
 
-        assert_eq!(
-            db.get_context_window("google", "gemini-3-flash-preview"),
-            Some(1048576)
-        );
+        assert_eq!(db.get_context_window("google", "gemini-3-flash-preview"), Some(1048576));
         assert_eq!(db.get_context_window("openai", "gpt-5"), Some(128000));
         assert_eq!(db.get_context_window("google", "nonexistent"), None);
     }
@@ -405,17 +391,15 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.provider = "mycorp".to_owned();
         config.agent.default_model = "totally-custom-model".to_owned();
-        config
-            .custom_providers
-            .push(vtcode_config::core::CustomProviderConfig {
-                name: "mycorp".to_string(),
-                display_name: "MyCorporateName".to_string(),
-                base_url: "https://llm.example/v1".to_string(),
-                api_key_env: "MYCORP_API_KEY".to_string(),
-                auth: None,
-                model: "totally-custom-model".to_string(),
-                models: Vec::new(),
-            });
+        config.custom_providers.push(vtcode_config::core::CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorporateName".to_string(),
+            base_url: "https://llm.example/v1".to_string(),
+            api_key_env: "MYCORP_API_KEY".to_string(),
+            auth: None,
+            model: "totally-custom-model".to_string(),
+            models: Vec::new(),
+        });
 
         let result = validator.validate(&config).unwrap();
 
@@ -437,10 +421,7 @@ mod tests {
 
     #[test]
     fn copilot_managed_auth_model_accepts_live_raw_ids() {
-        assert!(is_managed_auth_model(
-            Some(Provider::Copilot),
-            "gpt-5.3-codex"
-        ));
+        assert!(is_managed_auth_model(Some(Provider::Copilot), "gpt-5.3-codex"));
         assert!(!is_managed_auth_model(Some(Provider::Copilot), "   "));
     }
 
@@ -535,11 +516,8 @@ mod tests {
         cfg.provider.openai.hosted_shell.file_ids = vec!["file_123".to_string()];
         cfg.provider.openai.hosted_shell.network_policy.policy_type =
             vtcode_config::core::OpenAIHostedShellNetworkPolicyType::Allowlist;
-        cfg.provider
-            .openai
-            .hosted_shell
-            .network_policy
-            .allowed_domains = vec!["httpbin.org".to_string()];
+        cfg.provider.openai.hosted_shell.network_policy.allowed_domains =
+            vec!["httpbin.org".to_string()];
 
         let msg = check_openai_hosted_shell_compat(
             &cfg,
@@ -622,11 +600,7 @@ mod tests {
 
         let msg = check_openai_hosted_shell_compat(&cfg, "gpt-5", "openai");
 
-        assert!(
-            msg.as_deref()
-                .unwrap_or_default()
-                .contains("network_policy.allowed_domains")
-        );
+        assert!(msg.as_deref().unwrap_or_default().contains("network_policy.allowed_domains"));
     }
 
     #[test]
@@ -635,28 +609,18 @@ mod tests {
         cfg.provider.openai.hosted_shell.enabled = true;
         cfg.provider.openai.hosted_shell.network_policy.policy_type =
             vtcode_config::core::OpenAIHostedShellNetworkPolicyType::Allowlist;
-        cfg.provider
-            .openai
-            .hosted_shell
-            .network_policy
-            .allowed_domains = vec!["pypi.org".to_string()];
-        cfg.provider
-            .openai
-            .hosted_shell
-            .network_policy
-            .domain_secrets = vec![vtcode_config::core::OpenAIHostedShellDomainSecret {
-            domain: "httpbin.org".to_string(),
-            name: "API_KEY".to_string(),
-            value: "secret".to_string(),
-        }];
+        cfg.provider.openai.hosted_shell.network_policy.allowed_domains =
+            vec!["pypi.org".to_string()];
+        cfg.provider.openai.hosted_shell.network_policy.domain_secrets =
+            vec![vtcode_config::core::OpenAIHostedShellDomainSecret {
+                domain: "httpbin.org".to_string(),
+                name: "API_KEY".to_string(),
+                value: "secret".to_string(),
+            }];
 
         let msg = check_openai_hosted_shell_compat(&cfg, "gpt-5", "openai");
 
-        assert!(
-            msg.as_deref()
-                .unwrap_or_default()
-                .contains("domain_secrets[0].domain")
-        );
+        assert!(msg.as_deref().unwrap_or_default().contains("domain_secrets[0].domain"));
     }
 
     #[test]

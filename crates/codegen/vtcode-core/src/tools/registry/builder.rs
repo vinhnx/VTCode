@@ -258,10 +258,7 @@ tool_output_threshold = "oops"
         let config = registry.output_spooler().config();
 
         assert!(config.enabled);
-        assert_eq!(
-            config.threshold_bytes,
-            DynamicContextConfig::default().tool_output_threshold
-        );
+        assert_eq!(config.threshold_bytes, DynamicContextConfig::default().tool_output_threshold);
         assert_eq!(config.max_files, SpoolerConfig::default().max_files);
         assert_eq!(config.max_age_secs, SpoolerConfig::default().max_age_secs);
     }

@@ -251,12 +251,8 @@ impl ResultMetadata {
         }
 
         // Merge tool metrics - use extend to avoid double clone
-        self.tool_metrics.extend(
-            other
-                .tool_metrics
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone())),
-        );
+        self.tool_metrics
+            .extend(other.tool_metrics.iter().map(|(k, v)| (k.clone(), v.clone())));
     }
 }
 

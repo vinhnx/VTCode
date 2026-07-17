@@ -24,12 +24,7 @@ use vtcode_ui::tui::{
     },
 };
 
-const VIEWPORT: Rect = Rect {
-    x: 0,
-    y: 0,
-    width: 100,
-    height: 24,
-};
+const VIEWPORT: Rect = Rect { x: 0, y: 0, width: 100, height: 24 };
 const APP_WIDTH: u16 = 100;
 const APP_HEIGHT: u16 = 30;
 const MESSAGE_COUNT: usize = 500;
@@ -108,9 +103,7 @@ fn set_review_search(
 }
 
 fn draw_app_session(session: &mut AppSession, terminal: &mut Terminal<TestBackend>) {
-    terminal
-        .draw(|frame| session.render(frame))
-        .expect("app session should render");
+    terminal.draw(|frame| session.render(frame)).expect("app session should render");
 }
 
 fn transcript_widget_benchmark(c: &mut Criterion) {
@@ -224,9 +217,5 @@ fn transcript_review_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    benches,
-    transcript_widget_benchmark,
-    transcript_review_benchmark
-);
+criterion_group!(benches, transcript_widget_benchmark, transcript_review_benchmark);
 criterion_main!(benches);

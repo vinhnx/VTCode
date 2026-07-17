@@ -47,10 +47,8 @@ pub(super) fn normalize_for_shell_detection(command_part: &str) -> String {
 
 fn normalize_cargo_phrase(command_part: &str) -> Option<String> {
     let tokens: Vec<&str> = command_part.split_whitespace().collect();
-    let lowered_tokens: Vec<String> = tokens
-        .iter()
-        .map(|token| token.to_ascii_lowercase())
-        .collect();
+    let lowered_tokens: Vec<String> =
+        tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
     if lowered_tokens.len() < 2 || lowered_tokens.first()? != "cargo" {
         return None;
     }
@@ -67,10 +65,7 @@ fn normalize_cargo_test_phrase(tokens: &[&str], lowered_tokens: &[String]) -> Op
         && lowered_tokens[2] == "on"
         && lowered_tokens[4] == "bin"
         && lowered_tokens[5] == "for"
-        && matches!(
-            lowered_tokens[6].as_str(),
-            "func" | "function" | "test" | "case"
-        )
+        && matches!(lowered_tokens[6].as_str(), "func" | "function" | "test" | "case")
     {
         let bin_name = trim_token(tokens[3]);
         let test_name_joined = tokens[7..].join(" ");
@@ -116,10 +111,8 @@ fn normalize_cargo_check_phrase(tokens: &[&str], lowered_tokens: &[String]) -> O
 
 fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
     let tokens: Vec<&str> = command_part.split_whitespace().collect();
-    let lowered_tokens: Vec<String> = tokens
-        .iter()
-        .map(|token| token.to_ascii_lowercase())
-        .collect();
+    let lowered_tokens: Vec<String> =
+        tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
     if lowered_tokens.len() < 2 {
         return None;
     }
@@ -165,10 +158,8 @@ fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
 
 fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
     let tokens: Vec<&str> = command_part.split_whitespace().collect();
-    let lowered_tokens: Vec<String> = tokens
-        .iter()
-        .map(|token| token.to_ascii_lowercase())
-        .collect();
+    let lowered_tokens: Vec<String> =
+        tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
     if lowered_tokens.len() < 2 || lowered_tokens.first()? != "pytest" {
         return None;
     }
@@ -176,10 +167,7 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
     if lowered_tokens.len() >= 6
         && lowered_tokens[1] == "on"
         && lowered_tokens[3] == "for"
-        && matches!(
-            lowered_tokens[4].as_str(),
-            "func" | "function" | "test" | "case"
-        )
+        && matches!(lowered_tokens[4].as_str(), "func" | "function" | "test" | "case")
     {
         let path = shell_quote_if_needed(&normalize_path_operand(tokens[2]));
         let test_name_joined = tokens[5..].join(" ");
@@ -201,10 +189,7 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
 
     if lowered_tokens.len() >= 4
         && lowered_tokens[1] == "for"
-        && matches!(
-            lowered_tokens[2].as_str(),
-            "func" | "function" | "test" | "case"
-        )
+        && matches!(lowered_tokens[2].as_str(), "func" | "function" | "test" | "case")
     {
         let test_name_joined = tokens[3..].join(" ");
         let test_name = trim_token(&test_name_joined);
@@ -219,10 +204,8 @@ fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
 
 fn normalize_unix_phrase(command_part: &str) -> Option<String> {
     let tokens: Vec<&str> = command_part.split_whitespace().collect();
-    let lowered_tokens: Vec<String> = tokens
-        .iter()
-        .map(|token| token.to_ascii_lowercase())
-        .collect();
+    let lowered_tokens: Vec<String> =
+        tokens.iter().map(|token| token.to_ascii_lowercase()).collect();
     if lowered_tokens.len() < 2 {
         return None;
     }

@@ -46,9 +46,7 @@ pub struct LLMFactory {
 impl LLMFactory {
     /// Create a new factory pre-populated with all built-in provider registrations.
     pub fn new() -> Self {
-        let mut factory = Self {
-            providers: HashMap::new(),
-        };
+        let mut factory = Self { providers: HashMap::new() };
 
         register_builtin_cgp_providers(&mut factory);
 
@@ -68,8 +66,7 @@ impl LLMFactory {
     where
         F: Fn(ProviderConfig) -> Box<dyn LLMProvider> + Send + Sync + 'static,
     {
-        self.providers
-            .insert(name.to_string(), Box::new(factory_fn));
+        self.providers.insert(name.to_string(), Box::new(factory_fn));
     }
 
     /// Create provider instance
@@ -79,12 +76,10 @@ impl LLMFactory {
         config: ProviderConfig,
     ) -> Result<Box<dyn LLMProvider>, LLMError> {
         let factory_fn =
-            self.providers
-                .get(provider_name)
-                .ok_or_else(|| LLMError::InvalidRequest {
-                    message: format!("Unknown provider: {provider_name}"),
-                    metadata: None,
-                })?;
+            self.providers.get(provider_name).ok_or_else(|| LLMError::InvalidRequest {
+                message: format!("Unknown provider: {provider_name}"),
+                metadata: None,
+            })?;
 
         Ok(factory_fn(config))
     }
@@ -260,9 +255,8 @@ pub fn register_custom_providers(custom_providers: &[vtcode_config::core::Custom
                 api_key.or_else(|| std::env::var(&api_key_env).ok())
             };
 
-            let model = model
-                .filter(|m| !m.trim().is_empty())
-                .unwrap_or_else(|| default_model.clone());
+            let model =
+                model.filter(|m| !m.trim().is_empty()).unwrap_or_else(|| default_model.clone());
 
             let base_url = base_url
                 .clone()
@@ -392,10 +386,7 @@ mod tests {
                     ),
                     prompt_cache: None,
                     timeouts: None,
-                    openai: Some(OpenAIConfig {
-                        websocket_mode: true,
-                        ..OpenAIConfig::default()
-                    }),
+                    openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
                     anthropic: Some(AnthropicConfig::default()),
                     model_behavior: None,
                     workspace_root: None,

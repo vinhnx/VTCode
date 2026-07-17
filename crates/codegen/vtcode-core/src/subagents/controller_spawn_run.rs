@@ -43,9 +43,7 @@ impl SubagentController {
                 "spawn_agent",
             )
             .await?;
-        let spec = self
-            .resolve_requested_spec(delegation.requested_agent.as_deref())
-            .await?;
+        let spec = self.resolve_requested_spec(delegation.requested_agent.as_deref()).await?;
         let prompt = self.prepare_delegation_prompt(
             &spec,
             &delegation,
@@ -87,9 +85,7 @@ impl SubagentController {
                 "spawn_background_subprocess",
             )
             .await?;
-        let spec = self
-            .resolve_requested_spec(delegation.requested_agent.as_deref())
-            .await?;
+        let spec = self.resolve_requested_spec(delegation.requested_agent.as_deref()).await?;
         if !spec.background {
             bail!(
                 "spawn_background_subprocess requires an agent with `background: true`; '{}' is a normal delegated child agent. Use spawn_agent instead.",
@@ -107,11 +103,10 @@ impl SubagentController {
         let desired_max_turns =
             normalize_background_child_max_turns(request.max_turns.or(spec.max_turns), true);
         let desired_model_override = request.model.clone().or_else(|| spec.model.clone());
-        let desired_reasoning_override = request.reasoning_effort.clone().or_else(|| {
-            spec.reasoning_effort
-                .as_ref()
-                .map(|e| e.as_str().to_string())
-        });
+        let desired_reasoning_override = request
+            .reasoning_effort
+            .clone()
+            .or_else(|| spec.reasoning_effort.as_ref().map(|e| e.as_str().to_string()));
 
         let record_id = background_record_id(spec.name.as_str());
         let _ = self.refresh_background_processes().await?;
@@ -227,10 +222,7 @@ impl SubagentController {
                 record.queued_prompts.clear();
                 record.queued_prompts.push_back(prompt.clone());
                 true
-            } else if matches!(
-                record.status,
-                SubagentStatus::Running | SubagentStatus::Queued
-            ) {
+            } else if matches!(record.status, SubagentStatus::Running | SubagentStatus::Queued) {
                 record.status = SubagentStatus::Waiting;
                 record.queued_prompts.push_back(prompt.clone());
                 false
@@ -287,11 +279,7 @@ impl SubagentController {
         }
 
         let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or_else(|| {
-            self.config
-                .vt_cfg
-                .subagents
-                .default_timeout_seconds
-                .saturating_mul(1000)
+            self.config.vt_cfg.subagents.default_timeout_seconds.saturating_mul(1000)
         }));
         let deadline = tokio::time::Instant::now() + timeout;
 
@@ -302,10 +290,7 @@ impl SubagentController {
                 targets
                     .iter()
                     .filter_map(|target| {
-                        state
-                            .children
-                            .get(target)
-                            .map(|record| record.notify.clone())
+                        state.children.get(target).map(|record| record.notify.clone())
                     })
                     .collect::<Vec<_>>()
             };
@@ -394,10 +379,7 @@ impl SubagentController {
             .children
             .get_mut(target)
             .ok_or_else(|| anyhow!("Unknown subagent id {target}"))?;
-        if matches!(
-            record.status,
-            SubagentStatus::Running | SubagentStatus::Queued
-        ) {
+        if matches!(record.status, SubagentStatus::Running | SubagentStatus::Queued) {
             return Ok(false);
         }
         let prompt = record.last_prompt.clone().unwrap_or_else(|| {
@@ -514,11 +496,7 @@ impl SubagentController {
             .as_ref()
             .and_then(|overrides| overrides.reasoning_override.clone())
             .or(previous_reasoning_override)
-            .or_else(|| {
-                spec.reasoning_effort
-                    .as_ref()
-                    .map(|e| e.as_str().to_string())
-            });
+            .or_else(|| spec.reasoning_effort.as_ref().map(|e| e.as_str().to_string()));
 
         {
             let mut state = self.state.write().await;
@@ -592,10 +570,7 @@ impl SubagentController {
                 .await
         }
         .with_context(|| {
-            format!(
-                "Failed to spawn background subprocess for subagent '{}'",
-                spec.name
-            )
+            format!("Failed to spawn background subprocess for subagent '{}'", spec.name)
         })?;
 
         tracing::info!(
@@ -848,12 +823,8 @@ impl SubagentController {
                 })
                 .count()
         };
-        let effective_max_concurrent = self
-            .config
-            .vt_cfg
-            .subagents
-            .max_concurrent
-            .min(SUBAGENT_HARD_CONCURRENCY_LIMIT);
+        let effective_max_concurrent =
+            self.config.vt_cfg.subagents.max_concurrent.min(SUBAGENT_HARD_CONCURRENCY_LIMIT);
         if active_count >= effective_max_concurrent {
             bail!("Subagent concurrency limit reached (max_concurrent={effective_max_concurrent})");
         }

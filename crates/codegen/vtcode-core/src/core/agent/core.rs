@@ -114,11 +114,7 @@ impl Agent {
         if self.config.verbose {
             println!("{} Agent initialized", style("[INIT]").cyan().bold());
             println!("  {} Model: {}", style("").dim(), self.config.model);
-            println!(
-                "  {} Workspace: {}",
-                style("").dim(),
-                self.config.workspace.display()
-            );
+            println!("  {} Workspace: {}", style("").dim(), self.config.workspace.display());
             println!("  {} Tools loaded: {}", style("").dim(), tool_count);
 
             // Show REAL optimization status
@@ -250,8 +246,7 @@ impl Agent {
 
     /// Check for error patterns
     pub fn detect_error_pattern(&self, error_type: &ErrorType, time_window_seconds: u64) -> bool {
-        self.error_recovery
-            .detect_error_pattern(error_type, time_window_seconds)
+        self.error_recovery.detect_error_pattern(error_type, time_window_seconds)
     }
 
     /// Calculate recovery success rate
@@ -270,14 +265,8 @@ impl Agent {
         let error_stats = self.error_recovery.get_error_statistics();
 
         if detailed && self.config.verbose {
-            println!(
-                "{} Session Transparency Summary:",
-                style("[TRANSPARENCY]").magenta().bold()
-            );
-            println!(
-                "  {} total decisions made",
-                style(report.total_decisions).cyan()
-            );
+            println!("{} Session Transparency Summary:", style("[TRANSPARENCY]").magenta().bold());
+            println!("  {} total decisions made", style(report.total_decisions).cyan());
             println!(
                 "  {} successful ({}% success rate)",
                 style(report.successful_decisions).green(),
@@ -287,31 +276,16 @@ impl Agent {
                     0
                 }
             );
-            println!(
-                "  {} failed decisions",
-                style(report.failed_decisions).red()
-            );
+            println!("  {} failed decisions", style(report.failed_decisions).red());
             println!("  {} tool calls executed", style(report.tool_calls).cyan());
-            println!(
-                "  Session duration: {} seconds",
-                style(report.session_duration).cyan()
-            );
+            println!("  Session duration: {} seconds", style(report.session_duration).cyan());
             if let Some(avg_confidence) = report.avg_confidence {
-                println!(
-                    "  {:.1}% average decision confidence",
-                    avg_confidence * 100.0
-                );
+                println!("  {:.1}% average decision confidence", avg_confidence * 100.0);
             }
 
             // Error recovery statistics
-            println!(
-                "\n{} Error Statistics:",
-                style("[ERROR RECOVERY]").red().bold()
-            );
-            println!(
-                "  {} total errors occurred",
-                style(error_stats.total_errors).red()
-            );
+            println!("\n{} Error Statistics:", style("[ERROR RECOVERY]").red().bold());
+            println!("  {} total errors occurred", style(error_stats.total_errors).red());
             println!(
                 "  {} errors resolved ({}% recovery rate)",
                 style(error_stats.resolved_errors).green(),
@@ -340,10 +314,7 @@ impl Agent {
         self.show_transparency_report(true);
 
         if self.config.verbose {
-            println!(
-                "{} Agent shutdown complete",
-                style("[SHUTDOWN]").cyan().bold()
-            );
+            println!("{} Agent shutdown complete", style("[SHUTDOWN]").cyan().bold());
         }
 
         Ok(())

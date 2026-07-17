@@ -14,10 +14,7 @@ pub fn delegated_task_requires_clarification(prompt: &str) -> bool {
     if normalized.is_empty() {
         return true;
     }
-    if VAGUE_SUBAGENT_PROMPTS
-        .iter()
-        .any(|candidate| normalized == *candidate)
-    {
+    if VAGUE_SUBAGENT_PROMPTS.iter().any(|candidate| normalized == *candidate) {
         return true;
     }
     normalized.split_whitespace().count() == 1
@@ -36,10 +33,7 @@ pub fn extract_explicit_agent_mentions(input: &str, specs: &[SubagentSpec]) -> V
             continue;
         }
 
-        if specs
-            .iter()
-            .any(|spec| spec.is_primary() && spec.matches_name(direct.as_str()))
-        {
+        if specs.iter().any(|spec| spec.is_primary() && spec.matches_name(direct.as_str())) {
             continue;
         }
 
@@ -62,10 +56,7 @@ fn extract_direct_agent_mentions(input: &str) -> Vec<String> {
         .split_whitespace()
         .filter_map(|token| {
             let trimmed = token.trim_matches(|ch: char| {
-                matches!(
-                    ch,
-                    '"' | '\'' | ',' | '.' | ':' | ';' | '!' | '?' | ')' | '('
-                )
+                matches!(ch, '"' | '\'' | ',' | '.' | ':' | ';' | '!' | '?' | ')' | '(')
             });
             trimmed
                 .strip_prefix("@agent-")
@@ -77,10 +68,7 @@ fn extract_direct_agent_mentions(input: &str) -> Vec<String> {
 }
 
 fn push_unique_agent_mention(mentions: &mut Vec<String>, candidate: &str) {
-    if mentions
-        .iter()
-        .any(|existing| existing.eq_ignore_ascii_case(candidate))
-    {
+    if mentions.iter().any(|existing| existing.eq_ignore_ascii_case(candidate)) {
         return;
     }
     mentions.push(candidate.to_string());
@@ -197,15 +185,9 @@ fn contains_bounded_term(input: &str, needle: &str) -> bool {
     input.match_indices(needle).any(|(start, matched)| {
         let end = start + matched.len();
         let leading_ok = start == 0
-            || !input[..start]
-                .chars()
-                .next_back()
-                .is_some_and(|ch| ch.is_ascii_alphanumeric());
+            || !input[..start].chars().next_back().is_some_and(|ch| ch.is_ascii_alphanumeric());
         let trailing_ok = end == input.len()
-            || !input[end..]
-                .chars()
-                .next()
-                .is_some_and(|ch| ch.is_ascii_alphanumeric());
+            || !input[end..].chars().next().is_some_and(|ch| ch.is_ascii_alphanumeric());
         leading_ok && trailing_ok
     })
 }
@@ -246,10 +228,7 @@ pub fn request_prompt(message: &Option<String>, items: &[SubagentInputItem]) -> 
         return Some(message.trim().to_string());
     }
 
-    let segments = items
-        .iter()
-        .filter_map(item_prompt_segment)
-        .collect::<Vec<_>>();
+    let segments = items.iter().filter_map(item_prompt_segment).collect::<Vec<_>>();
     if segments.is_empty() {
         None
     } else {

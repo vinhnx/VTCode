@@ -116,10 +116,7 @@ impl PluginRuntime {
 
     pub async fn register_manifest(&self, manifest_path: impl AsRef<Path>) -> Result<PluginHandle> {
         let path = manifest_path.as_ref();
-        ensure!(
-            self.config.enabled,
-            "plugin runtime disabled by configuration"
-        );
+        ensure!(self.config.enabled, "plugin runtime disabled by configuration");
 
         let manifest = self.load_manifest(path).await?;
         self.validate_trust(&manifest)?;
@@ -146,10 +143,7 @@ impl PluginRuntime {
         manifest: &PluginManifest,
         installer: &dyn PluginInstaller,
     ) -> Result<()> {
-        ensure!(
-            self.config.enabled,
-            "plugin runtime disabled by configuration"
-        );
+        ensure!(self.config.enabled, "plugin runtime disabled by configuration");
         self.validate_trust(manifest)?;
 
         let registration = installer.materialize(manifest).await?;
@@ -172,21 +166,12 @@ impl PluginRuntime {
     }
 
     fn validate_trust(&self, manifest: &PluginManifest) -> Result<()> {
-        if self
-            .config
-            .deny
-            .iter()
-            .any(|blocked| blocked.as_str() == manifest.id.as_str())
-        {
+        if self.config.deny.iter().any(|blocked| blocked.as_str() == manifest.id.as_str()) {
             bail!("plugin {} is blocked by deny list", manifest.id);
         }
 
         if !self.config.allow.is_empty()
-            && !self
-                .config
-                .allow
-                .iter()
-                .any(|allowed| allowed.as_str() == manifest.id.as_str())
+            && !self.config.allow.iter().any(|allowed| allowed.as_str() == manifest.id.as_str())
         {
             bail!("plugin {} not present in allow list", manifest.id);
         }
@@ -240,10 +225,7 @@ entrypoint = "bin/plugin"
         );
 
         let err = runtime.register_manifest(&manifest_path).await.unwrap_err();
-        assert!(
-            err.to_string().contains("blocked"),
-            "expected deny list rejection"
-        );
+        assert!(err.to_string().contains("blocked"), "expected deny list rejection");
     }
 
     #[tokio::test]

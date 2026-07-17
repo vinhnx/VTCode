@@ -22,10 +22,7 @@ pub(crate) fn render_message_spans(
         spans.extend(agent_prefix_spans(line, theme, labels, &prefix_style_fn));
     } else if let Some(prefix) = prefix_text_fn(line.kind) {
         let style = prefix_style_fn(line);
-        spans.push(Span::styled(
-            prefix,
-            ratatui_style_from_inline(&style, theme.foreground),
-        ));
+        spans.push(Span::styled(prefix, ratatui_style_from_inline(&style, theme.foreground)));
     }
 
     if line.kind == InlineMessageKind::Agent {

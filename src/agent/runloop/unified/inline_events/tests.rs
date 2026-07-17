@@ -98,11 +98,8 @@ fn renderer_with_handle() -> (InlineHandle, AnsiRenderer) {
     (handle, renderer)
 }
 
-fn renderer_with_handle_and_commands() -> (
-    InlineHandle,
-    tokio::sync::mpsc::UnboundedReceiver<InlineCommand>,
-    AnsiRenderer,
-) {
+fn renderer_with_handle_and_commands()
+-> (InlineHandle, tokio::sync::mpsc::UnboundedReceiver<InlineCommand>, AnsiRenderer) {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let handle = InlineHandle::new_for_tests(tx);
     let renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
@@ -157,12 +154,7 @@ async fn launch_editor_event_submits_edit_command() {
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
-        .process_event(
-            InlineEvent::LaunchEditor {
-                draft: "".to_string(),
-            },
-            &mut queue,
-        )
+        .process_event(InlineEvent::LaunchEditor { draft: "".to_string() }, &mut queue)
         .await
         .expect("process launch editor");
     assert!(matches!(
@@ -215,12 +207,7 @@ async fn launch_editor_event_with_draft_returns_editor_with_draft_action() {
     let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
     let action = context
-        .process_event(
-            InlineEvent::LaunchEditor {
-                draft: "hello world".to_string(),
-            },
-            &mut queue,
-        )
+        .process_event(InlineEvent::LaunchEditor { draft: "hello world".to_string() }, &mut queue)
         .await
         .expect("process launch editor with draft");
     assert!(matches!(
@@ -343,25 +330,17 @@ async fn open_url_event_shows_guard_modal_with_deny_selected_by_default() {
                 assert_eq!(request.title, "Open External Link");
                 assert_eq!(request.selected, Some(prompt.default_selection()));
                 assert_eq!(request.lines, prompt.lines());
-                let titles: Vec<_> = request
-                    .items
-                    .iter()
-                    .map(|item| item.title.as_str())
-                    .collect();
+                let titles: Vec<_> = request.items.iter().map(|item| item.title.as_str()).collect();
                 assert_eq!(titles, vec!["Cancel", "Open in browser"]);
             }
             other => panic!("expected list transient, got {other:?}"),
         },
-        other => panic!(
-            "expected transient command, got different command: {:?}",
-            other_name(&other)
-        ),
+        other => {
+            panic!("expected transient command, got different command: {:?}", other_name(&other))
+        }
     }
 
-    assert!(matches!(
-        palette_state,
-        Some(ActivePalette::UrlGuard { .. })
-    ));
+    assert!(matches!(palette_state, Some(ActivePalette::UrlGuard { .. })));
 }
 
 #[tokio::test]
@@ -409,10 +388,7 @@ async fn open_http_url_guard_modal_includes_insecure_transport_warning() {
         let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
         let action = context
-            .process_event(
-                InlineEvent::OpenUrl("http://example.com/docs".to_string()),
-                &mut queue,
-            )
+            .process_event(InlineEvent::OpenUrl("http://example.com/docs".to_string()), &mut queue)
             .await
             .expect("process insecure open url");
         assert!(matches!(action, InlineLoopAction::Continue));
@@ -422,19 +398,13 @@ async fn open_http_url_guard_modal_includes_insecure_transport_warning() {
     match command {
         InlineCommand::ShowTransient { request } => match *request {
             TransientRequest::List(request) => {
-                assert!(
-                    request
-                        .lines
-                        .iter()
-                        .any(|line| line.contains("Plain HTTP is insecure"))
-                );
+                assert!(request.lines.iter().any(|line| line.contains("Plain HTTP is insecure")));
             }
             other => panic!("expected list transient, got {other:?}"),
         },
-        other => panic!(
-            "expected transient command, got different command: {:?}",
-            other_name(&other)
-        ),
+        other => {
+            panic!("expected transient command, got different command: {:?}", other_name(&other))
+        }
     }
 }
 
@@ -483,19 +453,13 @@ async fn cancelling_url_guard_restores_previous_palette() {
         let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
         let action = context
-            .process_event(
-                InlineEvent::OpenUrl("https://example.com/docs".to_string()),
-                &mut queue,
-            )
+            .process_event(InlineEvent::OpenUrl("https://example.com/docs".to_string()), &mut queue)
             .await
             .expect("process open url");
         assert!(matches!(action, InlineLoopAction::Continue));
 
         let cancel = context
-            .process_event(
-                InlineEvent::Transient(TransientEvent::Cancelled),
-                &mut queue,
-            )
+            .process_event(InlineEvent::Transient(TransientEvent::Cancelled), &mut queue)
             .await
             .expect("process cancel");
         assert!(matches!(cancel, InlineLoopAction::Continue));
@@ -507,10 +471,9 @@ async fn cancelling_url_guard_restores_previous_palette() {
             TransientRequest::List(request) => assert_eq!(request.title, "Open External Link"),
             other => panic!("expected list transient, got {other:?}"),
         },
-        other => panic!(
-            "expected transient command, got different command: {:?}",
-            other_name(&other)
-        ),
+        other => {
+            panic!("expected transient command, got different command: {:?}", other_name(&other))
+        }
     }
 
     let restored_command = commands.recv().await.expect("restored palette command");
@@ -519,10 +482,9 @@ async fn cancelling_url_guard_restores_previous_palette() {
             TransientRequest::List(request) => assert_eq!(request.title, "Model"),
             other => panic!("expected list transient, got {other:?}"),
         },
-        other => panic!(
-            "expected transient command, got different command: {:?}",
-            other_name(&other)
-        ),
+        other => {
+            panic!("expected transient command, got different command: {:?}", other_name(&other))
+        }
     }
 
     assert!(matches!(palette_state, Some(ActivePalette::ModelTarget)));
@@ -575,10 +537,7 @@ async fn previous_agent_event_cycles_primary_agent_backward() {
         .process_event(InlineEvent::CyclePrimaryAgentPrevious, &mut queue)
         .await
         .expect("process previous primary agent");
-    assert!(matches!(
-        action,
-        InlineLoopAction::CyclePrimaryAgentPrevious
-    ));
+    assert!(matches!(action, InlineLoopAction::CyclePrimaryAgentPrevious));
 }
 
 #[tokio::test]
@@ -781,21 +740,12 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         .await
         .expect("process edit plan");
     let cancel = context
-        .process_event(
-            InlineEvent::Transient(TransientEvent::Cancelled),
-            &mut queue,
-        )
+        .process_event(InlineEvent::Transient(TransientEvent::Cancelled), &mut queue)
         .await
         .expect("process cancel");
 
-    assert!(matches!(
-        execute,
-        InlineLoopAction::PlanApproved { auto_accept: false }
-    ));
-    assert!(matches!(
-        auto,
-        InlineLoopAction::PlanApproved { auto_accept: true }
-    ));
+    assert!(matches!(execute, InlineLoopAction::PlanApproved { auto_accept: false }));
+    assert!(matches!(auto, InlineLoopAction::PlanApproved { auto_accept: true }));
     assert!(matches!(edit, InlineLoopAction::PlanEditRequested));
     assert!(matches!(cancel, InlineLoopAction::Continue));
 }
@@ -959,10 +909,8 @@ async fn steering_events_are_passive_in_idle_loop() {
         InlineEvent::Resume,
         InlineEvent::Steer("keep going".into()),
     ] {
-        let action = context
-            .process_event(event, &mut queue)
-            .await
-            .expect("process steering event");
+        let action =
+            context.process_event(event, &mut queue).await.expect("process steering event");
         assert!(matches!(action, InlineLoopAction::Continue));
     }
 }

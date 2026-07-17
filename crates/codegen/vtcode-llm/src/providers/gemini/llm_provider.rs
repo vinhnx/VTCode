@@ -67,10 +67,8 @@ impl LLMProvider for GeminiProvider {
                 return Err(Self::handle_http_error(status, &error_text));
             }
 
-            let interaction_response: Interaction = response
-                .json()
-                .await
-                .map_err(|e| format_parse_error("Gemini", &e))?;
+            let interaction_response: Interaction =
+                response.json().await.map_err(|e| format_parse_error("Gemini", &e))?;
 
             return Self::convert_from_interaction_response(interaction_response, model);
         }
@@ -94,10 +92,8 @@ impl LLMProvider for GeminiProvider {
             return Err(Self::handle_http_error(status, &error_text));
         }
 
-        let gemini_response: GenerateContentResponse = response
-            .json()
-            .await
-            .map_err(|e| format_parse_error("Gemini", &e))?;
+        let gemini_response: GenerateContentResponse =
+            response.json().await.map_err(|e| format_parse_error("Gemini", &e))?;
 
         Self::convert_from_gemini_response(gemini_response, model)
     }
@@ -182,10 +178,7 @@ impl LLMProvider for GeminiProvider {
         let model = request.model.clone();
         let gemini_request = self.convert_to_gemini_request(&request)?;
 
-        let url = format!(
-            "{}/models/{}:streamGenerateContent",
-            self.base_url, request.model
-        );
+        let url = format!("{}/models/{}:streamGenerateContent", self.base_url, request.model);
 
         let response = self
             .http_client
@@ -297,10 +290,7 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        models::google::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+        models::google::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
@@ -309,24 +299,15 @@ impl LLMProvider for GeminiProvider {
                 "Gemini",
                 "Interactions with previous_interaction_id cannot set store=false",
             );
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 
-        if !models::google::SUPPORTED_MODELS
-            .iter()
-            .any(|m| *m == request.model)
-        {
+        if !models::google::SUPPORTED_MODELS.iter().any(|m| *m == request.model) {
             let formatted_error = error_display::format_llm_error(
                 "Gemini",
                 &format!("Unsupported model: {}", request.model),
             );
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 
         if let Some(max_tokens) = request.max_tokens {
@@ -340,10 +321,7 @@ impl LLMProvider for GeminiProvider {
                         "Requested max_tokens ({max_tokens}) exceeds model limit ({max_output_tokens}) for {model}"
                     ),
                 );
-                return Err(LLMError::InvalidRequest {
-                    message: formatted_error,
-                    metadata: None,
-                });
+                return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
             }
         }
 

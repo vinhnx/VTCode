@@ -38,11 +38,7 @@ fn maybe_force_planning_workflow_interview_inserts_tool_call() {
         1,
     );
     match result {
-        TurnProcessingResult::ToolCalls {
-            tool_calls,
-            assistant_text,
-            ..
-        } => {
+        TurnProcessingResult::ToolCalls { tool_calls, assistant_text, .. } => {
             assert_eq!(assistant_text, "Proceeding without explicit questions.");
             assert!(!tool_calls.is_empty());
             let name = tool_calls.last().map(|call| call.tool_name()).unwrap_or("");
@@ -98,31 +94,21 @@ fn maybe_force_planning_workflow_interview_includes_distinct_question_options() 
         .and_then(|call| call.args())
         .expect("expected interview tool arguments");
     let payload = args.clone();
-    let questions = payload["questions"]
-        .as_array()
-        .expect("questions array should exist");
+    let questions = payload["questions"].as_array().expect("questions array should exist");
     assert!(!questions.is_empty());
 
     let first_labels = questions
         .iter()
         .map(|question| {
-            question["options"]
-                .as_array()
-                .expect("options array should exist")[0]["label"]
+            question["options"].as_array().expect("options array should exist")[0]["label"]
                 .as_str()
                 .expect("first option label should exist")
                 .to_string()
         })
         .collect::<Vec<_>>();
 
-    assert!(
-        first_labels
-            .iter()
-            .all(|label| label.contains("(Recommended)"))
-    );
-    let unique_labels = first_labels
-        .iter()
-        .collect::<std::collections::HashSet<_>>();
+    assert!(first_labels.iter().all(|label| label.contains("(Recommended)")));
+    let unique_labels = first_labels.iter().collect::<std::collections::HashSet<_>>();
     assert_eq!(unique_labels.len(), first_labels.len());
 }
 
@@ -383,10 +369,7 @@ fn maybe_force_planning_workflow_interview_strips_interview_from_mixed_tool_call
     match result {
         TurnProcessingResult::ToolCalls { tool_calls, .. } => {
             assert_eq!(tool_calls.len(), 1);
-            let name = tool_calls
-                .first()
-                .map(|call| call.tool_name())
-                .unwrap_or("");
+            let name = tool_calls.first().map(|call| call.tool_name()).unwrap_or("");
             assert_eq!(name, tools::READ_FILE);
             assert!(plan_session.interview_pending());
         }
@@ -459,16 +442,10 @@ fn maybe_force_planning_workflow_interview_clears_stale_pending_when_decisions_c
 
 #[test]
 fn line_has_open_decision_marker_only_tracks_next_open_decision() {
-    assert!(line_has_open_decision_marker(
-        "Next open decision: validate migration order"
-    ));
-    assert!(!line_has_open_decision_marker(
-        "Decision needed: choose validation scope"
-    ));
+    assert!(line_has_open_decision_marker("Next open decision: validate migration order"));
+    assert!(!line_has_open_decision_marker("Decision needed: choose validation scope"));
     assert!(!line_has_open_decision_marker("Next open decision: none"));
-    assert!(!line_has_open_decision_marker(
-        "Next open decision: No remaining scope decisions."
-    ));
+    assert!(!line_has_open_decision_marker("Next open decision: No remaining scope decisions."));
 }
 
 #[test]

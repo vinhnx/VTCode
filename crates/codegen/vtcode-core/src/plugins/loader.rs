@@ -31,10 +31,7 @@ pub struct PluginLoader {
 impl PluginLoader {
     /// Create a new plugin loader
     pub fn new(plugins_dir: PathBuf, runtime: PluginRuntime) -> Self {
-        Self {
-            plugins_dir,
-            runtime,
-        }
+        Self { plugins_dir, runtime }
     }
 
     /// Install a plugin from a source
@@ -118,9 +115,7 @@ impl PluginLoader {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(PluginError::LoadingError(format!(
-                "Git clone failed: {stderr}"
-            )));
+            return Err(PluginError::LoadingError(format!("Git clone failed: {stderr}")));
         }
 
         // Determine plugin name
@@ -151,9 +146,8 @@ impl PluginLoader {
     /// Install plugin from HTTP URL
     async fn install_from_http(&self, url: &str, name: Option<&str>) -> PluginResult<PathBuf> {
         // For now, create a placeholder implementation
-        let plugin_name = name
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| self.extract_name_from_url(url));
+        let plugin_name =
+            name.map(|s| s.to_string()).unwrap_or_else(|| self.extract_name_from_url(url));
 
         let install_dir = self.plugins_dir.join(&plugin_name);
         fs::create_dir_all(&install_dir).await.map_err(|e| {
@@ -176,11 +170,9 @@ impl PluginLoader {
             )
         })?;
         fs::create_dir_all(manifest_parent).await?;
-        fs::write(&manifest_path, placeholder_manifest)
-            .await
-            .map_err(|e| {
-                PluginError::LoadingError(format!("Failed to create placeholder manifest: {e}"))
-            })?;
+        fs::write(&manifest_path, placeholder_manifest).await.map_err(|e| {
+            PluginError::LoadingError(format!("Failed to create placeholder manifest: {e}"))
+        })?;
 
         Ok(install_dir)
     }
@@ -193,11 +185,7 @@ impl PluginLoader {
     ) -> PluginResult<PathBuf> {
         // For now, create a placeholder implementation
         let plugin_name = name.map(|s| s.to_string()).unwrap_or_else(|| {
-            marketplace_id
-                .split('/')
-                .next_back()
-                .unwrap_or(marketplace_id)
-                .to_string()
+            marketplace_id.split('/').next_back().unwrap_or(marketplace_id).to_string()
         });
 
         let install_dir = self.plugins_dir.join(&plugin_name);
@@ -221,11 +209,9 @@ impl PluginLoader {
             )
         })?;
         fs::create_dir_all(manifest_parent).await?;
-        fs::write(&manifest_path, placeholder_manifest)
-            .await
-            .map_err(|e| {
-                PluginError::LoadingError(format!("Failed to create placeholder manifest: {e}"))
-            })?;
+        fs::write(&manifest_path, placeholder_manifest).await.map_err(|e| {
+            PluginError::LoadingError(format!("Failed to create placeholder manifest: {e}"))
+        })?;
 
         Ok(install_dir)
     }
@@ -330,9 +316,6 @@ impl PluginLoader {
     /// Extract plugin name from URL
     fn extract_name_from_url(&self, url: &str) -> String {
         // Extract name from URL path
-        url.split('/')
-            .next_back()
-            .unwrap_or("unknown-plugin")
-            .to_string()
+        url.split('/').next_back().unwrap_or("unknown-plugin").to_string()
     }
 }

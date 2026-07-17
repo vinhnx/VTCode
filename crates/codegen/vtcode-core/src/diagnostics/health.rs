@@ -11,11 +11,7 @@ pub struct HealthSample {
 
 impl HealthSample {
     pub fn new(latency_ms: u64, success: bool) -> Self {
-        Self {
-            timestamp: SystemTime::now(),
-            latency_ms,
-            success,
-        }
+        Self { timestamp: SystemTime::now(), latency_ms, success }
     }
 }
 

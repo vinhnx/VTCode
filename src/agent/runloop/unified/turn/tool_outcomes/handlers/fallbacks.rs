@@ -101,10 +101,8 @@ fn file_operation_write_fallback(args: &Value) -> Option<(String, Value)> {
     let content = args.get("content").and_then(Value::as_str)?;
 
     let delimiter = unique_heredoc_delimiter(content)?;
-    let command = format!(
-        "cat > {} << '{delimiter}'\n{content}\n{delimiter}",
-        shell_single_quote(path)
-    );
+    let command =
+        format!("cat > {} << '{delimiter}'\n{content}\n{delimiter}", shell_single_quote(path));
     Some(public_exec_fallback(command))
 }
 
@@ -116,10 +114,7 @@ fn unique_heredoc_delimiter(content: &str) -> Option<&'static str> {
         "__VT_WRITE_EOF_2__",
         "__VT_WRITE_EOF_3__",
     ];
-    CANDIDATES
-        .iter()
-        .find(|d| !content.lines().any(|line| line == **d))
-        .copied()
+    CANDIDATES.iter().find(|d| !content.lines().any(|line| line == **d)).copied()
 }
 
 pub(super) fn build_validation_error_content_with_fallback(
@@ -211,10 +206,7 @@ pub(super) fn preflight_validation_fallback(
     }
 
     tool_intent::remap_file_operation_command_args_to_command_session(args_val).and_then(|args| {
-        let command = args
-            .get("command")
-            .and_then(Value::as_str)
-            .map(str::to_string)?;
+        let command = args.get("command").and_then(Value::as_str).map(str::to_string)?;
         let mut fallback_args = json!({ "cmd": command });
         if let Some(cwd) = args.get("cwd").and_then(Value::as_str)
             && let Some(obj) = fallback_args.as_object_mut()
@@ -233,10 +225,7 @@ pub(super) fn try_recover_preflight_with_fallback(
 ) -> Option<PreparedToolCall> {
     let (recovered_tool_name, recovered_args) =
         preflight_validation_fallback(tool_name, args_val, error)?;
-    match ctx
-        .tool_registry
-        .admit_public_tool_call(&recovered_tool_name, &recovered_args)
-    {
+    match ctx.tool_registry.admit_public_tool_call(&recovered_tool_name, &recovered_args) {
         Ok(prepared) => Some(prepared),
         Err(recovery_err) => {
             tracing::debug!(
@@ -264,10 +253,7 @@ mod tests {
             "blank": "   "
         });
 
-        assert_eq!(
-            trimmed_non_empty_string_field(&value, "pattern"),
-            Some("todo".to_string())
-        );
+        assert_eq!(trimmed_non_empty_string_field(&value, "pattern"), Some("todo".to_string()));
         assert_eq!(trimmed_non_empty_string_field(&value, "blank"), None);
         assert_eq!(trimmed_non_empty_string_field(&value, "missing"), None);
     }
@@ -285,21 +271,10 @@ mod tests {
                 .expect("file_operation write should have fallback");
 
         assert_eq!(tool_name, tool_names::EXEC_COMMAND);
-        let command = fallback_args["cmd"]
-            .as_str()
-            .expect("command should be a string");
-        assert!(
-            command.contains("'docs/output.md'"),
-            "command should quote the path"
-        );
-        assert!(
-            command.contains("# Large Document"),
-            "command should include the content"
-        );
-        assert!(
-            command.contains("__VT_WRITE_EOF__"),
-            "command should use unique delimiter"
-        );
+        let command = fallback_args["cmd"].as_str().expect("command should be a string");
+        assert!(command.contains("'docs/output.md'"), "command should quote the path");
+        assert!(command.contains("# Large Document"), "command should include the content");
+        assert!(command.contains("__VT_WRITE_EOF__"), "command should use unique delimiter");
     }
 
     #[test]
@@ -316,10 +291,7 @@ mod tests {
 
         assert_eq!(tool_name, tool_names::EXEC_COMMAND);
         let command = fallback_args["cmd"].as_str().expect("command");
-        assert!(
-            command.contains("'my files/output.md'"),
-            "path with spaces should be quoted"
-        );
+        assert!(command.contains("'my files/output.md'"), "path with spaces should be quoted");
     }
 
     #[test]
@@ -349,11 +321,7 @@ mod tests {
                 .expect("file_operation read should have fallback");
 
         assert_eq!(tool_name, tool_names::EXEC_COMMAND);
-        assert!(
-            fallback_args["cmd"]
-                .as_str()
-                .is_some_and(|cmd| cmd.contains("'src/main.rs'"))
-        );
+        assert!(fallback_args["cmd"].as_str().is_some_and(|cmd| cmd.contains("'src/main.rs'")));
     }
 
     #[test]

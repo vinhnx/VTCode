@@ -59,11 +59,7 @@ const NORMALIZE_ONLY_KEYS: &[&str] = &["encoding"];
 
 /// Every key that scopes a read to a sub-range (offset ∪ limit ∪ page).
 pub(crate) fn bounded_extent_keys() -> impl Iterator<Item = &'static str> {
-    OFFSET_KEYS
-        .iter()
-        .chain(LIMIT_KEYS)
-        .chain(PAGE_KEYS)
-        .copied()
+    OFFSET_KEYS.iter().chain(LIMIT_KEYS).chain(PAGE_KEYS).copied()
 }
 
 /// Keys stripped when normalizing a read's arguments for cross-turn dedup:
@@ -99,9 +95,7 @@ pub(crate) fn extent_offset(args: &Value) -> u64 {
 
 /// First limit value present in `args` under any [`LIMIT_KEYS`] alias, if any.
 pub(crate) fn extent_limit(args: &Value) -> Option<u64> {
-    LIMIT_KEYS
-        .iter()
-        .find_map(|key| args.get(*key).and_then(as_u64_lenient))
+    LIMIT_KEYS.iter().find_map(|key| args.get(*key).and_then(as_u64_lenient))
 }
 
 fn raw_flag(args: &Value) -> bool {
@@ -149,9 +143,7 @@ mod tests {
 
     #[test]
     fn whole_file_read_is_not_bounded() {
-        assert!(!args_have_bounded_extent(
-            &json!({"action": "read", "path": "src/lib.rs"})
-        ));
+        assert!(!args_have_bounded_extent(&json!({"action": "read", "path": "src/lib.rs"})));
         assert!(!args_have_bounded_extent(
             &json!({"action": "read", "path": "src/lib.rs", "encoding": "utf8"})
         ));
@@ -208,9 +200,6 @@ mod tests {
     #[test]
     fn extent_covers_unbounded_cached_covers_unbounded_query() {
         assert!(extent_covers(&json!({"offset": 0}), &json!({"offset": 0})));
-        assert!(!extent_covers(
-            &json!({"offset": 0}),
-            &json!({"offset": 0, "limit": 100})
-        ));
+        assert!(!extent_covers(&json!({"offset": 0}), &json!({"offset": 0, "limit": 100})));
     }
 }

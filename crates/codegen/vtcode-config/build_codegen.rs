@@ -46,14 +46,11 @@ pub fn generate_openrouter_constants(
     let default_id = provider.default_model.as_ref().ok_or_else(|| {
         anyhow::anyhow!("openrouter.default_model is missing in docs/models.json")
     })?;
-    let default_entry = entries
-        .iter()
-        .find(|e| &e.id == default_id)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Default OpenRouter model '{default_id}' is not declared in vtcode metadata"
-            )
-        })?;
+    let default_entry = entries.iter().find(|e| &e.id == default_id).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Default OpenRouter model '{default_id}' is not declared in vtcode metadata"
+        )
+    })?;
     let default_const = ident(&default_entry.const_name);
 
     // SUPPORTED_MODELS
@@ -88,10 +85,7 @@ pub fn generate_openrouter_constants(
     // Vendor modules
     let mut vendor_map: IndexMap<String, Vec<&EntryData>> = IndexMap::new();
     for entry in entries {
-        vendor_map
-            .entry(entry.vendor.clone())
-            .or_default()
-            .push(entry);
+        vendor_map.entry(entry.vendor.clone()).or_default().push(entry);
     }
 
     let vendor_modules: TokenStream = vendor_map
@@ -151,10 +145,7 @@ pub fn generate_openrouter_metadata(entries: &[EntryData]) -> String {
     // VendorModels
     let mut vendor_map: IndexMap<String, Vec<&EntryData>> = IndexMap::new();
     for entry in entries {
-        vendor_map
-            .entry(entry.vendor.clone())
-            .or_default()
-            .push(entry);
+        vendor_map.entry(entry.vendor.clone()).or_default().push(entry);
     }
 
     let vendor_models: TokenStream = vendor_map
@@ -458,11 +449,7 @@ fn capability_entry_expr(entry: &CapabilityEntry) -> TokenStream {
     let reasoning = entry.reasoning;
     let tool_call = entry.tool_call;
     let vision = entry.vision;
-    let modalities: TokenStream = entry
-        .input_modalities
-        .iter()
-        .map(|m| quote! { #m, })
-        .collect();
+    let modalities: TokenStream = entry.input_modalities.iter().map(|m| quote! { #m, }).collect();
     let caching = entry.caching;
     let structured_output = entry.structured_output;
     let pricing = pricing_literal(&entry.pricing);

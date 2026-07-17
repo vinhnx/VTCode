@@ -50,9 +50,7 @@ impl provider::LLMProvider for OpenAIProvider {
         };
 
         // Same robustness logic for reasoning effort
-        models::openai::REASONING_MODELS
-            .iter()
-            .any(|candidate| *candidate == requested)
+        models::openai::REASONING_MODELS.iter().any(|candidate| *candidate == requested)
             || self
                 .model_behavior
                 .as_ref()
@@ -157,8 +155,7 @@ impl provider::LLMProvider for OpenAIProvider {
             });
         }
 
-        self.compact_history_request_with_options(requested, history, options)
-            .await
+        self.compact_history_request_with_options(requested, history, options).await
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -168,19 +165,13 @@ impl provider::LLMProvider for OpenAIProvider {
         if self.provider_key_override.is_some() {
             return vec![self.model.to_string()];
         }
-        models::openai::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+        models::openai::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect()
     }
 
     fn validate_request(&self, request: &provider::LLMRequest) -> Result<(), provider::LLMError> {
         let supported_models = (!self.is_native_openai_api()).then(|| self.supported_models());
 
-        let display_name = self
-            .provider_display_override
-            .as_deref()
-            .unwrap_or("OpenAI");
+        let display_name = self.provider_display_override.as_deref().unwrap_or("OpenAI");
         let key = self.provider_key_override.as_deref().unwrap_or("openai");
         super::super::super::common::validate_request_common(
             request,
@@ -204,9 +195,7 @@ impl LLMClient for OpenAIProvider {
         Ok(llm_types::LLMResponse {
             content: Some(response.content.unwrap_or_default()),
             model: request_model,
-            usage: response
-                .usage
-                .map(super::super::super::common::convert_usage_to_llm_types),
+            usage: response.usage.map(super::super::super::common::convert_usage_to_llm_types),
             reasoning: response.reasoning,
             reasoning_details: response.reasoning_details,
             request_id: response.request_id,

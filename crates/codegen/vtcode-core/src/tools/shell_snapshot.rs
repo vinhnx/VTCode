@@ -89,10 +89,7 @@ pub enum ShellKind {
 impl ShellKind {
     /// Detect shell kind from the shell path.
     pub fn from_path(shell_path: &str) -> Self {
-        let shell_name = Path::new(shell_path)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
+        let shell_name = Path::new(shell_path).file_name().and_then(|s| s.to_str()).unwrap_or("");
 
         match shell_name {
             name if name.contains("bash") => ShellKind::Bash,
@@ -275,10 +272,7 @@ impl ShellSnapshotManager {
             *snapshot = Some(Arc::clone(&new_snapshot));
         }
 
-        info!(
-            "Captured shell environment snapshot ({} variables)",
-            new_snapshot.env.len()
-        );
+        info!("Captured shell environment snapshot ({} variables)", new_snapshot.env.len());
         Ok(new_snapshot)
     }
 

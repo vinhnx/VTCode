@@ -45,9 +45,7 @@ pub fn install_tool_config(snapshot: ToolConfigSnapshot) {
     match TOOL_CONFIG.set(snapshot) {
         Ok(()) => {}
         Err(new) => {
-            let existing = TOOL_CONFIG
-                .get()
-                .expect("set failed; lock should be initialized");
+            let existing = TOOL_CONFIG.get().expect("set failed; lock should be initialized");
             if existing != &new {
                 panic!(
                     "install_tool_config called with a different snapshot; \
@@ -103,10 +101,7 @@ mod tests {
         // branch, so we exercise the panic by passing a value that
         // differs from the first one observed in this process.
         let divergent = ToolConfigSnapshot {
-            web_search: WebSearchConfig {
-                max_results: 999,
-                ..WebSearchConfig::default()
-            },
+            web_search: WebSearchConfig { max_results: 999, ..WebSearchConfig::default() },
             ..ToolConfigSnapshot::default()
         };
         // If a prior test already installed a default snapshot, this

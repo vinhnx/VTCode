@@ -13,9 +13,6 @@ pub async fn summarize_text(
         ..Default::default()
     };
 
-    let response = provider
-        .generate(request)
-        .await
-        .context("Failed to generate summary")?;
+    let response = provider.generate(request).await.context("Failed to generate summary")?;
     Ok(response.content.unwrap_or_default())
 }

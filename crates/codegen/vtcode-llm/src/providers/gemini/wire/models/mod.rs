@@ -41,10 +41,7 @@ impl Content {
     pub fn user_text(text: impl Into<String>) -> Self {
         Content {
             role: "user".into(),
-            parts: vec![Part::Text {
-                text: text.into(),
-                thought_signature: None,
-            }],
+            parts: vec![Part::Text { text: text.into(), thought_signature: None }],
         }
     }
 
@@ -61,33 +58,22 @@ impl Content {
     }
 
     pub fn user_parts(parts: Vec<Part>) -> Self {
-        Content {
-            role: "user".into(),
-            parts,
-        }
+        Content { role: "user".into(), parts }
     }
 }
 
 impl SystemInstruction {
     pub fn new(text: impl Into<String>) -> Self {
         SystemInstruction {
-            parts: vec![Part::Text {
-                text: text.into(),
-                thought_signature: None,
-            }],
+            parts: vec![Part::Text { text: text.into(), thought_signature: None }],
         }
     }
 
     pub fn with_ttl(text: impl Into<String>, ttl_seconds: u64) -> Self {
         SystemInstruction {
             parts: vec![
-                Part::Text {
-                    text: text.into(),
-                    thought_signature: None,
-                },
-                Part::CacheControl {
-                    ttl_seconds: Some(ttl_seconds),
-                },
+                Part::Text { text: text.into(), thought_signature: None },
+                Part::CacheControl { ttl_seconds: Some(ttl_seconds) },
             ],
         }
     }
@@ -183,27 +169,13 @@ impl Part {
 
     pub fn thought_signature(&self) -> Option<&str> {
         match self {
-            Part::FunctionCall {
-                thought_signature, ..
-            }
-            | Part::FunctionResponse {
-                thought_signature, ..
-            }
-            | Part::ToolCall {
-                thought_signature, ..
-            }
-            | Part::ToolResponse {
-                thought_signature, ..
-            }
-            | Part::ExecutableCode {
-                thought_signature, ..
-            }
-            | Part::CodeExecutionResult {
-                thought_signature, ..
-            }
-            | Part::Text {
-                thought_signature, ..
-            } => thought_signature.as_deref(),
+            Part::FunctionCall { thought_signature, .. }
+            | Part::FunctionResponse { thought_signature, .. }
+            | Part::ToolCall { thought_signature, .. }
+            | Part::ToolResponse { thought_signature, .. }
+            | Part::ExecutableCode { thought_signature, .. }
+            | Part::CodeExecutionResult { thought_signature, .. }
+            | Part::Text { thought_signature, .. } => thought_signature.as_deref(),
             Part::InlineData { .. } | Part::CacheControl { .. } => None,
         }
     }

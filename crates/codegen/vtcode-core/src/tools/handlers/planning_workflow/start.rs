@@ -82,11 +82,7 @@ fn title_from_plan_name(plan_name: &str) -> String {
             let mut chars = segment.chars();
             match chars.next() {
                 Some(first) => {
-                    format!(
-                        "{}{}",
-                        first.to_ascii_uppercase(),
-                        chars.as_str().to_ascii_lowercase()
-                    )
+                    format!("{}{}", first.to_ascii_uppercase(), chars.as_str().to_ascii_lowercase())
                 }
                 None => String::new(),
             }
@@ -128,19 +124,15 @@ impl Tool for StartPlanningTool {
             approved: false,
         });
 
-        let workspace_root = self
-            .state
-            .workspace_root()
-            .unwrap_or_else(|| PathBuf::from("."));
+        let workspace_root = self.state.workspace_root().unwrap_or_else(|| PathBuf::from("."));
         let validation_hints = detect_validation_command_hints(&workspace_root);
 
         // Check if already in planning workflow
         if self.state.is_active() {
             let fallback_plan_name = self.generate_plan_name(args.plan_name.as_deref());
             let existing_plan_file = self.state.get_plan_file().await;
-            let existing_plan_file_exists = existing_plan_file
-                .as_ref()
-                .is_some_and(|path| path.exists());
+            let existing_plan_file_exists =
+                existing_plan_file.as_ref().is_some_and(|path| path.exists());
 
             if existing_plan_file_exists {
                 return Ok(json!({
@@ -154,9 +146,7 @@ impl Tool for StartPlanningTool {
                 &workspace_root,
                 args.plan_path.as_deref(),
                 existing_plan_file.as_deref(),
-                self.state
-                    .plans_dir()
-                    .join(format!("{fallback_plan_name}.md")),
+                self.state.plans_dir().join(format!("{fallback_plan_name}.md")),
                 &fallback_plan_name,
             );
             let plan_title = title_from_plan_name(&plan_title_seed);

@@ -92,10 +92,7 @@ fn find_default_choice_selection(
 }
 
 fn split_question_lines(question: &str) -> Vec<String> {
-    let mut lines = question
-        .lines()
-        .map(|line| line.trim_end().to_string())
-        .collect::<Vec<_>>();
+    let mut lines = question.lines().map(|line| line.trim_end().to_string()).collect::<Vec<_>>();
 
     while lines.last().is_some_and(|line| line.trim().is_empty()) {
         lines.pop();
@@ -204,9 +201,7 @@ pub(crate) async fn execute_recovery_prompt(
         }));
     }
 
-    let title = parsed
-        .title
-        .unwrap_or_else(|| "Circuit Breaker Activated".to_string());
+    let title = parsed.title.unwrap_or_else(|| "Circuit Breaker Activated".to_string());
     let current_step = resolve_current_step(&parsed.tabs, parsed.default_tab_id.as_deref());
     let Some(tab) = parsed.tabs.get(current_step) else {
         return Ok(json!({ "cancelled": true, "error": "Invalid tab index" }));
@@ -307,21 +302,9 @@ pub(crate) fn build_recovery_prompt_from_diagnostics(
     }
 
     for (id, title, subtitle) in [
-        (
-            CHOICE_CONTINUE,
-            "Continue Anyway",
-            "Ignore circuit breakers and proceed",
-        ),
-        (
-            CHOICE_SKIP,
-            "Skip This Step",
-            "Move on to the next part of the task",
-        ),
-        (
-            CHOICE_SAVE_EXIT,
-            "Save Progress & Exit",
-            "Write task summary and end session",
-        ),
+        (CHOICE_CONTINUE, "Continue Anyway", "Ignore circuit breakers and proceed"),
+        (CHOICE_SKIP, "Skip This Step", "Move on to the next part of the task"),
+        (CHOICE_SAVE_EXIT, "Save Progress & Exit", "Write task summary and end session"),
     ] {
         builder = builder.add_recommendation(RecoveryOption {
             id: id.to_string(),
@@ -366,11 +349,7 @@ fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
     }
 
     if diagnostics.recent_errors.len() > 5 {
-        let _ = writeln!(
-            summary,
-            "... and {} more errors",
-            diagnostics.recent_errors.len() - 5
-        );
+        let _ = writeln!(summary, "... and {} more errors", diagnostics.recent_errors.len() - 5);
     }
 
     summary
@@ -388,10 +367,7 @@ fn action_from_choice_id(choice_id: &str) -> Option<RecoveryAction> {
 
 pub(crate) fn parse_recovery_response(response: &Value) -> Option<RecoveryAction> {
     let choice_id = response.get("choice_id")?.as_str()?;
-    let tab_id = response
-        .get("tab_id")
-        .and_then(|v| v.as_str())
-        .unwrap_or(RECOVERY_TAB_ID);
+    let tab_id = response.get("tab_id").and_then(|v| v.as_str()).unwrap_or(RECOVERY_TAB_ID);
 
     if tab_id != RECOVERY_TAB_ID {
         return None;

@@ -56,8 +56,7 @@ pub(super) async fn record_recovery_tool_error(
     error: &ToolExecutionError,
     error_type: RecoveryErrorType,
 ) {
-    ctx.record_recovery_tool_error(tool_name, error, error_type)
-        .await;
+    ctx.record_recovery_tool_error(tool_name, error, error_type).await;
 }
 
 pub(super) async fn finalize_failed_tool_response(
@@ -96,11 +95,7 @@ async fn push_tool_error_response(
     {
         (Some(tool), Some(args))
     } else {
-        let fallback = t_ctx
-            .ctx
-            .tool_registry
-            .suggest_fallback_tool(tool_name)
-            .await;
+        let fallback = t_ctx.ctx.tool_registry.suggest_fallback_tool(tool_name).await;
         (fallback, None)
     };
 

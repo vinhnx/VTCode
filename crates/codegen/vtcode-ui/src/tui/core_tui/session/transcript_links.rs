@@ -102,10 +102,7 @@ impl Session {
         }
 
         let workspace_root = self.workspace_root.as_deref();
-        let link_style = self
-            .styles
-            .transcript_link_style()
-            .add_modifier(Modifier::UNDERLINED);
+        let link_style = self.styles.transcript_link_style().add_modifier(Modifier::UNDERLINED);
         let styles = TranscriptLinkStyles {
             link: link_style,
             hovered: link_style.add_modifier(Modifier::BOLD),
@@ -163,10 +160,7 @@ impl Session {
         }
 
         let workspace_root = self.workspace_root.as_deref();
-        let link_style = self
-            .styles
-            .transcript_link_style()
-            .add_modifier(Modifier::UNDERLINED);
+        let link_style = self.styles.transcript_link_style().add_modifier(Modifier::UNDERLINED);
         let styles = TranscriptLinkStyles {
             link: link_style,
             hovered: link_style.add_modifier(Modifier::BOLD),
@@ -175,10 +169,7 @@ impl Session {
         let mut decorated = Vec::with_capacity(lines.len());
 
         for (row_idx, transcript_line) in lines.into_iter().enumerate() {
-            let TranscriptLine {
-                line,
-                explicit_links,
-            } = transcript_line;
+            let TranscriptLine { line, explicit_links } = transcript_line;
             decorated.push(decorate_transcript_line(
                 line,
                 &explicit_links,
@@ -288,14 +279,10 @@ impl Session {
             return TranscriptLinkClickAction::Open(outbound);
         };
         let now = Instant::now();
-        if self
-            .last_link_open
-            .as_ref()
-            .is_some_and(|(last_key, last_at)| {
-                last_key == &key
-                    && now.saturating_duration_since(*last_at) <= LINK_OPEN_THROTTLE_INTERVAL
-            })
-        {
+        if self.last_link_open.as_ref().is_some_and(|(last_key, last_at)| {
+            last_key == &key
+                && now.saturating_duration_since(*last_at) <= LINK_OPEN_THROTTLE_INTERVAL
+        }) {
             return TranscriptLinkClickAction::Consume;
         }
 
@@ -455,15 +442,8 @@ fn decorate_transcript_line(
             let hovered = last_mouse_position
                 .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
 
-            targets.push(TranscriptFileLinkTarget {
-                area: target_area,
-                target,
-            });
-            styled_matches.push(StyledLinkMatch {
-                start,
-                end,
-                hovered,
-            });
+            targets.push(TranscriptFileLinkTarget { area: target_area, target });
+            styled_matches.push(StyledLinkMatch { start, end, hovered });
         }
     }
 
@@ -542,15 +522,8 @@ fn append_explicit_link_matches(
                 .map(TranscriptLinkTarget::File)
                 .unwrap_or_else(|| TranscriptLinkTarget::Url(url.clone())),
         };
-        targets.push(TranscriptFileLinkTarget {
-            area: target_area,
-            target,
-        });
-        styled_matches.push(StyledLinkMatch {
-            start: explicit.start,
-            end: explicit.end,
-            hovered,
-        });
+        targets.push(TranscriptFileLinkTarget { area: target_area, target });
+        styled_matches.push(StyledLinkMatch { start: explicit.start, end: explicit.end, hovered });
     }
 }
 
@@ -695,10 +668,7 @@ fn style_transcript_file_link_line(
         }
 
         if local_offset < content.len() {
-            spans.push(Span::styled(
-                content[local_offset..].to_string(),
-                span.style,
-            ));
+            spans.push(Span::styled(content[local_offset..].to_string(), span.style));
         }
 
         global_offset = span_end;
@@ -775,10 +745,8 @@ pub(crate) fn decorate_detected_link_lines(
                 );
                 let hovered = last_mouse_position
                     .is_some_and(|(column, row)| point_in_rect(target_area, column, row));
-                targets.push(TranscriptFileLinkTarget {
-                    area: target_area,
-                    target: target.clone(),
-                });
+                targets
+                    .push(TranscriptFileLinkTarget { area: target_area, target: target.clone() });
                 styled_matches.push(StyledLinkMatch {
                     start: relative_start,
                     end: relative_end,
@@ -942,9 +910,8 @@ fn build_transcript_link_match(
     let start = token_start + trimmed_start;
     let end = token_start + trimmed_end;
     let candidate = &text[start..end];
-    let target = resolve_transcript_url(candidate)
-        .map(TranscriptLinkTarget::Url)
-        .or_else(|| {
+    let target =
+        resolve_transcript_url(candidate).map(TranscriptLinkTarget::Url).or_else(|| {
             resolve_transcript_file_target(candidate, workspace_root)
                 .map(TranscriptLinkTarget::File)
         })?;
@@ -971,10 +938,7 @@ fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
         let Some(ch) = token[start..end].chars().next_back() else {
             break;
         };
-        if matches!(
-            ch,
-            ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?'
-        ) {
+        if matches!(ch, ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?') {
             // Preserve trailing ')' when it looks like a location suffix e.g. file.rs(10,5)
             if ch == ')' && location_paren_suffix_start(&token[start..end]).is_some() {
                 break;
@@ -1109,9 +1073,9 @@ mod tests {
 
     #[test]
     fn project_detected_links_preserves_char_boundaries_for_unicode_wraps() {
-        let original_text = "vtcode-core/src/tool_policy.rs — those files";
+        let original_text = "crates/codegen/vtcode-core/src/tool_policy.rs — those files";
         let wrapped_lines = vec![
-            Line::from("vtcode-core/src/tool_policy.rs —"),
+            Line::from("crates/codegen/vtcode-core/src/tool_policy.rs —"),
             Line::from(" those files"),
         ];
 
@@ -1124,7 +1088,7 @@ mod tests {
         assert_eq!(projected.len(), 2);
         assert_eq!(projected[0].len(), 1);
         assert_eq!(projected[0][0].start, 0);
-        assert!(projected[0][0].end <= "vtcode-core/src/tool_policy.rs —".len());
-        assert!("vtcode-core/src/tool_policy.rs —".is_char_boundary(projected[0][0].end));
+        assert!(projected[0][0].end <= "crates/codegen/vtcode-core/src/tool_policy.rs —".len());
+        assert!("crates/codegen/vtcode-core/src/tool_policy.rs —".is_char_boundary(projected[0][0].end));
     }
 }

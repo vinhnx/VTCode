@@ -21,9 +21,7 @@ struct SidebarListItem {
 
 impl Widget for SidebarListItem {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new(self.line)
-            .wrap(Wrap { trim: false })
-            .render(area, buf);
+        Paragraph::new(self.line).wrap(Wrap { trim: false }).render(area, buf);
     }
 }
 
@@ -301,11 +299,7 @@ impl Widget for SidebarWidget<'_> {
             sections.push((SidebarSection::Tools, 2));
         }
 
-        let total_weight = sections
-            .iter()
-            .map(|(_, weight)| *weight)
-            .sum::<u32>()
-            .max(1);
+        let total_weight = sections.iter().map(|(_, weight)| *weight).sum::<u32>().max(1);
         let constraints = sections
             .iter()
             .map(|(_, weight)| Constraint::Ratio(*weight, total_weight))
@@ -397,11 +391,7 @@ mod tests {
             .render(area, &mut buf);
 
         let rendered = (0..area.height)
-            .map(|row| {
-                (0..area.width)
-                    .map(|col| buf[(col, row)].symbol())
-                    .collect::<String>()
-            })
+            .map(|row| (0..area.width).map(|col| buf[(col, row)].symbol()).collect::<String>())
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -432,11 +422,7 @@ mod tests {
             .render(area, &mut buf);
 
         let rendered = (0..area.height)
-            .map(|row| {
-                (0..area.width)
-                    .map(|col| buf[(col, row)].symbol())
-                    .collect::<String>()
-            })
+            .map(|row| (0..area.width).map(|col| buf[(col, row)].symbol()).collect::<String>())
             .collect::<Vec<_>>()
             .join("\n");
 

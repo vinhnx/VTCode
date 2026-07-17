@@ -61,11 +61,9 @@ pub(crate) async fn handle_direct_tool_execution(
     };
 
     let (tool_name_str, args, is_bang_prefix) = match parsed {
-        DirectToolInput::Execute {
-            tool_name,
-            args,
-            is_bang_prefix,
-        } => (tool_name, args, is_bang_prefix),
+        DirectToolInput::Execute { tool_name, args, is_bang_prefix } => {
+            (tool_name, args, is_bang_prefix)
+        }
         DirectToolInput::InvalidBang { command, diagnosis } => {
             ctx.interaction_ctx.renderer.line(
                 vtcode_core::utils::ansi::MessageStyle::Info,
@@ -131,29 +129,21 @@ pub(crate) async fn execute_direct_tool_call(
                 "Shell mode (!): executing command directly.",
             )?;
         }
-        if matches!(
-            tool_name,
-            tools::SPAWN_AGENT | tools::SPAWN_BACKGROUND_SUBPROCESS
-        ) && let Some(controller) = t_ctx.ctx.tool_registry.subagent_controller()
+        if matches!(tool_name, tools::SPAWN_AGENT | tools::SPAWN_BACKGROUND_SUBPROCESS)
+            && let Some(controller) = t_ctx.ctx.tool_registry.subagent_controller()
         {
             controller.set_turn_delegation_hints_from_input(input).await;
         }
         display_user_message(t_ctx.ctx.renderer, input)?;
-        t_ctx
-            .ctx
-            .working_history
-            .push(uni::Message::user(input.to_string()));
+        t_ctx.ctx.working_history.push(uni::Message::user(input.to_string()));
 
         // 2. Inject assistant message with tool call to keep history valid for LLM
         let mut pending_tool = Some((tool_name.to_string(), args));
         let mut consumed_fallback = false;
 
         while let Some((current_tool_name, current_args)) = pending_tool.take() {
-            let tool_call_id = format!(
-                "direct_{}_{}",
-                current_tool_name,
-                t_ctx.ctx.working_history.len()
-            );
+            let tool_call_id =
+                format!("direct_{}_{}", current_tool_name, t_ctx.ctx.working_history.len());
             let tool_call = uni::ToolCall::function(
                 tool_call_id.clone(),
                 current_tool_name.clone(),
@@ -162,10 +152,7 @@ pub(crate) async fn execute_direct_tool_call(
             t_ctx
                 .ctx
                 .working_history
-                .push(uni::Message::assistant_with_tools(
-                    String::new(),
-                    vec![tool_call],
-                ));
+                .push(uni::Message::assistant_with_tools(String::new(), vec![tool_call]));
 
             // 3. Execute through unified pipeline to ensure safety, metrics, and consistent output
             let outcome = handle_single_tool_call(
@@ -276,19 +263,14 @@ fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
                 args: serde_json::json!({ "action": "run", "command": shell_command }),
                 is_bang_prefix: true,
             }),
-            Err(diagnosis) => Some(DirectToolInput::InvalidBang {
-                command: shell_command.to_string(),
-                diagnosis,
-            }),
+            Err(diagnosis) => {
+                Some(DirectToolInput::InvalidBang { command: shell_command.to_string(), diagnosis })
+            }
         };
     }
 
     crate::agent::runloop::unified::shell::detect_explicit_run_command(input).map(
-        |(tool_name, args)| DirectToolInput::Execute {
-            tool_name,
-            args,
-            is_bang_prefix: false,
-        },
+        |(tool_name, args)| DirectToolInput::Execute { tool_name, args, is_bang_prefix: false },
     )
 }
 
@@ -298,9 +280,8 @@ fn detect_direct_file_operation_read(input: &str) -> Option<serde_json::Value> {
         return None;
     }
 
-    let without_run = strip_prefix_case_insensitive(trimmed, "run ")
-        .unwrap_or(trimmed)
-        .trim_start();
+    let without_run =
+        strip_prefix_case_insensitive(trimmed, "run ").unwrap_or(trimmed).trim_start();
     let tool_prefix = strip_prefix_case_insensitive(without_run, "file_operation")?;
     let after_tool = tool_prefix.trim_start();
     let after_read = strip_prefix_case_insensitive(after_tool, "read")?.trim_start();
@@ -352,10 +333,8 @@ fn direct_subagent_spawn_args(input: &str, specs: &[SubagentSpec]) -> Option<ser
 
 fn direct_subagent_tool_name(args: &serde_json::Value, specs: &[SubagentSpec]) -> &'static str {
     let agent_type = args.get("agent_type").and_then(serde_json::Value::as_str);
-    let background_requested = args
-        .get("background")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
+    let background_requested =
+        args.get("background").and_then(serde_json::Value::as_bool).unwrap_or(false);
     if specs
         .iter()
         .any(|spec| Some(spec.name.as_str()) == agent_type && spec.background)
@@ -423,31 +402,21 @@ fn parse_direct_subagent_task<'a>(
 fn parse_direct_subagent_task_suffix(input: &str) -> Option<DirectSubagentTask<'_>> {
     let (trimmed, background) = strip_background_directive(input.trim());
     if trimmed.is_empty() {
-        return Some(DirectSubagentTask {
-            message: None,
-            background,
-        });
+        return Some(DirectSubagentTask { message: None, background });
     }
 
     for prefix in ["and", "to", "for"] {
         if let Some(rest) = strip_bounded_prefix_case_insensitive(trimmed, prefix) {
             let task = trim_wrapping_quotes_and_punctuation(rest).trim();
-            return (!task.is_empty()).then_some(DirectSubagentTask {
-                message: Some(task),
-                background,
-            });
+            return (!task.is_empty())
+                .then_some(DirectSubagentTask { message: Some(task), background });
         }
     }
 
-    if let Some(rest) = trimmed
-        .strip_prefix(':')
-        .or_else(|| trimmed.strip_prefix('-'))
-    {
+    if let Some(rest) = trimmed.strip_prefix(':').or_else(|| trimmed.strip_prefix('-')) {
         let task = trim_wrapping_quotes_and_punctuation(rest).trim();
-        return (!task.is_empty()).then_some(DirectSubagentTask {
-            message: Some(task),
-            background,
-        });
+        return (!task.is_empty())
+            .then_some(DirectSubagentTask { message: Some(task), background });
     }
 
     None
@@ -547,9 +516,7 @@ fn trim_wrapping_quotes_and_punctuation(target: &str) -> &str {
         normalized = normalized.strip_suffix('"').unwrap_or(normalized);
         normalized = normalized.strip_prefix('\'').unwrap_or(normalized);
         normalized = normalized.strip_suffix('\'').unwrap_or(normalized);
-        normalized = normalized
-            .trim_end_matches(['.', ',', ';', '!', '?'])
-            .trim();
+        normalized = normalized.trim_end_matches(['.', ',', ';', '!', '?']).trim();
         if normalized == previous {
             return normalized;
         }
@@ -694,11 +661,7 @@ mod tests {
     fn parses_bang_prefix_with_leading_whitespace() {
         let parsed = parse_direct_tool_input("   !echo hello").expect("direct tool");
         match parsed {
-            DirectToolInput::Execute {
-                tool_name,
-                args,
-                is_bang_prefix,
-            } => {
+            DirectToolInput::Execute { tool_name, args, is_bang_prefix } => {
                 assert_eq!(tool_name, tools::EXEC_COMMAND);
                 assert_eq!(args["action"], "run");
                 assert_eq!(args["command"], "echo hello");
@@ -739,11 +702,7 @@ mod tests {
     fn parses_likely_run_typo_as_direct_command() {
         let parsed = parse_direct_tool_input("eun cargo check").expect("direct tool");
         match parsed {
-            DirectToolInput::Execute {
-                tool_name,
-                args,
-                is_bang_prefix,
-            } => {
+            DirectToolInput::Execute { tool_name, args, is_bang_prefix } => {
                 assert_eq!(tool_name, tools::EXEC_COMMAND);
                 assert_eq!(args["command"], "cargo check");
                 assert!(!is_bang_prefix);
@@ -786,11 +745,7 @@ mod tests {
 
         let parsed = parse_direct_tool_input(&normalized).expect("direct tool");
         match parsed {
-            DirectToolInput::Execute {
-                args,
-                is_bang_prefix,
-                ..
-            } => {
+            DirectToolInput::Execute { args, is_bang_prefix, .. } => {
                 assert_eq!(args["command"], "cat 'docs/file with spaces.md'");
                 assert!(is_bang_prefix);
             }
@@ -811,9 +766,7 @@ mod tests {
             parse_direct_tool_input("file_operation read on /tmp/example.md with mode omitted")
                 .expect("direct file_operation");
         match parsed {
-            DirectToolInput::Execute {
-                tool_name, args, ..
-            } => {
+            DirectToolInput::Execute { tool_name, args, .. } => {
                 assert_eq!(tool_name, tools::UNIFIED_FILE);
                 assert_eq!(args["action"], "read");
                 assert_eq!(args["path"], "/tmp/example.md");
@@ -830,9 +783,7 @@ mod tests {
         let parsed = parse_direct_tool_input("run file_operation read /tmp/example.md")
             .expect("direct file_operation");
         match parsed {
-            DirectToolInput::Execute {
-                tool_name, args, ..
-            } => {
+            DirectToolInput::Execute { tool_name, args, .. } => {
                 assert_eq!(tool_name, tools::UNIFIED_FILE);
                 assert_eq!(args["action"], "read");
                 assert_eq!(args["path"], "/tmp/example.md");
@@ -915,10 +866,7 @@ mod tests {
             .expect("direct subagent spawn");
         assert_eq!(args["agent_type"], "background-demo");
         assert_eq!(args["background"], true);
-        assert_eq!(
-            args["message"],
-            "Run the demo subprocess and report readiness."
-        );
+        assert_eq!(args["message"], "Run the demo subprocess and report readiness.");
     }
 
     #[test]
@@ -930,10 +878,7 @@ mod tests {
             .expect("direct subagent spawn");
         assert_eq!(args["agent_type"], "background-demo");
         assert_eq!(args["background"], true);
-        assert_eq!(
-            args["message"],
-            "Run the demo subprocess and report readiness."
-        );
+        assert_eq!(args["message"], "Run the demo subprocess and report readiness.");
     }
 
     #[test]
@@ -957,10 +902,7 @@ mod tests {
             "background": true
         });
 
-        assert_eq!(
-            direct_subagent_tool_name(&args, &[spec]),
-            tools::SPAWN_BACKGROUND_SUBPROCESS
-        );
+        assert_eq!(direct_subagent_tool_name(&args, &[spec]), tools::SPAWN_BACKGROUND_SUBPROCESS);
     }
 
     #[test]
@@ -973,10 +915,7 @@ mod tests {
             "background": false
         });
 
-        assert_eq!(
-            direct_subagent_tool_name(&args, &[spec]),
-            tools::SPAWN_AGENT
-        );
+        assert_eq!(direct_subagent_tool_name(&args, &[spec]), tools::SPAWN_AGENT);
     }
 
     #[test]

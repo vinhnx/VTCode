@@ -4,9 +4,7 @@ pub(crate) struct ProgressMarker {
 
 impl ProgressMarker {
     pub(crate) fn new(current: usize, total: usize) -> Self {
-        Self {
-            display: format!("[{current}/{total}]"),
-        }
+        Self { display: format!("[{current}/{total}]") }
     }
 
     pub(crate) fn annotate(&self, detail: &str) -> String {

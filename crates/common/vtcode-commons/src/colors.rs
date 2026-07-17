@@ -139,10 +139,7 @@ fn styled(text: &str, style: Style) -> String {
 
 /// Style wrapper for console::style compatibility
 pub fn style(text: impl std::fmt::Display) -> StyledString {
-    StyledString {
-        text: text.to_string(),
-        style: Style::new(),
-    }
+    StyledString { text: text.to_string(), style: Style::new() }
 }
 
 pub struct StyledString {
@@ -187,9 +184,7 @@ impl StyledString {
     }
 
     pub fn dimmed(mut self) -> Self {
-        self.style = self
-            .style
-            .effects(self.style.get_effects() | Effects::DIMMED);
+        self.style = self.style.effects(self.style.get_effects() | Effects::DIMMED);
         self
     }
 
@@ -205,78 +200,48 @@ impl StyledString {
 
 impl std::fmt::Display for StyledString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}{}{}",
-            self.style.render(),
-            self.text,
-            self.style.render_reset()
-        )
+        write!(f, "{}{}{}", self.style.render(), self.text, self.style.render_reset())
     }
 }
 
 /// Apply red color to text
 pub fn red(text: &str) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red))))
 }
 
 /// Apply green color to text
 pub fn green(text: &str) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green))))
 }
 
 /// Apply blue color to text
 pub fn blue(text: &str) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Blue))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Ansi(AnsiColor::Blue))))
 }
 
 /// Apply yellow color to text
 pub fn yellow(text: &str) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow))))
 }
 
 /// Apply purple color to text
 pub fn purple(text: &str) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Magenta))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Ansi(AnsiColor::Magenta))))
 }
 
 /// Apply cyan color to text
 pub fn cyan(text: &str) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))))
 }
 
 /// Apply white color to text
 pub fn white(text: &str) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::White))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Ansi(AnsiColor::White))))
 }
 
 /// Apply black color to text
 pub fn black(text: &str) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Black))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Ansi(AnsiColor::Black))))
 }
 
 /// Apply bold styling to text
@@ -316,10 +281,7 @@ pub fn strikethrough(text: &str) -> String {
 
 /// Apply custom RGB color to text
 pub fn rgb(text: &str, r: u8, g: u8, b: u8) -> String {
-    styled(
-        text,
-        Style::new().fg_color(Some(Color::Rgb(RgbColor(r, g, b)))),
-    )
+    styled(text, Style::new().fg_color(Some(Color::Rgb(RgbColor(r, g, b)))))
 }
 
 /// Combine multiple color and style operations

@@ -72,9 +72,7 @@ pub(crate) struct TextualToolParserRegistry {
 impl TextualToolParserRegistry {
     /// Creates an empty registry.
     pub(crate) fn new() -> Self {
-        Self {
-            parsers: Vec::new(),
-        }
+        Self { parsers: Vec::new() }
     }
 
     /// Registers a parser with this registry.

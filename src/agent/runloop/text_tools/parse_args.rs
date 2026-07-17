@@ -170,11 +170,7 @@ pub(super) fn parse_key_value_arguments(input: &str) -> Option<Value> {
 
         let (key_raw, value_raw) = pair.split_once('=').or_else(|| pair.split_once(':'))?;
 
-        let key = key_raw
-            .trim()
-            .trim_matches('"')
-            .trim_matches('\'')
-            .to_string();
+        let key = key_raw.trim().trim_matches('"').trim_matches('\'').to_string();
 
         let value = parse_scalar_value(value_raw.trim());
         map.insert(key, value);

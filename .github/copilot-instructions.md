@@ -22,7 +22,7 @@ cargo ts                    # Alias for standard cargo test
 
 ## Architecture & Key Modules
 
-- **Workspace**: `vtcode-core/` (library) + `src/main.rs` (binary) + 9 workspace crates
+- **Workspace**: `crates/codegen/vtcode-core/` (library) + `src/main.rs` (binary) + 9 workspace crates
 - **Core**: `llm/` (multi-provider), `tools/` (trait-based), `config/` (TOML-based)
 - **Integrations**: Tree-sitter, PTY execution, ACP/MCP protocol, Gemini/OpenAI/Anthropic APIs
 
@@ -30,7 +30,7 @@ cargo ts                    # Alias for standard cargo test
 
 - **Naming**: snake_case functions/vars, PascalCase types (standard Rust)
 - **Error Handling**: `anyhow::Result<T>` + `anyhow::Context`; NO `unwrap()`
-- **Constants**: Use `vtcode-core/src/config/constants.rs` (never hardcode, especially model IDs)
+- **Constants**: Use `crates/codegen/vtcode-core/src/config/constants.rs` (never hardcode, especially model IDs)
 - **Config**: Read from `vtcode.toml` at runtime
 - **Docs**: Markdown ONLY in `./docs/`; use `docs/models.json` for latest LLM models
 - **Formatting**: 4-space indentation, early returns, simple variable names

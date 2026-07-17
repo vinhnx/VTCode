@@ -35,10 +35,7 @@ impl TimeoutWarningGuard {
             warning_fraction,
             progress_reporter,
         );
-        Self {
-            cancel_token,
-            handle,
-        }
+        Self { cancel_token, handle }
     }
 
     pub(super) async fn cancel(&mut self) {
@@ -63,11 +60,7 @@ pub(crate) fn create_timeout_error(
             category.label(),
             limit.as_secs()
         ),
-        None => format!(
-            "Operation '{}' exceeded the {} timeout ceiling",
-            name,
-            category.label()
-        ),
+        None => format!("Operation '{}' exceeded the {} timeout ceiling", name, category.label()),
     };
 
     ToolExecutionStatus::Timeout {
@@ -146,11 +139,7 @@ mod tests {
 
         let after = wait_for_message(&reporter).await;
         assert!(after.message.contains("is nearing the"));
-        assert!(
-            after
-                .message
-                .contains(vtcode_commons::stop_hints::STOP_HINT_INLINE)
-        );
+        assert!(after.message.contains(vtcode_commons::stop_hints::STOP_HINT_INLINE));
 
         handle.await.expect("warning task should complete");
     }

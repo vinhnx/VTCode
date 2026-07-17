@@ -10,10 +10,7 @@ pub struct HookMessage {
 
 impl HookMessage {
     pub fn info(text: impl Into<String>) -> Self {
-        Self {
-            level: HookMessageLevel::Info,
-            text: text.into(),
-        }
+        Self { level: HookMessageLevel::Info, text: text.into() }
     }
 
     pub fn warning(text: impl Into<String>) -> Self {
@@ -24,10 +21,7 @@ impl HookMessage {
     }
 
     pub fn error(text: impl Into<String>) -> Self {
-        Self {
-            level: HookMessageLevel::Error,
-            text: text.into(),
-        }
+        Self { level: HookMessageLevel::Error, text: text.into() }
     }
 }
 
@@ -187,10 +181,7 @@ impl SessionEndReason {
         budget_limit_reached: bool,
     ) -> (&'static str, ThreadCompletionSubtype) {
         if budget_limit_reached {
-            return (
-                "budget_limit_reached",
-                ThreadCompletionSubtype::ErrorMaxBudgetUsd,
-            );
+            return ("budget_limit_reached", ThreadCompletionSubtype::ErrorMaxBudgetUsd);
         }
 
         match self {

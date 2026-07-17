@@ -19,15 +19,15 @@ at scale.
 2. **Propose / verify separation.** `SubagentController::verify_proposed_change()`
    spawns a read-only verifier that re-reads affected files and approves or
    rejects the change. The verifier shares no context with the proposer.
-3. **Loop state persistence.** `vtcode-core/src/loop_state.rs` captures the
+3. **Loop state persistence.** `crates/codegen/vtcode-core/src/loop_state.rs` captures the
    durable state a loop scheduler reads on resume: current step index, last
    artifact path, and status. State lives under `.vtcode/state/loop-{id}.json`.
 4. **Cost guardrails.** Long loops accrue spend; `SessionBudget`
-   (`vtcode-core/src/llm/usage_cost.rs`) pauses or escalates at thresholds so a
+   (`crates/codegen/vtcode-core/src/llm/usage_cost.rs`) pauses or escalates at thresholds so a
    loop cannot run unbounded.
 5. **Progress over time.** The `ProgressLedger`
-   (`vtcode-session-store/src/progress.rs`) and `ProgressMonitor`
-   (`vtcode-core/src/core/agent/progress_monitor.rs`) give the loop an external,
+   (`crates/codegen/vtcode-session-store/src/progress.rs`) and `ProgressMonitor`
+   (`crates/codegen/vtcode-core/src/core/agent/progress_monitor.rs`) give the loop an external,
    compaction-safe signal of goal progress and detect stalls.
 
 ## Lifecycle

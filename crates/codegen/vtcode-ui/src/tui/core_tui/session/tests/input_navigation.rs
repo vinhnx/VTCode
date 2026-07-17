@@ -287,10 +287,7 @@ fn control_k_deletes_to_end_of_line() {
 fn control_alt_e_does_not_launch_editor() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    let event = KeyEvent::new(
-        KeyCode::Char('e'),
-        KeyModifiers::CONTROL | KeyModifiers::ALT,
-    );
+    let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL | KeyModifiers::ALT);
     let result = session.process_key(event);
 
     assert!(!matches!(result, Some(InlineEvent::LaunchEditor { .. })));
@@ -301,10 +298,7 @@ fn control_super_e_does_not_launch_editor() {
     let text = "hello world";
     let mut session = session_with_input(text, 0);
 
-    let event = KeyEvent::new(
-        KeyCode::Char('e'),
-        KeyModifiers::CONTROL | KeyModifiers::SUPER,
-    );
+    let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL | KeyModifiers::SUPER);
     let result = session.process_key(event);
 
     // Should not launch editor when both Control and Super (Cmd) are pressed

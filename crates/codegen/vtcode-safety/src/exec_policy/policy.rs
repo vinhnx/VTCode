@@ -39,10 +39,7 @@ impl PrefixRule {
         if command.len() < self.pattern.len() {
             return false;
         }
-        self.pattern
-            .iter()
-            .zip(command.iter())
-            .all(|(pattern, cmd)| pattern == cmd)
+        self.pattern.iter().zip(command.iter()).all(|(pattern, cmd)| pattern == cmd)
     }
 }
 
@@ -94,9 +91,7 @@ pub struct Policy {
 impl Policy {
     /// Create an empty policy.
     pub fn empty() -> Self {
-        Self {
-            prefix_rules: Vec::new(),
-        }
+        Self { prefix_rules: Vec::new() }
     }
 
     /// Add a prefix rule to the policy.
@@ -105,8 +100,7 @@ impl Policy {
         pattern: &[String],
         decision: Decision,
     ) -> anyhow::Result<()> {
-        self.prefix_rules
-            .push(PrefixRule::new(pattern.to_vec(), decision));
+        self.prefix_rules.push(PrefixRule::new(pattern.to_vec(), decision));
         Ok(())
     }
 
@@ -114,17 +108,12 @@ impl Policy {
     pub fn check(&self, command: &[String]) -> RuleMatch {
         for rule in &self.prefix_rules {
             if rule.matches(command) {
-                return RuleMatch::PrefixRuleMatch {
-                    rule: rule.clone(),
-                    decision: rule.decision,
-                };
+                return RuleMatch::PrefixRuleMatch { rule: rule.clone(), decision: rule.decision };
             }
         }
 
         // No explicit rule matched - use heuristics
-        RuleMatch::HeuristicsRuleMatch {
-            decision: Decision::Prompt,
-        }
+        RuleMatch::HeuristicsRuleMatch { decision: Decision::Prompt }
     }
 
     /// Check multiple commands against the policy.
@@ -155,10 +144,7 @@ impl Policy {
             matched_rules.push(rule_match);
         }
 
-        PolicyEvaluation {
-            decision: overall_decision,
-            matched_rules,
-        }
+        PolicyEvaluation { decision: overall_decision, matched_rules }
     }
 
     /// Get all prefix rules.
@@ -173,10 +159,7 @@ mod tests {
 
     #[test]
     fn test_prefix_rule_matching() {
-        let rule = PrefixRule::new(
-            vec!["cargo".to_string(), "build".to_string()],
-            Decision::Allow,
-        );
+        let rule = PrefixRule::new(vec!["cargo".to_string(), "build".to_string()], Decision::Allow);
 
         assert!(rule.matches(&["cargo".to_string(), "build".to_string()]));
         assert!(rule.matches(&[
@@ -194,9 +177,7 @@ mod tests {
         policy
             .add_prefix_rule(&["cargo".to_string(), "build".to_string()], Decision::Allow)
             .unwrap();
-        policy
-            .add_prefix_rule(&["rm".to_string()], Decision::Forbidden)
-            .unwrap();
+        policy.add_prefix_rule(&["rm".to_string()], Decision::Forbidden).unwrap();
 
         let allow = policy.check(&["cargo".to_string(), "build".to_string()]);
         assert_eq!(allow.decision(), Decision::Allow);
@@ -212,12 +193,8 @@ mod tests {
     #[test]
     fn test_policy_evaluation() {
         let mut policy = Policy::empty();
-        policy
-            .add_prefix_rule(&["echo".to_string()], Decision::Allow)
-            .unwrap();
-        policy
-            .add_prefix_rule(&["rm".to_string()], Decision::Forbidden)
-            .unwrap();
+        policy.add_prefix_rule(&["echo".to_string()], Decision::Allow).unwrap();
+        policy.add_prefix_rule(&["rm".to_string()], Decision::Forbidden).unwrap();
 
         let commands = [
             vec!["echo".to_string(), "hello".to_string()],

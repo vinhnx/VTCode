@@ -211,17 +211,13 @@ impl SensitivePath {
 
 #[cfg(windows)]
 fn normalize_windows_path(path: &Path) -> String {
-    path.to_string_lossy()
-        .replace('\\', "/")
-        .to_ascii_lowercase()
+    path.to_string_lossy().replace('\\', "/").to_ascii_lowercase()
 }
 
 /// Get the default sensitive paths as SensitivePath entries.
 pub fn default_sensitive_paths() -> Vec<SensitivePath> {
-    let paths: Vec<SensitivePath> = DEFAULT_SENSITIVE_PATHS
-        .iter()
-        .map(|p| SensitivePath::new(*p))
-        .collect();
+    let paths: Vec<SensitivePath> =
+        DEFAULT_SENSITIVE_PATHS.iter().map(|p| SensitivePath::new(*p)).collect();
 
     #[cfg(windows)]
     {
@@ -812,15 +808,10 @@ impl SandboxPolicy {
     #[must_use]
     pub fn has_full_network_access(&self) -> bool {
         match self {
-            Self::ReadOnly {
-                network_access,
-                network_allowlist,
+            Self::ReadOnly { network_access, network_allowlist }
+            | Self::WorkspaceWrite { network_access, network_allowlist, .. } => {
+                *network_access && network_allowlist.is_empty()
             }
-            | Self::WorkspaceWrite {
-                network_access,
-                network_allowlist,
-                ..
-            } => *network_access && network_allowlist.is_empty(),
             Self::DangerFullAccess | Self::ExternalSandbox { .. } => true,
         }
     }
@@ -830,12 +821,8 @@ impl SandboxPolicy {
     #[must_use]
     pub fn has_network_allowlist(&self) -> bool {
         match self {
-            Self::ReadOnly {
-                network_allowlist, ..
-            }
-            | Self::WorkspaceWrite {
-                network_allowlist, ..
-            } => !network_allowlist.is_empty(),
+            Self::ReadOnly { network_allowlist, .. }
+            | Self::WorkspaceWrite { network_allowlist, .. } => !network_allowlist.is_empty(),
             _ => false,
         }
     }
@@ -845,12 +832,8 @@ impl SandboxPolicy {
     #[must_use]
     pub fn network_allowlist(&self) -> &[NetworkAllowlistEntry] {
         match self {
-            Self::ReadOnly {
-                network_allowlist, ..
-            }
-            | Self::WorkspaceWrite {
-                network_allowlist, ..
-            } => network_allowlist,
+            Self::ReadOnly { network_allowlist, .. }
+            | Self::WorkspaceWrite { network_allowlist, .. } => network_allowlist,
             _ => &[],
         }
     }
@@ -860,21 +843,12 @@ impl SandboxPolicy {
     #[must_use]
     pub fn is_network_allowed(&self, domain: &str, port: u16) -> bool {
         match self {
-            Self::ReadOnly {
-                network_access,
-                network_allowlist,
-            }
-            | Self::WorkspaceWrite {
-                network_access,
-                network_allowlist,
-                ..
-            } => {
+            Self::ReadOnly { network_access, network_allowlist }
+            | Self::WorkspaceWrite { network_access, network_allowlist, .. } => {
                 if network_allowlist.is_empty() {
                     *network_access
                 } else {
-                    network_allowlist
-                        .iter()
-                        .any(|entry| entry.matches(domain, port))
+                    network_allowlist.iter().any(|entry| entry.matches(domain, port))
                 }
             }
             Self::DangerFullAccess | Self::ExternalSandbox { .. } => true,
@@ -887,11 +861,9 @@ impl SandboxPolicy {
     pub fn sensitive_paths(&self) -> Vec<SensitivePath> {
         match self {
             Self::ReadOnly { .. } => default_sensitive_paths(),
-            Self::WorkspaceWrite {
-                sensitive_paths, ..
-            } => sensitive_paths
-                .clone()
-                .unwrap_or_else(default_sensitive_paths),
+            Self::WorkspaceWrite { sensitive_paths, .. } => {
+                sensitive_paths.clone().unwrap_or_else(default_sensitive_paths)
+            }
             Self::DangerFullAccess | Self::ExternalSandbox { .. } => Vec::new(),
         }
     }
@@ -915,9 +887,7 @@ impl SandboxPolicy {
     #[inline]
     #[must_use]
     pub fn is_sensitive_path(&self, path: &Path) -> bool {
-        self.sensitive_paths()
-            .iter()
-            .any(|sp| sp.matches(path) && sp.block_read)
+        self.sensitive_paths().iter().any(|sp| sp.matches(path) && sp.block_read)
     }
 
     /// Check if write access to a path is blocked under this policy.
@@ -948,9 +918,7 @@ impl SandboxPolicy {
     pub fn resource_limits(&self) -> ResourceLimits {
         match self {
             Self::ReadOnly { .. } => ResourceLimits::conservative(),
-            Self::WorkspaceWrite {
-                resource_limits, ..
-            } => resource_limits.clone(),
+            Self::WorkspaceWrite { resource_limits, .. } => resource_limits.clone(),
             Self::DangerFullAccess | Self::ExternalSandbox { .. } => ResourceLimits::unlimited(),
         }
     }
@@ -959,19 +927,14 @@ impl SandboxPolicy {
     #[must_use]
     pub fn seccomp_profile(&self) -> SeccompProfile {
         match self {
-            Self::ReadOnly {
-                network_access,
-                network_allowlist,
-            } => {
+            Self::ReadOnly { network_access, network_allowlist } => {
                 let mut profile = SeccompProfile::strict();
                 if *network_access || !network_allowlist.is_empty() {
                     profile = profile.with_network();
                 }
                 profile
             }
-            Self::WorkspaceWrite {
-                seccomp_profile, ..
-            } => seccomp_profile.clone(),
+            Self::WorkspaceWrite { seccomp_profile, .. } => seccomp_profile.clone(),
             Self::DangerFullAccess | Self::ExternalSandbox { .. } => SeccompProfile::permissive(),
         }
     }
@@ -1033,9 +996,9 @@ impl SandboxPolicy {
             // Can always downgrade
             (DangerFullAccess, _) => Ok(()),
             // Cannot escalate from ReadOnly to write-capable
-            (ReadOnly { .. }, WorkspaceWrite { .. } | DangerFullAccess) => Err(anyhow::anyhow!(
-                "cannot escalate from read-only to write-capable policy"
-            )),
+            (ReadOnly { .. }, WorkspaceWrite { .. } | DangerFullAccess) => {
+                Err(anyhow::anyhow!("cannot escalate from read-only to write-capable policy"))
+            }
             // Other transitions are allowed
             _ => Ok(()),
         }
@@ -1369,9 +1332,7 @@ mod tests {
 
     #[test]
     fn test_seccomp_profile_builder() {
-        let profile = SeccompProfile::strict()
-            .with_network()
-            .block_syscall("custom_syscall");
+        let profile = SeccompProfile::strict().with_network().block_syscall("custom_syscall");
         assert!(profile.allow_network_sockets);
         assert!(profile.is_blocked("custom_syscall"));
     }

@@ -112,11 +112,7 @@ impl PermissionAuditLog {
 
         info!(?log_path, "Audit log initialized");
 
-        Ok(Self {
-            log_path,
-            writer: None,
-            event_count: 0,
-        })
+        Ok(Self { log_path, writer: None, event_count: 0 })
     }
 
     /// Record a permission event
@@ -186,9 +182,7 @@ impl PermissionAuditLog {
             self.writer = Some(BufWriter::new(file));
         }
 
-        self.writer
-            .as_mut()
-            .context("audit log writer was not initialized")
+        self.writer.as_mut().context("audit log writer was not initialized")
     }
 }
 
@@ -200,9 +194,7 @@ fn cleanup_old_audit_logs(audit_dir: &Path, max_age_days: u64) -> Result<()> {
     }
 
     let cutoff = SystemTime::now()
-        .checked_sub(Duration::from_secs(
-            max_age_days.saturating_mul(SECONDS_PER_DAY),
-        ))
+        .checked_sub(Duration::from_secs(max_age_days.saturating_mul(SECONDS_PER_DAY)))
         .unwrap_or(UNIX_EPOCH);
 
     let entries = match fs::read_dir(audit_dir) {

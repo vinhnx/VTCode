@@ -52,9 +52,7 @@ impl Usage {
 
     #[inline]
     pub fn cache_read_tokens_or_fallback(&self) -> u32 {
-        self.cache_read_tokens
-            .or(self.cached_prompt_tokens)
-            .unwrap_or(0)
+        self.cache_read_tokens.or(self.cached_prompt_tokens).unwrap_or(0)
     }
 
     #[inline]
@@ -79,8 +77,7 @@ impl Usage {
 
     #[inline]
     pub fn is_cache_hit(&self) -> Option<bool> {
-        self.has_any_cache_metrics()
-            .then(|| self.cache_read_tokens_or_fallback() > 0)
+        self.has_any_cache_metrics().then(|| self.cache_read_tokens_or_fallback() > 0)
     }
 
     #[inline]
@@ -152,10 +149,7 @@ impl From<DeepSeekBalanceResponse> for BalanceInfo {
                 format!("{}{}", b.total_balance, symbol)
             })
             .unwrap_or_else(|| "N/A".to_string());
-        BalanceInfo {
-            display,
-            is_available: resp.is_available,
-        }
+        BalanceInfo { display, is_available: resp.is_available }
     }
 }
 
@@ -269,11 +263,7 @@ impl ToolCall {
         Self {
             id,
             call_type: "function".to_owned(),
-            function: Some(FunctionCall {
-                namespace,
-                name,
-                arguments,
-            }),
+            function: Some(FunctionCall { namespace, name, arguments }),
             text: None,
             thought_signature: None,
         }
@@ -284,11 +274,7 @@ impl ToolCall {
         Self {
             id,
             call_type: "custom".to_owned(),
-            function: Some(FunctionCall {
-                namespace: None,
-                name,
-                arguments: text.clone(),
-            }),
+            function: Some(FunctionCall { namespace: None, name, arguments: text.clone() }),
             text: Some(text),
             thought_signature: None,
         }
@@ -301,18 +287,14 @@ impl ToolCall {
 
     /// Returns the tool name when the call includes function details.
     pub fn tool_name(&self) -> Option<&str> {
-        self.function
-            .as_ref()
-            .map(|function| function.name.as_str())
+        self.function.as_ref().map(|function| function.name.as_str())
     }
 
     /// Returns the raw payload text exactly as emitted by the model.
     pub fn raw_input(&self) -> Option<&str> {
-        self.text.as_deref().or_else(|| {
-            self.function
-                .as_ref()
-                .map(|function| function.arguments.as_str())
-        })
+        self.text
+            .as_deref()
+            .or_else(|| self.function.as_ref().map(|function| function.arguments.as_str()))
     }
 
     /// Parse the arguments as JSON Value (for function-type tools)
@@ -332,9 +314,7 @@ impl ToolCall {
     /// flow through the existing tool pipeline.
     pub fn execution_arguments(&self) -> Result<serde_json::Value, serde_json::Error> {
         if self.is_custom() {
-            return Ok(serde_json::Value::String(
-                self.raw_input().unwrap_or_default().to_string(),
-            ));
+            return Ok(serde_json::Value::String(self.raw_input().unwrap_or_default().to_string()));
         }
 
         self.parsed_arguments()
@@ -474,10 +454,7 @@ fn find_provider_markup_boundary(input: &str) -> Option<usize> {
 
     input.char_indices().find_map(|(offset, _)| {
         let rest = input.get(offset..)?;
-        PROVIDER_MARKERS
-            .iter()
-            .any(|marker| rest.starts_with(marker))
-            .then_some(offset)
+        PROVIDER_MARKERS.iter().any(|marker| rest.starts_with(marker)).then_some(offset)
     })
 }
 
@@ -676,9 +653,7 @@ mod tests {
             r#"{"path":"src/main.rs"} trailing text"#.to_string(),
         );
 
-        let parsed = call
-            .parsed_arguments()
-            .expect("arguments with trailing text should recover");
+        let parsed = call.parsed_arguments().expect("arguments with trailing text should recover");
         assert_eq!(parsed, json!({"path":"src/main.rs"}));
     }
 
@@ -690,9 +665,7 @@ mod tests {
             "```json\n{\"path\":\"src/lib.rs\",\"limit\":25}\n```".to_string(),
         );
 
-        let parsed = call
-            .parsed_arguments()
-            .expect("code-fenced arguments should recover");
+        let parsed = call.parsed_arguments().expect("code-fenced arguments should recover");
         assert_eq!(parsed, json!({"path":"src/lib.rs","limit":25}));
     }
 
@@ -736,17 +709,15 @@ mod tests {
         let call = ToolCall::function(
             "call_search".to_string(),
             "code_search".to_string(),
-            "{\"query\":\"persistent_memory\",\"file_types\":[\"rust\"],\"result_types\":[\"text\"],\"max_results\":20,\"path\":\"vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
+            "{\"query\":\"persistent_memory\",\"file_types\":[\"rust\"],\"result_types\":[\"text\"],\"max_results\":20,\"path\":\"crates/codegen/vtcode-core/src</parameter>\n<</invoke>\n</minimax:tool_call>".to_string(),
         );
 
-        let parsed = call
-            .parsed_arguments()
-            .expect("minimax markup spillover should recover");
+        let parsed = call.parsed_arguments().expect("minimax markup spillover should recover");
         assert_eq!(
             parsed,
             json!({
                 "query": "persistent_memory",
-                "path": "vtcode-core/src",
+                "path": "crates/codegen/vtcode-core/src",
                 "file_types": ["rust"],
                 "result_types": ["text"],
                 "max_results": 20
@@ -771,19 +742,13 @@ mod tests {
     #[test]
     fn custom_tool_call_exposes_raw_execution_arguments() {
         let patch = "*** Begin Patch\n*** End Patch\n".to_string();
-        let call = ToolCall::custom(
-            "call_patch".to_string(),
-            "apply_patch".to_string(),
-            patch.clone(),
-        );
+        let call =
+            ToolCall::custom("call_patch".to_string(), "apply_patch".to_string(), patch.clone());
 
         assert!(call.is_custom());
         assert_eq!(call.tool_name(), Some("apply_patch"));
         assert_eq!(call.raw_input(), Some(patch.as_str()));
-        assert_eq!(
-            call.execution_arguments().expect("custom arguments"),
-            json!(patch)
-        );
+        assert_eq!(call.execution_arguments().expect("custom arguments"), json!(patch));
         assert!(
             call.parsed_arguments().is_err(),
             "custom tool payload should stay freeform rather than JSON"

@@ -75,12 +75,7 @@ impl PreparedAssistantToolCall {
             .function
             .is_none()
         {
-            (
-                None,
-                Some("tool call missing function details".to_string()),
-                false,
-                false,
-            )
+            (None, Some("tool call missing function details".to_string()), false, false)
         } else {
             match raw_call.execution_arguments() {
                 Ok(args) => {
@@ -168,8 +163,7 @@ impl<'a> TurnProcessingContext<'a> {
     }
 
     pub(crate) fn push_system_message(&mut self, content: impl Into<String>) {
-        self.working_history
-            .push(uni::Message::system(content.into()));
+        self.working_history.push(uni::Message::system(content.into()));
     }
 
     pub(crate) fn reset_blocked_tool_call_streak(&mut self) {

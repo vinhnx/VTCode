@@ -62,12 +62,7 @@ async fn main() -> Result<()> {
             println!("Success: {result:?}");
             assert_eq!(result["success"], true);
             assert_eq!(result["code"], 0);
-            assert!(
-                result["output"]
-                    .as_str()
-                    .unwrap()
-                    .contains("Hello, PTY from file!")
-            );
+            assert!(result["output"].as_str().unwrap().contains("Hello, PTY from file!"));
             println!("✓ Test 2 passed");
         }
         Err(e) => {
@@ -103,12 +98,7 @@ async fn main() -> Result<()> {
     match registry.execute_tool("list_pty_sessions", args).await {
         Ok(result) => {
             println!("List sessions result: {result:?}");
-            assert!(
-                result["sessions"]
-                    .as_array()
-                    .unwrap()
-                    .contains(&"test_session".into())
-            );
+            assert!(result["sessions"].as_array().unwrap().contains(&"test_session".into()));
             println!("✓ Session listed");
         }
         Err(e) => {

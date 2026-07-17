@@ -119,9 +119,7 @@ pub(super) fn apply_exec_command_defaults(
         .entry("action".to_string())
         .or_insert_with(|| Value::String(defaults.action.to_string()));
     if let Some(tty) = defaults.force_tty {
-        payload
-            .entry("tty".to_string())
-            .or_insert_with(|| Value::Bool(tty));
+        payload.entry("tty".to_string()).or_insert_with(|| Value::Bool(tty));
     }
 }
 
@@ -129,31 +127,15 @@ fn exec_command_defaults_from_normalized_name(normalized: &str) -> Option<ExecCo
     match normalized {
         "run" | "runcmd" | "runcommand" | "terminalrun" | "terminalcmd" | "terminalcommand"
         | "command" | "shell" | "bash" | "container_exec" | "exec" | "exec_command" => {
-            Some(ExecCommandDefaults {
-                action: "run",
-                force_tty: None,
-            })
+            Some(ExecCommandDefaults { action: "run", force_tty: None })
         }
-        "run_pty_cmd" | "create_pty_session" => Some(ExecCommandDefaults {
-            action: "run",
-            force_tty: Some(true),
-        }),
-        "send_pty_input" => Some(ExecCommandDefaults {
-            action: "write",
-            force_tty: None,
-        }),
-        "read_pty_session" => Some(ExecCommandDefaults {
-            action: "poll",
-            force_tty: None,
-        }),
-        "list_pty_sessions" => Some(ExecCommandDefaults {
-            action: "list",
-            force_tty: None,
-        }),
-        "close_pty_session" => Some(ExecCommandDefaults {
-            action: "close",
-            force_tty: None,
-        }),
+        "run_pty_cmd" | "create_pty_session" => {
+            Some(ExecCommandDefaults { action: "run", force_tty: Some(true) })
+        }
+        "send_pty_input" => Some(ExecCommandDefaults { action: "write", force_tty: None }),
+        "read_pty_session" => Some(ExecCommandDefaults { action: "poll", force_tty: None }),
+        "list_pty_sessions" => Some(ExecCommandDefaults { action: "list", force_tty: None }),
+        "close_pty_session" => Some(ExecCommandDefaults { action: "close", force_tty: None }),
         _ => None,
     }
 }

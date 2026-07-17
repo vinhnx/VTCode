@@ -192,9 +192,7 @@ impl McpOAuthService {
         let now = now_secs();
         Ok(McpOAuthStatus::Authenticated {
             age_seconds: now.saturating_sub(token.obtained_at),
-            expires_in: token
-                .expires_at
-                .map(|expires_at| expires_at.saturating_sub(now)),
+            expires_in: token.expires_at.map(|expires_at| expires_at.saturating_sub(now)),
         })
     }
 
@@ -285,10 +283,7 @@ async fn exchange_code_for_token(
         ("client_id".to_string(), config.client_id.clone()),
         ("code".to_string(), code.to_string()),
         ("redirect_uri".to_string(), config.callback_url()),
-        (
-            "code_verifier".to_string(),
-            challenge.code_verifier.to_string(),
-        ),
+        ("code_verifier".to_string(), challenge.code_verifier.to_string()),
     ];
     if let Some(audience) = config.audience.as_deref()
         && !audience.trim().is_empty()
@@ -305,11 +300,12 @@ async fn exchange_code_for_token(
 }
 
 async fn refresh_token(config: &McpOAuthConfig, current: &McpOAuthToken) -> Result<McpOAuthToken> {
-    let refresh_token = current
-        .refresh_token
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| anyhow!("Stored MCP OAuth token does not include a refresh token"))?;
+    let refresh_token =
+        current
+            .refresh_token
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow!("Stored MCP OAuth token does not include a refresh token"))?;
     let mut form = vec![
         ("grant_type".to_string(), "refresh_token".to_string()),
         ("client_id".to_string(), config.client_id.clone()),
@@ -329,9 +325,7 @@ async fn refresh_token(config: &McpOAuthConfig, current: &McpOAuthToken) -> Resu
 
     let refreshed = send_token_request(&config.token_url, &form).await?;
     Ok(McpOAuthToken {
-        refresh_token: refreshed
-            .refresh_token
-            .or_else(|| current.refresh_token.clone()),
+        refresh_token: refreshed.refresh_token.or_else(|| current.refresh_token.clone()),
         ..refreshed
     })
 }
@@ -345,10 +339,7 @@ async fn send_token_request(token_url: &str, form: &[(String, String)]) -> Resul
         .await
         .with_context(|| format!("failed to send MCP OAuth request to {token_url}"))?;
     let status = response.status();
-    let body = response
-        .text()
-        .await
-        .context("failed to read MCP OAuth response body")?;
+    let body = response.text().await.context("failed to read MCP OAuth response body")?;
 
     if !status.is_success() {
         bail!("MCP OAuth request failed (HTTP {status}): {body}");
@@ -455,10 +446,7 @@ mod tests {
                 temp_dir.path().to_path_buf(),
             ))
             .expect("set auth dir override");
-            Self {
-                previous,
-                temp_dir: Some(temp_dir),
-            }
+            Self { previous, temp_dir: Some(temp_dir) }
         }
     }
 
@@ -490,9 +478,7 @@ mod tests {
     #[test]
     fn prepare_login_builds_expected_auth_url() {
         let service = McpOAuthService::new();
-        let prepared = service
-            .prepare_login("demo", &sample_config())
-            .expect("prepare login");
+        let prepared = service.prepare_login("demo", &sample_config()).expect("prepare login");
 
         assert!(prepared.auth_url.contains("response_type=code"));
         assert!(prepared.auth_url.contains("client_id=client-123"));
@@ -531,13 +517,7 @@ mod tests {
         .expect("save token");
 
         let status = service.status("demo", storage_mode).expect("status");
-        assert!(matches!(
-            status,
-            McpOAuthStatus::Authenticated {
-                expires_in: Some(_),
-                ..
-            }
-        ));
+        assert!(matches!(status, McpOAuthStatus::Authenticated { expires_in: Some(_), .. }));
     }
 
     #[test]

@@ -6,13 +6,13 @@ This document outlines how VT Code implements Model Context Protocol (MCP) based
 
 ## Overview
 
-VT Code integrates MCP to connect with external tools, databases, and APIs through the `vtcode-core/src/mcp/` module. MCP provides a standardized interface for AI agents to access tools beyond their native capabilities.
+VT Code integrates MCP to connect with external tools, databases, and APIs through the `crates/codegen/vtcode-core/src/mcp/` module. MCP provides a standardized interface for AI agents to access tools beyond their native capabilities.
 
 ## Architecture
 
 ### Core Components
 
-**Location**: `vtcode-core/src/mcp/`
+**Location**: `crates/codegen/vtcode-core/src/mcp/`
 
 ```
 mcp/
@@ -77,7 +77,7 @@ max_concurrent_requests = 1
    - Provider definitions
    - Security policies
 
-3. **Code Constants** (`vtcode-core/src/config/constants.rs`)
+3. **Code Constants** (`crates/codegen/vtcode-core/src/config/constants.rs`)
    - Default values
    - Built-in limits
 
@@ -534,8 +534,8 @@ Implement additional transport types by extending `rmcp_transport.rs`:
 
 ## References
 
-- `vtcode-core/src/mcp/mod.rs`: Main MCP client implementation (2200+ lines)
-- `vtcode-core/src/mcp/rmcp_transport.rs`: Transport abstractions
-- `vtcode-core/src/mcp/schema.rs`: JSON schema validation
-- `vtcode-core/src/mcp/tool_discovery.rs`: Tool discovery and caching
-- `vtcode-core/src/config/mcp.rs`: Configuration types
+- `crates/codegen/vtcode-core/src/mcp/mod.rs`: Main MCP client implementation (2200+ lines)
+- `crates/codegen/vtcode-core/src/mcp/rmcp_transport.rs`: Transport abstractions
+- `crates/codegen/vtcode-core/src/mcp/schema.rs`: JSON schema validation
+- `crates/codegen/vtcode-core/src/mcp/tool_discovery.rs`: Tool discovery and caching
+- `crates/codegen/vtcode-core/src/config/mcp.rs`: Configuration types

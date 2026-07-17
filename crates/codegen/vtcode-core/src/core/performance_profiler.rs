@@ -112,10 +112,7 @@ impl PerformanceProfiler {
             resource_snapshots: Vec::new(),
         };
 
-        self.sessions
-            .write()
-            .await
-            .insert(name.to_string(), session);
+        self.sessions.write().await.insert(name.to_string(), session);
         self.resource_monitor.start_monitoring().await?;
 
         Ok(())
@@ -160,11 +157,8 @@ impl PerformanceProfiler {
     /// Calculate benchmark results from session data
     async fn calculate_results(&self, session: BenchmarkSession) -> BenchmarkResults {
         let total_duration = session.start_time.elapsed();
-        let mut durations_ns: Vec<u64> = session
-            .durations
-            .iter()
-            .map(|d| d.as_nanos() as u64)
-            .collect();
+        let mut durations_ns: Vec<u64> =
+            session.durations.iter().map(|d| d.as_nanos() as u64).collect();
 
         durations_ns.sort_unstable();
 
@@ -180,10 +174,7 @@ impl PerformanceProfiler {
         let percentile_95_ns = if !durations_ns.is_empty() {
             #[allow(clippy::cast_sign_loss)]
             let index = (durations_ns.len() as f64 * 0.95) as usize;
-            durations_ns
-                .get(index.min(durations_ns.len() - 1))
-                .copied()
-                .unwrap_or(0)
+            durations_ns.get(index.min(durations_ns.len() - 1)).copied().unwrap_or(0)
         } else {
             0
         };
@@ -191,10 +182,7 @@ impl PerformanceProfiler {
         let percentile_99_ns = if !durations_ns.is_empty() {
             #[allow(clippy::cast_sign_loss)]
             let index = (durations_ns.len() as f64 * 0.99) as usize;
-            durations_ns
-                .get(index.min(durations_ns.len() - 1))
-                .copied()
-                .unwrap_or(0)
+            durations_ns.get(index.min(durations_ns.len() - 1)).copied().unwrap_or(0)
         } else {
             0
         };
@@ -208,11 +196,7 @@ impl PerformanceProfiler {
         // Calculate average resource usage
         let avg_memory_mb = if !session.resource_snapshots.is_empty() {
             Some(
-                session
-                    .resource_snapshots
-                    .iter()
-                    .map(|m| m.memory_used_mb)
-                    .sum::<f64>()
+                session.resource_snapshots.iter().map(|m| m.memory_used_mb).sum::<f64>()
                     / session.resource_snapshots.len() as f64,
             )
         } else {
@@ -221,11 +205,7 @@ impl PerformanceProfiler {
 
         let avg_cpu_percent = if !session.resource_snapshots.is_empty() {
             Some(
-                session
-                    .resource_snapshots
-                    .iter()
-                    .map(|m| m.cpu_percent)
-                    .sum::<f64>()
+                session.resource_snapshots.iter().map(|m| m.cpu_percent).sum::<f64>()
                     / session.resource_snapshots.len() as f64,
             )
         } else {

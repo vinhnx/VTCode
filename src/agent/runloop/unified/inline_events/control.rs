@@ -17,10 +17,9 @@ impl<'a, 'state> InlineControlProcessor<'a, 'state> {
 
     pub(crate) fn cancel(self) -> Result<InlineLoopAction> {
         self.state.reset_interrupt_state();
-        self.state.renderer().line(
-            MessageStyle::Info,
-            "Cancellation request noted. No active run to stop.",
-        )?;
+        self.state
+            .renderer()
+            .line(MessageStyle::Info, "Cancellation request noted. No active run to stop.")?;
         Ok(InlineLoopAction::Continue)
     }
 

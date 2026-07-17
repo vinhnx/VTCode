@@ -182,13 +182,7 @@ fn indicator_fg(kind: DiffLineType, theme: DiffTheme) -> Option<RatatuiColor> {
 
 /// Should the diff indicator use the DIM modifier?
 fn indicator_dim(kind: DiffLineType, theme: DiffTheme) -> bool {
-    matches!(
-        (kind, theme),
-        (
-            DiffLineType::Insert | DiffLineType::Delete,
-            DiffTheme::Light
-        )
-    )
+    matches!((kind, theme), (DiffLineType::Insert | DiffLineType::Delete, DiffTheme::Light))
 }
 
 /// Build a style for a line-level indicator (gutter or sign).
@@ -225,16 +219,14 @@ pub fn style_content(kind: DiffLineType, style_context: DiffRenderStyleContext) 
         (_, DiffTheme::Light, _, Some(bg)) => RatatuiStyle::default().bg(bg),
         (_, DiffTheme::Light, _, None) => RatatuiStyle::default(),
         // ANSI16: foreground-only — no background support.
-        (_, _, DiffColorLevel::Ansi16, _) => fg
-            .map(|c| RatatuiStyle::default().fg(c))
-            .unwrap_or_default(),
+        (_, _, DiffColorLevel::Ansi16, _) => {
+            fg.map(|c| RatatuiStyle::default().fg(c)).unwrap_or_default()
+        }
         // TrueColor/256 + tinted bg: coloured text on tinted background.
         (_, _, _, Some(bg)) => fg
             .map(|c| RatatuiStyle::default().fg(c).bg(bg))
             .unwrap_or_else(|| RatatuiStyle::default().bg(bg)),
-        (_, _, _, None) => fg
-            .map(|c| RatatuiStyle::default().fg(c))
-            .unwrap_or_default(),
+        (_, _, _, None) => fg.map(|c| RatatuiStyle::default().fg(c)).unwrap_or_default(),
     }
 }
 
@@ -375,10 +367,7 @@ mod tests {
         let style_context = diff_render_style_context_for(
             DiffTheme::Dark,
             DiffColorLevel::Ansi256,
-            DiffScopeBackgroundRgbs {
-                inserted: Some((0, 95, 0)),
-                deleted: None,
-            },
+            DiffScopeBackgroundRgbs { inserted: Some((0, 95, 0)), deleted: None },
         );
         assert_eq!(
             style_line_bg(DiffLineType::Insert, style_context),
@@ -400,14 +389,8 @@ mod tests {
                 deleted: Some((11, 12, 13)),
             },
         );
-        assert_eq!(
-            style_line_bg(DiffLineType::Insert, style_context),
-            RatatuiStyle::default()
-        );
-        assert_eq!(
-            style_line_bg(DiffLineType::Delete, style_context),
-            RatatuiStyle::default()
-        );
+        assert_eq!(style_line_bg(DiffLineType::Insert, style_context), RatatuiStyle::default());
+        assert_eq!(style_line_bg(DiffLineType::Delete, style_context), RatatuiStyle::default());
     }
 
     #[test]
@@ -430,10 +413,7 @@ mod tests {
         let style_context = diff_render_style_context_for(
             DiffTheme::Dark,
             DiffColorLevel::TrueColor,
-            DiffScopeBackgroundRgbs {
-                inserted: Some((12, 34, 56)),
-                deleted: None,
-            },
+            DiffScopeBackgroundRgbs { inserted: Some((12, 34, 56)), deleted: None },
         );
         assert_eq!(
             content_background(DiffLineType::Insert, style_context),

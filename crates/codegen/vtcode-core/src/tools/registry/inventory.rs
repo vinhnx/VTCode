@@ -52,11 +52,7 @@ impl RigRegistrationTool {
             .cloned()
             .unwrap_or_else(|| json!({"type": "object"}));
 
-        Self {
-            name,
-            description,
-            parameters,
-        }
+        Self { name, description, parameters }
     }
 }
 
@@ -75,11 +71,9 @@ impl RigToolDyn for RigRegistrationTool {
 
     fn call<'a>(&'a self, _args: String) -> WasmBoxedFuture<'a, Result<String, RigToolError>> {
         Box::pin(async move {
-            Err(RigToolError::ToolCallError(Box::new(
-                std::io::Error::other(
-                    "VTCode owns tool dispatch; Rig ToolSet is used for registration only",
-                ),
-            )))
+            Err(RigToolError::ToolCallError(Box::new(std::io::Error::other(
+                "VTCode owns tool dispatch; Rig ToolSet is used for registration only",
+            ))))
         })
     }
 }
@@ -149,9 +143,7 @@ impl ToolInventory {
     }
 
     pub(super) fn update_commands_config(&self, commands_config: &CommandsConfig) {
-        self.command_tool
-            .write()
-            .update_commands_config(commands_config);
+        self.command_tool.write().update_commands_config(commands_config);
     }
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
@@ -209,10 +201,7 @@ impl ToolInventory {
         }
 
         if self.is_common_tool(&name_lower) {
-            self.state
-                .write()
-                .frequently_used
-                .insert(name_lower.clone());
+            self.state.write().frequently_used.insert(name_lower.clone());
         }
 
         if !aliases.is_empty() {
@@ -296,9 +285,7 @@ impl ToolInventory {
         let tools = self.tools.read();
         if let Some(entry) = tools.get(&resolved_name) {
             *entry.last_used.write() = Instant::now();
-            entry
-                .use_count
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            entry.use_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             if resolved_name != name_lower {
                 self.state.write().frequently_used.insert(resolved_name);
@@ -374,18 +361,10 @@ impl ToolInventory {
             .ok_or_else(|| anyhow::anyhow!("tool '{name}' not found for handler replacement"))?;
 
         let old_reg = &entry.registration;
-        if !matches!(
-            &new_handler,
-            super::registration::ToolHandler::TraitObject(_)
-        ) {
-            return Err(anyhow::anyhow!(
-                "CGP handler replacement requires a TraitObject handler"
-            ));
+        if !matches!(&new_handler, super::registration::ToolHandler::TraitObject(_)) {
+            return Err(anyhow::anyhow!("CGP handler replacement requires a TraitObject handler"));
         }
-        let updated = old_reg
-            .clone()
-            .with_handler(new_handler)
-            .with_cgp_wrapped(true);
+        let updated = old_reg.clone().with_handler(new_handler).with_cgp_wrapped(true);
 
         tools.insert(
             name_lower,
@@ -466,10 +445,7 @@ mod tests {
     use std::sync::Arc;
 
     fn make_test_inventory() -> ToolInventory {
-        ToolInventory::new(
-            PathBuf::from("/tmp/vtcode-test"),
-            Arc::new(EditedFileMonitor::new()),
-        )
+        ToolInventory::new(PathBuf::from("/tmp/vtcode-test"), Arc::new(EditedFileMonitor::new()))
     }
 
     fn make_visible_registration(name: impl Into<Arc<str>>) -> ToolRegistration {
@@ -531,11 +507,7 @@ mod tests {
         // When we look up "read_file", it should resolve to "read_file"
         // because the direct registration is LLM-visible
         let registration = inventory.registration_for("read_file").unwrap();
-        assert_eq!(
-            registration.name(),
-            "read_file",
-            "Visible direct tool should take precedence"
-        );
+        assert_eq!(registration.name(), "read_file", "Visible direct tool should take precedence");
     }
 
     #[test]
@@ -570,10 +542,7 @@ mod tests {
         // Get initial state - registration adds the entry with count 0
         let initial_metrics = inventory.alias_metrics();
         let initial_entry = initial_metrics.usage.get("read_file");
-        assert!(
-            initial_entry.is_some(),
-            "Alias entry should be created during registration"
-        );
+        assert!(initial_entry.is_some(), "Alias entry should be created during registration");
         let initial_count = initial_entry.unwrap().1;
 
         // Direct lookups should not consume the alias path anymore.
@@ -610,9 +579,7 @@ mod tests {
         let inventory = make_test_inventory();
 
         for name in ["zeta_tool", "alpha_tool", "middle_tool"] {
-            inventory
-                .register_tool(make_visible_registration(name))
-                .unwrap();
+            inventory.register_tool(make_visible_registration(name)).unwrap();
         }
 
         let snapshot_names = inventory
@@ -674,12 +641,7 @@ mod tests {
             rig_defs[0].parameters,
             json!({"type": "object", "properties": {"new": {"type": "string"}}})
         );
-        assert_eq!(
-            inventory.registrations_snapshot()[0]
-                .metadata()
-                .description(),
-            Some("second")
-        );
+        assert_eq!(inventory.registrations_snapshot()[0].metadata().description(), Some("second"));
     }
 
     #[test]
@@ -709,9 +671,7 @@ mod tests {
     #[test]
     fn test_cleanup_uses_frequently_used_snapshot() {
         let inventory = make_test_inventory();
-        let stale = Instant::now()
-            .checked_sub(Duration::from_secs(3601))
-            .unwrap();
+        let stale = Instant::now().checked_sub(Duration::from_secs(3601)).unwrap();
 
         for idx in 0..1001 {
             let name = format!("tool_{idx}");
@@ -733,9 +693,8 @@ mod tests {
         {
             let mut state = inventory.state.write();
             state.frequently_used.insert("tool_0".to_string());
-            state.last_cache_cleanup = Instant::now()
-                .checked_sub(Duration::from_secs(301))
-                .unwrap();
+            state.last_cache_cleanup =
+                Instant::now().checked_sub(Duration::from_secs(301)).unwrap();
         }
 
         inventory.cleanup_cache_if_needed();

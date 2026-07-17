@@ -25,9 +25,7 @@ impl Default for FormattingOrchestrator {
 
 impl FormattingOrchestrator {
     pub fn new() -> Self {
-        let mut orchestrator = Self {
-            configs: Vec::new(),
-        };
+        let mut orchestrator = Self { configs: Vec::new() };
 
         // Register default formatters
         orchestrator.register(FormatConfig::rustfmt());

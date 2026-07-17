@@ -323,9 +323,7 @@ mod otel_support {
                     }
                 }
                 ThreadEvent::Error(e) => {
-                    span.set_status(Status::Error {
-                        description: e.message.clone().into(),
-                    });
+                    span.set_status(Status::Error { description: e.message.clone().into() });
                     span.set_attribute(KeyValue::new("error_message", e.message.clone()));
                 }
                 _ => {}
@@ -645,12 +643,10 @@ impl Usage {
     /// Accumulate another usage sample into this one.
     pub fn add(&mut self, other: &Usage) {
         self.input_tokens = self.input_tokens.saturating_add(other.input_tokens);
-        self.cached_input_tokens = self
-            .cached_input_tokens
-            .saturating_add(other.cached_input_tokens);
-        self.cache_creation_tokens = self
-            .cache_creation_tokens
-            .saturating_add(other.cache_creation_tokens);
+        self.cached_input_tokens =
+            self.cached_input_tokens.saturating_add(other.cached_input_tokens);
+        self.cache_creation_tokens =
+            self.cache_creation_tokens.saturating_add(other.cache_creation_tokens);
         self.output_tokens = self.output_tokens.saturating_add(other.output_tokens);
     }
 }
@@ -1043,10 +1039,7 @@ mod tests {
 
     #[test]
     fn usage_cache_summary_formats() {
-        assert_eq!(
-            Usage::default().cache_summary(),
-            "No input tokens recorded."
-        );
+        assert_eq!(Usage::default().cache_summary(), "No input tokens recorded.");
 
         let usage = Usage {
             input_tokens: 1_000,
@@ -1100,9 +1093,7 @@ mod tests {
 
     #[test]
     fn versioned_event_wraps_schema_version() {
-        let event = ThreadEvent::ThreadStarted(ThreadStartedEvent {
-            thread_id: "abc".to_string(),
-        });
+        let event = ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "abc".to_string() });
 
         let versioned = VersionedThreadEvent::new(event.clone());
 

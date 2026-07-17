@@ -145,10 +145,7 @@ mod memory_integration {
             stats.current_size, stats.evictions
         );
 
-        assert!(
-            stats.evictions > 0,
-            "Expected evictions but cache never cleaned up"
-        );
+        assert!(stats.evictions > 0, "Expected evictions but cache never cleaned up");
     }
 
     /// Test: Verify TTL-based cleanup prevents stale data accumulation
@@ -242,11 +239,9 @@ mod memory_integration {
         if stable_period_readings.len() > 2 {
             let stable_avg: f64 =
                 stable_period_readings.iter().sum::<f64>() / stable_period_readings.len() as f64;
-            let stable_variance = stable_period_readings
-                .iter()
-                .map(|&v| (v - stable_avg).abs())
-                .sum::<f64>()
-                / stable_period_readings.len() as f64;
+            let stable_variance =
+                stable_period_readings.iter().map(|&v| (v - stable_avg).abs()).sum::<f64>()
+                    / stable_period_readings.len() as f64;
 
             println!("Stable period: avg={stable_avg:.0}B, variance={stable_variance:.0}B");
 

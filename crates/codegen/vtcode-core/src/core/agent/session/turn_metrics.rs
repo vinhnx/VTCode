@@ -36,8 +36,7 @@ impl TurnMetrics {
 
     /// Record a tool execution latency within the current turn.
     pub fn record_tool_latency(&mut self, tool_name: impl Into<String>, duration_ms: u64) {
-        self.turn_tool_latencies
-            .push((tool_name.into(), duration_ms));
+        self.turn_tool_latencies.push((tool_name.into(), duration_ms));
     }
 
     /// Clear per-turn tool latencies (call at the start of each turn).

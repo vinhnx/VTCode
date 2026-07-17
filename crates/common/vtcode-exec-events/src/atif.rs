@@ -377,23 +377,19 @@ impl AtifTrajectoryBuilder {
                 // Accumulate aggregate usage
                 self.total_input_tokens =
                     self.total_input_tokens.saturating_add(e.usage.input_tokens);
-                self.total_output_tokens = self
-                    .total_output_tokens
-                    .saturating_add(e.usage.output_tokens);
-                self.total_cached_tokens = self
-                    .total_cached_tokens
-                    .saturating_add(e.usage.cached_input_tokens);
+                self.total_output_tokens =
+                    self.total_output_tokens.saturating_add(e.usage.output_tokens);
+                self.total_cached_tokens =
+                    self.total_cached_tokens.saturating_add(e.usage.cached_input_tokens);
                 self.num_turns = e.num_turns;
             }
             ThreadEvent::TurnCompleted(e) => {
                 self.total_input_tokens =
                     self.total_input_tokens.saturating_add(e.usage.input_tokens);
-                self.total_output_tokens = self
-                    .total_output_tokens
-                    .saturating_add(e.usage.output_tokens);
-                self.total_cached_tokens = self
-                    .total_cached_tokens
-                    .saturating_add(e.usage.cached_input_tokens);
+                self.total_output_tokens =
+                    self.total_output_tokens.saturating_add(e.usage.output_tokens);
+                self.total_cached_tokens =
+                    self.total_cached_tokens.saturating_add(e.usage.cached_input_tokens);
                 self.num_turns += 1;
 
                 let mut step = Step::system(self.next_step_id, "turn_completed");
@@ -473,26 +469,17 @@ impl AtifTrajectoryBuilder {
             }
             ThreadItemDetails::ToolOutput(output) => {
                 // Find the matching pending invocation
-                let pending_idx = self
-                    .pending_tool_calls
-                    .iter()
-                    .position(|p| p.call_id == output.call_id);
+                let pending_idx =
+                    self.pending_tool_calls.iter().position(|p| p.call_id == output.call_id);
 
                 let (tool_name, arguments, tool_call_id, inv_ts) = if let Some(idx) = pending_idx {
                     let p = self.pending_tool_calls.remove(idx);
                     (p.tool_name, p.arguments, p.tool_call_id, p.timestamp)
                 } else {
-                    (
-                        "unknown".to_string(),
-                        None,
-                        output.tool_call_id.clone(),
-                        ts.to_string(),
-                    )
+                    ("unknown".to_string(), None, output.tool_call_id.clone(), ts.to_string())
                 };
 
-                let call_id = tool_call_id
-                    .clone()
-                    .unwrap_or_else(|| output.call_id.clone());
+                let call_id = tool_call_id.clone().unwrap_or_else(|| output.call_id.clone());
 
                 let mut step = Step::agent(self.next_step_id, "");
                 step.timestamp = Some(inv_ts);
@@ -510,10 +497,7 @@ impl AtifTrajectoryBuilder {
                 };
                 let content = format!("{}{}", output.output, status_suffix);
                 step.observation = Some(Observation {
-                    results: vec![ObservationResult {
-                        source_call_id: call_id,
-                        content,
-                    }],
+                    results: vec![ObservationResult { source_call_id: call_id, content }],
                 });
                 self.push_step(step);
             }
@@ -562,11 +546,8 @@ impl AtifTrajectoryBuilder {
                 self.push_step(step);
             }
             ThreadItemDetails::FileChange(fc) => {
-                let changes: Vec<String> = fc
-                    .changes
-                    .iter()
-                    .map(|c| format!("{}: {:?}", c.path, c.kind))
-                    .collect();
+                let changes: Vec<String> =
+                    fc.changes.iter().map(|c| format!("{}: {:?}", c.path, c.kind)).collect();
                 let msg = format!("file_changes: {}", changes.join(", "));
                 let mut step = Step::system(self.next_step_id, msg);
                 step.timestamp = Some(ts.to_string());
@@ -631,9 +612,7 @@ impl AtifTrajectoryBuilder {
 
         Trajectory {
             schema_version: ATIF_SCHEMA_VERSION.to_string(),
-            session_id: self
-                .session_id
-                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            session_id: self.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             agent: self.agent,
             steps: self.steps,
             notes: None,
@@ -659,7 +638,7 @@ mod tests {
     use super::*;
     use crate::{
         AgentMessageItem, ItemCompletedEvent, ThreadItem, ThreadStartedEvent, ToolInvocationItem,
-        ToolOutputItem, TurnCompletedEvent, Usage,
+        ToolOutputItem, TurnCompletedEvent, TurnStartedEvent, Usage,
     };
 
     fn fixed_ts() -> DateTime<Utc> {
@@ -688,9 +667,8 @@ mod tests {
     #[test]
     fn builder_thread_started_sets_session_id() {
         let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
-        let event = ThreadEvent::ThreadStarted(ThreadStartedEvent {
-            thread_id: "thread-abc".to_string(),
-        });
+        let event =
+            ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-abc".to_string() });
         builder.process_event_at(&event, fixed_ts());
         let trajectory = builder.finish(None);
         assert_eq!(trajectory.session_id, "thread-abc");
@@ -806,9 +784,7 @@ mod tests {
     #[test]
     fn builder_implements_event_emitter() {
         let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
-        let event = ThreadEvent::ThreadStarted(ThreadStartedEvent {
-            thread_id: "t-1".to_string(),
-        });
+        let event = ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "t-1".to_string() });
         // Use EventEmitter trait
         crate::EventEmitter::emit(&mut builder, &event);
         assert_eq!(builder.step_count(), 0); // ThreadStarted doesn't create a step
@@ -817,7 +793,7 @@ mod tests {
     #[test]
     fn skips_lifecycle_events() {
         let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
-        builder.process_event(&ThreadEvent::TurnStarted(crate::TurnStartedEvent {}));
+        builder.process_event(&ThreadEvent::TurnStarted(TurnStartedEvent::default()));
         assert_eq!(builder.step_count(), 0);
     }
 }

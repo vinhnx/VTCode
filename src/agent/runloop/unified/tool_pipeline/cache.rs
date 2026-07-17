@@ -24,10 +24,8 @@ pub(super) fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
 }
 
 fn is_readonly_repo_browsing_tool(tool_name: &str, args: &Value) -> bool {
-    matches!(
-        tool_name,
-        tools::READ_FILE | tools::LIST_FILES | "grep_search" | "find_files"
-    ) || tool_name == tools::CODE_SEARCH
+    matches!(tool_name, tools::READ_FILE | tools::LIST_FILES | "grep_search" | "find_files")
+        || tool_name == tools::CODE_SEARCH
         || (tool_name == tools::UNIFIED_FILE && tool_intent::file_operation_action_is(args, "read"))
 }
 
@@ -164,11 +162,7 @@ fn append_args(parts: &mut Vec<String>, args_value: Option<&Value>) {
     };
 
     for arg in args_array {
-        if let Some(segment) = arg
-            .as_str()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
+        if let Some(segment) = arg.as_str().map(str::trim).filter(|value| !value.is_empty()) {
             parts.push(segment.to_string());
         }
     }
@@ -230,10 +224,8 @@ fn is_path_like(candidate: &str) -> bool {
 
 fn contains_shell_operator(parts: &[String]) -> bool {
     parts.iter().any(|part| {
-        matches!(
-            part.as_str(),
-            "|" | "||" | "&" | "&&" | ";" | ">" | ">>" | "<"
-        ) || part.contains('|')
+        matches!(part.as_str(), "|" | "||" | "&" | "&&" | ";" | ">" | ">>" | "<")
+            || part.contains('|')
             || part.contains(';')
             || part.contains("&&")
             || part.contains("||")
@@ -267,10 +259,7 @@ mod tests {
         let args = json!({ "command": "git diff" });
 
         assert!(!is_tool_cacheable(tools::RUN_PTY_CMD, &args));
-        assert_eq!(
-            cache_target_path(tools::RUN_PTY_CMD, &args),
-            tools::RUN_PTY_CMD
-        );
+        assert_eq!(cache_target_path(tools::RUN_PTY_CMD, &args), tools::RUN_PTY_CMD);
     }
 
     #[test]
@@ -310,10 +299,7 @@ mod tests {
         });
 
         assert!(is_tool_cacheable(tools::RUN_PTY_CMD, &args));
-        assert_eq!(
-            cache_target_path(tools::RUN_PTY_CMD, &args),
-            "dir with space/file.rs"
-        );
+        assert_eq!(cache_target_path(tools::RUN_PTY_CMD, &args), "dir with space/file.rs");
     }
 
     #[test]

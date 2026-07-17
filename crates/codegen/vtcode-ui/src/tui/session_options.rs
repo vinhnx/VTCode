@@ -212,9 +212,6 @@ mod tests {
 
         assert_eq!(options.surface_preference, SessionSurface::Inline);
         assert_eq!(options.inline_rows, 24);
-        assert_eq!(
-            options.workspace_root,
-            Some(PathBuf::from("/workspace/demo"))
-        );
+        assert_eq!(options.workspace_root, Some(PathBuf::from("/workspace/demo")));
     }
 }

@@ -181,23 +181,14 @@ mod tests {
     #[test]
     fn test_exact_word_matching() {
         assert_eq!(extract_action_suggestion("find all files"), "Finding");
-        assert_eq!(
-            extract_action_suggestion("search the codebase"),
-            "Searching"
-        );
-        assert_eq!(
-            extract_action_suggestion("create a new function"),
-            "Creating"
-        );
+        assert_eq!(extract_action_suggestion("search the codebase"), "Searching");
+        assert_eq!(extract_action_suggestion("create a new function"), "Creating");
     }
 
     #[test]
     fn test_word_boundaries() {
         // Should not match "use" inside "because"
-        assert_eq!(
-            extract_action_suggestion("because this is important"),
-            "Processing"
-        );
+        assert_eq!(extract_action_suggestion("because this is important"), "Processing");
 
         // Should match standalone "use"
         // Note: "use" is not in our list, so it should return default
@@ -207,10 +198,7 @@ mod tests {
     #[test]
     fn test_phrase_matching() {
         assert_eq!(extract_action_suggestion("look for the bug"), "Finding");
-        assert_eq!(
-            extract_action_suggestion("make build for production"),
-            "Building"
-        );
+        assert_eq!(extract_action_suggestion("make build for production"), "Building");
     }
 
     #[test]
@@ -222,27 +210,15 @@ mod tests {
     #[test]
     fn test_question_patterns() {
         // Questions starting with how/what/why should analyze, even if they contain other verbs
-        assert_eq!(
-            extract_action_suggestion("how can I fix this?"),
-            "Analyzing"
-        );
-        assert_eq!(
-            extract_action_suggestion("what does this code do?"),
-            "Analyzing"
-        );
-        assert_eq!(
-            extract_action_suggestion("why is this failing?"),
-            "Analyzing"
-        );
+        assert_eq!(extract_action_suggestion("how can I fix this?"), "Analyzing");
+        assert_eq!(extract_action_suggestion("what does this code do?"), "Analyzing");
+        assert_eq!(extract_action_suggestion("why is this failing?"), "Analyzing");
         assert_eq!(extract_action_suggestion("can you help me?"), "Thinking");
     }
 
     #[test]
     fn test_question_mark_fallback() {
-        assert_eq!(
-            extract_action_suggestion("implement this feature?"),
-            "Answering"
-        );
+        assert_eq!(extract_action_suggestion("implement this feature?"), "Answering");
     }
 
     #[test]
@@ -277,17 +253,8 @@ mod tests {
     #[test]
     fn test_development_operations() {
         assert_eq!(extract_action_suggestion("debug the issue"), "Debugging");
-        assert_eq!(
-            extract_action_suggestion("analyze the performance"),
-            "Analyzing"
-        );
-        assert_eq!(
-            extract_action_suggestion("refactor this code"),
-            "Refactoring"
-        );
-        assert_eq!(
-            extract_action_suggestion("optimize the query"),
-            "Optimizing"
-        );
+        assert_eq!(extract_action_suggestion("analyze the performance"), "Analyzing");
+        assert_eq!(extract_action_suggestion("refactor this code"), "Refactoring");
+        assert_eq!(extract_action_suggestion("optimize the query"), "Optimizing");
     }
 }

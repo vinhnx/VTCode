@@ -143,9 +143,9 @@ These metrics flow through `vtcode-core::llm::types::Usage` and appear anywhere 
 
 ## Validation & Testing
 
--   Unit tests in `vtcode-core/src/llm/providers/anthropic.rs` validate cache control insertion and beta header composition.
--   `vtcode-core/src/llm/providers/openrouter.rs` exercises usage parsing to ensure cache metrics are preserved.
--   Local cache behavior tests in `vtcode-core/src/core/prompt_caching.rs` verify caching, eviction, and persistence.
+-   Unit tests in `crates/codegen/vtcode-core/src/llm/providers/anthropic.rs` validate cache control insertion and beta header composition.
+-   `crates/codegen/vtcode-core/src/llm/providers/openrouter.rs` exercises usage parsing to ensure cache metrics are preserved.
+-   Local cache behavior tests in `crates/codegen/vtcode-core/src/core/prompt_caching.rs` verify caching, eviction, and persistence.
 -   Configuration loading tests ensure settings from `vtcode.toml` are applied correctly.
 -   Run `cargo test` to execute all fast tests after updating configuration logic.
 
@@ -153,9 +153,9 @@ These metrics flow through `vtcode-core::llm::types::Usage` and appear anywhere 
 
 The prompt caching system is implemented as a multi-layered architecture:
 
-1. **Global Configuration Layer**: Managed in `vtcode-config/src/core/prompt_cache.rs` with global and per-provider settings
-2. **Provider Integration Layer**: Each provider has specific cache control implementation in `vtcode-core/src/llm/providers/`
-3. **Local Caching Layer**: File-based caching engine in `vtcode-core/src/core/prompt_caching.rs` for optimized prompt storage
+1. **Global Configuration Layer**: Managed in `crates/codegen/vtcode-config/src/core/prompt_cache.rs` with global and per-provider settings
+2. **Provider Integration Layer**: Each provider has specific cache control implementation in `crates/codegen/vtcode-core/src/llm/providers/`
+3. **Local Caching Layer**: File-based caching engine in `crates/codegen/vtcode-core/src/core/prompt_caching.rs` for optimized prompt storage
 4. **Runtime Integration**: Cache configuration flows through the provider factory to ensure proper initialization
 
 ## Migration Guide

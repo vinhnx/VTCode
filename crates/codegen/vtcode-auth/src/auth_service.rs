@@ -21,10 +21,7 @@ pub struct OpenAIAccountAuthService {
 impl OpenAIAccountAuthService {
     #[must_use]
     pub fn new(auth_config: OpenAIAuthConfig, storage_mode: AuthCredentialsStoreMode) -> Self {
-        Self {
-            auth_config,
-            storage_mode,
-        }
+        Self { auth_config, storage_mode }
     }
 
     /// Resolve the active OpenAI auth source for the current configuration.
@@ -83,13 +80,11 @@ impl OpenAIAccountAuthService {
         api_key: Option<String>,
     ) -> Result<OpenAICredentialOverview> {
         let chatgpt_session = load_openai_chatgpt_session_with_mode(self.storage_mode)?;
-        let api_key_available = api_key
-            .as_ref()
-            .is_some_and(|value| !value.trim().is_empty());
+        let api_key_available = api_key.as_ref().is_some_and(|value| !value.trim().is_empty());
         let active_source = match self.auth_config.preferred_method {
-            OpenAIPreferredMethod::Chatgpt => chatgpt_session
-                .as_ref()
-                .map(|_| OpenAIResolvedAuthSource::ChatGpt),
+            OpenAIPreferredMethod::Chatgpt => {
+                chatgpt_session.as_ref().map(|_| OpenAIResolvedAuthSource::ChatGpt)
+            }
             OpenAIPreferredMethod::ApiKey => {
                 api_key_available.then_some(OpenAIResolvedAuthSource::ApiKey)
             }

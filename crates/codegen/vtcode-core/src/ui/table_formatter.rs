@@ -32,11 +32,7 @@ impl TableColumn {
     pub fn new(header: impl Into<String>, alignment: Alignment) -> Self {
         let header_str = header.into();
         let width = UnicodeWidthStr::width(header_str.as_str());
-        Self {
-            width,
-            alignment,
-            header: header_str,
-        }
+        Self { width, alignment, header: header_str }
     }
 
     /// Update column width based on cell content, keeping maximum
@@ -58,10 +54,7 @@ pub struct TableFormatter {
 impl TableFormatter {
     /// Create a new table formatter with specified columns
     pub fn new(columns: Vec<TableColumn>, use_unicode: bool) -> Self {
-        Self {
-            columns,
-            use_unicode,
-        }
+        Self { columns, use_unicode }
     }
 
     /// Measure all content and update column widths
@@ -109,12 +102,7 @@ impl TableFormatter {
             Alignment::Center => {
                 let left_pad = padding / 2;
                 let right_pad = padding - left_pad;
-                format!(
-                    "{}{}{}",
-                    " ".repeat(left_pad),
-                    content,
-                    " ".repeat(right_pad)
-                )
+                format!("{}{}{}", " ".repeat(left_pad), content, " ".repeat(right_pad))
             }
             Alignment::Right => {
                 format!("{}{}", " ".repeat(padding), content)

@@ -153,24 +153,21 @@ impl<S: OpenAiCompatSpec> LLMProvider for OpenCodeCompatibleProvider<S> {
                     provider_name,
                     model_clone,
                     |value| {
-                        if let Some(choices) = value
-                            .get("choices")
-                            .and_then(|candidate| candidate.as_array())
+                        if let Some(choices) =
+                            value.get("choices").and_then(|candidate| candidate.as_array())
                             && let Some(choice) = choices.first()
                         {
                             if let Some(delta) = choice.get("delta")
-                                && let Some(content) = delta
-                                    .get("content")
-                                    .and_then(|candidate| candidate.as_str())
+                                && let Some(content) =
+                                    delta.get("content").and_then(|candidate| candidate.as_str())
                             {
                                 for event in aggregator.handle_content(content) {
                                     let _ = tx.send(Ok(event));
                                 }
                             }
 
-                            if let Some(reason) = choice
-                                .get("finish_reason")
-                                .and_then(|candidate| candidate.as_str())
+                            if let Some(reason) =
+                                choice.get("finish_reason").and_then(|candidate| candidate.as_str())
                             {
                                 aggregator.set_finish_reason(map_finish_reason_common(reason));
                             }
@@ -191,9 +188,7 @@ impl<S: OpenAiCompatSpec> LLMProvider for OpenCodeCompatibleProvider<S> {
             match result {
                 Ok(Ok(_)) => {
                     let response = aggregator.finalize();
-                    let _ = tx.send(Ok(LLMStreamEvent::Completed {
-                        response: Box::new(response),
-                    }));
+                    let _ = tx.send(Ok(LLMStreamEvent::Completed { response: Box::new(response) }));
                 }
                 Ok(Err(error)) => {
                     let _ = tx.send(Err(error));

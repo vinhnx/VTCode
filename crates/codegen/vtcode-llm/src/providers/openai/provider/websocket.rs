@@ -64,9 +64,7 @@ pub(super) fn is_websocket_reconnect_error(err: &LLMError) -> bool {
 
 fn is_websocket_auth_retryable(error: &tokio_tungstenite::tungstenite::Error) -> bool {
     let message = error.to_string();
-    WEBSOCKET_AUTH_RETRY_STATUSES
-        .iter()
-        .any(|status| message.contains(status))
+    WEBSOCKET_AUTH_RETRY_STATUSES.iter().any(|status| message.contains(status))
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -102,11 +100,7 @@ impl OpenAIResponsesWebSocketContinuationCache {
             .and_then(Value::as_str)
             .map(str::to_owned)
             .or_else(|| {
-                prepared
-                    .event
-                    .get("instructions")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
+                prepared.event.get("instructions").and_then(Value::as_str).map(str::to_owned)
             });
         let tools = prepared.event.get("tools").cloned();
         Some(Self {
@@ -134,10 +128,8 @@ impl OpenAIResponsesWebSocketContinuationCache {
             return false;
         }
 
-        let current_instructions = payload
-            .get("instructions")
-            .and_then(Value::as_str)
-            .map(str::to_owned);
+        let current_instructions =
+            payload.get("instructions").and_then(Value::as_str).map(str::to_owned);
         if self.instructions != current_instructions {
             return false;
         }
@@ -185,9 +177,7 @@ impl OpenAIProvider {
         loop {
             let needs_warmup = self.websocket_continuation_snapshot().is_none();
             let mut session_guard = self.websocket_session.lock().await;
-            let session = self
-                .ensure_websocket_session(&mut session_guard, request)
-                .await?;
+            let session = self.ensure_websocket_session(&mut session_guard, request).await?;
 
             if needs_warmup {
                 let warmup_prepared = prepare_websocket_event(payload.clone(), None, true)?;
@@ -420,19 +410,12 @@ fn prepare_websocket_event(
     }
 
     let event = Value::Object(
-        std::iter::once((
-            "type".to_string(),
-            Value::String("response.create".to_string()),
-        ))
-        .chain(request_obj)
-        .collect(),
+        std::iter::once(("type".to_string(), Value::String("response.create".to_string())))
+            .chain(request_obj)
+            .collect(),
     );
 
-    Ok(PreparedWebSocketEvent {
-        event,
-        full_input,
-        used_previous_response_id,
-    })
+    Ok(PreparedWebSocketEvent { event, full_input, used_previous_response_id })
 }
 
 async fn send_websocket_event(
@@ -494,15 +477,9 @@ async fn read_websocket_response(
                 }
             }
             Message::Ping(payload) => {
-                session
-                    .socket
-                    .send(Message::Pong(payload))
-                    .await
-                    .map_err(|err| {
-                        format_network_error(format!(
-                            "Failed to reply to OpenAI WebSocket ping: {err}"
-                        ))
-                    })?;
+                session.socket.send(Message::Pong(payload)).await.map_err(|err| {
+                    format_network_error(format!("Failed to reply to OpenAI WebSocket ping: {err}"))
+                })?;
             }
             Message::Close(frame) => {
                 let reason = frame
@@ -516,9 +493,7 @@ async fn read_websocket_response(
         }
     }
 
-    Err(format_network_error(
-        "OpenAI WebSocket stream ended unexpectedly".to_string(),
-    ))
+    Err(format_network_error("OpenAI WebSocket stream ended unexpectedly".to_string()))
 }
 
 fn responses_websocket_url(base_url: &str) -> Result<String, LLMError> {
@@ -706,10 +681,7 @@ mod tests {
             prepared.event.get("input").and_then(Value::as_array),
             Some(&prepared.full_input)
         );
-        assert_eq!(
-            prepared.event.get("store").and_then(Value::as_bool),
-            Some(false)
-        );
+        assert_eq!(prepared.event.get("store").and_then(Value::as_bool), Some(false));
         assert!(!prepared.used_previous_response_id);
     }
 
@@ -734,10 +706,7 @@ mod tests {
         let prepared = prepare_websocket_event(payload, Some(&continuation), false).expect("event");
 
         assert_eq!(
-            prepared
-                .event
-                .get("previous_response_id")
-                .and_then(Value::as_str),
+            prepared.event.get("previous_response_id").and_then(Value::as_str),
             Some("resp_prev")
         );
         assert_eq!(
@@ -769,10 +738,7 @@ mod tests {
             prepared.event.get("input").and_then(Value::as_array),
             Some(&prepared.full_input)
         );
-        assert_eq!(
-            prepared.event.get("store").and_then(Value::as_bool),
-            Some(false)
-        );
+        assert_eq!(prepared.event.get("store").and_then(Value::as_bool), Some(false));
         assert!(!prepared.used_previous_response_id);
     }
 
@@ -793,11 +759,7 @@ mod tests {
 
     async fn spawn_scripted_websocket_server(
         sessions: Vec<Vec<ScriptedReply>>,
-    ) -> Option<(
-        String,
-        Arc<StdMutex<Vec<Value>>>,
-        tokio::task::JoinHandle<()>,
-    )> {
+    ) -> Option<(String, Arc<StdMutex<Vec<Value>>>, tokio::task::JoinHandle<()>)> {
         let listener = match TcpListener::bind("127.0.0.1:0").await {
             Ok(listener) => listener,
             Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return None,
@@ -877,11 +839,7 @@ mod tests {
         });
 
         ready_rx.await.expect("server ready");
-        Some((
-            format!("http://api.openai.com@127.0.0.1:{}/v1", addr.port()),
-            recorded,
-            handle,
-        ))
+        Some((format!("http://api.openai.com@127.0.0.1:{}/v1", addr.port()), recorded, handle))
     }
 
     fn websocket_test_provider(base_url: String) -> OpenAIProvider {
@@ -893,10 +851,7 @@ mod tests {
             None,
             None,
             None,
-            Some(OpenAIConfig {
-                websocket_mode: true,
-                ..Default::default()
-            }),
+            Some(OpenAIConfig { websocket_mode: true, ..Default::default() }),
             None,
         )
     }
@@ -910,10 +865,7 @@ mod tests {
             Some(base_url),
             None,
             None,
-            Some(OpenAIConfig {
-                websocket_mode: true,
-                ..Default::default()
-            }),
+            Some(OpenAIConfig { websocket_mode: true, ..Default::default() }),
             None,
             None,
             None,
@@ -937,11 +889,8 @@ mod tests {
         let payload = provider
             .convert_to_openai_responses_format(request)
             .expect("payload should serialize");
-        let full_input = payload
-            .get("input")
-            .and_then(Value::as_array)
-            .cloned()
-            .expect("full input");
+        let full_input =
+            payload.get("input").and_then(Value::as_array).cloned().expect("full input");
         let mut event = payload;
         event["store"] = Value::Bool(store);
 
@@ -981,14 +930,8 @@ mod tests {
                 message: "Responses websocket connection limit reached (60 minutes).",
             }],
             vec![
-                ScriptedReply::Completed {
-                    response_id: "resp_warmup",
-                    text: "",
-                },
-                ScriptedReply::Completed {
-                    response_id: "resp_reconnected",
-                    text: "ok",
-                },
+                ScriptedReply::Completed { response_id: "resp_warmup", text: "" },
+                ScriptedReply::Completed { response_id: "resp_reconnected", text: "ok" },
             ],
         ])
         .await
@@ -1008,20 +951,13 @@ mod tests {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
             assert_eq!(
-                recorded[0]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[0].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_cached")
             );
             assert!(recorded[1].get("previous_response_id").is_none());
+            assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
             assert_eq!(
-                recorded[1].get("generate").and_then(Value::as_bool),
-                Some(false)
-            );
-            assert_eq!(
-                recorded[2]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[2].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_warmup")
             );
             assert!(
@@ -1037,14 +973,8 @@ mod tests {
     #[tokio::test]
     async fn websocket_custom_provider_uses_compatible_transport() {
         let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![vec![
-            ScriptedReply::Completed {
-                response_id: "resp_warmup",
-                text: "",
-            },
-            ScriptedReply::Completed {
-                response_id: "resp_final",
-                text: "compat ok",
-            },
+            ScriptedReply::Completed { response_id: "resp_warmup", text: "" },
+            ScriptedReply::Completed { response_id: "resp_final", text: "compat ok" },
         ]])
         .await
         else {
@@ -1061,15 +991,10 @@ mod tests {
         {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 2);
-            assert_eq!(
-                recorded[0].get("generate").and_then(Value::as_bool),
-                Some(false)
-            );
+            assert_eq!(recorded[0].get("generate").and_then(Value::as_bool), Some(false));
             assert!(recorded[0].get("previous_response_id").is_none());
             assert_eq!(
-                recorded[1]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[1].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_warmup")
             );
         }
@@ -1084,10 +1009,7 @@ mod tests {
                 message: "Conversation already has an active response in progress: resp_active.",
             }],
             vec![
-                ScriptedReply::Completed {
-                    response_id: "resp_warmup",
-                    text: "",
-                },
+                ScriptedReply::Completed { response_id: "resp_warmup", text: "" },
                 ScriptedReply::Completed {
                     response_id: "resp_after_active",
                     text: "retried ok",
@@ -1111,20 +1033,13 @@ mod tests {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
             assert_eq!(
-                recorded[0]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[0].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_cached")
             );
             assert!(recorded[1].get("previous_response_id").is_none());
+            assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
             assert_eq!(
-                recorded[1].get("generate").and_then(Value::as_bool),
-                Some(false)
-            );
-            assert_eq!(
-                recorded[2]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[2].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_warmup")
             );
         }
@@ -1139,14 +1054,8 @@ mod tests {
                 message: "Conversation already has an active response in progress: resp_active.",
             }],
             vec![
-                ScriptedReply::Completed {
-                    response_id: "resp_warmup",
-                    text: "",
-                },
-                ScriptedReply::Completed {
-                    response_id: "resp_after_reset",
-                    text: "reset ok",
-                },
+                ScriptedReply::Completed { response_id: "resp_warmup", text: "" },
+                ScriptedReply::Completed { response_id: "resp_after_reset", text: "reset ok" },
             ],
         ])
         .await
@@ -1166,20 +1075,13 @@ mod tests {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
             assert_eq!(
-                recorded[0]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[0].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_cached")
             );
             assert!(recorded[1].get("previous_response_id").is_none());
+            assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
             assert_eq!(
-                recorded[1].get("generate").and_then(Value::as_bool),
-                Some(false)
-            );
-            assert_eq!(
-                recorded[2]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[2].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_warmup")
             );
         }
@@ -1194,14 +1096,8 @@ mod tests {
                 message: "Previous response with id 'resp_cached' not found.",
             }],
             vec![
-                ScriptedReply::Completed {
-                    response_id: "resp_warmup",
-                    text: "",
-                },
-                ScriptedReply::Completed {
-                    response_id: "resp_final",
-                    text: "new chain ok",
-                },
+                ScriptedReply::Completed { response_id: "resp_warmup", text: "" },
+                ScriptedReply::Completed { response_id: "resp_final", text: "new chain ok" },
             ],
         ])
         .await
@@ -1221,20 +1117,13 @@ mod tests {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
             assert_eq!(
-                recorded[0]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[0].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_cached")
             );
             assert!(recorded[1].get("previous_response_id").is_none());
+            assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
             assert_eq!(
-                recorded[1].get("generate").and_then(Value::as_bool),
-                Some(false)
-            );
-            assert_eq!(
-                recorded[2]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[2].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_warmup")
             );
         }
@@ -1244,14 +1133,9 @@ mod tests {
     #[tokio::test]
     async fn websocket_reconnects_after_close_frame() {
         let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
-            vec![ScriptedReply::Close {
-                reason: "limit reached",
-            }],
+            vec![ScriptedReply::Close { reason: "limit reached" }],
             vec![
-                ScriptedReply::Completed {
-                    response_id: "resp_warmup",
-                    text: "",
-                },
+                ScriptedReply::Completed { response_id: "resp_warmup", text: "" },
                 ScriptedReply::Completed {
                     response_id: "resp_after_close",
                     text: "closed then ok",
@@ -1275,14 +1159,9 @@ mod tests {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
             assert!(recorded[1].get("previous_response_id").is_none());
+            assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
             assert_eq!(
-                recorded[1].get("generate").and_then(Value::as_bool),
-                Some(false)
-            );
-            assert_eq!(
-                recorded[2]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[2].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_warmup")
             );
         }
@@ -1292,14 +1171,9 @@ mod tests {
     #[tokio::test]
     async fn websocket_reconnect_drops_nonpersistent_continuation_before_retry() {
         let Some((base_url, recorded, handle)) = spawn_scripted_websocket_server(vec![
-            vec![ScriptedReply::Close {
-                reason: "network reset",
-            }],
+            vec![ScriptedReply::Close { reason: "network reset" }],
             vec![
-                ScriptedReply::Completed {
-                    response_id: "resp_warmup",
-                    text: "",
-                },
+                ScriptedReply::Completed { response_id: "resp_warmup", text: "" },
                 ScriptedReply::Completed {
                     response_id: "resp_final",
                     text: "restarted cleanly",
@@ -1323,20 +1197,13 @@ mod tests {
             let recorded = recorded.lock().expect("recorded lock");
             assert_eq!(recorded.len(), 3);
             assert_eq!(
-                recorded[0]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[0].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_cached")
             );
             assert!(recorded[1].get("previous_response_id").is_none());
+            assert_eq!(recorded[1].get("generate").and_then(Value::as_bool), Some(false));
             assert_eq!(
-                recorded[1].get("generate").and_then(Value::as_bool),
-                Some(false)
-            );
-            assert_eq!(
-                recorded[2]
-                    .get("previous_response_id")
-                    .and_then(Value::as_str),
+                recorded[2].get("previous_response_id").and_then(Value::as_str),
                 Some("resp_warmup")
             );
         }

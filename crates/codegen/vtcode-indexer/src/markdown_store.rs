@@ -53,11 +53,7 @@ impl MarkdownStorage {
 
         for entry in fs::read_dir(&self.storage_dir)? {
             let entry = entry?;
-            if let Some(name) = entry
-                .path()
-                .file_stem()
-                .and_then(|file_name| file_name.to_str())
-            {
+            if let Some(name) = entry.path().file_stem().and_then(|file_name| file_name.to_str()) {
                 items.push(name.to_string());
             }
         }
@@ -179,10 +175,7 @@ impl MarkdownStorage {
 fn write_with_lock(path: &Path, data: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "Failed to ensure parent directory exists for {}",
-                path.display()
-            )
+            format!("Failed to ensure parent directory exists for {}", path.display())
         })?;
     }
 
@@ -197,24 +190,15 @@ fn write_with_lock(path: &Path, data: &[u8]) -> Result<()> {
         .with_context(|| format!("Failed to acquire exclusive lock for {}", path.display()))?;
 
     file.set_len(0).with_context(|| {
-        format!(
-            "Failed to truncate file at {} while holding exclusive lock",
-            path.display()
-        )
+        format!("Failed to truncate file at {} while holding exclusive lock", path.display())
     })?;
 
     file.write_all(data).with_context(|| {
-        format!(
-            "Failed to write file content to {} while holding exclusive lock",
-            path.display()
-        )
+        format!("Failed to write file content to {} while holding exclusive lock", path.display())
     })?;
 
     file.sync_all().with_context(|| {
-        format!(
-            "Failed to sync file at {} after writing with exclusive lock",
-            path.display()
-        )
+        format!("Failed to sync file at {} after writing with exclusive lock", path.display())
     })?;
 
     FileExt::unlock(&file)
@@ -232,10 +216,7 @@ fn read_with_shared_lock(path: &Path) -> Result<String> {
 
     let mut content = String::new();
     file.read_to_string(&mut content).with_context(|| {
-        format!(
-            "Failed to read file content from {} while holding shared lock",
-            path.display()
-        )
+        format!("Failed to read file content from {} while holding shared lock", path.display())
     })?;
 
     FileExt::unlock(&file)
@@ -251,9 +232,7 @@ pub struct SimpleKVStorage {
 
 impl SimpleKVStorage {
     pub fn new(storage_dir: PathBuf) -> Self {
-        Self {
-            storage: MarkdownStorage::new(storage_dir),
-        }
+        Self { storage: MarkdownStorage::new(storage_dir) }
     }
 
     pub fn init(&self) -> Result<()> {
@@ -311,9 +290,7 @@ pub struct ProjectStorage {
 
 impl ProjectStorage {
     pub fn new(storage_dir: PathBuf) -> Self {
-        Self {
-            storage: MarkdownStorage::new(storage_dir),
-        }
+        Self { storage: MarkdownStorage::new(storage_dir) }
     }
 
     pub fn init(&self) -> Result<()> {
@@ -321,11 +298,8 @@ impl ProjectStorage {
     }
 
     pub fn save_project(&self, project: &ProjectData) -> Result<()> {
-        self.storage.store(
-            &project.name,
-            project,
-            &format!("Project: {}", project.name),
-        )
+        self.storage
+            .store(&project.name, project, &format!("Project: {}", project.name))
     }
 
     pub fn load_project(&self, name: &str) -> Result<ProjectData> {
@@ -364,11 +338,7 @@ impl SimpleProjectManager {
     /// Construct a manager with a caller-supplied project storage root.
     pub fn with_project_root(workspace_root: PathBuf, project_root: PathBuf) -> Self {
         let storage = ProjectStorage::new(project_root.clone());
-        Self {
-            storage,
-            workspace_root,
-            project_root,
-        }
+        Self { storage, workspace_root, project_root }
     }
 
     /// Initialize the project manager
@@ -542,11 +512,7 @@ impl SimpleCache {
         let mut entries = Vec::new();
         for entry in fs::read_dir(&self.cache_dir)? {
             let entry = entry?;
-            if let Some(name) = entry
-                .path()
-                .file_stem()
-                .and_then(|file_name| file_name.to_str())
-            {
+            if let Some(name) = entry.path().file_stem().and_then(|file_name| file_name.to_str()) {
                 entries.push(name.to_string());
             }
         }

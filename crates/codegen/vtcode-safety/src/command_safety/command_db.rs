@@ -80,10 +80,7 @@ impl CommandDatabase {
 
     /// Source control commands
     fn source_control() -> Vec<String> {
-        vec!["git", "hg", "svn", "bzr"]
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect()
+        vec!["git", "hg", "svn", "bzr"].into_iter().map(|s| s.to_string()).collect()
     }
 
     /// Build system commands

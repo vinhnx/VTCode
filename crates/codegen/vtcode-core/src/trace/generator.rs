@@ -29,10 +29,7 @@ impl TraceGenerator {
         }
 
         // Get workspace path or use current directory
-        let workspace_path = ctx
-            .workspace_path
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("."));
+        let workspace_path = ctx.workspace_path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         // Generate files with attributed ranges
         for (path, change) in tracker.changes() {
@@ -81,10 +78,7 @@ impl TraceGenerator {
             builder = builder.git_revision(revision);
         }
 
-        let workspace_path = ctx
-            .workspace_path
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("."));
+        let workspace_path = ctx.workspace_path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         for (path, change) in changes {
             if let Some(trace_file) =
@@ -122,11 +116,8 @@ impl TraceGenerator {
         workspace_path: &Path,
     ) -> Option<TraceFile> {
         // Get relative path from workspace
-        let relative_path = path
-            .strip_prefix(workspace_path)
-            .unwrap_or(path)
-            .to_string_lossy()
-            .to_string();
+        let relative_path =
+            path.strip_prefix(workspace_path).unwrap_or(path).to_string_lossy().to_string();
 
         // Determine line range and content for hash
         let (line_range, content_for_hash) = match &change.kind {
@@ -275,10 +266,7 @@ mod tests {
 
         let trace = trace.unwrap();
         assert!(trace.vcs.is_some());
-        assert_eq!(
-            trace.vcs.unwrap().revision,
-            "abc123def456789012345678901234567890abcd"
-        );
+        assert_eq!(trace.vcs.unwrap().revision, "abc123def456789012345678901234567890abcd");
     }
 
     #[test]
@@ -295,10 +283,7 @@ mod tests {
         let ctx = TraceContext::new("model", "provider").with_workspace_path("/workspace");
 
         let mut changes = HashMap::new();
-        changes.insert(
-            PathBuf::from("/workspace/deleted.rs"),
-            FileChange::delete("old content"),
-        );
+        changes.insert(PathBuf::from("/workspace/deleted.rs"), FileChange::delete("old content"));
 
         let trace = TraceGenerator::from_changes(&changes, &ctx);
         // Deletions don't create attributions

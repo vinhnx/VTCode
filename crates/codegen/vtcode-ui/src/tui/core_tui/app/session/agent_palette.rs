@@ -30,8 +30,7 @@ impl AgentPalette {
 
     pub fn load_agents(&mut self, agents: Vec<AgentEntry>) {
         self.all_agents = agents;
-        self.all_agents
-            .sort_by_key(|entry| entry.name.to_lowercase());
+        self.all_agents.sort_by_key(|entry| entry.name.to_lowercase());
         self.apply_filter();
         self.navigator.select_first();
     }
@@ -43,8 +42,7 @@ impl AgentPalette {
         } else {
             self.apply_filter();
             if !query.is_empty() && self.filter_cache.len() < 50 {
-                self.filter_cache
-                    .insert(query, self.filtered_agents.clone());
+                self.filter_cache.insert(query, self.filtered_agents.clone());
             }
         }
         self.navigator.set_item_count(self.filtered_agents.len());
@@ -63,12 +61,9 @@ impl AgentPalette {
             .all_agents
             .iter()
             .filter_map(|entry| {
-                let haystack = format!(
-                    "{} {}",
-                    entry.name,
-                    entry.description.as_deref().unwrap_or_default()
-                )
-                .to_ascii_lowercase();
+                let haystack =
+                    format!("{} {}", entry.name, entry.description.as_deref().unwrap_or_default())
+                        .to_ascii_lowercase();
                 if !haystack.contains(&query) {
                     return None;
                 }
@@ -109,9 +104,7 @@ impl AgentPalette {
     }
 
     pub fn get_selected(&self) -> Option<&AgentEntry> {
-        self.navigator
-            .selected()
-            .and_then(|index| self.filtered_agents.get(index))
+        self.navigator.selected().and_then(|index| self.filtered_agents.get(index))
     }
 
     pub fn select_index(&mut self, index: usize) -> bool {
@@ -192,10 +185,7 @@ pub fn extract_agent_reference(input: &str, cursor: usize) -> Option<(usize, usi
     }
 
     let prefix_starts_token = token_start == 0
-        || input[..token_start]
-            .chars()
-            .next_back()
-            .is_none_or(char::is_whitespace);
+        || input[..token_start].chars().next_back().is_none_or(char::is_whitespace);
     if !prefix_starts_token {
         return None;
     }
@@ -250,9 +240,6 @@ mod tests {
         ]);
 
         palette.set_filter("exp".to_string());
-        assert_eq!(
-            palette.get_selected().map(|entry| entry.name.as_str()),
-            Some("explorer")
-        );
+        assert_eq!(palette.get_selected().map(|entry| entry.name.as_str()), Some("explorer"));
     }
 }

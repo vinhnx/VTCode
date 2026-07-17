@@ -159,10 +159,7 @@ impl<V: Send + Sync> LruCache<V> {
                     state.access_order.retain(|k| k != key);
                     state.access_order.push_back(key.to_string());
 
-                    GetOutcome::Hit {
-                        value,
-                        access_count,
-                    }
+                    GetOutcome::Hit { value, access_count }
                 }
             } else {
                 GetOutcome::Miss
@@ -171,10 +168,7 @@ impl<V: Send + Sync> LruCache<V> {
 
         // Handle observer callbacks outside the lock.
         match outcome {
-            GetOutcome::Hit {
-                value,
-                access_count,
-            } => {
+            GetOutcome::Hit { value, access_count } => {
                 let mut stats = self.stats.write().await;
                 stats.hits += 1;
                 self.observer.on_hit(key, access_count).await;
@@ -243,9 +237,7 @@ impl<V: Send + Sync> LruCache<V> {
 
         // Avoid awaiting external observer hooks while cache lock is held.
         if let Some(evicted_key) = capacity_evicted {
-            self.observer
-                .on_evict(&evicted_key, EvictionReason::Capacity)
-                .await;
+            self.observer.on_evict(&evicted_key, EvictionReason::Capacity).await;
             let mut stats = self.stats.write().await;
             stats.evictions += 1;
         }
@@ -343,21 +335,11 @@ mod tests {
     async fn test_basic_operations() {
         let cache: LruCache<String> = LruCache::new(3, Duration::from_secs(60));
 
-        cache
-            .insert_arc("a".into(), Arc::new("value_a".into()))
-            .await;
-        cache
-            .insert_arc("b".into(), Arc::new("value_b".into()))
-            .await;
+        cache.insert_arc("a".into(), Arc::new("value_a".into())).await;
+        cache.insert_arc("b".into(), Arc::new("value_b".into())).await;
 
-        assert_eq!(
-            cache.get("a").await.map(|v| (*v).clone()),
-            Some("value_a".into())
-        );
-        assert_eq!(
-            cache.get("b").await.map(|v| (*v).clone()),
-            Some("value_b".into())
-        );
+        assert_eq!(cache.get("a").await.map(|v| (*v).clone()), Some("value_a".into()));
+        assert_eq!(cache.get("b").await.map(|v| (*v).clone()), Some("value_b".into()));
         assert_eq!(cache.get("c").await, None);
     }
 
@@ -379,10 +361,7 @@ mod tests {
         let cache: LruCache<String> = LruCache::new(10, Duration::from_millis(50));
 
         cache.insert_arc("a".into(), Arc::new("value".into())).await;
-        assert_eq!(
-            cache.get("a").await.map(|v| (*v).clone()),
-            Some("value".into())
-        );
+        assert_eq!(cache.get("a").await.map(|v| (*v).clone()), Some("value".into()));
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert_eq!(cache.get("a").await, None);

@@ -74,20 +74,15 @@ pub(crate) async fn handle_start_terminal_title_setup(
     mut ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Terminal title setup is available in inline UI only.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Terminal title setup is available in inline UI only.")?;
         return Ok(SlashCommandControl::Continue);
     }
     if !ensure_selection_ui_available(&mut ctx, "configuring the terminal title")? {
         return Ok(SlashCommandControl::Continue);
     }
 
-    let original_items = ctx
-        .vt_cfg
-        .as_ref()
-        .and_then(|cfg| cfg.ui.terminal_title.items.clone());
+    let original_items = ctx.vt_cfg.as_ref().and_then(|cfg| cfg.ui.terminal_title.items.clone());
     let mut draft_items = effective_terminal_title_items(original_items.clone());
 
     loop {
@@ -122,23 +117,19 @@ pub(crate) async fn handle_start_terminal_title_setup(
 
         let Some(selection) = wait_for_list_modal_selection(&mut ctx).await else {
             ctx.handle.set_terminal_title_items(original_items.clone());
-            ctx.renderer
-                .line(MessageStyle::Info, "Terminal title setup cancelled.")?;
+            ctx.renderer.line(MessageStyle::Info, "Terminal title setup cancelled.")?;
             return Ok(SlashCommandControl::Continue);
         };
 
         let InlineListSelection::ConfigAction(action) = selection else {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Unsupported terminal title setup selection.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, "Unsupported terminal title setup selection.")?;
             continue;
         };
 
         match apply_terminal_title_action(&action, &mut draft_items)? {
             TerminalTitleSetupAction::Continue => {
-                ctx.handle
-                    .set_terminal_title_items(Some(draft_items.clone()));
+                ctx.handle.set_terminal_title_items(Some(draft_items.clone()));
             }
             TerminalTitleSetupAction::Save => {
                 persist_terminal_title_items(
@@ -146,8 +137,7 @@ pub(crate) async fn handle_start_terminal_title_setup(
                     ctx.vt_cfg,
                     draft_items.clone(),
                 )?;
-                ctx.handle
-                    .set_terminal_title_items(Some(draft_items.clone()));
+                ctx.handle.set_terminal_title_items(Some(draft_items.clone()));
                 ctx.renderer.line(
                     MessageStyle::Info,
                     "Saved terminal title configuration to vtcode.toml.",
@@ -156,8 +146,7 @@ pub(crate) async fn handle_start_terminal_title_setup(
             }
             TerminalTitleSetupAction::Cancel => {
                 ctx.handle.set_terminal_title_items(original_items.clone());
-                ctx.renderer
-                    .line(MessageStyle::Info, "Terminal title setup cancelled.")?;
+                ctx.renderer.line(MessageStyle::Info, "Terminal title setup cancelled.")?;
                 return Ok(SlashCommandControl::Continue);
             }
         }
@@ -249,12 +238,8 @@ fn apply_terminal_title_action(
     let Some("title") = parts.next() else {
         return Err(anyhow!("unsupported terminal title action: {action}"));
     };
-    let operation = parts
-        .next()
-        .ok_or_else(|| anyhow!("missing terminal title operation"))?;
-    let item_id = parts
-        .next()
-        .ok_or_else(|| anyhow!("missing terminal title item id"))?;
+    let operation = parts.next().ok_or_else(|| anyhow!("missing terminal title operation"))?;
+    let item_id = parts.next().ok_or_else(|| anyhow!("missing terminal title item id"))?;
 
     if terminal_title_item_spec(item_id).is_none() {
         return Err(anyhow!("unsupported terminal title item: {item_id}"));
@@ -310,10 +295,7 @@ fn persist_terminal_title_items(
 }
 
 fn terminal_title_item_spec(item_id: &str) -> Option<TerminalTitleItemSpec> {
-    TERMINAL_TITLE_ITEM_SPECS
-        .iter()
-        .copied()
-        .find(|spec| spec.id == item_id)
+    TERMINAL_TITLE_ITEM_SPECS.iter().copied().find(|spec| spec.id == item_id)
 }
 
 fn effective_terminal_title_items(raw_items: Option<Vec<String>>) -> Vec<String> {
@@ -322,10 +304,7 @@ fn effective_terminal_title_items(raw_items: Option<Vec<String>>) -> Vec<String>
             .into_iter()
             .filter(|item| terminal_title_item_spec(item).is_some())
             .collect(),
-        None => DEFAULT_TERMINAL_TITLE_ITEMS
-            .iter()
-            .map(|item| (*item).to_string())
-            .collect(),
+        None => DEFAULT_TERMINAL_TITLE_ITEMS.iter().map(|item| (*item).to_string()).collect(),
     }
 }
 
@@ -382,11 +361,7 @@ fn build_terminal_title_preview(
             _ => None,
         };
         if let Some((text, spinner_part)) = candidate {
-            let key = text
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ")
-                .to_ascii_lowercase();
+            let key = text.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase();
             if !key.is_empty() && seen.insert(key) {
                 parts.push((text, spinner_part));
             }

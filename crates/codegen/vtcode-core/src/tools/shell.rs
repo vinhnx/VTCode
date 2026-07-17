@@ -47,9 +47,7 @@ pub struct SystemExecutor {
 
 impl Default for SystemExecutor {
     fn default() -> Self {
-        Self {
-            shell: resolve_fallback_shell(),
-        }
+        Self { shell: resolve_fallback_shell() }
     }
 }
 
@@ -123,10 +121,7 @@ impl SnapshotExecutor {
     ///
     /// The snapshot will be lazily captured on first command execution.
     pub fn new() -> Self {
-        Self {
-            shell: resolve_fallback_shell(),
-            snapshot: None,
-        }
+        Self { shell: resolve_fallback_shell(), snapshot: None }
     }
 
     /// Create a snapshot executor with a pre-captured snapshot.
@@ -316,10 +311,7 @@ impl<E: CommandExecutor> ShellRunner<E> {
         let output = self.executor.execute(command_str, &self.working_dir).await;
 
         if let Some(token) = inflight_token {
-            let result = output
-                .as_ref()
-                .map(|out| out.clone())
-                .map_err(|err| err.to_string());
+            let result = output.as_ref().map(|out| out.clone()).map_err(|err| err.to_string());
             finish_inflight(token, result).await;
         }
 

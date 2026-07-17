@@ -108,11 +108,8 @@ pub(super) fn capture_turn_request_snapshot(
         .vt_cfg
         .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
         .unwrap_or(DEFAULT_TURN_TIMEOUT_SECS);
-    let openai_prompt_cache_key_mode = prompt_cache_config
-        .providers
-        .openai
-        .prompt_cache_key_mode
-        .clone();
+    let openai_prompt_cache_key_mode =
+        prompt_cache_config.providers.openai.prompt_cache_key_mode.clone();
     let full_auto = ctx.full_auto;
     let capabilities = uni::get_cached_capabilities(&**ctx.provider_client, &active_model);
     let client_local_tool_deferral =

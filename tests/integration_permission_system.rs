@@ -60,11 +60,7 @@ mod integration_tests {
         let mut cache = PermissionCache::new();
 
         cache.put("test", true, "reason");
-        assert_eq!(
-            cache.get("test"),
-            Some(true),
-            "Should be available immediately",
-        );
+        assert_eq!(cache.get("test"), Some(true), "Should be available immediately",);
 
         thread::sleep(Duration::from_millis(100));
         assert_eq!(cache.get("test"), Some(true), "Should remain without TTL",);

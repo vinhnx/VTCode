@@ -127,10 +127,7 @@ where
         if n == 0 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
-                format!(
-                    "unexpected EOF before reading {len} bytes (got {})",
-                    buf.len()
-                ),
+                format!("unexpected EOF before reading {len} bytes (got {})", buf.len()),
             ));
         }
     }
@@ -145,9 +142,7 @@ mod tests {
     async fn read_exact_uninit_round_trips_known_payload() {
         let payload: Vec<u8> = (0..64u8).collect();
         let mut reader = std::io::Cursor::new(payload.clone());
-        let got = read_exact_uninit(&mut reader, payload.len())
-            .await
-            .expect("read full payload");
+        let got = read_exact_uninit(&mut reader, payload.len()).await.expect("read full payload");
         assert_eq!(got, payload);
     }
 
@@ -157,9 +152,7 @@ mod tests {
         // several poll_read calls; the loop must still accumulate correctly.
         let payload: Vec<u8> = (0..2000u32).map(|i| (i % 256) as u8).collect();
         let mut reader = std::io::Cursor::new(payload.clone());
-        let got = read_exact_uninit(&mut reader, payload.len())
-            .await
-            .expect("read full payload");
+        let got = read_exact_uninit(&mut reader, payload.len()).await.expect("read full payload");
         assert_eq!(got, payload);
     }
 
@@ -167,27 +160,21 @@ mod tests {
     async fn read_exact_uninit_returns_unexpected_eof_on_short_read() {
         let payload = b"only ten!".to_vec();
         let mut reader = std::io::Cursor::new(payload);
-        let err = read_exact_uninit(&mut reader, 64)
-            .await
-            .expect_err("short read must error");
+        let err = read_exact_uninit(&mut reader, 64).await.expect_err("short read must error");
         assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
     }
 
     #[tokio::test]
     async fn read_exact_uninit_returns_unexpected_eof_on_empty_reader() {
         let mut reader = std::io::Cursor::new(Vec::<u8>::new());
-        let err = read_exact_uninit(&mut reader, 1)
-            .await
-            .expect_err("empty reader must error");
+        let err = read_exact_uninit(&mut reader, 1).await.expect_err("empty reader must error");
         assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
     }
 
     #[tokio::test]
     async fn read_exact_uninit_zero_len_returns_empty_vec() {
         let mut reader = std::io::Cursor::new(Vec::<u8>::new());
-        let got = read_exact_uninit(&mut reader, 0)
-            .await
-            .expect("zero-length read must succeed");
+        let got = read_exact_uninit(&mut reader, 0).await.expect("zero-length read must succeed");
         assert!(got.is_empty());
     }
 }

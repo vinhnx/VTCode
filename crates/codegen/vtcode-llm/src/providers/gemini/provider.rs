@@ -95,12 +95,8 @@ impl GeminiProvider {
             api_key: Arc::from(api_key.as_str()),
             http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: Arc::from(
-                override_base_url(
-                    urls::GEMINI_API_BASE,
-                    base_url,
-                    Some(env_vars::GEMINI_BASE_URL),
-                )
-                .as_str(),
+                override_base_url(urls::GEMINI_API_BASE, base_url, Some(env_vars::GEMINI_BASE_URL))
+                    .as_str(),
             ),
             model: Arc::from(model.as_str()),
             prompt_cache_enabled,
@@ -124,10 +120,7 @@ impl GeminiProvider {
                     "Authentication failed: {error_text}. Check your GOOGLE_API_KEY or GEMINI_API_KEY environment variable."
                 ),
             );
-            return LLMError::Authentication {
-                message: formatted_error,
-                metadata: None,
-            };
+            return LLMError::Authentication { message: formatted_error, metadata: None };
         }
 
         // Handle rate limit and quota errors using shared detection
@@ -141,18 +134,12 @@ impl GeminiProvider {
                 "Gemini",
                 &format!("Invalid request: {error_text}"),
             );
-            return LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            };
+            return LLMError::InvalidRequest { message: formatted_error, metadata: None };
         }
 
         // Generic error for other cases
         let formatted_error =
             error_display::format_llm_error("Gemini", &format!("HTTP {status}: {error_text}"));
-        LLMError::Provider {
-            message: formatted_error,
-            metadata: None,
-        }
+        LLMError::Provider { message: formatted_error, metadata: None }
     }
 }

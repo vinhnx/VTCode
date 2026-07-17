@@ -45,9 +45,7 @@ mod headless_highlight {
         _language: Option<&str>,
         _theme: &str,
     ) -> Vec<Vec<(Style, String)>> {
-        code.lines()
-            .map(|line| vec![(Style::default(), line.to_string())])
-            .collect()
+        code.lines().map(|line| vec![(Style::default(), line.to_string())]).collect()
     }
     pub fn highlight_code_to_line_segments(
         code: &str,

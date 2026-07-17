@@ -32,9 +32,7 @@ pub(crate) struct BackgroundTaskGuard {
 
 impl BackgroundTaskGuard {
     pub(crate) fn new(handle: tokio::task::JoinHandle<()>) -> Self {
-        Self {
-            handle: Some(handle),
-        }
+        Self { handle: Some(handle) }
     }
 }
 
@@ -188,11 +186,10 @@ mod tests {
         assert_eq!(history[0].content.as_text(), "saved request");
         assert_eq!(history[1].role, MessageRole::Assistant);
         assert_eq!(history[1].content.as_text(), "saved answer");
-        assert!(history.iter().all(|message| {
-            !message
-                .content
-                .as_text()
-                .contains("[Session Memory Envelope]")
-        }));
+        assert!(
+            history.iter().all(|message| {
+                !message.content.as_text().contains("[Session Memory Envelope]")
+            })
+        );
     }
 }

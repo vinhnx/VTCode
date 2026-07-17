@@ -152,7 +152,7 @@ let line = Line::from(vec![
 
 - `docs/styling_integration.md` - Detailed guide
 - `vtcode-core/examples/anstyle_ratatui_example.rs` - Full working example
-- `vtcode-core/src/utils/ratatui_styles.rs` - Module documentation
+- `crates/codegen/vtcode-core/src/utils/ratatui_styles.rs` - Module documentation
 
 ## Running the Example
 

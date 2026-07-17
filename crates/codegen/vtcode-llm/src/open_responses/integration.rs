@@ -292,20 +292,14 @@ mod tests {
 
     #[test]
     fn test_integration_enabled() {
-        let config = OpenResponsesConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let config = OpenResponsesConfig { enabled: true, ..Default::default() };
         let integration = OpenResponsesIntegration::new(config);
         assert!(integration.is_enabled());
     }
 
     #[test]
     fn test_start_response() {
-        let config = OpenResponsesConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let config = OpenResponsesConfig { enabled: true, ..Default::default() };
         let mut integration = OpenResponsesIntegration::new(config);
         integration.start_response("gpt-5");
         assert!(integration.current_response().is_some());

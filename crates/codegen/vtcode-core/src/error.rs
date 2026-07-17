@@ -275,12 +275,8 @@ impl From<reqwest::Error> for VtCodeError {
 impl From<anyhow::Error> for VtCodeError {
     fn from(err: anyhow::Error) -> Self {
         let category = vtcode_commons::classify_anyhow_error(&err);
-        VtCodeError::new(
-            category,
-            ErrorCode::from_category(category),
-            err.to_string(),
-        )
-        .with_context(format!("{err:#}"))
+        VtCodeError::new(category, ErrorCode::from_category(category), err.to_string())
+            .with_context(format!("{err:#}"))
     }
 }
 
@@ -349,11 +345,7 @@ impl From<UnifiedToolError> for VtCodeError {
             if let Some(invocation_id) = &ctx.invocation_id {
                 metadata.push(format!("invocation_id={invocation_id}"));
             }
-            metadata.extend(
-                ctx.metadata
-                    .iter()
-                    .map(|(key, value)| format!("{key}={value}")),
-            );
+            metadata.extend(ctx.metadata.iter().map(|(key, value)| format!("{key}={value}")));
             error = error.with_context(metadata.join(", "));
         }
 
@@ -375,10 +367,8 @@ impl From<ToolExecutionError> for VtCodeError {
             context_parts.push(format!("original_error={original_error}"));
         }
         if !err.recovery_suggestions.is_empty() {
-            context_parts.push(format!(
-                "recovery_suggestions={}",
-                err.recovery_suggestions.join(" | ")
-            ));
+            context_parts
+                .push(format!("recovery_suggestions={}", err.recovery_suggestions.join(" | ")));
         }
         if !context_parts.is_empty() {
             error = error.with_context(context_parts.join(", "));
@@ -487,10 +477,7 @@ mod tests {
         let converted = VtCodeError::from(err);
         assert_eq!(converted.category, ErrorCategory::RateLimit);
         assert_eq!(converted.code, ErrorCode::RateLimited);
-        assert_eq!(
-            converted.retry_after(),
-            Some(std::time::Duration::from_secs(3))
-        );
+        assert_eq!(converted.retry_after(), Some(std::time::Duration::from_secs(3)));
     }
 
     #[test]
@@ -508,10 +495,7 @@ mod tests {
         };
 
         let converted = VtCodeError::from(err);
-        assert_eq!(
-            converted.retry_after(),
-            Some(std::time::Duration::from_millis(500))
-        );
+        assert_eq!(converted.retry_after(), Some(std::time::Duration::from_millis(500)));
     }
 
     #[test]
@@ -547,12 +531,7 @@ mod tests {
         let converted = VtCodeError::from(err);
         assert_eq!(converted.category, ErrorCategory::Network);
         assert_eq!(converted.code, ErrorCode::ConnectionFailed);
-        assert!(
-            converted
-                .context
-                .as_deref()
-                .is_some_and(|ctx| ctx.contains("tool=read_file"))
-        );
+        assert!(converted.context.as_deref().is_some_and(|ctx| ctx.contains("tool=read_file")));
     }
 
     #[test]

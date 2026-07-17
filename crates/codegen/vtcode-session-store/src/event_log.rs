@@ -57,16 +57,10 @@ impl SessionEventLog {
     /// rebuilding the index from `events.jsonl` if it already exists.
     pub fn open(workspace: &Path, session_id: &str) -> Result<Self, SessionStoreError> {
         let dir = session_dir(workspace, session_id);
-        std::fs::create_dir_all(dir.join(crate::DERIVED_DIR)).map_err(|e| {
-            SessionStoreError::CreateDir {
-                path: dir.clone(),
-                source: e,
-            }
-        })?;
-        std::fs::create_dir_all(dir.join("index")).map_err(|e| SessionStoreError::CreateDir {
-            path: dir.clone(),
-            source: e,
-        })?;
+        std::fs::create_dir_all(dir.join(crate::DERIVED_DIR))
+            .map_err(|e| SessionStoreError::CreateDir { path: dir.clone(), source: e })?;
+        std::fs::create_dir_all(dir.join("index"))
+            .map_err(|e| SessionStoreError::CreateDir { path: dir.clone(), source: e })?;
         let events_path = dir.join("events.jsonl");
         let file = OpenOptions::new()
             .create(true)
@@ -153,11 +147,11 @@ impl SessionEventLog {
                 self.persist_meta_locked(&st)?;
             }
             _ => {
-                if st.in_turn {
-                    if let Some(entry) = st.index.entries.last_mut() {
-                        entry.end_offset = end;
-                        entry.event_count += 1;
-                    }
+                if st.in_turn
+                    && let Some(entry) = st.index.entries.last_mut()
+                {
+                    entry.end_offset = end;
+                    entry.event_count += 1;
                 }
             }
         }
@@ -168,15 +162,9 @@ impl SessionEventLog {
     pub fn reconstruct_turn(&self, turn: u64) -> Result<Vec<ThreadEvent>, SessionStoreError> {
         let entry = {
             let st = self.state.lock().map_err(poison)?;
-            st.index
-                .entries
-                .iter()
-                .find(|e| e.turn_number == turn)
-                .cloned()
-                .ok_or(SessionStoreError::TurnNotFound {
-                    session: st.manifest.session_id.clone(),
-                    turn,
-                })?
+            st.index.entries.iter().find(|e| e.turn_number == turn).cloned().ok_or(
+                SessionStoreError::TurnNotFound { session: st.manifest.session_id.clone(), turn },
+            )?
         };
         let buf = {
             let mut file = self.file.lock().map_err(poison)?;
@@ -205,19 +193,13 @@ impl SessionEventLog {
     /// Number of turns recorded.
     #[must_use]
     pub fn turn_count(&self) -> u64 {
-        self.state
-            .lock()
-            .map_err(poison)
-            .map_or(0, |s| s.manifest.turn_count)
+        self.state.lock().map_err(poison).map_or(0, |s| s.manifest.turn_count)
     }
 
     /// Number of events recorded.
     #[must_use]
     pub fn event_count(&self) -> u64 {
-        self.state
-            .lock()
-            .map_err(poison)
-            .map_or(0, |s| s.manifest.event_count)
+        self.state.lock().map_err(poison).map_or(0, |s| s.manifest.event_count)
     }
 
     /// Snapshot of the session manifest.
@@ -233,11 +215,7 @@ impl SessionEventLog {
     /// Snapshot of the turn index.
     #[must_use]
     pub fn turn_index(&self) -> TurnIndex {
-        self.state
-            .lock()
-            .map_err(poison)
-            .map(|s| s.index.clone())
-            .unwrap_or_default()
+        self.state.lock().map_err(poison).map(|s| s.index.clone()).unwrap_or_default()
     }
 
     /// Mark the session completed and flush metadata.
@@ -265,66 +243,62 @@ impl SessionEventLog {
         let mut in_turn = false;
         while pos < bytes.len() {
             let line_end = memchr_newline(bytes, pos);
-            let trimmed = std::str::from_utf8(&bytes[pos..line_end])
-                .unwrap_or("")
-                .trim();
-            if !trimmed.is_empty() {
-                if let Ok(v) = serde_json::from_str::<VersionedThreadEvent>(trimmed) {
-                    let event = v.into_event();
-                    st.manifest.event_count += 1;
-                    match &event {
-                        ThreadEvent::ThreadStarted(_) => {
-                            if first_ts.is_none() {
-                                first_ts = Some(now_rfc3339());
-                            }
+            let trimmed = std::str::from_utf8(&bytes[pos..line_end]).unwrap_or("").trim();
+            if !trimmed.is_empty()
+                && let Ok(v) = serde_json::from_str::<VersionedThreadEvent>(trimmed)
+            {
+                let event = v.into_event();
+                st.manifest.event_count += 1;
+                match &event {
+                    ThreadEvent::ThreadStarted(_) => {
+                        if first_ts.is_none() {
+                            first_ts = Some(now_rfc3339());
                         }
-                        ThreadEvent::TurnStarted(_) => {
-                            in_turn = true;
-                            let n = st.manifest.turn_count + 1;
-                            st.index.entries.push(TurnIndexEntry {
-                                turn_number: n,
-                                start_offset: pos as u64,
-                                end_offset: 0,
-                                event_count: 1,
-                                ts: now_rfc3339(),
-                            });
+                    }
+                    ThreadEvent::TurnStarted(_) => {
+                        in_turn = true;
+                        let n = st.manifest.turn_count + 1;
+                        st.index.entries.push(TurnIndexEntry {
+                            turn_number: n,
+                            start_offset: pos as u64,
+                            end_offset: 0,
+                            event_count: 1,
+                            ts: now_rfc3339(),
+                        });
+                    }
+                    ThreadEvent::TurnCompleted(_) | ThreadEvent::TurnFailed(_) => {
+                        if in_turn {
+                            if let Some(entry) = st.index.entries.last_mut() {
+                                entry.end_offset = line_end as u64;
+                                entry.event_count += 1;
+                            }
+                            in_turn = false;
+                            st.manifest.turn_count = st.index.entries.len() as u64;
                         }
-                        ThreadEvent::TurnCompleted(_) | ThreadEvent::TurnFailed(_) => {
-                            if in_turn {
-                                if let Some(entry) = st.index.entries.last_mut() {
-                                    entry.end_offset = line_end as u64;
-                                    entry.event_count += 1;
-                                }
-                                in_turn = false;
-                                st.manifest.turn_count = st.index.entries.len() as u64;
+                        match &event {
+                            ThreadEvent::TurnCompleted(_) => {
+                                st.manifest.status = "completed".to_string();
                             }
-                            match &event {
-                                ThreadEvent::TurnCompleted(_) => {
-                                    st.manifest.status = "completed".to_string();
-                                }
-                                ThreadEvent::TurnFailed(_) => {
-                                    st.manifest.status = "failed".to_string();
-                                }
-                                _ => {}
+                            ThreadEvent::TurnFailed(_) => {
+                                st.manifest.status = "failed".to_string();
                             }
+                            _ => {}
                         }
-                        _ => {
-                            if in_turn {
-                                if let Some(entry) = st.index.entries.last_mut() {
-                                    entry.end_offset = line_end as u64;
-                                    entry.event_count += 1;
-                                }
-                            }
+                    }
+                    _ => {
+                        if in_turn && let Some(entry) = st.index.entries.last_mut() {
+                            entry.end_offset = line_end as u64;
+                            entry.event_count += 1;
                         }
                     }
                 }
             }
             pos = line_end;
         }
-        if let Some(ts) = first_ts {
-            if st.manifest.created_at.is_empty() {
-                st.manifest.created_at = ts;
-            }
+        if let Some(ts) = first_ts
+            && st.manifest.created_at.is_empty()
+        {
+            st.manifest.created_at = ts;
         }
         Ok(())
     }

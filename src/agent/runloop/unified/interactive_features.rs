@@ -63,10 +63,7 @@ struct PromptSuggestionRoutes {
 
 impl PromptSuggestionRoute {
     fn cache_key(&self) -> String {
-        format!(
-            "{}:{}:{:.2}",
-            self.provider_name, self.model, self.temperature
-        )
+        format!("{}:{}:{:.2}", self.provider_name, self.model, self.temperature)
     }
 }
 
@@ -127,10 +124,7 @@ pub(crate) async fn generate_inline_prompt_suggestion(
     tool_registry: &ToolRegistry,
     draft: &str,
 ) -> Option<InlinePromptSuggestion> {
-    if !vt_cfg
-        .map(|cfg| cfg.agent.prompt_suggestions.enabled)
-        .unwrap_or(true)
-    {
+    if !vt_cfg.map(|cfg| cfg.agent.prompt_suggestions.enabled).unwrap_or(true) {
         return None;
     }
 
@@ -139,17 +133,11 @@ pub(crate) async fn generate_inline_prompt_suggestion(
     if let Some(prompt) =
         llm_inline_prompt_suggestion(provider, config, vt_cfg, &routes, history, draft).await
     {
-        return Some(InlinePromptSuggestion {
-            prompt,
-            source: PromptSuggestionSource::Llm,
-        });
+        return Some(InlinePromptSuggestion { prompt, source: PromptSuggestionSource::Llm });
     }
 
     deterministic_inline_prompt_suggestion(workspace, history, session_stats, tool_registry, draft)
-        .map(|prompt| InlinePromptSuggestion {
-            prompt,
-            source: PromptSuggestionSource::Local,
-        })
+        .map(|prompt| InlinePromptSuggestion { prompt, source: PromptSuggestionSource::Local })
 }
 
 fn deterministic_prompt_suggestions(
@@ -258,9 +246,7 @@ fn deterministic_inline_prompt_suggestion(
     }
 
     if draft.trim().is_empty() {
-        return suggestions
-            .first()
-            .map(|suggestion| suggestion.prompt.clone());
+        return suggestions.first().map(|suggestion| suggestion.prompt.clone());
     }
 
     let normalized = draft.to_lowercase();
@@ -441,13 +427,7 @@ async fn llm_prompt_suggestions_from_provider(
 
     let suggestions = content
         .lines()
-        .map(|line| {
-            line.trim()
-                .trim_start_matches('-')
-                .trim_start_matches('•')
-                .trim()
-                .to_string()
-        })
+        .map(|line| line.trim().trim_start_matches('-').trim_start_matches('•').trim().to_string())
         .filter(|line| !line.is_empty())
         .take(3)
         .enumerate()
@@ -515,11 +495,7 @@ fn build_inline_prompt_suggestion_request(
 
 fn normalize_inline_prompt_suggestion(content: &str, draft: &str) -> Option<String> {
     let trimmed = content.lines().find_map(|line| {
-        let candidate = line
-            .trim()
-            .trim_start_matches('-')
-            .trim_start_matches('•')
-            .trim();
+        let candidate = line.trim().trim_start_matches('-').trim_start_matches('•').trim();
         (!candidate.is_empty()).then(|| candidate.to_string())
     })?;
 
@@ -527,10 +503,7 @@ fn normalize_inline_prompt_suggestion(content: &str, draft: &str) -> Option<Stri
         return Some(trimmed);
     }
 
-    trimmed
-        .to_lowercase()
-        .starts_with(&draft.to_lowercase())
-        .then_some(trimmed)
+    trimmed.to_lowercase().starts_with(&draft.to_lowercase()).then_some(trimmed)
 }
 
 pub(crate) fn collect_background_jobs(tool_registry: &ToolRegistry) -> Vec<BackgroundJobSummary> {
@@ -539,10 +512,7 @@ pub(crate) fn collect_background_jobs(tool_registry: &ToolRegistry) -> Vec<Backg
         .list_sessions()
         .into_iter()
         .map(|session| {
-            let status = match tool_registry
-                .pty_manager()
-                .is_session_completed(&session.id)
-            {
+            let status = match tool_registry.pty_manager().is_session_completed(&session.id) {
                 Ok(Some(0)) => "done".to_string(),
                 Ok(Some(code)) => format!("exit {code}"),
                 Ok(None) => "running".to_string(),
@@ -616,20 +586,13 @@ fn resolve_prompt_suggestion_routes(
         model: resolution.primary.model.clone(),
         temperature,
     };
-    let fallback = resolution
-        .fallback
-        .as_ref()
-        .map(|route| PromptSuggestionRoute {
-            provider_name: route.provider_name.clone(),
-            model: route.model.clone(),
-            temperature,
-        });
+    let fallback = resolution.fallback.as_ref().map(|route| PromptSuggestionRoute {
+        provider_name: route.provider_name.clone(),
+        model: route.model.clone(),
+        temperature,
+    });
 
-    PromptSuggestionRoutes {
-        primary,
-        fallback,
-        warning: resolution.warning,
-    }
+    PromptSuggestionRoutes { primary, fallback, warning: resolution.warning }
 }
 
 fn log_prompt_suggestion_route_warning(routes: &PromptSuggestionRoutes) {
@@ -672,10 +635,7 @@ fn truncate_for_prompt(text: &str, max_chars: usize) -> String {
     if text.chars().count() <= max_chars {
         return text.to_string();
     }
-    let mut truncated = text
-        .chars()
-        .take(max_chars.saturating_sub(1))
-        .collect::<String>();
+    let mut truncated = text.chars().take(max_chars.saturating_sub(1)).collect::<String>();
     truncated.push('…');
     truncated
 }
@@ -727,10 +687,7 @@ mod tests {
         }
 
         async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            self.requests
-                .lock()
-                .expect("requests lock")
-                .push(request.clone());
+            self.requests.lock().expect("requests lock").push(request.clone());
             Ok(LLMResponse {
                 content: self.response.clone(),
                 model: request.model,
@@ -903,10 +860,7 @@ mod tests {
         .expect("inline suggestion");
 
         assert_eq!(suggestion.source, PromptSuggestionSource::Llm);
-        assert_eq!(
-            suggestion.prompt,
-            "Review the current diff in detail".to_string()
-        );
+        assert_eq!(suggestion.prompt, "Review the current diff in detail".to_string());
 
         let requests = provider.recorded_requests();
         assert_eq!(requests.len(), 1);

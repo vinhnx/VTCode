@@ -43,20 +43,12 @@ fn local_agents_drawer_hides_input_while_open() {
 
     assert!(session.local_agents_visible());
     assert!(!session.core.input_enabled());
-    assert!(
-        !session
-            .core
-            .build_input_widget_data(VIEW_WIDTH, 1)
-            .cursor_should_be_visible
-    );
+    assert!(!session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
 
     let lines = rendered_app_session_lines(&mut session, 20);
     assert!(session.core.input_area().is_none());
     assert!(session.core.bottom_panel_area().is_some());
-    assert!(
-        lines.iter().any(|line| line.contains("Local Agents")),
-        "drawer should still render"
-    );
+    assert!(lines.iter().any(|line| line.contains("Local Agents")), "drawer should still render");
     assert!(
         !lines.iter().any(|line| line.contains("draft command")),
         "hidden composer should not render draft text"
@@ -79,12 +71,7 @@ fn closing_local_agents_drawer_restores_input_and_draft() {
     assert!(event.is_none());
     assert!(!session.local_agents_visible());
     assert!(session.core.input_enabled());
-    assert!(
-        session
-            .core
-            .build_input_widget_data(VIEW_WIDTH, 1)
-            .cursor_should_be_visible
-    );
+    assert!(session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
     assert_eq!(session.core.input_manager.content(), "draft command");
 
     let lines = rendered_app_session_lines(&mut session, 20);
@@ -157,9 +144,7 @@ fn manually_opened_empty_local_agents_drawer_stays_open() {
     let mut session = app_session_with_input("", 0);
     session.handle_command(app_types::InlineCommand::ShowTransient {
         request: Box::new(app_types::TransientRequest::LocalAgents(
-            app_types::LocalAgentsTransientRequest {
-                visible: Some(true),
-            },
+            app_types::LocalAgentsTransientRequest { visible: Some(true) },
         )),
     });
     session.handle_command(app_types::InlineCommand::SetLocalAgents { entries: vec![] });
@@ -168,9 +153,7 @@ fn manually_opened_empty_local_agents_drawer_stays_open() {
 
     let lines = rendered_app_session_lines(&mut session, 20);
     assert!(
-        lines
-            .iter()
-            .any(|line| line.contains("No local agents yet")),
+        lines.iter().any(|line| line.contains("No local agents yet")),
         "drawer should remain visible and show the empty state"
     );
 }
@@ -193,10 +176,7 @@ fn tab_cycles_primary_agent_when_composer_is_empty() {
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(matches!(
-        event,
-        Some(app_types::InlineEvent::CyclePrimaryAgent)
-    ));
+    assert!(matches!(event, Some(app_types::InlineEvent::CyclePrimaryAgent)));
 }
 
 #[test]
@@ -205,10 +185,7 @@ fn tab_character_cycles_primary_agent_when_composer_is_empty() {
 
     let event = session.process_key(KeyEvent::new(KeyCode::Char('\t'), KeyModifiers::NONE));
 
-    assert!(matches!(
-        event,
-        Some(app_types::InlineEvent::CyclePrimaryAgent)
-    ));
+    assert!(matches!(event, Some(app_types::InlineEvent::CyclePrimaryAgent)));
 }
 
 #[test]
@@ -265,10 +242,7 @@ fn tab_cycles_primary_agent_back_to_default_after_last_agent() {
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(matches!(
-        event,
-        Some(app_types::InlineEvent::CyclePrimaryAgent)
-    ));
+    assert!(matches!(event, Some(app_types::InlineEvent::CyclePrimaryAgent)));
 }
 
 #[test]
@@ -282,10 +256,7 @@ fn tab_accepts_inline_prompt_suggestion_before_primary_agent_cycle() {
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert!(event.is_none());
-    assert_eq!(
-        session.core.input_manager.content(),
-        "Review the current diff"
-    );
+    assert_eq!(session.core.input_manager.content(), "Review the current diff");
     assert!(session.core.inline_prompt_suggestion.suggestion.is_none());
 }
 
@@ -296,10 +267,7 @@ fn tab_cycles_primary_agent_with_draft() {
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(matches!(
-        event,
-        Some(app_types::InlineEvent::CyclePrimaryAgent)
-    ));
+    assert!(matches!(event, Some(app_types::InlineEvent::CyclePrimaryAgent)));
     assert_eq!(session.core.input_manager.content(), "Review this");
 }
 
@@ -311,10 +279,7 @@ fn tab_cycles_primary_agent_when_queued_input_exists() {
 
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert!(matches!(
-        event,
-        Some(app_types::InlineEvent::CyclePrimaryAgent)
-    ));
+    assert!(matches!(event, Some(app_types::InlineEvent::CyclePrimaryAgent)));
     assert_eq!(session.core.queued_inputs, vec!["queued follow-up"]);
 }
 
@@ -325,10 +290,7 @@ fn shift_tab_cycles_previous_primary_agent() {
 
     let event = session.process_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
 
-    assert!(matches!(
-        event,
-        Some(app_types::InlineEvent::CyclePrimaryAgentPrevious)
-    ));
+    assert!(matches!(event, Some(app_types::InlineEvent::CyclePrimaryAgentPrevious)));
 }
 
 #[test]
@@ -338,14 +300,8 @@ fn header_suggestions_include_subagent_shortcuts() {
         app_types::LocalAgentKind::Delegated,
     )];
 
-    let line = session
-        .header_suggestions_line()
-        .expect("header suggestions line");
-    let rendered = line
-        .spans
-        .iter()
-        .map(|span| span.content.as_ref())
-        .collect::<String>();
+    let line = session.header_suggestions_line().expect("header suggestions line");
+    let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
 
     assert!(rendered.contains("Alt+S"));
     assert!(rendered.contains("Ctrl+B"));
@@ -355,14 +311,8 @@ fn header_suggestions_include_subagent_shortcuts() {
 fn header_suggestions_hide_subagent_shortcuts_without_agents() {
     let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-    let line = session
-        .header_suggestions_line()
-        .expect("header suggestions line");
-    let rendered = line
-        .spans
-        .iter()
-        .map(|span| span.content.as_ref())
-        .collect::<String>();
+    let line = session.header_suggestions_line().expect("header suggestions line");
+    let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
 
     assert!(!rendered.contains("Alt+S"));
     assert!(!rendered.contains("Ctrl+B"));
@@ -375,14 +325,8 @@ fn header_suggestions_hide_subagent_shortcuts_with_background_only() {
         app_types::LocalAgentKind::Background,
     )];
 
-    let line = session
-        .header_suggestions_line()
-        .expect("header suggestions line");
-    let rendered = line
-        .spans
-        .iter()
-        .map(|span| span.content.as_ref())
-        .collect::<String>();
+    let line = session.header_suggestions_line().expect("header suggestions line");
+    let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
 
     assert!(!rendered.contains("Alt+S"));
     assert!(!rendered.contains("Ctrl+B"));
@@ -395,14 +339,8 @@ fn empty_input_status_shows_subagent_shortcuts() {
         app_types::LocalAgentKind::Delegated,
     )];
 
-    let line = session
-        .render_input_status_line(VIEW_WIDTH)
-        .expect("input status line");
-    let rendered = line
-        .spans
-        .iter()
-        .map(|span| span.content.as_ref())
-        .collect::<String>();
+    let line = session.render_input_status_line(VIEW_WIDTH).expect("input status line");
+    let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
 
     assert!(rendered.contains("Alt+S"));
     assert!(rendered.contains("Ctrl+B"));
@@ -414,12 +352,7 @@ fn empty_input_status_hides_subagent_shortcuts_without_agents() {
 
     let rendered = session
         .render_input_status_line(VIEW_WIDTH)
-        .map(|line| {
-            line.spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect::<String>()
-        })
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect::<String>())
         .unwrap_or_default();
 
     assert!(!rendered.contains("Alt+S"));
@@ -435,12 +368,7 @@ fn empty_input_status_hides_subagent_shortcuts_with_background_only() {
 
     let rendered = session
         .render_input_status_line(VIEW_WIDTH)
-        .map(|line| {
-            line.spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect::<String>()
-        })
+        .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect::<String>())
         .unwrap_or_default();
 
     assert!(!rendered.contains("Alt+S"));
@@ -502,9 +430,7 @@ fn input_block_shows_active_subagent_title_with_badge_style() {
         full_background: true,
     }];
 
-    let title = session
-        .active_subagent_input_title()
-        .expect("active subagent input title");
+    let title = session.active_subagent_input_title().expect("active subagent input title");
     let span = title.spans.first().expect("title span");
     assert_eq!(span.content.as_ref(), " rust-engineer ");
     assert_eq!(span.style.fg, Some(Color::Rgb(0xFF, 0xFF, 0xFF)));
@@ -522,9 +448,7 @@ fn header_suggestions_do_not_show_memory_shortcut_when_enabled() {
         tone: InlineHeaderStatusTone::Ready,
     });
 
-    let line = session
-        .header_suggestions_line()
-        .expect("header suggestions line");
+    let line = session.header_suggestions_line().expect("header suggestions line");
     let summary = line_text(&line);
 
     assert!(!summary.contains("/memory"));
@@ -535,14 +459,8 @@ fn load_primary_agent_palette(session: &mut AppSession) {
         request: Box::new(app_types::TransientRequest::AgentPalette(
             app_types::AgentPaletteTransientRequest {
                 agents: vec![
-                    app_types::AgentPaletteItem {
-                        name: "beta".to_string(),
-                        description: None,
-                    },
-                    app_types::AgentPaletteItem {
-                        name: "alpha".to_string(),
-                        description: None,
-                    },
+                    app_types::AgentPaletteItem { name: "beta".to_string(), description: None },
+                    app_types::AgentPaletteItem { name: "alpha".to_string(), description: None },
                 ],
                 visible: None,
             },

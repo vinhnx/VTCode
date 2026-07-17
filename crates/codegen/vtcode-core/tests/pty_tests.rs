@@ -111,19 +111,11 @@ async fn resolve_working_dir_rejects_missing_directory() {
 #[tokio::test]
 async fn session_input_roundtrip_and_resize() -> Result<()> {
     let temp_dir = tempdir()?;
-    let config = PtyConfig {
-        scrollback_lines: 200,
-        ..Default::default()
-    };
+    let config = PtyConfig { scrollback_lines: 200, ..Default::default() };
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), config);
 
     let working_dir = manager.resolve_working_dir(Some(".")).await?;
-    let size = PtySize {
-        rows: 3,
-        cols: 80,
-        pixel_width: 0,
-        pixel_height: 0,
-    };
+    let size = PtySize { rows: 3, cols: 80, pixel_width: 0, pixel_height: 0 };
 
     let session_id = "roundtrip".to_string();
     manager.create_session(
@@ -152,16 +144,11 @@ async fn session_input_roundtrip_and_resize() -> Result<()> {
     std::thread::sleep(Duration::from_millis(150));
 
     let peek = manager.read_session_output(&session_id, false)?;
-    let peek_text = peek
-        .as_deref()
-        .expect("expected pending output")
-        .to_string();
+    let peek_text = peek.as_deref().expect("expected pending output").to_string();
     assert!(peek_text.contains("got:world"));
 
     let drained_again = manager.read_session_output(&session_id, true)?;
-    let drained_again_text = drained_again
-        .as_deref()
-        .expect("expected drained output after peek");
+    let drained_again_text = drained_again.as_deref().expect("expected drained output after peek");
     assert!(drained_again_text.contains("got:world"));
 
     let updated = manager.resize_session(
@@ -253,10 +240,7 @@ async fn run_pty_command_returns_timeout_error() -> Result<()> {
         Err(error) => error,
     };
     let message = error.to_string();
-    assert!(
-        message.contains("timed out"),
-        "unexpected timeout error: {message}"
-    );
+    assert!(message.contains("timed out"), "unexpected timeout error: {message}");
 
     Ok(())
 }
@@ -308,10 +292,7 @@ async fn pty_terminate_kills_background_children_in_same_process_group() -> Resu
     let pid = Pid::from_raw(bg_pid);
 
     // Verify background process is running
-    assert!(
-        kill(pid, None).is_ok(),
-        "Background process should be running"
-    );
+    assert!(kill(pid, None).is_ok(), "Background process should be running");
 
     // Close session, which should kill the process group
     manager.close_session(&session_id)?;
@@ -377,10 +358,7 @@ async fn run_pty_command_timeout_kills_background_children() -> Result<()> {
 
     // Read the background PID
     let bg_pid_str = fs::read_to_string(&pid_file).expect("Failed to read PID file");
-    let bg_pid = bg_pid_str
-        .trim()
-        .parse::<i32>()
-        .expect("Failed to parse PID");
+    let bg_pid = bg_pid_str.trim().parse::<i32>().expect("Failed to parse PID");
     let pid = Pid::from_raw(bg_pid);
 
     // Verify background process is killed
@@ -393,10 +371,7 @@ async fn run_pty_command_timeout_kills_background_children() -> Result<()> {
         std::thread::sleep(Duration::from_millis(100));
     }
 
-    assert!(
-        killed,
-        "Background process should have been killed by run_command timeout"
-    );
+    assert!(killed, "Background process should have been killed by run_command timeout");
 
     Ok(())
 }

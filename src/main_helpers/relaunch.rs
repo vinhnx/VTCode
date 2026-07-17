@@ -124,12 +124,7 @@ fn launch_relaunch_attempt(attempt: &RelaunchAttempt, cwd: &Path) -> std::io::Re
 fn format_manual_restart_command(attempt: &RelaunchAttempt) -> String {
     let mut parts = Vec::with_capacity(attempt.args.len() + 1);
     parts.push(attempt.program.to_string_lossy().to_string());
-    parts.extend(
-        attempt
-            .args
-            .iter()
-            .map(|arg| arg.to_string_lossy().to_string()),
-    );
+    parts.extend(attempt.args.iter().map(|arg| arg.to_string_lossy().to_string()));
     parts.join(" ")
 }
 
@@ -158,16 +153,11 @@ fn relaunch_attempts(
     let mut attempts = Vec::with_capacity(candidates.len());
     for candidate in candidates.into_iter().flatten() {
         if candidate.is_empty()
-            || attempts
-                .iter()
-                .any(|attempt: &RelaunchAttempt| attempt.program == candidate)
+            || attempts.iter().any(|attempt: &RelaunchAttempt| attempt.program == candidate)
         {
             continue;
         }
-        attempts.push(RelaunchAttempt {
-            program: candidate,
-            args: args.clone(),
-        });
+        attempts.push(RelaunchAttempt { program: candidate, args: args.clone() });
     }
     attempts
 }
@@ -200,10 +190,7 @@ mod tests {
             RelaunchPreference::PreferOriginalExecutable,
         );
 
-        assert_eq!(
-            attempts[0].program,
-            OsString::from("/Users/dev/.local/bin/vtcode")
-        );
+        assert_eq!(attempts[0].program, OsString::from("/Users/dev/.local/bin/vtcode"));
         assert_eq!(attempts[1].program, OsString::from("/tmp/current-vtcode"));
     }
 

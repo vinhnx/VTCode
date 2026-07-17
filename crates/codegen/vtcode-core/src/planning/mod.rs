@@ -171,34 +171,24 @@ pub fn matches_exit_intent(normalized: &str) -> bool {
         || APPROVAL_WORDS
             .iter()
             .any(|word| normalized.split_whitespace().any(|tok| tok == *word))
-        || APPROVAL_PHRASES
-            .iter()
-            .any(|phrase| normalized.contains(phrase))
-        || EXIT_TRIGGER_PHRASES
-            .iter()
-            .any(|phrase| normalized.contains(phrase))
+        || APPROVAL_PHRASES.iter().any(|phrase| normalized.contains(phrase))
+        || EXIT_TRIGGER_PHRASES.iter().any(|phrase| normalized.contains(phrase))
 }
 
 /// Whether the normalized text keeps the user in plan mode (highest priority).
 pub fn matches_stay_intent(normalized: &str) -> bool {
-    STAY_PHRASES
-        .iter()
-        .any(|phrase| normalized.contains(phrase))
+    STAY_PHRASES.iter().any(|phrase| normalized.contains(phrase))
 }
 
 /// Whether the normalized text is an explicit request to enter plan mode
 /// (excluding the `/plan` slash command, which callers check separately).
 pub fn matches_enter_intent(normalized: &str) -> bool {
-    ENTER_PHRASES
-        .iter()
-        .any(|phrase| normalized.contains(phrase))
+    ENTER_PHRASES.iter().any(|phrase| normalized.contains(phrase))
 }
 
 /// Whether the normalized assistant text contains an implementation prompt cue.
 pub fn contains_implementation_cue(normalized: &str) -> bool {
-    IMPLEMENTATION_CUES
-        .iter()
-        .any(|cue| normalized.contains(cue))
+    IMPLEMENTATION_CUES.iter().any(|cue| normalized.contains(cue))
 }
 
 /// Codex-bridge matcher: bare-token exact match against the execution/flag
@@ -215,7 +205,5 @@ pub fn is_execution_mode_alias(input: &str) -> bool {
 /// execution prompt) vs. a flag-clearing-only alias (pass through verbatim).
 pub fn is_implementation_alias(input: &str) -> bool {
     let normalized = input.trim().to_ascii_lowercase();
-    EXECUTION_MODE_ALIASES
-        .iter()
-        .any(|alias| *alias == normalized)
+    EXECUTION_MODE_ALIASES.iter().any(|alias| *alias == normalized)
 }

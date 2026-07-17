@@ -33,9 +33,7 @@ use crate::agent::runloop::unified::turn::harmony::{HARMONY_END_TAGS, contains_h
 fn incomplete_harmony_block_start(raw: &str) -> Option<usize> {
     let start_pos = raw.rfind("<|start|>")?;
     let tail = &raw[start_pos..];
-    let has_terminator = HARMONY_END_TAGS
-        .iter()
-        .any(|terminator| tail.contains(terminator));
+    let has_terminator = HARMONY_END_TAGS.iter().any(|terminator| tail.contains(terminator));
     if has_terminator {
         None
     } else {
@@ -207,10 +205,7 @@ mod tests {
         assert_eq!(result.visible_delta, "Real content here");
         // Noise mode provides aggregated_override for retroactive correction
         assert!(result.aggregated_override.is_some());
-        assert_eq!(
-            result.aggregated_override.as_deref(),
-            Some("Real content here")
-        );
+        assert_eq!(result.aggregated_override.as_deref(), Some("Real content here"));
     }
 
     #[test]

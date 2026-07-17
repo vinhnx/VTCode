@@ -91,22 +91,13 @@ mod tests {
         }
         .into_normalized();
 
-        assert!(matches!(
-            events.first(),
-            Some(NormalizedStreamEvent::Usage { .. })
-        ));
-        assert!(matches!(
-            events.last(),
-            Some(NormalizedStreamEvent::Done { .. })
-        ));
+        assert!(matches!(events.first(), Some(NormalizedStreamEvent::Usage { .. })));
+        assert!(matches!(events.last(), Some(NormalizedStreamEvent::Done { .. })));
     }
 
     #[test]
     fn token_event_maps_to_text_delta() {
-        let events = LLMStreamEvent::Token {
-            delta: "hello".to_string(),
-        }
-        .into_normalized();
+        let events = LLMStreamEvent::Token { delta: "hello".to_string() }.into_normalized();
 
         assert!(matches!(
             events.as_slice(),

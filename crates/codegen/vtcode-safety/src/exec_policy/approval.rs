@@ -60,10 +60,7 @@ pub enum AskForApproval {
 impl AskForApproval {
     /// Check if this policy requires asking for unknown commands.
     pub fn requires_approval_for_unknown(&self) -> bool {
-        matches!(
-            self,
-            Self::UnlessTrusted | Self::OnRequest | Self::Reject(_)
-        )
+        matches!(self, Self::UnlessTrusted | Self::OnRequest | Self::Reject(_))
     }
 
     /// Check whether rule-triggered approval prompts are rejected.
@@ -123,10 +120,7 @@ pub fn default_exec_approval_requirement(
     if needs_approval && policy.rejects_sandbox_prompt() {
         ExecApprovalRequirement::forbidden("approval policy rejected sandbox approval prompt")
     } else if needs_approval {
-        ExecApprovalRequirement::NeedsApproval {
-            reason: None,
-            proposed_execpolicy_amendment: None,
-        }
+        ExecApprovalRequirement::NeedsApproval { reason: None, proposed_execpolicy_amendment: None }
     } else {
         ExecApprovalRequirement::skip()
     }
@@ -150,9 +144,7 @@ impl ExecPolicyAmendment {
 
     /// Create from a single command prefix.
     pub fn from_prefix(prefix: impl Into<String>) -> Self {
-        Self {
-            pattern: vec![prefix.into()],
-        }
+        Self { pattern: vec![prefix.into()] }
     }
 
     /// Check if a command matches this amendment pattern.
@@ -160,10 +152,7 @@ impl ExecPolicyAmendment {
         if command.len() < self.pattern.len() {
             return false;
         }
-        self.pattern
-            .iter()
-            .zip(command.iter())
-            .all(|(pattern, cmd)| pattern == cmd)
+        self.pattern.iter().zip(command.iter()).all(|(pattern, cmd)| pattern == cmd)
     }
 
     /// Convert the amendment to a policy rule string.
@@ -246,9 +235,7 @@ impl ExecApprovalRequirement {
 
     /// Create a forbidden requirement.
     pub fn forbidden(reason: impl Into<String>) -> Self {
-        Self::Forbidden {
-            reason: reason.into(),
-        }
+        Self::Forbidden { reason: reason.into() }
     }
 
     /// Check if approval is needed.
@@ -269,14 +256,12 @@ impl ExecApprovalRequirement {
     /// Get the proposed amendment, if any.
     pub fn get_amendment(&self) -> Option<&ExecPolicyAmendment> {
         match self {
-            Self::Skip {
-                proposed_execpolicy_amendment,
-                ..
-            } => proposed_execpolicy_amendment.as_ref(),
-            Self::NeedsApproval {
-                proposed_execpolicy_amendment,
-                ..
-            } => proposed_execpolicy_amendment.as_ref(),
+            Self::Skip { proposed_execpolicy_amendment, .. } => {
+                proposed_execpolicy_amendment.as_ref()
+            }
+            Self::NeedsApproval { proposed_execpolicy_amendment, .. } => {
+                proposed_execpolicy_amendment.as_ref()
+            }
             Self::Forbidden { .. } => None,
         }
     }

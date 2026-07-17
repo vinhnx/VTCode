@@ -94,9 +94,8 @@ pub fn resolve_lightweight_route(
     let main_provider = main_route.provider_name.as_str();
 
     let mut warning = None;
-    if let Some(configured_model) = explicit_override_model
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(configured_model) =
+        explicit_override_model.map(str::trim).filter(|value| !value.is_empty())
     {
         if let Some(route) = route_for_candidate(main_provider, configured_model) {
             return LightweightRouteResolution {
@@ -169,10 +168,7 @@ pub fn main_model_route(runtime_config: &RuntimeAgentConfig) -> ModelRoute {
         runtime_config.provider.to_lowercase()
     };
 
-    ModelRoute {
-        provider_name,
-        model: runtime_config.model.clone(),
-    }
+    ModelRoute { provider_name, model: runtime_config.model.clone() }
 }
 
 /// Automatically select a lightweight model for the given provider and active model.

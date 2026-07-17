@@ -16,9 +16,7 @@ pub struct GenerationHelper {
 
 impl GenerationHelper {
     pub fn new(workspace_root: PathBuf) -> Self {
-        Self {
-            file_tracker: FileTracker::new(workspace_root),
-        }
+        Self { file_tracker: FileTracker::new(workspace_root) }
     }
 
     /// Creates a verification message for a specific file

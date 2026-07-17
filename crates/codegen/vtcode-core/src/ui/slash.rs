@@ -78,11 +78,8 @@ fn suggestions_for_commands(
 
     let query = trimmed.to_ascii_lowercase();
 
-    let mut prefix_matches: Vec<&SlashCommandInfo> = commands
-        .iter()
-        .copied()
-        .filter(|info| info.name.starts_with(&query))
-        .collect();
+    let mut prefix_matches: Vec<&SlashCommandInfo> =
+        commands.iter().copied().filter(|info| info.name.starts_with(&query)).collect();
 
     if !prefix_matches.is_empty() {
         prefix_matches.sort_by(|a, b| a.name.cmp(b.name));
@@ -99,10 +96,7 @@ fn suggestions_for_commands(
         substring_matches.sort_by(|(a, pos_a), (b, pos_b)| {
             (*pos_a, a.name.len(), a.name).cmp(&(*pos_b, b.name.len(), b.name))
         });
-        return substring_matches
-            .into_iter()
-            .map(|(info, _)| info)
-            .collect();
+        return substring_matches.into_iter().map(|(info, _)| info).collect();
     }
 
     let normalized_query = normalize_query(&query);
@@ -124,16 +118,8 @@ fn suggestions_for_commands(
                 return None;
             }
 
-            let name_pos = info
-                .name
-                .to_ascii_lowercase()
-                .find(&query)
-                .unwrap_or(usize::MAX);
-            let desc_pos = info
-                .description
-                .to_ascii_lowercase()
-                .find(&query)
-                .unwrap_or(usize::MAX);
+            let name_pos = info.name.to_ascii_lowercase().find(&query).unwrap_or(usize::MAX);
+            let desc_pos = info.description.to_ascii_lowercase().find(&query).unwrap_or(usize::MAX);
 
             Some((info, name_pos, desc_pos))
         })
@@ -162,10 +148,7 @@ mod tests {
     use super::*;
 
     fn names_for(prefix: &str) -> Vec<&'static str> {
-        suggestions_for(prefix)
-            .into_iter()
-            .map(|info| info.name)
-            .collect()
+        suggestions_for(prefix).into_iter().map(|info| info.name).collect()
     }
 
     #[test]

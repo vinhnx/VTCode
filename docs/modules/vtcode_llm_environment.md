@@ -33,7 +33,7 @@ secrets to the `ProviderConfig` implementor.
 
 ## Loading keys with `ProviderConfig`
 
-Implementors of [`config::ProviderConfig`](../../vtcode-core/src/llm/config_adapter.rs) decide where
+Implementors of [`config::ProviderConfig`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) decide where
 credentials originate. A common pattern is to read from environment variables and then
 pass the owned values to `OwnedProviderConfig` before building a client:
 
@@ -58,15 +58,15 @@ Because the trait only exposes borrowed data, callers can also point to secrets 
 in files, KMS-backed fetchers, or other secret managers.
 
 Internally, `vtcode_core::llm::config_adapter::ProviderConfig` is the canonical external
-surface. Both [`config::as_factory_config`](../../vtcode-core/src/llm/config_adapter.rs) and
-[`config::as_factory_config_with_hooks`](../../vtcode-core/src/llm/config_adapter.rs) now flow
+surface. Both [`config::as_factory_config`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) and
+[`config::as_factory_config_with_hooks`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) now flow
 through the same projection layer, so plain and hook-enriched conversions stay
 behaviorally aligned.
 
 ## Wiring workspace paths and telemetry
 
 When prompt caching is enabled, use
-[`config::AdapterHooks`](../../vtcode-core/src/llm/config_adapter.rs) to resolve relative directories
+[`config::AdapterHooks`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) to resolve relative directories
 against your workspace implementation and surface telemetry or error information using
 `vtcode-commons` traits:
 

@@ -83,13 +83,7 @@ pub struct DiffPreviewState {
 
 impl DiffPreviewState {
     pub fn new(file_path: String, before: String, after: String, hunks: Vec<DiffHunk>) -> Self {
-        Self::new_with_mode(
-            file_path,
-            before,
-            after,
-            hunks,
-            DiffPreviewMode::EditApproval,
-        )
+        Self::new_with_mode(file_path, before, after, hunks, DiffPreviewMode::EditApproval)
     }
 
     pub fn new_with_mode(

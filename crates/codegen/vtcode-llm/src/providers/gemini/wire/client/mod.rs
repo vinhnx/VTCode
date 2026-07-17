@@ -95,10 +95,7 @@ impl Client {
                 message,
                 is_retryable: decision.retryable,
             },
-            _ => StreamingError::NetworkError {
-                message,
-                is_retryable: decision.retryable,
-            },
+            _ => StreamingError::NetworkError { message, is_retryable: decision.retryable },
         }
     }
 
@@ -207,18 +204,13 @@ fn llm_error_for_status(status: StatusCode, message: &str) -> LLMError {
     ));
 
     match status {
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => LLMError::Authentication {
-            message: message.to_string(),
-            metadata,
-        },
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+            LLMError::Authentication { message: message.to_string(), metadata }
+        }
         StatusCode::TOO_MANY_REQUESTS => LLMError::RateLimit { metadata },
-        StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY => LLMError::InvalidRequest {
-            message: message.to_string(),
-            metadata,
-        },
-        _ => LLMError::Provider {
-            message: message.to_string(),
-            metadata,
-        },
+        StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY => {
+            LLMError::InvalidRequest { message: message.to_string(), metadata }
+        }
+        _ => LLMError::Provider { message: message.to_string(), metadata },
     }
 }

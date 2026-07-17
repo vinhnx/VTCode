@@ -296,10 +296,7 @@ impl ContextManager {
         // Cache the entry
         inner.loaded_skills.put(name.to_string(), entry);
 
-        info!(
-            "Loaded instructions for skill: {} ({} chars)",
-            name, instruction_size
-        );
+        info!("Loaded instructions for skill: {} ({} chars)", name, instruction_size);
 
         Ok(())
     }
@@ -409,11 +406,7 @@ impl ContextManager {
         inner.current_token_usage -= freed_tokens;
         inner.stats.current_token_usage = inner.current_token_usage;
 
-        info!(
-            "Evicted {} skills to free {} tokens",
-            evicted_skills.len(),
-            freed_tokens
-        );
+        info!("Evicted {} skills to free {} tokens", evicted_skills.len(), freed_tokens);
         debug!("Evicted skills: {:?}", evicted_skills);
 
         if freed_tokens < required_tokens {
@@ -465,10 +458,7 @@ impl ContextManager {
         inner.stats.total_skills_evicted += evicted_count as u64;
         inner.stats.total_tokens_evicted += evicted_tokens as u64;
 
-        info!(
-            "Cleared {} loaded skills ({} tokens)",
-            evicted_count, evicted_tokens
-        );
+        info!("Cleared {} loaded skills ({} tokens)", evicted_count, evicted_tokens);
     }
 
     /// Get all active skill names
@@ -491,17 +481,11 @@ impl ContextManager {
             warn!("ContextManager read lock poisoned while calculating memory usage; recovering");
             poisoned.into_inner()
         });
-        let active_memory: usize = inner
-            .active_skills
-            .values()
-            .map(|entry| entry.memory_size)
-            .sum();
+        let active_memory: usize =
+            inner.active_skills.values().map(|entry| entry.memory_size).sum();
 
-        let loaded_memory: usize = inner
-            .loaded_skills
-            .iter()
-            .map(|(_, entry)| entry.memory_size)
-            .sum();
+        let loaded_memory: usize =
+            inner.loaded_skills.iter().map(|(_, entry)| entry.memory_size).sum();
 
         active_memory + loaded_memory
     }

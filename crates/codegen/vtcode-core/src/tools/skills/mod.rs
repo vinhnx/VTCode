@@ -192,10 +192,8 @@ pub fn build_traditional_skill_tool_registration(
     // Traditional skills already flow through shared fork executors, so keep
     // the trait-object bridge here and let the native CGP factory handle the
     // ownership-first path when runtime mode is known.
-    let adapter: Arc<dyn Tool> = Arc::new(build_skill_tool_adapter(
-        skill.clone(),
-        fork_executor.clone(),
-    ));
+    let adapter: Arc<dyn Tool> =
+        Arc::new(build_skill_tool_adapter(skill.clone(), fork_executor.clone()));
     let native_skill = skill.clone();
     let native_fork_executor = fork_executor;
 
@@ -236,11 +234,7 @@ fn load_skill_instructions(skill: &Skill, activation_status: &str) -> String {
         };
     }
 
-    format!(
-        "No detailed instructions available for {}. {}",
-        skill.name(),
-        activation_status
-    )
+    format!("No detailed instructions available for {}. {}", skill.name(), activation_status)
 }
 
 fn build_skill_response(skill: &Skill, activation_status: &str) -> Value {
@@ -273,9 +267,7 @@ fn default_vtcode_home_dir() -> PathBuf {
 }
 
 fn effective_codex_home(explicit_home: Option<&Path>) -> PathBuf {
-    explicit_home
-        .map(Path::to_path_buf)
-        .unwrap_or_else(default_vtcode_home_dir)
+    explicit_home.map(Path::to_path_buf).unwrap_or_else(default_vtcode_home_dir)
 }
 
 fn find_project_root(path: &Path) -> Option<PathBuf> {
@@ -437,15 +429,11 @@ fn resolve_skill_resource_path(skill_root: &Path, resource_path: &str) -> anyhow
         .with_context(|| format!("Resource '{resource_path}' not found"))?;
 
     if !canonical_path.starts_with(&canonical_root) {
-        return Err(anyhow::anyhow!(
-            "Resource '{resource_path}' escapes the skill directory"
-        ));
+        return Err(anyhow::anyhow!("Resource '{resource_path}' escapes the skill directory"));
     }
 
     if !canonical_path.is_file() {
-        return Err(anyhow::anyhow!(
-            "Resource '{resource_path}' is not a readable file"
-        ));
+        return Err(anyhow::anyhow!("Resource '{resource_path}' is not a readable file"));
     }
 
     Ok(canonical_path)
@@ -461,10 +449,7 @@ fn extract_metadata_keywords(metadata: &Option<SkillManifestMetadata>) -> Vec<St
     let Some(keywords_array) = keywords_value.as_array() else {
         return Vec::new();
     };
-    keywords_array
-        .iter()
-        .filter_map(|v| v.as_str().map(String::from))
-        .collect()
+    keywords_array.iter().filter_map(|v| v.as_str().map(String::from)).collect()
 }
 
 fn matches_keywords(keywords: &[String], query_lower: &str) -> bool {
@@ -474,11 +459,9 @@ fn matches_keywords(keywords: &[String], query_lower: &str) -> bool {
     }
     query_words.iter().all(|word| {
         let normalized_word = word.replace('-', " ");
-        keywords.iter().any(|kw| {
-            kw.replace('-', " ")
-                .to_lowercase()
-                .contains(normalized_word.as_str())
-        })
+        keywords
+            .iter()
+            .any(|kw| kw.replace('-', " ").to_lowercase().contains(normalized_word.as_str()))
     })
 }
 
@@ -533,12 +516,7 @@ impl LoadSkillTool {
         runtime: SkillToolSessionRuntime,
         codex_home: Option<PathBuf>,
     ) -> Self {
-        Self {
-            workspace_root,
-            codex_home,
-            active_skills,
-            runtime,
-        }
+        Self { workspace_root, codex_home, active_skills, runtime }
     }
 }
 
@@ -585,11 +563,8 @@ impl Tool for LoadSkillTool {
             return Ok(build_skill_response(&skill, SKILL_ALREADY_ACTIVE_STATUS));
         }
 
-        let (codex_home, metadata) = discover_skill_catalog(
-            &self.workspace_root,
-            self.codex_home.as_deref(),
-            "load_skill",
-        );
+        let (codex_home, metadata) =
+            discover_skill_catalog(&self.workspace_root, self.codex_home.as_deref(), "load_skill");
 
         let mut loader =
             EnhancedSkillLoader::with_codex_home(self.workspace_root.clone(), codex_home.clone());
@@ -613,20 +588,15 @@ impl Tool for LoadSkillTool {
                     )
                 };
 
-                return Err(anyhow::anyhow!(
-                    "Failed to load skill '{name}': {error}.{detail}"
-                ));
+                return Err(anyhow::anyhow!("Failed to load skill '{name}': {error}.{detail}"));
             }
         };
 
-        let activation_status = match self
-            .runtime
-            .activate_skill(&self.active_skills, skill.clone())
-            .await?
-        {
-            SkillActivationState::Activated => SKILL_ACTIVATED_STATUS,
-            SkillActivationState::AlreadyActive => SKILL_ALREADY_ACTIVE_STATUS,
-        };
+        let activation_status =
+            match self.runtime.activate_skill(&self.active_skills, skill.clone()).await? {
+                SkillActivationState::Activated => SKILL_ACTIVATED_STATUS,
+                SkillActivationState::AlreadyActive => SKILL_ALREADY_ACTIVE_STATUS,
+            };
 
         Ok(build_skill_response(&skill, activation_status))
     }
@@ -649,11 +619,7 @@ impl ListSkillsTool {
         active_skills: SkillMap,
         codex_home: Option<PathBuf>,
     ) -> Self {
-        Self {
-            workspace_root,
-            codex_home,
-            active_skills,
-        }
+        Self { workspace_root, codex_home, active_skills }
     }
 }
 
@@ -698,31 +664,18 @@ impl Tool for ListSkillsTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<Value> {
-        let query = args
-            .get("query")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_lowercase());
+        let query = args.get("query").and_then(|v| v.as_str()).map(|s| s.to_lowercase());
         let variety_filter = args.get("variety").and_then(|v| v.as_str());
 
         let active_names: HashSet<String> =
             self.active_skills.read().await.keys().cloned().collect();
-        let (codex_home, discovery) = discover_skill_catalog(
-            &self.workspace_root,
-            self.codex_home.as_deref(),
-            "list_skills",
-        );
+        let (codex_home, discovery) =
+            discover_skill_catalog(&self.workspace_root, self.codex_home.as_deref(), "list_skills");
 
         let mut skill_list = Vec::new();
 
-        for skill_meta in discovery
-            .skills
-            .iter()
-            .filter(|skill| skill.manifest.is_some())
-        {
-            let manifest = skill_meta
-                .manifest
-                .as_ref()
-                .expect("filtered to skills with manifests");
+        for skill_meta in discovery.skills.iter().filter(|skill| skill.manifest.is_some()) {
+            let manifest = skill_meta.manifest.as_ref().expect("filtered to skills with manifests");
             let keywords = extract_metadata_keywords(&manifest.metadata);
             if !matches_skill_filters(
                 manifest.name.as_str(),
@@ -781,14 +734,8 @@ impl Tool for ListSkillsTool {
         // Group by variety for "better" discovery
         let mut grouped = HashMap::with_capacity(skill_list.len());
         for skill in &skill_list {
-            let variety = skill
-                .get("variety")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            grouped
-                .entry(variety.to_string())
-                .or_insert_with(Vec::new)
-                .push(skill.clone());
+            let variety = skill.get("variety").and_then(|v| v.as_str()).unwrap_or("unknown");
+            grouped.entry(variety.to_string()).or_insert_with(Vec::new).push(skill.clone());
         }
 
         let mut response = serde_json::json!({
@@ -806,10 +753,8 @@ impl Tool for ListSkillsTool {
         if !discovery.errors.is_empty()
             && let Some(response_object) = response.as_object_mut()
         {
-            response_object.insert(
-                "discovery_errors".to_string(),
-                serde_json::json!(discovery.errors.len()),
-            );
+            response_object
+                .insert("discovery_errors".to_string(), serde_json::json!(discovery.errors.len()));
             response_object.insert(
                 "discovery_error_samples".to_string(),
                 serde_json::json!(discovery_error_samples(discovery.errors.as_slice())),
@@ -882,9 +827,8 @@ impl Tool for LoadSkillResourceTool {
         }
         if let Some(skill) = skills.get(skill_name) {
             let full_path = resolve_skill_resource_path(&skill.path, resource_path)?;
-            let content = read_file_with_context_sync(&full_path, "skill resource").context(
-                format!("Failed to read resource at {}", full_path.display()),
-            )?;
+            let content = read_file_with_context_sync(&full_path, "skill resource")
+                .context(format!("Failed to read resource at {}", full_path.display()))?;
 
             Ok(serde_json::json!({
                 "skill_name": skill_name,
@@ -981,11 +925,7 @@ Use `/rust-skills`.
         write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
 
         let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
-        let skill = match loader
-            .get_skill(DEMO_SKILL_TOOL_NAME)
-            .await
-            .expect("discover skill")
-        {
+        let skill = match loader.get_skill(DEMO_SKILL_TOOL_NAME).await.expect("discover skill") {
             EnhancedSkill::Traditional(skill) => *skill,
             _ => panic!("expected traditional skill"),
         };
@@ -1000,11 +940,7 @@ Use `/rust-skills`.
         write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
 
         let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
-        let skill = match loader
-            .get_skill(DEMO_SKILL_TOOL_NAME)
-            .await
-            .expect("discover skill")
-        {
+        let skill = match loader.get_skill(DEMO_SKILL_TOOL_NAME).await.expect("discover skill") {
             EnhancedSkill::Traditional(skill) => *skill,
             _ => panic!("expected traditional skill"),
         };
@@ -1021,10 +957,7 @@ Use `/rust-skills`.
 
         assert_eq!(wrapped.name(), DEMO_SKILL_TOOL_NAME);
         assert_eq!(wrapped.description(), skill.description());
-        assert_eq!(
-            wrapped.prompt_path().as_deref(),
-            Some(SKILL_TOOL_PROMPT_PATH)
-        );
+        assert_eq!(wrapped.prompt_path().as_deref(), Some(SKILL_TOOL_PROMPT_PATH));
         assert_eq!(wrapped.default_permission(), ToolPolicy::Prompt);
         assert!(wrapped.parameter_schema().is_some());
     }
@@ -1035,11 +968,7 @@ Use `/rust-skills`.
         write_skill_fixture(temp_dir.path(), DEMO_SKILL_TOOL_NAME);
 
         let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
-        let skill = match loader
-            .get_skill(DEMO_SKILL_TOOL_NAME)
-            .await
-            .expect("discover skill")
-        {
+        let skill = match loader.get_skill(DEMO_SKILL_TOOL_NAME).await.expect("discover skill") {
             EnhancedSkill::Traditional(skill) => *skill,
             _ => panic!("expected traditional skill"),
         };
@@ -1081,10 +1010,8 @@ Use `/rust-skills`.
             Some(temp_codex_home(temp_dir.path())),
         );
 
-        let result = tool
-            .execute(json!({ "name": skill_name }))
-            .await
-            .expect("load skill succeeds");
+        let result =
+            tool.execute(json!({ "name": skill_name })).await.expect("load skill succeeds");
 
         assert_eq!(
             result["activation_status"].as_str(),
@@ -1092,13 +1019,7 @@ Use `/rust-skills`.
         );
         assert_eq!(change_count.load(Ordering::SeqCst), 1);
         assert!(active_skills.read().await.contains_key(skill_name));
-        assert!(
-            active_tools
-                .read()
-                .await
-                .iter()
-                .any(|tool| tool.function_name() == skill_name)
-        );
+        assert!(active_tools.read().await.iter().any(|tool| tool.function_name() == skill_name));
         assert!(
             active_tools
                 .read()
@@ -1156,9 +1077,7 @@ Use `/rust-skills`.
             Some(temp_codex_home(temp_dir.path())),
         );
 
-        tool.execute(json!({ "name": skill_name }))
-            .await
-            .expect("skill loads");
+        tool.execute(json!({ "name": skill_name })).await.expect("skill loads");
 
         let resource_tool = LoadSkillResourceTool::new(Arc::clone(&active_skills));
         let result = resource_tool
@@ -1194,9 +1113,7 @@ Use `/rust-skills`.
             Some(temp_codex_home(temp_dir.path())),
         );
 
-        tool.execute(json!({ "name": skill_name }))
-            .await
-            .expect("skill loads");
+        tool.execute(json!({ "name": skill_name })).await.expect("skill loads");
 
         let resource_tool = LoadSkillResourceTool::new(Arc::clone(&active_skills));
         let error = resource_tool
@@ -1223,11 +1140,7 @@ Use `/rust-skills`.
             .await
             .expect_err("resource load should fail before activation");
 
-        assert!(
-            error
-                .to_string()
-                .contains("Use `load_skill` (or `/skills load <name>`) first.")
-        );
+        assert!(error.to_string().contains("Use `load_skill` (or `/skills load <name>`) first."));
     }
 
     #[tokio::test]
@@ -1247,19 +1160,14 @@ Use `/rust-skills`.
             None,
         );
         let mut loader = EnhancedSkillLoader::new(temp_dir.path().to_path_buf());
-        let skill = match loader
-            .get_skill(skill_name)
-            .await
-            .expect("discover skill for activation")
+        let skill = match loader.get_skill(skill_name).await.expect("discover skill for activation")
         {
             EnhancedSkill::Traditional(skill) => *skill,
             _ => panic!("expected traditional skill"),
         };
 
-        let activation_state = runtime
-            .activate_skill(&active_skills, skill)
-            .await
-            .expect("activate skill");
+        let activation_state =
+            runtime.activate_skill(&active_skills, skill).await.expect("activate skill");
         assert_eq!(activation_state, SkillActivationState::Activated);
         assert!(registry.has_tool(skill_name).await);
 
@@ -1270,13 +1178,7 @@ Use `/rust-skills`.
         assert!(removed);
         assert!(!active_skills.read().await.contains_key(skill_name));
         assert!(!registry.has_tool(skill_name).await);
-        assert!(
-            active_tools
-                .read()
-                .await
-                .iter()
-                .all(|tool| tool.function_name() != skill_name)
-        );
+        assert!(active_tools.read().await.iter().all(|tool| tool.function_name() != skill_name));
     }
 
     #[tokio::test]
@@ -1295,9 +1197,7 @@ Use `/rust-skills`.
             .expect("list skills succeeds");
 
         assert_eq!(result["count"].as_u64(), Some(1));
-        let groups = result["groups"]["agent_skill"]
-            .as_array()
-            .expect("agent skill group");
+        let groups = result["groups"]["agent_skill"].as_array().expect("agent skill group");
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0]["name"].as_str(), Some("skill-creator"));
     }
@@ -1350,9 +1250,7 @@ Use `/rust-skills`.
             .expect("list skills succeeds");
 
         assert_eq!(result["count"].as_u64(), Some(1));
-        let groups = result["groups"]["agent_skill"]
-            .as_array()
-            .expect("agent skill group");
+        let groups = result["groups"]["agent_skill"].as_array().expect("agent skill group");
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
     }
@@ -1398,15 +1296,10 @@ Use `/rust-skills`.
             Some(temp_codex_home(temp_dir.path())),
         );
 
-        let result = tool
-            .execute(json!({ "query": query }))
-            .await
-            .expect("list skills succeeds");
+        let result = tool.execute(json!({ "query": query })).await.expect("list skills succeeds");
 
         assert_eq!(result["count"].as_u64(), Some(1));
-        let groups = result["groups"]["agent_skill"]
-            .as_array()
-            .expect("agent skill group");
+        let groups = result["groups"]["agent_skill"].as_array().expect("agent skill group");
         assert_eq!(groups[0]["name"].as_str(), Some("ast-grep"));
     }
 
@@ -1491,16 +1384,9 @@ Use `/rust-skills`.
         let result = tool.execute(json!({})).await.expect("list skills succeeds");
 
         assert_eq!(result["discovery_errors"].as_u64(), Some(1));
-        let samples = result["discovery_error_samples"]
-            .as_array()
-            .expect("error samples");
+        let samples = result["discovery_error_samples"].as_array().expect("error samples");
         assert_eq!(samples.len(), 1);
-        assert!(
-            samples[0]
-                .as_str()
-                .expect("sample string")
-                .contains("broken-skill")
-        );
+        assert!(samples[0].as_str().expect("sample string").contains("broken-skill"));
     }
 
     #[tokio::test]
@@ -1520,9 +1406,7 @@ Use `/rust-skills`.
             .expect("list skills succeeds");
 
         assert_eq!(result["count"].as_u64(), Some(1));
-        let groups = result["groups"]["agent_skill"]
-            .as_array()
-            .expect("agent skill group");
+        let groups = result["groups"]["agent_skill"].as_array().expect("agent skill group");
         assert_eq!(groups[0]["name"].as_str(), Some("rust-skills"));
         let samples = result
             .get("discovery_error_samples")
@@ -1530,10 +1414,7 @@ Use `/rust-skills`.
             .cloned()
             .unwrap_or_default();
         assert!(samples.iter().all(|sample| {
-            !sample
-                .as_str()
-                .expect("discovery error sample")
-                .contains("rust-skills")
+            !sample.as_str().expect("discovery error sample").contains("rust-skills")
         }));
     }
 
@@ -1553,17 +1434,10 @@ Use `/rust-skills`.
             .await
             .expect("list skills succeeds");
 
-        let groups = result["groups"]["agent_skill"]
-            .as_array()
-            .expect("agent skill group");
+        let groups = result["groups"]["agent_skill"].as_array().expect("agent skill group");
         assert_eq!(groups.len(), 1);
         let entry = &groups[0];
-        assert!(
-            entry["path"]
-                .as_str()
-                .expect("path string")
-                .contains(DEMO_SKILL_TOOL_NAME)
-        );
+        assert!(entry["path"].as_str().expect("path string").contains(DEMO_SKILL_TOOL_NAME));
         assert_eq!(entry["scope"].as_str(), Some("repo"));
     }
 
@@ -1584,9 +1458,7 @@ Use `/rust-skills`.
             .expect("list skills succeeds");
 
         assert_eq!(result["count"].as_u64(), Some(1));
-        let groups = result["groups"]["agent_skill"]
-            .as_array()
-            .expect("agent skill group");
+        let groups = result["groups"]["agent_skill"].as_array().expect("agent skill group");
         assert_eq!(groups[0]["name"].as_str(), Some(DEMO_SKILL_TOOL_NAME));
     }
 }

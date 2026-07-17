@@ -150,10 +150,7 @@ impl JustificationManager {
     /// Create a new justification manager
     pub fn new(cache_dir: PathBuf) -> Self {
         let patterns = std::sync::Arc::new(std::sync::Mutex::new(HashMap::new()));
-        let manager = Self {
-            cache_dir,
-            patterns,
-        };
+        let manager = Self { cache_dir, patterns };
 
         // Try to load existing patterns
         let _ = manager.load_patterns();
@@ -215,16 +212,14 @@ impl JustificationManager {
     ) {
         let should_persist = if let Ok(mut patterns) = self.patterns.lock() {
             let pattern =
-                patterns
-                    .entry(approval_key.to_owned())
-                    .or_insert_with(|| ApprovalPattern {
-                        tool_name: approval_key.to_owned(),
-                        display_name: display_name.map(str::to_owned),
-                        approve_count: 0,
-                        deny_count: 0,
-                        last_decision: None,
-                        recent_reason: None,
-                    });
+                patterns.entry(approval_key.to_owned()).or_insert_with(|| ApprovalPattern {
+                    tool_name: approval_key.to_owned(),
+                    display_name: display_name.map(str::to_owned),
+                    approve_count: 0,
+                    deny_count: 0,
+                    last_decision: None,
+                    recent_reason: None,
+                });
 
             if let Some(display_name) = display_name {
                 pattern.display_name = Some(display_name.to_owned());
@@ -366,18 +361,10 @@ mod tests {
         let manager = JustificationManager::new(temp_dir.clone());
 
         manager.record_decision("shell:key", Some("command `cargo test`"), true, None);
-        manager.record_decision(
-            "shell:key",
-            Some("commands starting with `cargo`"),
-            true,
-            None,
-        );
+        manager.record_decision("shell:key", Some("commands starting with `cargo`"), true, None);
 
         let pattern = manager.get_pattern("shell:key").unwrap();
-        assert_eq!(
-            pattern.display_name.as_deref(),
-            Some("commands starting with `cargo`")
-        );
+        assert_eq!(pattern.display_name.as_deref(), Some("commands starting with `cargo`"));
 
         // Cleanup
         let _ = std::fs::remove_dir_all(&temp_dir);

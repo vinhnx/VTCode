@@ -380,4 +380,4 @@ If you discover environment-related issues or improvements:
 
 -   Check the examples in this directory
 -   Review test cases in `tests/integration_path_env.rs`
--   Look at actual source in `vtcode-core/src/tools/command.rs` and `vtcode-core/src/tools/pty.rs`
+-   Look at actual source in `crates/codegen/vtcode-core/src/tools/command.rs` and `crates/codegen/vtcode-core/src/tools/pty.rs`

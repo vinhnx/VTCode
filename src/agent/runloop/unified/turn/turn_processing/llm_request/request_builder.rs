@@ -60,13 +60,8 @@ pub(super) async fn build_turn_request(
     use_streaming: bool,
 ) -> Result<TurnRequestBuildResult> {
     let request_model = turn_snapshot.active_model.as_str();
-    let mut prompt_output = assemble_prompt(
-        ctx,
-        PromptAssemblyInput {
-            turn: turn_snapshot,
-        },
-    )
-    .await?;
+    let mut prompt_output =
+        assemble_prompt(ctx, PromptAssemblyInput { turn: turn_snapshot }).await?;
 
     let reasoning_effort = resolve_effective_reasoning_effort(ctx.vt_cfg, turn_snapshot);
     let primary_agent_context = render_primary_agent_runtime_context(
@@ -80,10 +75,8 @@ pub(super) async fn build_turn_request(
     .await;
     let _ = writeln!(prompt_output.system_prompt, "\n{primary_agent_context}");
     let temperature = if reasoning_effort.is_some()
-        && matches!(
-            turn_snapshot.provider_name.as_str(),
-            "anthropic" | "minimax"
-        ) {
+        && matches!(turn_snapshot.provider_name.as_str(), "anthropic" | "minimax")
+    {
         None
     } else {
         Some(0.7)
@@ -142,9 +135,8 @@ pub(super) async fn build_turn_request(
         },
     );
     let context_management = resolve_context_management(ctx, turn_snapshot, request_model);
-    let continuation_messages = ctx
-        .context_manager
-        .normalize_history_for_request(ctx.working_history);
+    let continuation_messages =
+        ctx.context_manager.normalize_history_for_request(ctx.working_history);
     let (request_messages, previous_response_id) = prepare_responses_request_history(
         ctx.session_stats,
         &turn_snapshot.provider_name,
@@ -197,11 +189,7 @@ pub(super) async fn build_turn_request(
     // real on-wire request payload. Cache read/write/miss are already surfaced
     // via `SessionStats` prompt-cache diagnostics, so they are not duplicated.
     let request = &request_plan.request;
-    let system_prompt_tokens = request
-        .system_prompt
-        .as_ref()
-        .map(|sp| sp.len() / 4)
-        .unwrap_or(0);
+    let system_prompt_tokens = request.system_prompt.as_ref().map(|sp| sp.len() / 4).unwrap_or(0);
     let (on_wire_tools, tool_schema_tokens) = request
         .tools
         .as_ref()
@@ -305,11 +293,7 @@ mod tests {
     }
 
     fn system_prompt_text(request: &uni::LLMRequest) -> &str {
-        request
-            .system_prompt
-            .as_ref()
-            .expect("system prompt")
-            .as_str()
+        request.system_prompt.as_ref().expect("system prompt").as_str()
     }
 
     #[tokio::test]
@@ -362,41 +346,23 @@ mod tests {
         normal_snapshot.tool_free_recovery = false;
         normal_snapshot.capabilities.reasoning_effort = true;
 
-        let normal_built = build_turn_request(
-            &mut ctx,
-            1,
-            "noop-model",
-            &normal_snapshot,
-            Some(320),
-            None,
-            false,
-        )
-        .await
-        .expect("normal request should build");
+        let normal_built =
+            build_turn_request(&mut ctx, 1, "noop-model", &normal_snapshot, Some(320), None, false)
+                .await
+                .expect("normal request should build");
         let built =
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
                 .expect("recovery request should build");
 
-        assert_eq!(
-            normal_built.request.reasoning_effort,
-            Some(ReasoningEffortLevel::High)
-        );
+        assert_eq!(normal_built.request.reasoning_effort, Some(ReasoningEffortLevel::High));
         assert!(built.request.reasoning_effort.is_none());
         assert!(!built.has_tools);
         assert!(built.request.tools.is_none());
-        assert!(matches!(
-            built.request.tool_choice,
-            Some(uni::ToolChoice::None)
-        ));
+        assert!(matches!(built.request.tool_choice, Some(uni::ToolChoice::None)));
         assert_eq!(built.request.max_tokens, Some(320));
 
-        let system_prompt = built
-            .request
-            .system_prompt
-            .as_ref()
-            .expect("system prompt")
-            .as_str();
+        let system_prompt = built.request.system_prompt.as_ref().expect("system prompt").as_str();
         assert!(system_prompt.contains("[Recovery Mode]"));
         assert!(system_prompt.contains("do_not_request_more_tools: true"));
         assert!(system_prompt.contains("recovery_reason: loop detector"));
@@ -451,12 +417,7 @@ mod tests {
         assert!(built.request.tools.is_none());
         assert!(built.request.tool_choice.is_none());
 
-        let system_prompt = built
-            .request
-            .system_prompt
-            .as_ref()
-            .expect("system prompt")
-            .as_str();
+        let system_prompt = built.request.system_prompt.as_ref().expect("system prompt").as_str();
         assert!(!system_prompt.contains("[Runtime Tool Catalog]"));
     }
 
@@ -499,32 +460,17 @@ mod tests {
         let mut snapshot = capture_turn_request_snapshot(&mut ctx, "copilot-gpt-5.4", false);
         snapshot.provider_name = vtcode_core::copilot::COPILOT_PROVIDER_KEY.to_string();
         snapshot.capabilities.tools = true;
-        let built = build_turn_request(
-            &mut ctx,
-            1,
-            "copilot-gpt-5.4",
-            &snapshot,
-            Some(320),
-            None,
-            true,
-        )
-        .await
-        .expect("copilot request should build");
+        let built =
+            build_turn_request(&mut ctx, 1, "copilot-gpt-5.4", &snapshot, Some(320), None, true)
+                .await
+                .expect("copilot request should build");
 
         assert!(built.has_tools);
         assert!(built.request.tools.is_none());
         assert!(built.request.tool_choice.is_none());
-        assert_eq!(
-            built.runtime_tools.as_ref().map(|tools| tools.len()),
-            Some(1)
-        );
+        assert_eq!(built.runtime_tools.as_ref().map(|tools| tools.len()), Some(1));
 
-        let system_prompt = built
-            .request
-            .system_prompt
-            .as_ref()
-            .expect("system prompt")
-            .as_str();
+        let system_prompt = built.request.system_prompt.as_ref().expect("system prompt").as_str();
         assert!(system_prompt.contains("[GitHub Copilot Client Tools]"));
         assert!(system_prompt.contains("emit the actual client tool call"));
     }
@@ -570,10 +516,7 @@ mod tests {
         // `runtime_tools` must stay unfiltered: Copilot's out-of-band tool
         // exposure and stats consumers need the full catalog even when the
         // wire payload omits deferred definitions.
-        assert_eq!(
-            built.runtime_tools.as_ref().map(|tools| tools.len()),
-            Some(2)
-        );
+        assert_eq!(built.runtime_tools.as_ref().map(|tools| tools.len()), Some(2));
     }
 
     #[tokio::test]
@@ -625,8 +568,7 @@ mod tests {
         ];
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.extend(prior_messages.clone());
-        ctx.working_history
-            .push(uni::Message::user("continue".to_string()));
+        ctx.working_history.push(uni::Message::user("continue".to_string()));
         ctx.session_stats.set_previous_response_chain(
             "openai",
             "noop-model",
@@ -657,8 +599,7 @@ mod tests {
         let prior_messages = vec![uni::Message::user("hello".to_string())];
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.extend(prior_messages.clone());
-        ctx.working_history
-            .push(uni::Message::user("continue".to_string()));
+        ctx.working_history.push(uni::Message::user("continue".to_string()));
         ctx.session_stats.set_previous_response_chain(
             "mycorp",
             "noop-model",
@@ -690,8 +631,7 @@ mod tests {
         let prior_messages = vec![uni::Message::user("hello".to_string())];
         let mut ctx = backing.turn_processing_context();
         ctx.working_history.extend(prior_messages.clone());
-        ctx.working_history
-            .push(uni::Message::user("continue".to_string()));
+        ctx.working_history.push(uni::Message::user("continue".to_string()));
         ctx.session_stats.set_previous_response_chain(
             "gemini",
             "noop-model",
@@ -706,10 +646,7 @@ mod tests {
                 .await
                 .expect("gemini request should build");
 
-        assert_eq!(
-            built.request.previous_response_id.as_deref(),
-            Some("resp_123")
-        );
+        assert_eq!(built.request.previous_response_id.as_deref(), Some("resp_123"));
         assert_eq!(
             non_runtime_request_messages(&built.request),
             vec![
@@ -740,8 +677,7 @@ mod tests {
             }),
             Some(&vtcode_config::IdeContextConfig::default()),
         );
-        ctx.working_history
-            .push(uni::Message::user("hello".to_string()));
+        ctx.working_history.push(uni::Message::user("hello".to_string()));
 
         let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
         let built =
@@ -749,42 +685,16 @@ mod tests {
                 .await
                 .expect("request should build");
 
-        let system_prompt = built
-            .request
-            .system_prompt
-            .as_ref()
-            .expect("system prompt")
-            .as_str();
+        let system_prompt = built.request.system_prompt.as_ref().expect("system prompt").as_str();
         assert!(!system_prompt.contains("## Active Editor Context"));
         let non_runtime_messages = non_runtime_request_messages(&built.request);
         assert_eq!(non_runtime_messages.len(), 2);
         assert_eq!(non_runtime_messages[0].role, uni::MessageRole::User);
-        assert!(
-            non_runtime_messages[0]
-                .content
-                .as_text()
-                .contains("## Active Editor Context")
-        );
-        assert!(
-            non_runtime_messages[0]
-                .content
-                .as_text()
-                .contains("- Active file: src/main.rs")
-        );
-        assert!(
-            non_runtime_messages[0]
-                .content
-                .as_text()
-                .contains("- Language: Rust")
-        );
-        assert_eq!(
-            non_runtime_messages[1],
-            uni::Message::user("hello".to_string())
-        );
-        assert_eq!(
-            built.continuation_messages,
-            vec![uni::Message::user("hello".to_string())]
-        );
+        assert!(non_runtime_messages[0].content.as_text().contains("## Active Editor Context"));
+        assert!(non_runtime_messages[0].content.as_text().contains("- Active file: src/main.rs"));
+        assert!(non_runtime_messages[0].content.as_text().contains("- Language: Rust"));
+        assert_eq!(non_runtime_messages[1], uni::Message::user("hello".to_string()));
+        assert_eq!(built.continuation_messages, vec![uni::Message::user("hello".to_string())]);
     }
 
     #[tokio::test]
@@ -826,8 +736,7 @@ mod tests {
 
         let built = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -835,16 +744,8 @@ mod tests {
         };
 
         assert_eq!(built.request.messages.len(), 1);
-        assert_eq!(
-            built.request.messages[0],
-            uni::Message::user("hello".to_string())
-        );
-        let runtime_context = built
-            .request
-            .system_prompt
-            .as_ref()
-            .expect("system prompt")
-            .as_str();
+        assert_eq!(built.request.messages[0], uni::Message::user("hello".to_string()));
+        let runtime_context = built.request.system_prompt.as_ref().expect("system prompt").as_str();
         assert!(runtime_context.contains("## Active Primary Agent Runtime State"));
         assert!(runtime_context.contains("- Active agent: planner"));
         assert!(runtime_context.contains("- Effective request tools: code_search"));
@@ -853,10 +754,7 @@ mod tests {
         ));
         assert!(runtime_context.contains("- Active primary permission default: deny"));
         assert!(runtime_context.contains("Plan carefully before editing."));
-        assert_eq!(
-            built.continuation_messages,
-            vec![uni::Message::user("hello".to_string())]
-        );
+        assert_eq!(built.continuation_messages, vec![uni::Message::user("hello".to_string())]);
     }
 
     #[tokio::test]
@@ -885,8 +783,7 @@ mod tests {
 
         let built = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -919,8 +816,7 @@ mod tests {
 
         let built = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -955,8 +851,7 @@ mod tests {
         backing.select_primary_agent_from_specs(std::slice::from_ref(&planner), "planner");
         let first_built = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -967,8 +862,7 @@ mod tests {
         let second_built = {
             let mut ctx = backing.turn_processing_context();
             ctx.working_history.clear();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -988,9 +882,7 @@ mod tests {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         backing.add_tool_definition(named_tool("code_search")).await;
         backing.add_tool_definition(named_tool("apply_patch")).await;
-        backing
-            .add_tool_definition(named_tool("exec_command"))
-            .await;
+        backing.add_tool_definition(named_tool("exec_command")).await;
         let mut spec = test_primary_agent_spec("planner", "Use limited tools.");
         spec.tools = Some(vec!["code_search".to_string(), "missing_tool".to_string()]);
         spec.disallowed_tools = Vec::new();
@@ -998,8 +890,7 @@ mod tests {
 
         let built = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -1022,8 +913,7 @@ mod tests {
 
         let built = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -1048,22 +938,15 @@ mod tests {
 
         let built = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
                 .expect("request should build")
         };
 
-        assert_eq!(
-            request_tool_names(&built.request),
-            vec!["code_search", "apply_patch"]
-        );
-        assert_eq!(
-            built.continuation_messages,
-            vec![uni::Message::user("hello".to_string())]
-        );
+        assert_eq!(request_tool_names(&built.request), vec!["code_search", "apply_patch"]);
+        assert_eq!(built.continuation_messages, vec![uni::Message::user("hello".to_string())]);
     }
 
     #[tokio::test]
@@ -1076,8 +959,7 @@ mod tests {
         let built = {
             let mut ctx = backing.turn_processing_context();
             ctx.working_history.extend(prior_messages.clone());
-            ctx.working_history
-                .push(uni::Message::user("continue".to_string()));
+            ctx.working_history.push(uni::Message::user("continue".to_string()));
             ctx.session_stats.set_previous_response_chain(
                 "openai",
                 "noop-model",
@@ -1124,8 +1006,7 @@ mod tests {
         let first_built = {
             let mut ctx = backing.turn_processing_context();
             ctx.vt_cfg = Some(cfg);
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -1137,8 +1018,7 @@ mod tests {
             let mut ctx = backing.turn_processing_context();
             ctx.vt_cfg = Some(cfg);
             ctx.working_history.clear();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -1169,8 +1049,7 @@ mod tests {
         backing.select_primary_agent_from_specs(std::slice::from_ref(&first), "planner");
         let first_built = {
             let mut ctx = backing.turn_processing_context();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 1, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -1181,8 +1060,7 @@ mod tests {
         let second_built = {
             let mut ctx = backing.turn_processing_context();
             ctx.working_history.clear();
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
             build_turn_request(&mut ctx, 2, "noop-model", &snapshot, Some(320), None, false)
                 .await
@@ -1216,8 +1094,7 @@ mod tests {
         let built = {
             let mut ctx = backing.turn_processing_context();
             ctx.vt_cfg = Some(cfg);
-            ctx.working_history
-                .push(uni::Message::user("hello".to_string()));
+            ctx.working_history.push(uni::Message::user("hello".to_string()));
             let mut snapshot = capture_turn_request_snapshot(&mut ctx, "base-model", false);
             assert_eq!(snapshot.active_model, "overlay-model");
             snapshot.capabilities.reasoning_effort = true;
@@ -1227,10 +1104,7 @@ mod tests {
         };
 
         assert_eq!(built.request.model, "overlay-model");
-        assert_eq!(
-            built.request.reasoning_effort,
-            Some(ReasoningEffortLevel::High)
-        );
+        assert_eq!(built.request.reasoning_effort, Some(ReasoningEffortLevel::High));
         let runtime_context = system_prompt_text(&built.request);
         assert!(runtime_context.contains("- Request model: overlay-model"));
         assert!(runtime_context.contains("- Request reasoning effort: high"));
@@ -1257,8 +1131,7 @@ mod tests {
             }),
             Some(&vtcode_config::IdeContextConfig::default()),
         );
-        ctx.working_history
-            .push(uni::Message::user("hello".to_string()));
+        ctx.working_history.push(uni::Message::user("hello".to_string()));
 
         let snapshot = capture_turn_request_snapshot(&mut ctx, "noop-model", false);
         let first =
@@ -1274,8 +1147,7 @@ mod tests {
             &first.continuation_messages,
         );
 
-        ctx.working_history
-            .push(uni::Message::user("continue".to_string()));
+        ctx.working_history.push(uni::Message::user("continue".to_string()));
         ctx.context_manager.set_editor_context_snapshot(
             Some(EditorContextSnapshot {
                 workspace_root: Some(PathBuf::from(workspace.path())),
@@ -1301,26 +1173,10 @@ mod tests {
         let non_runtime_messages = non_runtime_request_messages(&second.request);
         assert_eq!(non_runtime_messages.len(), 3);
         assert_eq!(non_runtime_messages[0].role, uni::MessageRole::User);
-        assert!(
-            non_runtime_messages[0]
-                .content
-                .as_text()
-                .contains("## Active Editor Context")
-        );
-        assert!(
-            non_runtime_messages[0]
-                .content
-                .as_text()
-                .contains("- Active file: src/lib.rs")
-        );
-        assert_eq!(
-            non_runtime_messages[1],
-            uni::Message::user("hello".to_string())
-        );
-        assert_eq!(
-            non_runtime_messages[2],
-            uni::Message::user("continue".to_string())
-        );
+        assert!(non_runtime_messages[0].content.as_text().contains("## Active Editor Context"));
+        assert!(non_runtime_messages[0].content.as_text().contains("- Active file: src/lib.rs"));
+        assert_eq!(non_runtime_messages[1], uni::Message::user("hello".to_string()));
+        assert_eq!(non_runtime_messages[2], uni::Message::user("continue".to_string()));
         assert_eq!(
             second.continuation_messages,
             vec![
@@ -1350,17 +1206,10 @@ mod tests {
         snapshot.provider_name = "anthropic".to_string();
         snapshot.capabilities.context_edits = true;
 
-        let built = build_turn_request(
-            &mut ctx,
-            1,
-            "claude-sonnet-4-6",
-            &snapshot,
-            Some(320),
-            None,
-            false,
-        )
-        .await
-        .expect("anthropic request should build");
+        let built =
+            build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
+                .await
+                .expect("anthropic request should build");
 
         assert_eq!(
             built.request.context_management,
@@ -1382,29 +1231,15 @@ mod tests {
         let mut compaction_only_cfg = VTCodeConfig::default();
         compaction_only_cfg.agent.provider = "anthropic".to_string();
         compaction_only_cfg.agent.harness.auto_compaction_enabled = true;
-        compaction_only_cfg
-            .agent
-            .harness
-            .auto_compaction_threshold_tokens = Some(90_000);
+        compaction_only_cfg.agent.harness.auto_compaction_threshold_tokens = Some(90_000);
         // `tool_result_clearing` defaults to enabled; disable it here so this
         // scenario exercises the "compaction only" path (clearing off).
-        compaction_only_cfg
-            .agent
-            .harness
-            .tool_result_clearing
-            .enabled = false;
+        compaction_only_cfg.agent.harness.tool_result_clearing.enabled = false;
         ctx.vt_cfg = Some(Box::leak(Box::new(compaction_only_cfg)));
-        let built = build_turn_request(
-            &mut ctx,
-            1,
-            "claude-sonnet-4-6",
-            &snapshot,
-            Some(320),
-            None,
-            false,
-        )
-        .await
-        .expect("compaction-only anthropic request should build");
+        let built =
+            build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
+                .await
+                .expect("compaction-only anthropic request should build");
         assert_eq!(
             built.request.context_management,
             Some(json!({
@@ -1423,17 +1258,10 @@ mod tests {
         // "no context management payload" (fully disabled) path is exercised.
         disabled_cfg.agent.harness.tool_result_clearing.enabled = false;
         ctx.vt_cfg = Some(Box::leak(Box::new(disabled_cfg)));
-        let built = build_turn_request(
-            &mut ctx,
-            1,
-            "claude-sonnet-4-6",
-            &snapshot,
-            Some(320),
-            None,
-            false,
-        )
-        .await
-        .expect("disabled anthropic request should build");
+        let built =
+            build_turn_request(&mut ctx, 1, "claude-sonnet-4-6", &snapshot, Some(320), None, false)
+                .await
+                .expect("disabled anthropic request should build");
         assert!(built.request.context_management.is_none());
     }
 
@@ -1468,9 +1296,6 @@ mod tests {
         let first = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n- Time (UTC): 2026-03-22T00:00:00Z\n- retries: 1";
         let second = "Static prefix\n## Skills\n- rust-skills\n[Runtime Context]\n- Time (UTC): 2026-03-23T00:00:00Z\n- retries: 4";
 
-        assert_eq!(
-            stable_system_prefix_hash(first),
-            stable_system_prefix_hash(second)
-        );
+        assert_eq!(stable_system_prefix_hash(first), stable_system_prefix_hash(second));
     }
 }

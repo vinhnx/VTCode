@@ -1,8 +1,8 @@
 [package]
 name = "vtcode-core"
 version.workspace = true
-edition.workspace = true
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Core library for VT Code - a Rust-based terminal coding agent"
 license.workspace = true
@@ -111,21 +111,21 @@ rig = { package = "rig-core", version = "0.40", default-features = false, featur
 ] }
 portable-pty = "0.9.0"
 ansi-to-tui = "8.0.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.11" }
-vtcode-ui = { path = "../vtcode-ui", version = "0.135.11" }
-vtcode-macros = { path = "../vtcode-macros", version = "0.135.11" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.135.11" }
-vtcode-session-store = { path = "../vtcode-session-store", version = "0.135.11" }
-vtcode-auth = { path = "../vtcode-auth", version = "0.135.11" }
-vtcode-config = { path = "../vtcode-config", version = "0.135.11" }
-vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.135.11" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.135.11" }
-vtcode-bash-runner = { path = "../vtcode-bash-runner", version = "0.135.11" }
-vtcode-safety = { path = "../vtcode-safety", version = "0.135.11" }
-vtcode-a2a = { path = "../vtcode-a2a", version = "0.135.11" }
-vtcode-mcp = { path = "../vtcode-mcp", version = "0.135.11" }
-vtcode-llm = { path = "../vtcode-llm", version = "0.135.11", features = ["copilot"] }
-vtcode-skills = { path = "../vtcode-skills", version = "0.135.11" }
+vtcode-commons = { workspace = true }
+vtcode-ui = { workspace = true }
+vtcode-macros = { workspace = true }
+vtcode-exec-events = { workspace = true }
+vtcode-session-store = { workspace = true }
+vtcode-auth = { workspace = true }
+vtcode-config = { workspace = true }
+vtcode-utility-tool-specs = { workspace = true }
+vtcode-indexer = { workspace = true }
+vtcode-bash-runner = { workspace = true }
+vtcode-safety = { workspace = true }
+vtcode-a2a = { workspace = true }
+vtcode-mcp = { workspace = true }
+vtcode-llm = { workspace = true, features = ["copilot"] }
+vtcode-skills = { workspace = true }
 
 # Schema generation
 schemars = { workspace = true, optional = true }

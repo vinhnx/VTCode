@@ -30,10 +30,7 @@ pub async fn collect_single_response(
     }
 
     let mut response = completed.ok_or_else(|| LLMError::Provider {
-        message: format!(
-            "{} stream ended without a completed response",
-            provider.name()
-        ),
+        message: format!("{} stream ended without a completed response", provider.name()),
         metadata: None,
     })?;
     if response.usage.is_none() {

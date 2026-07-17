@@ -13,9 +13,7 @@ pub struct PodsStore {
 impl PodsStore {
     /// Create a store rooted at the given directory.
     pub fn new(base_dir: impl Into<PathBuf>) -> Self {
-        Self {
-            base_dir: base_dir.into(),
-        }
+        Self { base_dir: base_dir.into() }
     }
 
     /// Create a store using the default `~/.vtcode/pods` directory.
@@ -43,17 +41,11 @@ impl PodsStore {
     pub async fn ensure_initialized(&self) -> Result<()> {
         ensure_dir_exists(&self.base_dir).await?;
 
-        if !tokio::fs::try_exists(&self.catalog_path())
-            .await
-            .unwrap_or(false)
-        {
+        if !tokio::fs::try_exists(&self.catalog_path()).await.unwrap_or(false) {
             self.save_catalog(&PodCatalog::embedded_default()).await?;
         }
 
-        if !tokio::fs::try_exists(&self.state_path())
-            .await
-            .unwrap_or(false)
-        {
+        if !tokio::fs::try_exists(&self.state_path()).await.unwrap_or(false) {
             self.save_state(&PodsState::default()).await?;
         }
 
@@ -63,47 +55,31 @@ impl PodsStore {
     /// Load the persisted pod state from disk.
     pub async fn load_state(&self) -> Result<PodsState> {
         self.ensure_initialized().await?;
-        read_json_file(&self.state_path()).await.with_context(|| {
-            format!(
-                "failed to read pod state at {}",
-                self.state_path().display()
-            )
-        })
+        read_json_file(&self.state_path())
+            .await
+            .with_context(|| format!("failed to read pod state at {}", self.state_path().display()))
     }
 
     /// Persist the pod state to disk.
     pub async fn save_state(&self, state: &PodsState) -> Result<()> {
         ensure_dir_exists(&self.base_dir).await?;
-        write_json_file(&self.state_path(), state)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to write pod state at {}",
-                    self.state_path().display()
-                )
-            })
+        write_json_file(&self.state_path(), state).await.with_context(|| {
+            format!("failed to write pod state at {}", self.state_path().display())
+        })
     }
 
     /// Load the deployment catalog from disk.
     pub async fn load_catalog(&self) -> Result<PodCatalog> {
         self.ensure_initialized().await?;
         read_json_file(&self.catalog_path()).await.with_context(|| {
-            format!(
-                "failed to read pod catalog at {}",
-                self.catalog_path().display()
-            )
+            format!("failed to read pod catalog at {}", self.catalog_path().display())
         })
     }
 
     pub async fn save_catalog(&self, catalog: &PodCatalog) -> Result<()> {
         ensure_dir_exists(&self.base_dir).await?;
-        write_json_file(&self.catalog_path(), catalog)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to write pod catalog at {}",
-                    self.catalog_path().display()
-                )
-            })
+        write_json_file(&self.catalog_path(), catalog).await.with_context(|| {
+            format!("failed to write pod catalog at {}", self.catalog_path().display())
+        })
     }
 }

@@ -78,10 +78,7 @@ impl AgentRunner {
         // deliberately discards it to clear noise and bad assumptions.
         let reset_mode = self.config().agent.harness.context_reset_mode.as_str();
         if maybe_write_reset_after_compaction(self._workspace.as_path(), reset_mode) {
-            info!(
-                "Context reset manifest written after compaction (mode: {})",
-                reset_mode
-            );
+            info!("Context reset manifest written after compaction (mode: {})", reset_mode);
         }
 
         event_recorder.compact_boundary(

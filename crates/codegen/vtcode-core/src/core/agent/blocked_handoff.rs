@@ -66,10 +66,7 @@ pub fn write_blocked_handoff(
     fs::write(&archive_path, markdown)
         .with_context(|| format!("failed to write {}", archive_path.display()))?;
 
-    Ok(BlockedHandoffArtifacts {
-        current_path,
-        archive_path,
-    })
+    Ok(BlockedHandoffArtifacts { current_path, archive_path })
 }
 
 fn render_blocked_handoff(
@@ -152,13 +149,10 @@ pub fn write_async_approval_blocker(
     );
     let current_path = blockers_dir.join(archive_name);
 
-    let cost_line = estimated_cost
-        .map(|c| format!("Estimated cost: ${c:.4}"))
-        .unwrap_or_default();
+    let cost_line = estimated_cost.map(|c| format!("Estimated cost: ${c:.4}")).unwrap_or_default();
 
-    let notify_line = notify_command
-        .map(|cmd| format!("Notify command: `{cmd}`"))
-        .unwrap_or_default();
+    let notify_line =
+        notify_command.map(|cmd| format!("Notify command: `{cmd}`")).unwrap_or_default();
 
     let markdown = format!(
         "---\ntoken: {approval_token}\nsession_id: {session_id}\ntool: {tool_name}\ncreated_at: {created_at}\ntype: async_approval\n---\n\n\
@@ -175,10 +169,7 @@ pub fn write_async_approval_blocker(
     fs::write(&current_path, &markdown)
         .with_context(|| format!("failed to write async blocker {}", current_path.display()))?;
 
-    Ok(AsyncApprovalArtifacts {
-        current_path,
-        approval_token,
-    })
+    Ok(AsyncApprovalArtifacts { current_path, approval_token })
 }
 
 #[cfg(test)]

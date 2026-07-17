@@ -65,10 +65,7 @@ impl IdeContextBridge {
 
         Ok((
             self.snapshot.clone(),
-            IdeContextRefreshState {
-                changed,
-                available: self.snapshot.is_some(),
-            },
+            IdeContextRefreshState { changed, available: self.snapshot.is_some() },
         ))
     }
 
@@ -254,24 +251,15 @@ struct ResolvedIdeContextSnapshot {
 
 fn read_current_ide_context_snapshot(workspace: &Path) -> Result<ResolvedIdeContextSnapshot> {
     if let Some((snapshot, source)) = read_env_ide_context_snapshot()? {
-        return Ok(ResolvedIdeContextSnapshot {
-            snapshot: Some(snapshot),
-            source: Some(source),
-        });
+        return Ok(ResolvedIdeContextSnapshot { snapshot: Some(snapshot), source: Some(source) });
     }
 
     if let Some((snapshot, source)) = read_workspace_ide_context_snapshot(workspace)? {
-        return Ok(ResolvedIdeContextSnapshot {
-            snapshot: Some(snapshot),
-            source: Some(source),
-        });
+        return Ok(ResolvedIdeContextSnapshot { snapshot: Some(snapshot), source: Some(source) });
     }
 
     if let Some((snapshot, source)) = read_vscode_compatible_global_storage_snapshot(workspace) {
-        return Ok(ResolvedIdeContextSnapshot {
-            snapshot: Some(snapshot),
-            source: Some(source),
-        });
+        return Ok(ResolvedIdeContextSnapshot { snapshot: Some(snapshot), source: Some(source) });
     }
 
     Ok(ResolvedIdeContextSnapshot::default())
@@ -302,10 +290,8 @@ fn read_workspace_ide_context_snapshot(
     }
 
     let legacy_markdown_path = workspace.join(WORKSPACE_IDE_CONTEXT_MARKDOWN_FILE);
-    Ok(
-        EditorContextSnapshot::read_legacy_markdown_file(&legacy_markdown_path)?
-            .map(|snapshot| (snapshot, legacy_markdown_path)),
-    )
+    Ok(EditorContextSnapshot::read_legacy_markdown_file(&legacy_markdown_path)?
+        .map(|snapshot| (snapshot, legacy_markdown_path)))
 }
 
 fn read_vscode_compatible_global_storage_snapshot(
@@ -541,10 +527,7 @@ mod tests {
             ..EditorContextSnapshot::default()
         };
 
-        let config = IdeContextConfig {
-            show_in_tui: false,
-            ..IdeContextConfig::default()
-        };
+        let config = IdeContextConfig { show_in_tui: false, ..IdeContextConfig::default() };
 
         assert_eq!(
             tui_header_summary(Path::new("/workspace"), Some(&config), Some(&snapshot)),
@@ -616,9 +599,7 @@ mod tests {
         assert!(state.changed);
         assert!(state.available);
         assert_eq!(
-            bridge
-                .snapshot()
-                .and_then(EditorContextSnapshot::active_display_language),
+            bridge.snapshot().and_then(EditorContextSnapshot::active_display_language),
             Some("Rust".to_string())
         );
     }
@@ -645,7 +626,7 @@ mod tests {
             editor_name: Some("VS Code".to_string()),
             workspace_root: Some(PathBuf::from("/workspace")),
             active_file: Some(vtcode_core::EditorFileContext {
-                path: "/workspace/vtcode-config/src/core/agent.rs".to_string(),
+                path: "/workspace/crates/codegen/vtcode-config/src/core/agent.rs".to_string(),
                 language_id: Some("rust".to_string()),
                 line_range: None,
                 dirty: false,
@@ -657,7 +638,7 @@ mod tests {
 
         assert_eq!(
             status_line_editor_label(workspace, None, Some(&snapshot), None).as_deref(),
-            Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs")
+            Some("IDE Context (VS Code): crates/codegen/vtcode-config/src/core/agent.rs")
         );
     }
 

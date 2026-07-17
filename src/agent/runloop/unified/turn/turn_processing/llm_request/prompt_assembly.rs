@@ -96,14 +96,12 @@ async fn build_prompt_output(
 ) -> Result<PromptAssemblyOutput> {
     let mut system_prompt = ctx
         .context_manager
-        .build_system_prompt(
-            crate::agent::runloop::unified::context_manager::SystemPromptParams {
-                full_auto: input.turn.full_auto,
-                auto_permission: input.turn.auto_permission,
-                planning_active: input.turn.planning_active,
-                request_user_input_enabled: input.turn.request_user_input_enabled,
-            },
-        )
+        .build_system_prompt(crate::agent::runloop::unified::context_manager::SystemPromptParams {
+            full_auto: input.turn.full_auto,
+            auto_permission: input.turn.auto_permission,
+            planning_active: input.turn.planning_active,
+            request_user_input_enabled: input.turn.request_user_input_enabled,
+        })
         .await?;
 
     let agent = &input.turn.active_primary_agent;
@@ -186,10 +184,7 @@ async fn build_prompt_output(
         // cannot load deferred tools even if told about them.
         append_deferred_tools_prompt_section(
             &mut system_prompt,
-            tool_snapshot
-                .snapshot
-                .as_deref()
-                .map_or(&[], |tools| tools.as_slice()),
+            tool_snapshot.snapshot.as_deref().map_or(&[], |tools| tools.as_slice()),
         );
     }
 
@@ -207,11 +202,7 @@ async fn build_prompt_output(
         let _ = writeln!(system_prompt, "\n{section}");
     }
 
-    Ok(PromptAssemblyOutput {
-        system_prompt,
-        tool_snapshot,
-        agent_prompt_context,
-    })
+    Ok(PromptAssemblyOutput { system_prompt, tool_snapshot, agent_prompt_context })
 }
 
 fn active_primary_agent_prompt_context(
@@ -330,15 +321,9 @@ pub(super) async fn render_primary_agent_runtime_context(
         "- Active primary permission default: {}",
         permission_default_label(agent.permissions.default)
     ));
-    lines.push(format!(
-        "- Effective request tools: {}",
-        render_tool_names(tool_snapshot)
-    ));
+    lines.push(format!("- Effective request tools: {}", render_tool_names(tool_snapshot)));
     if let Some(tools) = agent.tools.as_ref().filter(|tools| !tools.is_empty()) {
-        lines.push(format!(
-            "- Primary-agent tool allow-list: {}",
-            tools.join(", ")
-        ));
+        lines.push(format!("- Primary-agent tool allow-list: {}", tools.join(", ")));
     }
     if !agent.disallowed_tools.is_empty() {
         lines.push(format!(
@@ -349,10 +334,7 @@ pub(super) async fn render_primary_agent_runtime_context(
     if !agent.skills.is_empty() {
         if let Some(prompt_context) = agent_prompt_context {
             if prompt_context.available_skill_metadata.is_empty() {
-                lines.push(format!(
-                    "- Active primary skills: {}",
-                    agent.skills.join(", ")
-                ));
+                lines.push(format!("- Active primary skills: {}", agent.skills.join(", ")));
             } else {
                 let mut names = prompt_context
                     .available_skill_metadata
@@ -363,20 +345,14 @@ pub(super) async fn render_primary_agent_runtime_context(
                 lines.push(format!("- Active primary skills: {}", names.join(", ")));
             }
         } else {
-            lines.push(format!(
-                "- Active primary skills: {}",
-                agent.skills.join(", ")
-            ));
+            lines.push(format!("- Active primary skills: {}", agent.skills.join(", ")));
         }
     }
     if let Some(cfg) = ctx.vt_cfg
         && cfg.agent.include_temporal_context
     {
-        lines.push(
-            generate_temporal_context(cfg.agent.temporal_context_use_utc)
-                .trim()
-                .to_string(),
-        );
+        lines
+            .push(generate_temporal_context(cfg.agent.temporal_context_use_utc).trim().to_string());
     }
 
     lines.push("### Instructions".to_string());

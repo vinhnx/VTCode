@@ -83,9 +83,7 @@ impl DiffVerifier for HeuristicDiffVerifier {
             // one pattern the original hand-rolled heuristic caught that the
             // shared detector misses; it stays scoped to a single added line.
             if looks_like_pipe_to_shell(line) {
-                issues.push(format!(
-                    "Pipe-to-shell exfiltration pattern in diff: `{line}`"
-                ));
+                issues.push(format!("Pipe-to-shell exfiltration pattern in diff: `{line}`"));
             }
         }
 
@@ -96,15 +94,8 @@ impl DiffVerifier for HeuristicDiffVerifier {
                 reasoning: "Heuristic check passed (no dangerous commands in added lines)".into(),
             })
         } else {
-            let reasoning = format!(
-                "Heuristic check found {} dangerous command(s)",
-                issues.len()
-            );
-            Ok(VerifyVerdict {
-                approved: false,
-                issues,
-                reasoning,
-            })
+            let reasoning = format!("Heuristic check found {} dangerous command(s)", issues.len());
+            Ok(VerifyVerdict { approved: false, issues, reasoning })
         }
     }
 }
@@ -132,9 +123,7 @@ mod tests {
     use super::*;
 
     fn verdict_for(diff: &str) -> VerifyVerdict {
-        HeuristicDiffVerifier
-            .verify(diff, &[])
-            .expect("verify should not error")
+        HeuristicDiffVerifier.verify(diff, &[]).expect("verify should not error")
     }
 
     #[test]
@@ -176,11 +165,7 @@ diff --git a/cleanup.sh b/cleanup.sh
 -rm -rf /tmp/build
 ";
         let v = verdict_for(diff);
-        assert!(
-            v.approved,
-            "rm -rf on a removed line must not be flagged: {:?}",
-            v.issues
-        );
+        assert!(v.approved, "rm -rf on a removed line must not be flagged: {:?}", v.issues);
     }
 
     #[test]

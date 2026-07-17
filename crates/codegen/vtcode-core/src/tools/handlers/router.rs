@@ -56,9 +56,7 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
         return None;
     }
 
-    let normalized = lowered
-        .replace([' ', '-'], "_")
-        .replace(['(', ')', '\'', '"'], "");
+    let normalized = lowered.replace([' ', '-'], "_").replace(['(', ')', '\'', '"'], "");
 
     let mapped = match normalized.as_str() {
         alias if tool_intent::canonical_command_session_tool_name(alias).is_some() => {
@@ -115,13 +113,7 @@ impl DispatchRegistry {
         let handlers: HashMap<CompactStr, DispatchEntry> = handlers
             .into_iter()
             .map(|(name, handler)| {
-                (
-                    CompactStr::from(name.clone()),
-                    DispatchEntry {
-                        canonical_name: name,
-                        handler,
-                    },
-                )
+                (CompactStr::from(name.clone()), DispatchEntry { canonical_name: name, handler })
             })
             .collect();
         Self { handlers }
@@ -132,8 +124,7 @@ impl DispatchRegistry {
     }
 
     pub fn resolve_tool_name(&self, requested_name: &str) -> Result<&str, ToolCallError> {
-        self.resolve_entry(requested_name)
-            .map(|entry| entry.canonical_name.as_str())
+        self.resolve_entry(requested_name).map(|entry| entry.canonical_name.as_str())
     }
 
     /// Dispatch a tool invocation to the appropriate handler.
@@ -156,9 +147,7 @@ impl DispatchRegistry {
         self.handlers
             .get(requested_name)
             .or_else(|| {
-                normalized_name
-                    .as_deref()
-                    .and_then(|candidate| self.handlers.get(candidate))
+                normalized_name.as_deref().and_then(|candidate| self.handlers.get(candidate))
             })
             .ok_or_else(|| {
                 let suggested = suggest_similar_tool_names(requested_name, &self.handlers);
@@ -193,10 +182,7 @@ impl Default for DispatchRegistryBuilder {
 
 impl DispatchRegistryBuilder {
     pub fn new() -> Self {
-        Self {
-            handlers: HashMap::new(),
-            specs: Vec::new(),
-        }
+        Self { handlers: HashMap::new(), specs: Vec::new() }
     }
 
     /// Add a tool spec without parallel support.
@@ -210,8 +196,7 @@ impl DispatchRegistryBuilder {
         spec: ToolSpec,
         supports_parallel_tool_calls: bool,
     ) -> &mut Self {
-        self.specs
-            .push(ConfiguredToolSpec::new(spec, supports_parallel_tool_calls));
+        self.specs.push(ConfiguredToolSpec::new(spec, supports_parallel_tool_calls));
         self
     }
 
@@ -238,10 +223,7 @@ impl DispatchRegistryBuilder {
             CompactStr::from(&*name),
             DispatchEntry {
                 canonical_name: canonical_name.clone(),
-                handler: Arc::new(RouteAliasHandler {
-                    canonical_name,
-                    inner: handler,
-                }),
+                handler: Arc::new(RouteAliasHandler { canonical_name, inner: handler }),
             },
         );
         if previous.is_some() {
@@ -260,9 +242,7 @@ impl DispatchRegistryBuilder {
 
     /// Build the registry and return specs.
     pub fn build(self) -> (Vec<ConfiguredToolSpec>, DispatchRegistry) {
-        let registry = DispatchRegistry {
-            handlers: self.handlers,
-        };
+        let registry = DispatchRegistry { handlers: self.handlers };
         (self.specs, registry)
     }
 }
@@ -414,10 +394,7 @@ mod tests {
         }
 
         async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
-            Ok(ToolOutput::simple(format!(
-                "Handled: {}",
-                invocation.tool_name
-            )))
+            Ok(ToolOutput::simple(format!("Handled: {}", invocation.tool_name)))
         }
     }
 
@@ -447,10 +424,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(call.tool_name, "mcp_server/do_thing");
-        assert!(matches!(
-            call.payload,
-            ToolPayload::Mcp { arguments: Some(_) }
-        ));
+        assert!(matches!(call.payload, ToolPayload::Mcp { arguments: Some(_) }));
     }
 
     #[test]
@@ -498,18 +472,12 @@ mod tests {
 
     #[test]
     fn test_normalize_router_tool_name_exec_code_label() {
-        assert_eq!(
-            normalize_router_tool_name("Exec code").as_deref(),
-            Some(tools::UNIFIED_EXEC)
-        );
+        assert_eq!(normalize_router_tool_name("Exec code").as_deref(), Some(tools::UNIFIED_EXEC));
         assert_eq!(
             normalize_router_tool_name("run command (PTY)").as_deref(),
             Some(tools::UNIFIED_EXEC)
         );
-        assert_eq!(
-            normalize_router_tool_name("bash").as_deref(),
-            Some(tools::UNIFIED_EXEC)
-        );
+        assert_eq!(normalize_router_tool_name("bash").as_deref(), Some(tools::UNIFIED_EXEC));
         assert_eq!(
             normalize_router_tool_name("container.exec").as_deref(),
             Some(tools::UNIFIED_EXEC)
@@ -523,34 +491,19 @@ mod tests {
         // Case-insensitive normalization - returns None since lowered matches
         assert_eq!(normalize_router_tool_name("Apply_Patch").as_deref(), None);
         // Hyphen to underscore normalization
-        assert_eq!(
-            normalize_router_tool_name("apply-patch").as_deref(),
-            Some("apply_patch")
-        );
+        assert_eq!(normalize_router_tool_name("apply-patch").as_deref(), Some("apply_patch"));
         // Alias normalization
-        assert_eq!(
-            normalize_router_tool_name("applypatch").as_deref(),
-            Some("apply_patch")
-        );
+        assert_eq!(normalize_router_tool_name("applypatch").as_deref(), Some("apply_patch"));
     }
 
     #[test]
     fn test_normalize_router_tool_name_file_ops() {
         // Space to underscore normalization
-        assert_eq!(
-            normalize_router_tool_name("Create File").as_deref(),
-            Some("create_file")
-        );
+        assert_eq!(normalize_router_tool_name("Create File").as_deref(), Some("create_file"));
         // Hyphen to underscore normalization
-        assert_eq!(
-            normalize_router_tool_name("delete-file").as_deref(),
-            Some("delete_file")
-        );
+        assert_eq!(normalize_router_tool_name("delete-file").as_deref(), Some("delete_file"));
         // Space to underscore normalization
-        assert_eq!(
-            normalize_router_tool_name("move file").as_deref(),
-            Some("move_file")
-        );
+        assert_eq!(normalize_router_tool_name("move file").as_deref(), Some("move_file"));
         // Already canonical - returns None
         assert_eq!(normalize_router_tool_name("copy_file").as_deref(), None);
     }
@@ -558,20 +511,11 @@ mod tests {
     #[test]
     fn test_normalize_router_tool_name_search_variants() {
         // Alias normalization
-        assert_eq!(
-            normalize_router_tool_name("search_text").as_deref(),
-            Some("grep_file")
-        );
+        assert_eq!(normalize_router_tool_name("search_text").as_deref(), Some("grep_file"));
         // Case-insensitive + alias normalization
-        assert_eq!(
-            normalize_router_tool_name("Search").as_deref(),
-            Some("grep_file")
-        );
+        assert_eq!(normalize_router_tool_name("Search").as_deref(), Some("grep_file"));
         // Alias normalization
-        assert_eq!(
-            normalize_router_tool_name("find").as_deref(),
-            Some("grep_file")
-        );
+        assert_eq!(normalize_router_tool_name("find").as_deref(), Some("grep_file"));
     }
 
     #[test]

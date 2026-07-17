@@ -119,11 +119,7 @@ pub struct StreamingContext {
 impl StreamingContext {
     /// Create a new streaming context
     pub fn new(kind: InlineMessageKind) -> Self {
-        Self {
-            kind,
-            buffer: StreamBuffer::new(),
-            total_lines: 0,
-        }
+        Self { kind, buffer: StreamBuffer::new(), total_lines: 0 }
     }
 
     /// Create with custom buffer configuration
@@ -214,10 +210,8 @@ mod tests {
 
     #[test]
     fn test_stream_buffer_batch_flush() {
-        let mut buffer = StreamBuffer::with_config(StreamConfig {
-            batch_size: 5,
-            max_buffer_bytes: usize::MAX,
-        });
+        let mut buffer =
+            StreamBuffer::with_config(StreamConfig { batch_size: 5, max_buffer_bytes: usize::MAX });
 
         for i in 0..5 {
             let segment = InlineSegment {
@@ -236,10 +230,8 @@ mod tests {
 
     #[test]
     fn test_stream_buffer_byte_limit_flush() {
-        let mut buffer = StreamBuffer::with_config(StreamConfig {
-            batch_size: 100,
-            max_buffer_bytes: 50,
-        });
+        let mut buffer =
+            StreamBuffer::with_config(StreamConfig { batch_size: 100, max_buffer_bytes: 50 });
 
         let segment = InlineSegment {
             text: "x".repeat(60),

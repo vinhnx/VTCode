@@ -7,8 +7,5 @@ async fn test_get_errors_tool_registered_for_back_compat() {
     let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let registry = ToolRegistry::new(root).await;
     let has = registry.has_tool("get_errors").await;
-    assert!(
-        has,
-        "get_errors tool should remain registered for compatibility"
-    );
+    assert!(has, "get_errors tool should remain registered for compatibility");
 }

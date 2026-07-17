@@ -107,10 +107,7 @@ impl FewShotStore {
         }
 
         if let Some(workspace) = workspace_root {
-            merge_from_dir(
-                &mut by_id,
-                &workspace.join(PROMPTS_PARENT).join(EXAMPLES_DIR),
-            );
+            merge_from_dir(&mut by_id, &workspace.join(PROMPTS_PARENT).join(EXAMPLES_DIR));
         }
 
         let mut examples: Vec<FewShotExample> = by_id.into_values().collect();
@@ -233,10 +230,7 @@ fn merge_from_dir(by_id: &mut HashMap<String, FewShotExample>, dir: &Path) {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
         Err(err) => {
-            warn!(
-                "few_shot: failed to read directory {}: {err}",
-                dir.display()
-            );
+            warn!("few_shot: failed to read directory {}: {err}", dir.display());
             return;
         }
     };
@@ -302,10 +296,7 @@ fn parse_example(
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| fallback_id.to_string());
     let tags = frontmatter.tags.unwrap_or_default();
-    let summary = frontmatter
-        .summary
-        .map(|value| value.trim().to_string())
-        .unwrap_or_default();
+    let summary = frontmatter.summary.map(|value| value.trim().to_string()).unwrap_or_default();
     let body = body.trim().to_string();
     let token_count = estimate_tokens(&body);
 

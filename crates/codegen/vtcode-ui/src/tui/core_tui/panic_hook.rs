@@ -140,10 +140,7 @@ pub fn set_app_metadata(
 }
 
 fn app_metadata() -> AppMetadata {
-    APP_METADATA
-        .get()
-        .cloned()
-        .unwrap_or_else(AppMetadata::default_for_tui_crate)
+    APP_METADATA.get().cloned().unwrap_or_else(AppMetadata::default_for_tui_crate)
 }
 
 /// Initialize the panic hook to restore terminal state on panic and provide better formatting
@@ -291,12 +288,7 @@ pub fn restore_tui() -> io::Result<()> {
     crate::tui::core_tui::runner::terminal_io::reset_mouse_pointer_shape();
 
     // Ensure cursor state is restored
-    if let Err(error) = execute!(
-        stderr,
-        SetCursorStyle::DefaultUserShape,
-        Show,
-        RestorePosition
-    ) {
+    if let Err(error) = execute!(stderr, SetCursorStyle::DefaultUserShape, Show, RestorePosition) {
         first_error.get_or_insert(error);
     }
 
@@ -360,10 +352,7 @@ mod tests {
 
         {
             let _guard = TuiPanicGuard::new();
-            assert!(
-                TUI_INITIALIZED.load(Ordering::SeqCst),
-                "TUI should be marked as initialized"
-            );
+            assert!(TUI_INITIALIZED.load(Ordering::SeqCst), "TUI should be marked as initialized");
 
             // Drop happens automatically when leaving scope
         }
@@ -392,16 +381,10 @@ mod tests {
         // Create guard in a separate scope to test drop behavior
         {
             let _guard = TuiPanicGuard::new();
-            assert!(
-                TUI_INITIALIZED.load(Ordering::SeqCst),
-                "Guard should mark TUI as initialized"
-            );
+            assert!(TUI_INITIALIZED.load(Ordering::SeqCst), "Guard should mark TUI as initialized");
         }
 
-        assert!(
-            !TUI_INITIALIZED.load(Ordering::SeqCst),
-            "Drop should mark TUI as deinitialized"
-        );
+        assert!(!TUI_INITIALIZED.load(Ordering::SeqCst), "Drop should mark TUI as deinitialized");
     }
 
     #[test]

@@ -60,10 +60,7 @@ fn ctrl_v_attaches_clipboard_image_when_enabled() {
         });
 
     assert!(event.is_none());
-    assert_eq!(
-        session.core.input_manager.content(),
-        "describe this[Image #1]"
-    );
+    assert_eq!(session.core.input_manager.content(), "describe this[Image #1]");
     assert_eq!(session.core.input_manager.attachments(), &[attachment]);
     assert!(warning_text(&session).is_empty());
 }
@@ -105,10 +102,7 @@ fn pasted_images_insert_placeholders_at_cursor_and_keep_typed_order() {
         });
 
     assert!(second_paste.is_none());
-    assert_eq!(
-        session.core.input_manager.content(),
-        "[Image #2][Image #1]o"
-    );
+    assert_eq!(session.core.input_manager.content(), "[Image #2][Image #1]o");
     let data = session.core.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
     let rendered = text_content(&data.text);
     assert!(rendered.contains("[Image #2][Image #1]o"));
@@ -212,10 +206,7 @@ fn orphaned_second_pasted_image_placeholder_deleted_keeps_first_attachment() {
 
     paste_image(&mut session, &first_attachment);
     paste_image(&mut session, &second_attachment);
-    session
-        .core
-        .input_manager
-        .set_content("[Image #1] describe first".to_owned());
+    session.core.input_manager.set_content("[Image #1] describe first".to_owned());
 
     let submitted = submit(&mut session);
 
@@ -232,18 +223,12 @@ fn reordered_pasted_image_placeholders_keep_original_attachment_order() {
 
     paste_image(&mut session, &first_attachment);
     paste_image(&mut session, &second_attachment);
-    session
-        .core
-        .input_manager
-        .set_content("[Image #2] then [Image #1]".to_owned());
+    session.core.input_manager.set_content("[Image #2] then [Image #1]".to_owned());
 
     let submitted = submit(&mut session);
 
     assert_eq!(submitted.text, "[Image #2] then [Image #1]");
-    assert_eq!(
-        submitted.attachments,
-        vec![first_attachment, second_attachment]
-    );
+    assert_eq!(submitted.attachments, vec![first_attachment, second_attachment]);
 }
 
 #[test]
@@ -254,10 +239,7 @@ fn orphaned_restored_single_attachment_uses_visible_compacted_placeholder_proven
     session.handle_command(app_types::InlineCommand::RestoreInputDraft(
         app_types::SubmittedInput::new("[Image #2] describe remaining", vec![attachment]),
     ));
-    session
-        .core
-        .input_manager
-        .set_content("describe remaining".to_owned());
+    session.core.input_manager.set_content("describe remaining".to_owned());
 
     let submitted = submit(&mut session);
 
@@ -275,10 +257,7 @@ fn orphaned_history_restored_single_attachment_uses_visible_compacted_placeholde
     );
 
     session.core.input_manager.apply_history_entry(entry);
-    session
-        .core
-        .input_manager
-        .set_content("describe remaining".to_owned());
+    session.core.input_manager.set_content("describe remaining".to_owned());
 
     let submitted = submit(&mut session);
 
@@ -321,15 +300,9 @@ fn orphaned_later_paste_after_restored_placeholder_keeps_restored_attachment() {
     ));
     paste_image(&mut session, &pasted_attachment);
 
-    assert_eq!(
-        session.core.input_manager.content(),
-        "[Image #2] restored[Image #3]"
-    );
+    assert_eq!(session.core.input_manager.content(), "[Image #2] restored[Image #3]");
 
-    session
-        .core
-        .input_manager
-        .set_content("[Image #2] restored".to_owned());
+    session.core.input_manager.set_content("[Image #2] restored".to_owned());
 
     let submitted = submit(&mut session);
 
@@ -349,10 +322,7 @@ fn alt_v_attaches_clipboard_image_when_enabled() {
         });
 
     assert!(event.is_none());
-    assert_eq!(
-        session.core.input_manager.content(),
-        "describe this[Image #1]"
-    );
+    assert_eq!(session.core.input_manager.content(), "describe this[Image #1]");
     assert_eq!(session.core.input_manager.attachments(), &[attachment]);
 }
 
@@ -374,20 +344,14 @@ fn unsupported_model_warning_does_not_read_or_attach() {
     assert!(!reader_called);
     assert_eq!(session.core.input_manager.content(), "describe this");
     assert!(session.core.input_manager.attachments().is_empty());
-    assert_eq!(
-        warning_text(&session),
-        "The selected model does not support image input."
-    );
+    assert_eq!(warning_text(&session), "The selected model does not support image input.");
 }
 
 #[test]
 fn no_image_warning_leaves_text_and_attachments_unchanged() {
     let mut session = app_session_with_input("keep text", "keep text".len());
     let existing_attachment = ContentPart::image("existing", "image/png");
-    session
-        .core
-        .input_manager
-        .set_attachments(vec![existing_attachment.clone()]);
+    session.core.input_manager.set_attachments(vec![existing_attachment.clone()]);
     set_image_input_enabled(&mut session, true);
 
     let event = session
@@ -397,10 +361,7 @@ fn no_image_warning_leaves_text_and_attachments_unchanged() {
 
     assert!(event.is_none());
     assert_eq!(session.core.input_manager.content(), "keep text");
-    assert_eq!(
-        session.core.input_manager.attachments(),
-        &[existing_attachment]
-    );
+    assert_eq!(session.core.input_manager.attachments(), &[existing_attachment]);
     assert_eq!(warning_text(&session), "No image found in clipboard.");
 }
 

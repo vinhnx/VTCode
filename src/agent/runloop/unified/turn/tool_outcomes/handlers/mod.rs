@@ -93,10 +93,7 @@ pub(super) fn apply_reused_read_only_loop_metadata(
     // Keep output/content/stdout/stderr intact — stripping them was causing
     // false loop detection to leave the model with no data (issue #680). The
     // cached result may have useful content the model needs.
-    obj.insert(
-        "reused_recent_result".to_string(),
-        serde_json::Value::Bool(true),
-    );
+    obj.insert("reused_recent_result".to_string(), serde_json::Value::Bool(true));
     obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
     obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
 
@@ -127,14 +124,8 @@ pub(super) fn apply_reused_read_only_loop_metadata(
         )
     };
 
-    obj.insert(
-        "loop_detected_note".to_string(),
-        serde_json::Value::String(note.to_string()),
-    );
-    obj.insert(
-        "next_action".to_string(),
-        serde_json::Value::String(next_action.to_string()),
-    );
+    obj.insert("loop_detected_note".to_string(), serde_json::Value::String(note.to_string()));
+    obj.insert("next_action".to_string(), serde_json::Value::String(next_action.to_string()));
 }
 
 fn has_non_empty_text_content(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
@@ -211,10 +202,8 @@ async fn run_safety_validation_loop(
             Ok(Some((ValidationResult::Handled, Some(justification))))
         }
         Err(SafetyValidationFailure::Validation(err)) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Safety validation failed: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Safety validation failed: {err}"))?;
             ctx.push_tool_response(
                 tool_call_id,
                 Some(canonical_tool_name),
@@ -426,10 +415,7 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(ValidationResult::Blocked);
     }
 
-    let mut prepared = match ctx
-        .tool_registry
-        .admit_public_tool_call(tool_name, args_val)
-    {
+    let mut prepared = match ctx.tool_registry.admit_public_tool_call(tool_name, args_val) {
         Ok(prepared) => prepared,
         Err(err) => {
             if let Some(recovered_prepared) =
@@ -443,9 +429,8 @@ pub(crate) async fn validate_tool_call<'a>(
                 recovered_prepared
             } else {
                 let fallback = preflight_validation_fallback(tool_name, args_val, &err);
-                let (fallback_tool, fallback_tool_args) = fallback
-                    .map(|(tool, args)| (Some(tool), Some(args)))
-                    .unwrap_or((None, None));
+                let (fallback_tool, fallback_tool_args) =
+                    fallback.map(|(tool, args)| (Some(tool), Some(args))).unwrap_or((None, None));
                 ctx.push_tool_response(
                     tool_call_id,
                     Some(tool_name),
@@ -541,20 +526,13 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     // Phase 4 Check: Per-tool Circuit Breaker
-    let circuit_breaker_blocked = !ctx
-        .circuit_breaker
-        .allow_request_for_tool(&canonical_tool_name);
+    let circuit_breaker_blocked = !ctx.circuit_breaker.allow_request_for_tool(&canonical_tool_name);
     if circuit_breaker_blocked {
         let display_tool = tool_action_label(&canonical_tool_name, args_val);
         let (fallback_tool, fallback_tool_args) = prepared
             .fallback_recommendation
             .as_ref()
-            .map(|fallback| {
-                (
-                    Some(fallback.tool_name.clone()),
-                    Some(fallback.args.clone()),
-                )
-            })
+            .map(|fallback| (Some(fallback.tool_name.clone()), Some(fallback.args.clone())))
             .unwrap_or((None, None));
         let block_reason = format!(
             "Circuit breaker blocked '{display_tool}' due to high failure rate. Switching to autonomous fallback strategy."
@@ -631,10 +609,7 @@ pub(crate) async fn validate_tool_call<'a>(
             } else {
                 let mut error_json = ToolExecutionError::policy_violation(
                     canonical_tool_name.as_str(),
-                    format!(
-                        "Tool '{}' execution denied by policy",
-                        prepared.canonical_name
-                    ),
+                    format!("Tool '{}' execution denied by policy", prepared.canonical_name),
                 )
                 .to_json_value();
                 if let Some(diagnostic) = tool_denial_diagnostic(&canonical_tool_name)
@@ -651,17 +626,17 @@ pub(crate) async fn validate_tool_call<'a>(
             );
             Ok(ValidationResult::Blocked)
         }
-        Ok(ToolPermissionFlow::Blocked { reason }) => Ok(ValidationResult::Outcome(
-            TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+        Ok(ToolPermissionFlow::Blocked { reason }) => {
+            Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                 reason: Some(reason),
-            }),
-        )),
-        Ok(ToolPermissionFlow::Exit) => Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-            TurnLoopResult::Exit,
-        ))),
-        Ok(ToolPermissionFlow::Interrupted) => Ok(ValidationResult::Outcome(
-            TurnHandlerOutcome::Break(TurnLoopResult::Cancelled),
-        )),
+            })))
+        }
+        Ok(ToolPermissionFlow::Exit) => {
+            Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Exit)))
+        }
+        Ok(ToolPermissionFlow::Interrupted) => {
+            Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)))
+        }
         Err(err) => {
             let err_json = serde_json::json!({
                 "error": format!("Failed to evaluate policy for tool '{}': {}", tool_name, err)

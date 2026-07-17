@@ -97,11 +97,7 @@ impl CliToolBridge {
         let instructions = Self::load_readme(&config)?;
         let schema = Self::load_schema(&config)?;
 
-        Ok(CliToolBridge {
-            config,
-            instructions,
-            schema,
-        })
+        Ok(CliToolBridge { config, instructions, schema })
     }
 
     /// Create a bridge from a tool directory
@@ -122,10 +118,7 @@ impl CliToolBridge {
         // Look for executable files
         let executables = Self::find_executables(tool_dir)?;
         if executables.is_empty() {
-            return Err(anyhow!(
-                "No executable files found in {}",
-                tool_dir.display()
-            ));
+            return Err(anyhow!("No executable files found in {}", tool_dir.display()));
         }
 
         // Look for README files
@@ -231,10 +224,7 @@ impl CliToolBridge {
 
     /// Execute the CLI tool with given arguments
     pub async fn execute_internal(&self, args: Value) -> Result<CliToolResult> {
-        info!(
-            "Executing CLI tool: {} with args: {:?}",
-            self.config.name, args
-        );
+        info!("Executing CLI tool: {} with args: {:?}", self.config.name, args);
 
         let start_time = std::time::Instant::now();
 
@@ -259,9 +249,7 @@ impl CliToolBridge {
         }
 
         // Configure I/O
-        cmd.stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
 
         // Add arguments based on configuration and input
         self.configure_arguments(&mut cmd, &args)?;
@@ -358,9 +346,7 @@ impl CliToolBridge {
 
         // Try to execute with --help-json or similar flag
         let mut cmd = Command::new(&self.config.executable_path);
-        cmd.arg("--help-json")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        cmd.arg("--help-json").stdout(Stdio::piped()).stderr(Stdio::piped());
 
         let result = cmd.output().await;
 
@@ -575,10 +561,8 @@ mod tests {
         };
 
         let bridge = CliToolBridge::new(config).unwrap();
-        let result = bridge
-            .execute_internal(Value::String("hello world".to_string()))
-            .await
-            .unwrap();
+        let result =
+            bridge.execute_internal(Value::String("hello world".to_string())).await.unwrap();
 
         assert_eq!(result.exit_code, 0);
         assert!(result.stdout.contains("hello world"));

@@ -228,18 +228,9 @@ pub struct CopilotProviderBuild;
 
 impl ProviderBuildProvider<CopilotProviderConfig> for CopilotProviderBuild {
     fn build_provider(config: FactoryProviderConfig) -> Box<dyn LLMProvider> {
-        let FactoryProviderConfig {
-            model,
-            copilot_auth,
-            workspace_root,
-            ..
-        } = config;
+        let FactoryProviderConfig { model, copilot_auth, workspace_root, .. } = config;
 
-        Box::new(CopilotProvider::from_config(
-            model,
-            copilot_auth,
-            workspace_root,
-        ))
+        Box::new(CopilotProvider::from_config(model, copilot_auth, workspace_root))
     }
 }
 
@@ -415,14 +406,8 @@ mod tests {
 
     #[test]
     fn provider_context_metadata_is_available_through_consumer_traits() {
-        assert_eq!(
-            <GeminiProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
-            "gemini"
-        );
-        assert_eq!(
-            <OpenAIProviderConfig as CanDescribeProvider>::DISPLAY_NAME,
-            "OpenAI"
-        );
+        assert_eq!(<GeminiProviderConfig as CanDescribeProvider>::PROVIDER_KEY, "gemini");
+        assert_eq!(<OpenAIProviderConfig as CanDescribeProvider>::DISPLAY_NAME, "OpenAI");
         assert_eq!(
             <AnthropicProviderConfig as CanDescribeProvider>::BASE_URL_ENV_VAR,
             Some(vtcode_config::constants::env_vars::ANTHROPIC_BASE_URL)
@@ -462,10 +447,7 @@ mod tests {
                 model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
                 prompt_cache: None,
                 timeouts: None,
-                openai: Some(OpenAIConfig {
-                    websocket_mode: true,
-                    ..OpenAIConfig::default()
-                }),
+                openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
                 anthropic: Some(AnthropicConfig::default()),
                 model_behavior: None,
                 workspace_root: None,

@@ -263,10 +263,7 @@ mod tests {
     #[test]
     fn defaults_use_stdio_transport() {
         let cfg = AgentClientProtocolConfig::default();
-        assert!(matches!(
-            cfg.zed.transport,
-            AgentClientProtocolTransport::Stdio
-        ));
+        assert!(matches!(cfg.zed.transport, AgentClientProtocolTransport::Stdio));
         assert!(cfg.zed.tools.read_file);
         assert!(cfg.zed.tools.list_files);
         assert!(matches!(
@@ -299,9 +296,6 @@ auth_url = "https://platform.openai.com/api-keys"
         let auth: AcpAuthConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(auth.default_method, AcpAuthMethod::EnvVar);
         assert_eq!(auth.env_var_name, Some("OPENAI_API_KEY".to_string()));
-        assert_eq!(
-            auth.auth_url,
-            Some("https://platform.openai.com/api-keys".to_string())
-        );
+        assert_eq!(auth.auth_url, Some("https://platform.openai.com/api-keys".to_string()));
     }
 }

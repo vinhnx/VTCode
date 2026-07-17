@@ -183,12 +183,7 @@ impl ConversationMemory {
             }
 
             // Capitalized words (likely proper nouns)
-            if candidate
-                .chars()
-                .next()
-                .map(|c| c.is_uppercase())
-                .unwrap_or(false)
-            {
+            if candidate.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
                 entities.push(candidate.to_string());
                 continue;
             }

@@ -14,9 +14,7 @@ pub(super) fn trim_wrapping_quotes_and_punctuation(target: &str) -> &str {
         normalized = normalized.strip_suffix('"').unwrap_or(normalized);
         normalized = normalized.strip_prefix('\'').unwrap_or(normalized);
         normalized = normalized.strip_suffix('\'').unwrap_or(normalized);
-        normalized = normalized
-            .trim_end_matches(['.', ',', ';', '!', '?'])
-            .trim();
+        normalized = normalized.trim_end_matches(['.', ',', ';', '!', '?']).trim();
         if normalized == previous {
             return normalized;
         }

@@ -62,9 +62,7 @@ pub fn require_string_field(
 
 /// Extract an optional string field from JSON args
 pub fn optional_string_field(args: &serde_json::Value, field: &str) -> Option<String> {
-    args.get(field)
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+    args.get(field).and_then(|v| v.as_str()).map(|s| s.to_string())
 }
 
 /// Extract a required integer field from JSON args

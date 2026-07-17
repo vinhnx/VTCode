@@ -63,9 +63,7 @@ impl RegistrationMetadataSnapshot {
             config_schema: registration.config_schema().cloned(),
             state_schema: registration.state_schema().cloned(),
             prompt_path: registration.prompt_path().map(str::to_string),
-            default_permission: registration
-                .default_permission()
-                .unwrap_or(ToolPolicy::Prompt),
+            default_permission: registration.default_permission().unwrap_or(ToolPolicy::Prompt),
             allow_patterns: leak_patterns(registration.metadata().allowlist()),
             deny_patterns: leak_patterns(registration.metadata().denylist()),
         }
@@ -86,14 +84,8 @@ impl RegistrationMetadataSnapshot {
                 .parameter_schema()
                 .cloned()
                 .or_else(|| tool.parameter_schema()),
-            config_schema: registration
-                .config_schema()
-                .cloned()
-                .or_else(|| tool.config_schema()),
-            state_schema: registration
-                .state_schema()
-                .cloned()
-                .or_else(|| tool.state_schema()),
+            config_schema: registration.config_schema().cloned().or_else(|| tool.config_schema()),
+            state_schema: registration.state_schema().cloned().or_else(|| tool.state_schema()),
             prompt_path: registration
                 .prompt_path()
                 .map(str::to_string)
@@ -362,10 +354,8 @@ fn wrap_registered_trait_object_tool(
     workspace_root: PathBuf,
     mode: CgpRuntimeMode,
 ) -> Arc<dyn Tool> {
-    let tool: Arc<dyn Tool> = Arc::new(RegistrationBackedDynTool::from_registration(
-        tool,
-        registration,
-    ));
+    let tool: Arc<dyn Tool> =
+        Arc::new(RegistrationBackedDynTool::from_registration(tool, registration));
     match mode {
         CgpRuntimeMode::Interactive => Arc::new(wrap_tool_interactive(tool, workspace_root)),
         CgpRuntimeMode::Ci => Arc::new(wrap_tool_ci(tool, workspace_root)),
@@ -425,11 +415,7 @@ impl ToolRegistry {
     ) -> Option<ToolHandler> {
         let workspace = self.workspace_root_owned();
         if let Some(factory) = registration.native_cgp_factory() {
-            return Some(ToolHandler::TraitObject(factory(
-                registration,
-                workspace,
-                mode,
-            )));
+            return Some(ToolHandler::TraitObject(factory(registration, workspace, mode)));
         }
 
         match registration.handler() {
@@ -482,8 +468,7 @@ impl ToolRegistry {
 
         if wrapped_count > 0 {
             self.rebuild_tool_assembly().await;
-            self.tool_catalog_state
-                .note_explicit_refresh("cgp_pipeline_enable");
+            self.tool_catalog_state.note_explicit_refresh("cgp_pipeline_enable");
             self.invalidate_hot_cache();
             tracing::info!(
                 count = wrapped_count,
@@ -565,9 +550,7 @@ mod tests {
         );
         registry.register_tool(reg).await.expect("should register");
 
-        registry
-            .enable_cgp_pipeline(CgpRuntimeMode::Interactive)
-            .await;
+        registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
 
         let wrapped = registry.get_tool("dummy_cgp_test");
         assert!(wrapped.is_some(), "tool should still be accessible");
@@ -624,24 +607,16 @@ mod tests {
                 .with_allowlist(["tool://allowed"])
                 .with_denylist(["tool://blocked"]),
         );
-        registry
-            .register_tool(registration)
-            .await
-            .expect("should register");
+        registry.register_tool(registration).await.expect("should register");
 
-        registry
-            .enable_cgp_pipeline(CgpRuntimeMode::Interactive)
-            .await;
+        registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
 
         let tool = registry
             .get_tool("registered_trait_object_cgp_test")
             .expect("tool should exist");
         assert_eq!(tool.name(), "registered_trait_object_cgp_test");
         assert_eq!(tool.description(), "registered trait-object tool");
-        assert_eq!(
-            tool.prompt_path().as_deref(),
-            Some("tools/registered_trait_object.md")
-        );
+        assert_eq!(tool.prompt_path().as_deref(), Some("tools/registered_trait_object.md"));
         assert_eq!(tool.default_permission(), ToolPolicy::Allow);
         assert_eq!(
             tool.parameter_schema(),
@@ -684,10 +659,7 @@ mod tests {
             .await
             .expect("should execute");
         assert_eq!(
-            result
-                .get("echoed")
-                .and_then(|v| v.get("ci"))
-                .and_then(|v| v.as_str()),
+            result.get("echoed").and_then(|v| v.get("ci")).and_then(|v| v.as_str()),
             Some("mode")
         );
     }
@@ -737,9 +709,7 @@ mod tests {
             ToolHandler::RegistryFn(_) => panic!("expected trait object handler"),
         };
 
-        registry
-            .enable_cgp_pipeline(CgpRuntimeMode::Interactive)
-            .await;
+        registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
 
         let after = registry
             .inventory
@@ -803,20 +773,13 @@ mod tests {
         }));
         registry.register_tool(reg).await.expect("should register");
 
-        registry
-            .enable_cgp_pipeline(CgpRuntimeMode::Interactive)
-            .await;
+        registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
 
-        let tool = registry
-            .get_tool("native_cgp_factory_test")
-            .expect("tool should exist");
+        let tool = registry.get_tool("native_cgp_factory_test").expect("tool should exist");
         assert_eq!(tool.name(), "native_cgp_factory_test");
         assert_eq!(tool.description(), "registered native factory tool");
 
-        let result = tool
-            .execute(serde_json::json!({}))
-            .await
-            .expect("should execute");
+        let result = tool.execute(serde_json::json!({})).await.expect("should execute");
 
         assert_eq!(result.get("path").and_then(|v| v.as_str()), Some("native"));
     }
@@ -844,9 +807,7 @@ mod tests {
         }
 
         let registry = ToolRegistry::new(PathBuf::from("/tmp/test")).await;
-        registry
-            .enable_cgp_pipeline(CgpRuntimeMode::Interactive)
-            .await;
+        registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
 
         registry
             .register_tool(ToolRegistration::from_tool(
@@ -871,10 +832,7 @@ mod tests {
             .execute(serde_json::json!({"late": true}))
             .await
             .expect("should execute");
-        assert_eq!(
-            result.get("path").and_then(|v| v.as_str()),
-            Some("late-bridge")
-        );
+        assert_eq!(result.get("path").and_then(|v| v.as_str()), Some("late-bridge"));
     }
 
     #[tokio::test]
@@ -914,9 +872,7 @@ mod tests {
         }
 
         let registry = ToolRegistry::new(PathBuf::from("/tmp/test")).await;
-        registry
-            .enable_cgp_pipeline(CgpRuntimeMode::Interactive)
-            .await;
+        registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
 
         let registration = ToolRegistration::from_tool(
             "late_native_cgp_test",
@@ -926,10 +882,7 @@ mod tests {
         .with_native_cgp_factory(Arc::new(|registration, workspace_root, mode| {
             wrap_registered_native_tool(registration, NativeTool, workspace_root, mode)
         }));
-        registry
-            .register_tool(registration)
-            .await
-            .expect("should register");
+        registry.register_tool(registration).await.expect("should register");
 
         let result = registry
             .get_tool("late_native_cgp_test")
@@ -938,10 +891,7 @@ mod tests {
             .await
             .expect("should execute");
 
-        assert_eq!(
-            result.get("path").and_then(|v| v.as_str()),
-            Some("late-native")
-        );
+        assert_eq!(result.get("path").and_then(|v| v.as_str()), Some("late-native"));
     }
 
     fn registry_fn_test_executor<'a>(
@@ -973,18 +923,11 @@ mod tests {
             }
         }))
         .with_permission(ToolPolicy::Allow);
-        registry
-            .register_tool(registration)
-            .await
-            .expect("should register");
+        registry.register_tool(registration).await.expect("should register");
 
-        registry
-            .enable_cgp_pipeline(CgpRuntimeMode::Interactive)
-            .await;
+        registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
 
-        let wrapped = registry
-            .get_tool("registry_fn_cgp_test")
-            .expect("tool exists");
+        let wrapped = registry.get_tool("registry_fn_cgp_test").expect("tool exists");
         assert_eq!(wrapped.name(), "registry_fn_cgp_test");
         assert_eq!(wrapped.description(), "Registry function CGP test tool");
         assert!(wrapped.parameter_schema().is_some());
@@ -1006,9 +949,7 @@ mod tests {
     #[tokio::test]
     async fn register_registry_fn_after_enabling_cgp_pipeline_wraps_new_tools() {
         let registry = ToolRegistry::new(PathBuf::from("/tmp/test")).await;
-        registry
-            .enable_cgp_pipeline(CgpRuntimeMode::Interactive)
-            .await;
+        registry.enable_cgp_pipeline(CgpRuntimeMode::Interactive).await;
 
         registry
             .register_tool(ToolRegistration::new(

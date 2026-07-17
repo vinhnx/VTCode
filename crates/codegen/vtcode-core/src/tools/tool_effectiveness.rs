@@ -215,9 +215,7 @@ pub struct ToolEffectivenessTracker {
 
 impl ToolEffectivenessTracker {
     pub fn new() -> Self {
-        Self {
-            effectiveness: HashMap::new(),
-        }
+        Self { effectiveness: HashMap::new() }
     }
 
     /// Get or create effectiveness tracker for tool
@@ -235,8 +233,7 @@ impl ToolEffectivenessTracker {
         execution_time_ms: f32,
     ) {
         let quality = metadata.quality_score();
-        self.get_or_create(tool_name)
-            .record_success(quality, execution_time_ms);
+        self.get_or_create(tool_name).record_success(quality, execution_time_ms);
     }
 
     /// Record failed tool execution
@@ -246,8 +243,7 @@ impl ToolEffectivenessTracker {
         mode: ToolFailureMode,
         execution_time_ms: f32,
     ) {
-        self.get_or_create(tool_name)
-            .record_failure(mode, execution_time_ms);
+        self.get_or_create(tool_name).record_failure(mode, execution_time_ms);
     }
 
     /// Get effectiveness snapshot

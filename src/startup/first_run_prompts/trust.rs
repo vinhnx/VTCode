@@ -13,20 +13,15 @@ pub(crate) fn prompt_trust(
     renderer: &mut AnsiRenderer,
     default: WorkspaceTrustLevel,
 ) -> Result<WorkspaceTrustLevel> {
-    renderer.line(
-        MessageStyle::Status,
-        "Workspace trust determines which actions are allowed.",
-    )?;
+    renderer.line(MessageStyle::Status, "Workspace trust determines which actions are allowed.")?;
     renderer.line(MessageStyle::Info, &format!("  [1] {TOOLS_POLICY_LABEL}"))?;
     renderer.line(MessageStyle::Info, &format!("  [2] {FULL_AUTO_LABEL}"))?;
 
     match select_trust_with_ratatui(default) {
         Ok(level) => Ok(level),
         Err(error) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Falling back to manual input ({error})."),
-            )?;
+            renderer
+                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_trust_text(renderer, default)
         }
     }
@@ -67,10 +62,7 @@ fn trust_entries() -> [(WorkspaceTrustLevel, SelectionEntry); 2] {
             WorkspaceTrustLevel::ToolsPolicy,
             SelectionEntry::new(TOOLS_POLICY_LABEL.to_owned(), None),
         ),
-        (
-            WorkspaceTrustLevel::FullAuto,
-            SelectionEntry::new(FULL_AUTO_LABEL.to_owned(), None),
-        ),
+        (WorkspaceTrustLevel::FullAuto, SelectionEntry::new(FULL_AUTO_LABEL.to_owned(), None)),
     ]
 }
 
@@ -82,20 +74,14 @@ fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTr
         WorkspaceTrustLevel::FullAuto => 1,
     };
 
-    let selection_entries: Vec<SelectionEntry> = entries
-        .iter()
-        .map(|(_level, entry)| entry.clone())
-        .collect();
+    let selection_entries: Vec<SelectionEntry> =
+        entries.iter().map(|(_level, entry)| entry.clone()).collect();
     let instructions = format!(
         "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
         selection_entries[default_index].title
     );
-    let selected_index = run_selection(
-        "Workspace trust",
-        &instructions,
-        &selection_entries,
-        default_index,
-    )?;
+    let selected_index =
+        run_selection("Workspace trust", &instructions, &selection_entries, default_index)?;
     Ok(entries[selected_index].0)
 }
 

@@ -33,9 +33,7 @@ pub(super) async fn persist_selection(
     }
 
     manager.save_config(&config)?;
-    update_model_preference(&selection.provider, &selection.model)
-        .await
-        .ok();
+    update_model_preference(&selection.provider, &selection.model).await.ok();
     Ok(config)
 }
 
@@ -73,10 +71,7 @@ fn apply_api_key_state(config: &mut VTCodeConfig, selection: &ModelSelectionResu
 }
 
 fn uses_provider_api_key(selection: &ModelSelectionResult) -> bool {
-    if selection
-        .provider_enum
-        .is_some_and(|provider| provider.uses_managed_auth())
-    {
+    if selection.provider_enum.is_some_and(|provider| provider.uses_managed_auth()) {
         return false;
     }
 
@@ -106,10 +101,7 @@ fn sync_stored_api_key(config: &mut VTCodeConfig, selection: &ModelSelectionResu
                 err
             );
         }
-        config
-            .agent
-            .custom_api_keys
-            .insert(selection.provider.clone(), String::new());
+        config.agent.custom_api_keys.insert(selection.provider.clone(), String::new());
         return;
     }
 
@@ -189,11 +181,7 @@ mod tests {
 
     #[test]
     fn non_ollama_providers_keep_provider_api_key_state() {
-        assert!(uses_provider_api_key(&selection(
-            Some(Provider::OpenAI),
-            "openai",
-            "gpt-5.2"
-        )));
+        assert!(uses_provider_api_key(&selection(Some(Provider::OpenAI), "openai", "gpt-5.2")));
     }
 
     #[test]
@@ -211,10 +199,7 @@ mod tests {
         selected.service_tier_supported = true;
         selected.service_tier = Some(OpenAIServiceTier::Priority);
 
-        assert_eq!(
-            synced_openai_service_tier(&selected),
-            Some(OpenAIServiceTier::Priority)
-        );
+        assert_eq!(synced_openai_service_tier(&selected), Some(OpenAIServiceTier::Priority));
     }
 
     #[test]
@@ -223,10 +208,7 @@ mod tests {
         selected.service_tier_supported = true;
         selected.service_tier = Some(OpenAIServiceTier::Flex);
 
-        assert_eq!(
-            synced_openai_service_tier(&selected),
-            Some(OpenAIServiceTier::Flex)
-        );
+        assert_eq!(synced_openai_service_tier(&selected), Some(OpenAIServiceTier::Flex));
     }
 
     #[test]

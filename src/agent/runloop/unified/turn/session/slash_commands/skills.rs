@@ -118,14 +118,9 @@ async fn apply_skill_command_outcome(
             Ok(SlashCommandControl::Continue)
         }
         SkillCommandOutcome::LoadSkill { skill, message } => {
-            if let Err(e) = skill_runtime(ctx)
-                .activate_skill(ctx.loaded_skills, skill)
-                .await
-            {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to activate skill: {e}"),
-                )?;
+            if let Err(e) = skill_runtime(ctx).activate_skill(ctx.loaded_skills, skill).await {
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("Failed to activate skill: {e}"))?;
                 return Ok(SlashCommandControl::Continue);
             }
 
@@ -133,9 +128,7 @@ async fn apply_skill_command_outcome(
             Ok(SlashCommandControl::Continue)
         }
         SkillCommandOutcome::UnloadSkill { name } => {
-            let removed = skill_runtime(ctx)
-                .deactivate_skill(ctx.loaded_skills, &name)
-                .await?;
+            let removed = skill_runtime(ctx).deactivate_skill(ctx.loaded_skills, &name).await?;
             let message = if removed {
                 format!("Unloaded skill: {name}")
             } else {
@@ -169,33 +162,24 @@ async fn apply_skill_command_outcome(
             {
                 Ok(result) => {
                     drop(loading_spinner);
-                    ctx.renderer
-                        .render_markdown_output(MessageStyle::Output, &result)?;
-                    ctx.conversation_history.push(uni::Message::user(format!(
-                        "/skills use {skill_name} [executed]"
-                    )));
+                    ctx.renderer.render_markdown_output(MessageStyle::Output, &result)?;
+                    ctx.conversation_history
+                        .push(uni::Message::user(format!("/skills use {skill_name} [executed]")));
 
                     let limited = truncate_message_content(&result);
-                    ctx.conversation_history
-                        .push(uni::Message::assistant(limited));
+                    ctx.conversation_history.push(uni::Message::assistant(limited));
                     enforce_history_limits(ctx.conversation_history);
                     Ok(SlashCommandControl::Continue)
                 }
                 Err(e) => {
                     drop(loading_spinner);
-                    ctx.renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to execute skill: {e}"),
-                    )?;
+                    ctx.renderer
+                        .line(MessageStyle::Error, &format!("Failed to execute skill: {e}"))?;
                     Ok(SlashCommandControl::Continue)
                 }
             }
         }
-        SkillCommandOutcome::UseBuiltInCommand {
-            name,
-            slash_name,
-            input,
-        } => {
+        SkillCommandOutcome::UseBuiltInCommand { name, slash_name, input } => {
             let status_message = skill_invocation_status_message(&name);
             let loading_spinner = ctx.renderer.supports_inline_ui().then(|| {
                 start_loading_status(ctx.handle, ctx.input_status_state, status_message.clone())
@@ -274,9 +258,8 @@ fn skill_runtime_for_session(
     config: &vtcode_core::config::types::AgentConfig,
     vt_cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
 ) -> vtcode_core::tools::skills::SkillToolSessionRuntime {
-    let tool_documentation_mode = vt_cfg
-        .map(|cfg| cfg.agent.tool_documentation_mode)
-        .unwrap_or_default();
+    let tool_documentation_mode =
+        vt_cfg.map(|cfg| cfg.agent.tool_documentation_mode).unwrap_or_default();
 
     vtcode_core::tools::skills::SkillToolSessionRuntime::new(
         Arc::new(tool_registry.clone()),
@@ -286,18 +269,16 @@ fn skill_runtime_for_session(
         Some(tool_catalog_change_notifier(tool_catalog)),
     )
     .with_tool_profile(configured_tool_profile(vt_cfg))
-    .with_fork_executor(Arc::new(
-        vtcode_core::skills::executor::ChildAgentSkillExecutor::new(
-            Arc::new(tool_registry.clone()),
-            vtcode_core::skills::executor::ForkSkillRuntimeConfig {
-                workspace: config.workspace.clone(),
-                model: config.model.clone(),
-                api_key: config.api_key.clone(),
-                openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
-                vt_cfg: vt_cfg.cloned(),
-            },
-        ),
-    ))
+    .with_fork_executor(Arc::new(vtcode_core::skills::executor::ChildAgentSkillExecutor::new(
+        Arc::new(tool_registry.clone()),
+        vtcode_core::skills::executor::ForkSkillRuntimeConfig {
+            workspace: config.workspace.clone(),
+            model: config.model.clone(),
+            api_key: config.api_key.clone(),
+            openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            vt_cfg: vt_cfg.cloned(),
+        },
+    )))
 }
 
 fn configured_tool_profile(
@@ -491,10 +472,7 @@ async fn run_skill_browser(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
         let Some(skill_name) = action.strip_prefix(SKILL_OPEN_PREFIX) else {
             continue;
         };
-        let Some(entry) = entries
-            .iter()
-            .find(|candidate| candidate.name == skill_name)
-            .cloned()
+        let Some(entry) = entries.iter().find(|candidate| candidate.name == skill_name).cloned()
         else {
             continue;
         };
@@ -511,35 +489,18 @@ async fn run_skill_browser(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
         }
 
         if let Some(name) = skill_action.strip_prefix(SKILL_ENABLE_PREFIX) {
-            execute_skill_action(
-                ctx,
-                SkillCommandAction::Load {
-                    name: name.to_string(),
-                },
-            )
-            .await?;
+            execute_skill_action(ctx, SkillCommandAction::Load { name: name.to_string() }).await?;
             continue;
         }
 
         if let Some(name) = skill_action.strip_prefix(SKILL_DISABLE_PREFIX) {
-            execute_skill_action(
-                ctx,
-                SkillCommandAction::Unload {
-                    name: name.to_string(),
-                },
-            )
-            .await?;
+            execute_skill_action(ctx, SkillCommandAction::Unload { name: name.to_string() })
+                .await?;
             continue;
         }
 
         if let Some(name) = skill_action.strip_prefix(SKILL_INFO_PREFIX) {
-            execute_skill_action(
-                ctx,
-                SkillCommandAction::Info {
-                    name: name.to_string(),
-                },
-            )
-            .await?;
+            execute_skill_action(ctx, SkillCommandAction::Info { name: name.to_string() }).await?;
             continue;
         }
 
@@ -555,10 +516,7 @@ async fn run_skill_browser(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
             {
                 execute_skill_action(
                     ctx,
-                    SkillCommandAction::Use {
-                        name: name.to_string(),
-                        input,
-                    },
+                    SkillCommandAction::Use { name: name.to_string(), input },
                 )
                 .await?;
             }
@@ -566,24 +524,14 @@ async fn run_skill_browser(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
         }
 
         if let Some(name) = skill_action.strip_prefix(SKILL_VALIDATE_PREFIX) {
-            execute_skill_action(
-                ctx,
-                SkillCommandAction::Validate {
-                    name: name.to_string(),
-                },
-            )
-            .await?;
+            execute_skill_action(ctx, SkillCommandAction::Validate { name: name.to_string() })
+                .await?;
             continue;
         }
 
         if let Some(name) = skill_action.strip_prefix(SKILL_PACKAGE_PREFIX) {
-            execute_skill_action(
-                ctx,
-                SkillCommandAction::Package {
-                    name: name.to_string(),
-                },
-            )
-            .await?;
+            execute_skill_action(ctx, SkillCommandAction::Package { name: name.to_string() })
+                .await?;
             continue;
         }
     }
@@ -613,17 +561,12 @@ async fn discover_interactive_skills(
             }
         })
         .collect();
-    entries.extend(
-        discovered
-            .tools
-            .into_iter()
-            .map(|tool| InteractiveSkillEntry {
-                name: tool.name,
-                description: tool.description,
-                loaded: false,
-                kind: InteractiveSkillKind::Utility,
-            }),
-    );
+    entries.extend(discovered.tools.into_iter().map(|tool| InteractiveSkillEntry {
+        name: tool.name,
+        description: tool.description,
+        loaded: false,
+        kind: InteractiveSkillKind::Utility,
+    }));
 
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(entries)
@@ -643,10 +586,8 @@ async fn pick_skill_name(
         .collect();
 
     if filtered.is_empty() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "No matching skills available for that action.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "No matching skills available for that action.")?;
         return Ok(None);
     }
 
@@ -662,9 +603,7 @@ async fn pick_skill_name(
         return Ok(None);
     }
 
-    Ok(action
-        .strip_prefix(SKILL_PICK_PREFIX)
-        .map(ToString::to_string))
+    Ok(action.strip_prefix(SKILL_PICK_PREFIX).map(ToString::to_string))
 }
 
 #[derive(Clone, Copy)]
@@ -696,8 +635,7 @@ async fn prompt_required_text(
 
     let trimmed = value.trim().to_string();
     if trimmed.is_empty() {
-        ctx.renderer
-            .line(MessageStyle::Info, "Input was empty. Nothing executed.")?;
+        ctx.renderer.line(MessageStyle::Info, "Input was empty. Nothing executed.")?;
         return Ok(None);
     }
 
@@ -759,22 +697,18 @@ async fn prompt_text(
     .await?;
     let value = match outcome {
         WizardModalOutcome::Submitted(selections) => {
-            selections
-                .into_iter()
-                .find_map(|selection| match selection {
-                    InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        other,
-                    } if question_id == SKILL_PROMPT_QUESTION_ID => {
-                        if let Some(other) = other {
-                            Some(other)
-                        } else {
-                            selected.first().cloned()
-                        }
+            selections.into_iter().find_map(|selection| match selection {
+                InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
+                    if question_id == SKILL_PROMPT_QUESTION_ID =>
+                {
+                    if let Some(other) = other {
+                        Some(other)
+                    } else {
+                        selected.first().cloned()
                     }
-                    _ => None,
-                })
+                }
+                _ => None,
+            })
         }
         WizardModalOutcome::Cancelled { .. } => None,
     };
@@ -871,9 +805,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             subtitle: Some("Execute a skill with optional input".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{SKILL_ACTION_PREFIX}use"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}use"))),
             search_value: Some("run execute use".to_string()),
         },
         InlineListItem {
@@ -921,9 +853,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             subtitle: Some("Close skills manager".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                SKILL_ACTION_BACK.to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction(SKILL_ACTION_BACK.to_string())),
             search_value: Some("back close".to_string()),
         },
     ];
@@ -935,9 +865,7 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             "Use Enter to run an action, Esc to close.".to_string(),
         ],
         items,
-        Some(InlineListSelection::ConfigAction(format!(
-            "{SKILL_ACTION_PREFIX}browse"
-        ))),
+        Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}browse"))),
         None,
     );
 }
@@ -963,9 +891,7 @@ fn show_skills_list_modal(ctx: &mut SlashCommandContext<'_>, entries: &[Interact
         subtitle: Some("Return to skills actions".to_string()),
         badge: None,
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            SKILL_PICK_BACK_ACTION.to_string(),
-        )),
+        selection: Some(InlineListSelection::ConfigAction(SKILL_PICK_BACK_ACTION.to_string())),
         search_value: Some("back".to_string()),
     });
 
@@ -1014,9 +940,7 @@ fn show_skill_picker_modal(
         subtitle: Some("Cancel and return".to_string()),
         badge: None,
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            SKILL_PICK_BACK_ACTION.to_string(),
-        )),
+        selection: Some(InlineListSelection::ConfigAction(SKILL_PICK_BACK_ACTION.to_string())),
         search_value: Some("back cancel".to_string()),
     });
 
@@ -1121,9 +1045,7 @@ fn show_skill_actions_modal(ctx: &mut SlashCommandContext<'_>, entry: &Interacti
         subtitle: Some("Return to skills list".to_string()),
         badge: None,
         indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(
-            SKILL_BACK_ACTION.to_string(),
-        )),
+        selection: Some(InlineListSelection::ConfigAction(SKILL_BACK_ACTION.to_string())),
         search_value: Some("back return".to_string()),
     });
 
@@ -1163,10 +1085,7 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.tools.profile = ToolProfile::AdvancedVtCode;
 
-        assert_eq!(
-            configured_tool_profile(Some(&config)),
-            ToolProfile::AdvancedVtCode
-        );
+        assert_eq!(configured_tool_profile(Some(&config)), ToolProfile::AdvancedVtCode);
         assert_eq!(configured_tool_profile(None), ToolProfile::CodexDefault);
     }
 
@@ -1226,17 +1145,11 @@ mod tests {
 
     #[test]
     fn command_skills_use_slash_alias_in_status() {
-        assert_eq!(
-            skill_invocation_status_message("cmd-review"),
-            "Running /review..."
-        );
+        assert_eq!(skill_invocation_status_message("cmd-review"), "Running /review...");
     }
 
     #[test]
     fn non_command_skills_use_skill_name_in_status() {
-        assert_eq!(
-            skill_invocation_status_message("rust-skills"),
-            "Running rust-skills..."
-        );
+        assert_eq!(skill_invocation_status_message("rust-skills"), "Running rust-skills...");
     }
 }

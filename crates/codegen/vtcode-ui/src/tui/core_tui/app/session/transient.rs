@@ -125,13 +125,9 @@ impl TransientHost {
             entry.status = TransientStatus::Suspended;
         }
 
-        self.stack
-            .push(TransientEntry::new(surface, TransientStatus::Active));
+        self.stack.push(TransientEntry::new(surface, TransientStatus::Active));
 
-        TransientVisibilityChange {
-            previous_visible,
-            current_visible: Some(surface),
-        }
+        TransientVisibilityChange { previous_visible, current_visible: Some(surface) }
     }
 
     pub(crate) fn hide(&mut self, surface: TransientSurface) -> TransientVisibilityChange {
@@ -150,10 +146,7 @@ impl TransientHost {
             entry.status = TransientStatus::Active;
         }
 
-        TransientVisibilityChange {
-            previous_visible,
-            current_visible: self.top(),
-        }
+        TransientVisibilityChange { previous_visible, current_visible: self.top() }
     }
 
     pub(crate) fn visible_bottom_docked(&self) -> Option<TransientSurface> {
@@ -162,15 +155,11 @@ impl TransientHost {
     }
 
     pub(crate) fn has_active_navigation_surface(&self) -> bool {
-        self.top()
-            .is_some_and(TransientSurface::is_navigation_surface)
+        self.top().is_some_and(TransientSurface::is_navigation_surface)
     }
 
     fn visible_entry(&self) -> Option<&TransientEntry> {
-        self.stack
-            .iter()
-            .rev()
-            .find(|entry| entry.status == TransientStatus::Active)
+        self.stack.iter().rev().find(|entry| entry.status == TransientStatus::Active)
     }
 }
 
@@ -186,13 +175,7 @@ mod tests {
         previous_visible: Option<TransientSurface>,
         current_visible: Option<TransientSurface>,
     ) {
-        assert_eq!(
-            change,
-            TransientVisibilityChange {
-                previous_visible,
-                current_visible,
-            }
-        );
+        assert_eq!(change, TransientVisibilityChange { previous_visible, current_visible });
     }
 
     #[test]
@@ -208,14 +191,8 @@ mod tests {
             Some(TransientSurface::DiffPreview),
         );
         assert_eq!(host.top(), Some(TransientSurface::DiffPreview));
-        assert_eq!(
-            host.status(TransientSurface::TaskPanel),
-            Some(TransientStatus::Suspended)
-        );
-        assert_eq!(
-            host.status(TransientSurface::DiffPreview),
-            Some(TransientStatus::Active)
-        );
+        assert_eq!(host.status(TransientSurface::TaskPanel), Some(TransientStatus::Suspended));
+        assert_eq!(host.status(TransientSurface::DiffPreview), Some(TransientStatus::Active));
         assert_eq!(host.visible_bottom_docked(), None);
         assert_eq!(
             host.top().map(TransientSurface::focus_policy),
@@ -237,14 +214,8 @@ mod tests {
             Some(TransientSurface::TaskPanel),
         );
         assert_eq!(host.top(), Some(TransientSurface::TaskPanel));
-        assert_eq!(
-            host.status(TransientSurface::TaskPanel),
-            Some(TransientStatus::Active)
-        );
-        assert_eq!(
-            host.visible_bottom_docked(),
-            Some(TransientSurface::TaskPanel)
-        );
+        assert_eq!(host.status(TransientSurface::TaskPanel), Some(TransientStatus::Active));
+        assert_eq!(host.visible_bottom_docked(), Some(TransientSurface::TaskPanel));
         assert_eq!(
             host.top().map(TransientSurface::focus_policy),
             Some(TransientFocusPolicy::Passive)
@@ -265,21 +236,9 @@ mod tests {
             Some(TransientSurface::TaskPanel),
         );
         assert_eq!(host.top(), Some(TransientSurface::TaskPanel));
-        assert_eq!(
-            host.status(TransientSurface::SlashPalette),
-            Some(TransientStatus::Suspended)
-        );
-        assert_eq!(
-            host.status(TransientSurface::TaskPanel),
-            Some(TransientStatus::Active)
-        );
-        assert_eq!(
-            host.visible_bottom_docked(),
-            Some(TransientSurface::TaskPanel)
-        );
-        assert_eq!(
-            TransientSurface::TaskPanel.placement(),
-            TransientPlacement::BottomDocked
-        );
+        assert_eq!(host.status(TransientSurface::SlashPalette), Some(TransientStatus::Suspended));
+        assert_eq!(host.status(TransientSurface::TaskPanel), Some(TransientStatus::Active));
+        assert_eq!(host.visible_bottom_docked(), Some(TransientSurface::TaskPanel));
+        assert_eq!(TransientSurface::TaskPanel.placement(), TransientPlacement::BottomDocked);
     }
 }

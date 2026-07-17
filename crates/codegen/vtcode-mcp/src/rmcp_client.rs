@@ -179,10 +179,7 @@ impl RmcpClient {
             config = config.auth_header(token);
         }
 
-        info!(
-            "Connecting to MCP HTTP provider '{}' at {}",
-            provider_name, url
-        );
+        info!("Connecting to MCP HTTP provider '{}' at {}", provider_name, url);
 
         let mut client_builder = rmcp_reqwest::Client::builder();
         if !headers.is_empty() {
@@ -222,14 +219,12 @@ impl RmcpClient {
             let mut guard = self.state.lock().await;
             match &mut *guard {
                 ClientState::Connecting { transport } => match transport.take() {
-                    Some(PendingTransport::ChildProcess(transport)) => (
-                        service::serve_client(service_handler.clone(), transport).boxed(),
-                        "stdio",
-                    ),
-                    Some(PendingTransport::StreamableHttp(transport)) => (
-                        service::serve_client(service_handler.clone(), transport).boxed(),
-                        "http",
-                    ),
+                    Some(PendingTransport::ChildProcess(transport)) => {
+                        (service::serve_client(service_handler.clone(), transport).boxed(), "stdio")
+                    }
+                    Some(PendingTransport::StreamableHttp(transport)) => {
+                        (service::serve_client(service_handler.clone(), transport).boxed(), "http")
+                    }
                     None => {
                         return Err(anyhow!(
                             "MCP client for {} already initializing",
@@ -254,11 +249,11 @@ impl RmcpClient {
         };
 
         let service = match timeout {
-            Some(duration) => time::timeout(duration, transport_future)
-                .await
-                .with_context(|| {
+            Some(duration) => {
+                time::timeout(duration, transport_future).await.with_context(|| {
                     format!("Timed out establishing {service_label} MCP transport")
-                })??,
+                })??
+            }
             None => transport_future.await?,
         };
 
@@ -270,9 +265,7 @@ impl RmcpClient {
             .clone();
 
         let mut guard = self.state.lock().await;
-        *guard = ClientState::Ready {
-            service: Arc::new(service),
-        };
+        *guard = ClientState::Ready { service: Arc::new(service) };
 
         Ok(initialize_result)
     }
@@ -328,12 +321,9 @@ impl RmcpClient {
         timeout: Option<Duration>,
     ) -> Result<ReadResourceResult> {
         let service = self.service().await?;
-        let result = run_with_timeout(
-            service.peer().read_resource(params),
-            timeout,
-            "resources/read",
-        )
-        .await?;
+        let result =
+            run_with_timeout(service.peer().read_resource(params), timeout, "resources/read")
+                .await?;
         Ok(result)
     }
 
@@ -385,10 +375,9 @@ impl RmcpClient {
                 Ok(service.clone())
             }
             ClientState::Connecting { .. } => Err(anyhow!("MCP client not initialized")),
-            ClientState::Disconnected => Err(anyhow!(
-                "MCP client for '{}' has disconnected",
-                self.provider_name
-            )),
+            ClientState::Disconnected => {
+                Err(anyhow!("MCP client for '{}' has disconnected", self.provider_name))
+            }
             ClientState::Stopped => Err(anyhow!("MCP client has been shut down")),
         }
     }
@@ -451,9 +440,7 @@ impl Service<RoleClient> for ElicitationClientService {
         match request {
             ServerRequest::ElicitRequest(request) => {
                 let response = self.create_elicitation(request.params, context).await?;
-                Ok(ClientResult::CustomResult(elicitation_response_result(
-                    response,
-                )?))
+                Ok(ClientResult::CustomResult(elicitation_response_result(response)?))
             }
             request => {
                 <LoggingClientHandler as Service<RoleClient>>::handle_request(
@@ -525,11 +512,7 @@ impl LoggingClientHandler {
 
         if let Some(handler) = &self.elicitation_handler {
             let (message, schema_value, request_meta) = match &request {
-                ElicitRequestParams::FormElicitationParams {
-                    meta,
-                    message,
-                    requested_schema,
-                } => {
+                ElicitRequestParams::FormElicitationParams { meta, message, requested_schema } => {
                     let schema_value = match serde_json::to_value(requested_schema) {
                         Ok(value) => value,
                         Err(err) => {
@@ -547,9 +530,7 @@ impl LoggingClientHandler {
                         serialize_elicitation_meta(provider.as_str(), meta.as_ref()),
                     )
                 }
-                ElicitRequestParams::UrlElicitationParams {
-                    meta, message, url, ..
-                } => {
+                ElicitRequestParams::UrlElicitationParams { meta, message, url, .. } => {
                     let schema_value = json!({
                         "type": "object",
                         "properties": {
@@ -680,25 +661,23 @@ impl ClientHandler for LoggingClientHandler {
     ) -> impl Future<Output = Result<rmcp::model::ElicitResult, rmcp::ErrorData>> + Send + '_ {
         let request = restore_context_meta(request, context.meta);
         async move {
-            self.process_elicitation_request(request)
-                .await
-                .map(|response| {
-                    let meta = response.meta.and_then(|value| {
-                        value.as_object().cloned().map(Meta).or_else(|| {
-                            warn!(
-                                provider = self.provider.as_str(),
-                                "Elicitation response meta is not an object; dropping _meta"
-                            );
-                            None
-                        })
-                    });
-                    {
-                        let mut result = rmcp::model::ElicitResult::new(response.action);
-                        result.content = response.content;
-                        result.meta = meta;
-                        result
-                    }
-                })
+            self.process_elicitation_request(request).await.map(|response| {
+                let meta = response.meta.and_then(|value| {
+                    value.as_object().cloned().map(Meta).or_else(|| {
+                        warn!(
+                            provider = self.provider.as_str(),
+                            "Elicitation response meta is not an object; dropping _meta"
+                        );
+                        None
+                    })
+                });
+                {
+                    let mut result = rmcp::model::ElicitResult::new(response.action);
+                    result.content = response.content;
+                    result.meta = meta;
+                    result
+                }
+            })
         }
     }
 
@@ -780,11 +759,7 @@ impl ClientHandler for LoggingClientHandler {
         params: ResourceUpdatedNotificationParam,
         _context: NotificationContext<RoleClient>,
     ) -> impl Future<Output = ()> + Send + '_ {
-        info!(
-            provider = self.provider.as_str(),
-            uri = params.uri.as_str(),
-            "MCP resource updated"
-        );
+        info!(provider = self.provider.as_str(), uri = params.uri.as_str(), "MCP resource updated");
         async move {}
     }
 
@@ -793,10 +768,7 @@ impl ClientHandler for LoggingClientHandler {
         _context: NotificationContext<RoleClient>,
     ) -> impl Future<Output = ()> + Send + '_ {
         self.list_changed_state.mark_resources_changed();
-        info!(
-            provider = self.provider.as_str(),
-            "MCP provider reported resource list change"
-        );
+        info!(provider = self.provider.as_str(), "MCP provider reported resource list change");
         async move {}
     }
 
@@ -805,10 +777,7 @@ impl ClientHandler for LoggingClientHandler {
         _context: NotificationContext<RoleClient>,
     ) -> impl Future<Output = ()> + Send + '_ {
         self.list_changed_state.mark_tools_changed();
-        info!(
-            provider = self.provider.as_str(),
-            "MCP provider reported tool list change"
-        );
+        info!(provider = self.provider.as_str(), "MCP provider reported tool list change");
         async move {}
     }
 
@@ -817,10 +786,7 @@ impl ClientHandler for LoggingClientHandler {
         _context: NotificationContext<RoleClient>,
     ) -> impl Future<Output = ()> + Send + '_ {
         self.list_changed_state.mark_prompts_changed();
-        info!(
-            provider = self.provider.as_str(),
-            "MCP provider reported prompt list change"
-        );
+        info!(provider = self.provider.as_str(), "MCP provider reported prompt list change");
         async move {}
     }
 
@@ -930,10 +896,7 @@ pub(crate) fn validate_elicitation_payload(
     };
 
     let Some(payload) = content else {
-        warn!(
-            provider = provider,
-            "MCP elicitation accept action missing response content"
-        );
+        warn!(provider = provider, "MCP elicitation accept action missing response content");
         return Err(rmcp::ErrorData::invalid_params(
             "Elicitation response missing content for accept action",
             None,
@@ -941,10 +904,8 @@ pub(crate) fn validate_elicitation_payload(
     };
 
     if !validator.is_valid(payload) {
-        let messages: Vec<String> = validator
-            .iter_errors(payload)
-            .map(|err| err.to_string())
-            .collect();
+        let messages: Vec<String> =
+            validator.iter_errors(payload).map(|err| err.to_string()).collect();
         warn!(
             provider = provider,
             errors = ?messages,
@@ -960,9 +921,7 @@ pub(crate) fn validate_elicitation_payload(
 }
 
 pub(crate) fn directory_to_file_uri(path: &Path) -> Option<String> {
-    Url::from_directory_path(path)
-        .ok()
-        .map(|url| url.to_string())
+    Url::from_directory_path(path).ok().map(|url| url.to_string())
 }
 
 async fn run_with_timeout<F, T>(fut: F, timeout: Option<Duration>, label: &str) -> Result<T>

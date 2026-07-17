@@ -92,10 +92,7 @@ pub(super) fn normalize_write_stdin_args(
     let payload = args
         .as_object_mut()
         .ok_or_else(|| anyhow!("write_stdin requires a JSON object"))?;
-    payload.insert(
-        "action".to_string(),
-        json!(dispatch.command_session_action()),
-    );
+    payload.insert("action".to_string(), json!(dispatch.command_session_action()));
     if dispatch == crate::tools::command_args::WriteStdinDispatch::Poll {
         payload.remove("input");
     }
@@ -186,10 +183,7 @@ impl ToolRegistry {
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| anyhow!("cron_create requires a non-empty prompt"))?
                 .to_string();
-            let name = args
-                .get("name")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned);
+            let name = args.get("name").and_then(Value::as_str).map(ToOwned::to_owned);
             let cron = args.get("cron").and_then(Value::as_str);
             let delay_minutes = args.get("delay_minutes").and_then(Value::as_u64);
             let run_at = args.get("run_at").and_then(Value::as_str);
@@ -310,22 +304,11 @@ impl ToolRegistry {
                 self.pty_config(),
             ),
         };
-        let login_shell = payload
-            .get("login")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        let confirm = payload
-            .get("confirm")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
+        let login_shell = payload.get("login").and_then(|value| value.as_bool()).unwrap_or(false);
+        let confirm = payload.get("confirm").and_then(|value| value.as_bool()).unwrap_or(false);
 
-        let mut prepared_command = prepare_exec_command(
-            payload,
-            &shell_program,
-            login_shell,
-            command,
-            auto_raw_command,
-        );
+        let mut prepared_command =
+            prepare_exec_command(payload, &shell_program, login_shell, command, auto_raw_command);
         let is_git_diff = is_git_diff_command(&prepared_command.requested_command);
 
         let sandbox_request = self.resolve_exec_sandbox_request(payload).await?;
@@ -379,8 +362,7 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_command_session(&self, args: Value) -> Result<Value> {
-        self.execute_command_session_internal(args, ExecSettlementMode::Manual)
-            .await
+        self.execute_command_session_internal(args, ExecSettlementMode::Manual).await
     }
 
     pub(super) async fn execute_harness_command_session_terminal_run_raw(
@@ -393,9 +375,7 @@ impl ToolRegistry {
 
     fn dispatch_command_session_alias(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
-            self.execute_command_session(args)
-                .await
-                .map(super::normalize_tool_output)
+            self.execute_command_session(args).await.map(super::normalize_tool_output)
         })
     }
 
@@ -406,9 +386,7 @@ impl ToolRegistry {
     ) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             let args = normalize_command_session_run_alias_args(&args, tty)?;
-            self.execute_command_session(args)
-                .await
-                .map(super::normalize_tool_output)
+            self.execute_command_session(args).await.map(super::normalize_tool_output)
         })
     }
 
@@ -434,17 +412,14 @@ impl ToolRegistry {
 
         match action {
             CommandSessionAction::Run => {
-                self.execute_command_session_run_internal(args, exec_settlement_mode)
-                    .await
+                self.execute_command_session_run_internal(args, exec_settlement_mode).await
             }
             CommandSessionAction::Write => self.execute_command_session_write(args).await,
             CommandSessionAction::Poll => {
-                self.execute_command_session_poll_internal(args, exec_settlement_mode)
-                    .await
+                self.execute_command_session_poll_internal(args, exec_settlement_mode).await
             }
             CommandSessionAction::Continue => {
-                self.execute_command_session_continue_internal(args, exec_settlement_mode)
-                    .await
+                self.execute_command_session_continue_internal(args, exec_settlement_mode).await
             }
             CommandSessionAction::Inspect => self.execute_command_session_inspect(args).await,
             CommandSessionAction::List => self.execute_command_session_list().await,
@@ -481,14 +456,9 @@ impl ToolRegistry {
 
         let language = code_language_from_args(&args);
 
-        let track_files = args
-            .get("track_files")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let track_files = args.get("track_files").and_then(|v| v.as_bool()).unwrap_or(false);
 
-        let mcp_client = self
-            .mcp_client()
-            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let mcp_client = self.mcp_client().ok_or_else(|| anyhow!("MCP client not available"))?;
 
         let workspace_root = self.workspace_root_owned();
         // Expose built-in tools to the snippet as callable library functions
@@ -553,10 +523,7 @@ impl ToolRegistry {
     fn prepare_apply_patch_args(&self, args: Value) -> Result<(Value, usize, bool)> {
         let patch_input =
             crate::tools::apply_patch::decode_apply_patch_input(&args)?.ok_or_else(|| {
-                anyhow!(
-                    "Missing patch input {}",
-                    crate::tools::error_helpers::PATCH_PARAMETER_HINT
-                )
+                anyhow!("Missing patch input {}", crate::tools::error_helpers::PATCH_PARAMETER_HINT)
             })?;
         let patch_input_bytes = patch_input.source_bytes;
         let patch_base64 = patch_input.was_base64;
@@ -574,10 +541,8 @@ impl ToolRegistry {
         &self,
         payload: &serde_json::Map<String, Value>,
     ) -> Result<ResolvedExecSandboxRequest> {
-        let working_dir_path = self
-            .pty_manager()
-            .resolve_working_dir(shell_working_dir_value(payload))
-            .await?;
+        let working_dir_path =
+            self.pty_manager().resolve_working_dir(shell_working_dir_value(payload)).await?;
         let (sandbox_permissions, additional_permissions) =
             parse_requested_sandbox_permissions(payload, &working_dir_path)?;
 
@@ -604,10 +569,7 @@ impl ToolRegistry {
     delegate_to_self!(mcp_get_tool_details_executor, execute_mcp_get_tool_details);
     delegate_to_self!(mcp_list_servers_executor, execute_mcp_list_servers);
     delegate_to_self!(mcp_connect_server_executor, execute_mcp_connect_server);
-    delegate_to_self!(
-        mcp_disconnect_server_executor,
-        execute_mcp_disconnect_server
-    );
+    delegate_to_self!(mcp_disconnect_server_executor, execute_mcp_disconnect_server);
     delegate_to_self!(apply_patch_executor, execute_apply_patch);
 
     /// Unified `mcp` executor: dispatches on `action`
@@ -666,8 +628,7 @@ impl ToolRegistry {
 
             let response = match dispatch {
                 crate::tools::command_args::WriteStdinDispatch::Write => {
-                    self.execute_command_session_write_for_tool(args, tools::WRITE_STDIN)
-                        .await
+                    self.execute_command_session_write_for_tool(args, tools::WRITE_STDIN).await
                 }
                 crate::tools::command_args::WriteStdinDispatch::Poll => {
                     self.execute_command_session_poll_for_tool(
@@ -876,10 +837,7 @@ mod token_efficiency_tests {
     #[test]
     fn test_suggests_limit_for_cat() {
         assert_eq!(suggest_max_tokens_for_command("cat file.txt"), Some(250));
-        assert_eq!(
-            suggest_max_tokens_for_command("cat /path/to/file.rs"),
-            Some(250)
-        );
+        assert_eq!(suggest_max_tokens_for_command("cat /path/to/file.rs"), Some(250));
         assert_eq!(suggest_max_tokens_for_command("CAT file.txt"), Some(250)); // case insensitive
     }
 
@@ -985,10 +943,7 @@ mod pty_context_tests {
 
         assert!(response.get("follow_up_prompt").is_none());
         assert!(response.get("next_poll_args").is_none());
-        assert_eq!(
-            response["next_continue_args"],
-            json!({ "session_id": "run-123" })
-        );
+        assert_eq!(response["next_continue_args"], json!({ "session_id": "run-123" }));
         assert!(response.get("preferred_next_action").is_none());
     }
 
@@ -999,10 +954,7 @@ mod pty_context_tests {
 
         assert!(response.get("follow_up_prompt").is_none());
         assert!(response.get("next_poll_args").is_none());
-        assert_eq!(
-            response["next_continue_args"],
-            json!({ "session_id": "run-123" })
-        );
+        assert_eq!(response["next_continue_args"], json!({ "session_id": "run-123" }));
     }
 
     #[test]
@@ -1133,14 +1085,8 @@ mod unified_action_error_tests {
     #[test]
     fn extracts_run_session_id_from_read_file_error() {
         let error = "Use exec_command with session_id=\"run-zz9\" instead of read_file.";
-        assert_eq!(
-            extract_run_session_id_from_read_file_error(error),
-            Some("run-zz9".to_string())
-        );
-        assert_eq!(
-            extract_run_session_id_from_read_file_error("no session"),
-            None
-        );
+        assert_eq!(extract_run_session_id_from_read_file_error(error), Some("run-zz9".to_string()));
+        assert_eq!(extract_run_session_id_from_read_file_error("no session"), None);
     }
 
     #[test]
@@ -1148,10 +1094,7 @@ mod unified_action_error_tests {
         let payload = json!({ "session_id": " check_sh " });
         let payload = payload.as_object().expect("object");
 
-        assert_eq!(
-            resolve_exec_run_session_id(payload).expect("requested session id"),
-            "check_sh"
-        );
+        assert_eq!(resolve_exec_run_session_id(payload).expect("requested session id"), "check_sh");
     }
 
     #[test]
@@ -1250,10 +1193,7 @@ mod unified_action_error_tests {
         assert_eq!(response["exit_code"], 127);
         assert_eq!(response["session_id"], "run-123");
         assert_eq!(response["command"], "pip install pymupdf");
-        assert_eq!(
-            response["critical_note"],
-            "Command `pip` was not found in PATH."
-        );
+        assert_eq!(response["critical_note"], "Command `pip` was not found in PATH.");
         assert_eq!(
             response["next_action"],
             "Check the command name or install the missing binary, then rerun the command."
@@ -1302,7 +1242,7 @@ mod unified_action_error_tests {
     Nextest run ID 18fffe01-0ef9-4113-9a81-2344a7cc3c16 with nextest profile: default
         FAIL [   0.216s] ( 363/2669) vtcode-core core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled
     stderr ───
-    thread 'core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled' (382951) panicked at vtcode-core/src/core/agent/runner/tests.rs:692:10:
+    thread 'core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled' (382951) panicked at crates/codegen/vtcode-core/src/core/agent/runner/tests.rs:692:10:
     task result: Invalid request: QueuedProvider has no queued responses
 "#;
 
@@ -1323,7 +1263,7 @@ mod unified_action_error_tests {
         );
         assert_eq!(
             diagnostics["source_file"],
-            "vtcode-core/src/core/agent/runner/tests.rs"
+            "crates/codegen/vtcode-core/src/core/agent/runner/tests.rs"
         );
         assert_eq!(diagnostics["source_line"], 692);
         assert_eq!(
@@ -1359,7 +1299,7 @@ mod unified_action_error_tests {
         };
         let raw_output = r#"
         FAIL [   0.216s] ( 363/2669) vtcode-core core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled
-    thread 'core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled' (382951) panicked at vtcode-core/src/core/agent/runner/tests.rs:692:10:
+    thread 'core::agent::runner::tests::exec_only_policy_skips_when_full_auto_is_disabled' (382951) panicked at crates/codegen/vtcode-core/src/core/agent/runner/tests.rs:692:10:
     task result: Invalid request: QueuedProvider has no queued responses
 "#;
         let capture = PtyEphemeralCapture {
@@ -1390,7 +1330,7 @@ mod unified_action_error_tests {
         assert_eq!(response["binary_kind"], "unit");
         assert_eq!(
             response["source_file"],
-            "vtcode-core/src/core/agent/runner/tests.rs"
+            "crates/codegen/vtcode-core/src/core/agent/runner/tests.rs"
         );
         assert_eq!(response["source_line"], 692);
         assert_eq!(
@@ -1430,16 +1370,10 @@ mod unified_action_error_tests {
             response["validation_hint"],
             "cargo test -p vtcode-core --lib -- --list | rg 'bad'"
         );
-        assert_eq!(
-            response["rerun_hint"],
-            "cargo nextest run -p vtcode-core bad"
-        );
+        assert_eq!(response["rerun_hint"], "cargo nextest run -p vtcode-core bad");
         assert_eq!(response["critical_note"], "selector mismatch");
         assert_eq!(response["next_action"], "validate first");
-        assert_eq!(
-            response["failure_diagnostics"]["kind"],
-            "cargo_test_selector_error"
-        );
+        assert_eq!(response["failure_diagnostics"]["kind"], "cargo_test_selector_error");
     }
 }
 

@@ -106,9 +106,7 @@ impl TranscriptReviewState {
             } else {
                 Style::default()
             };
-            let line = self
-                .line_text_at(row)
-                .map_or_else(String::new, str::to_string);
+            let line = self.line_text_at(row).map_or_else(String::new, str::to_string);
             visible.push(Line::styled(line, style));
         }
 
@@ -125,16 +123,11 @@ impl TranscriptReviewState {
     }
 
     pub(crate) fn scroll_line_down(&mut self, height: u16) {
-        self.scroll_top = self
-            .scroll_top
-            .saturating_add(1)
-            .min(self.max_scroll(height));
+        self.scroll_top = self.scroll_top.saturating_add(1).min(self.max_scroll(height));
     }
 
     pub(crate) fn scroll_half_page_up(&mut self, height: u16) {
-        self.scroll_top = self
-            .scroll_top
-            .saturating_sub(Self::page_step(height).max(1) / 2);
+        self.scroll_top = self.scroll_top.saturating_sub(Self::page_step(height).max(1) / 2);
         self.clamp_scroll(height);
     }
 
@@ -250,12 +243,7 @@ impl TranscriptReviewState {
             format!("search '{}' (0 matches)", self.search.query)
         } else {
             let current = self.search.current_match.unwrap_or(0) + 1;
-            format!(
-                "search '{}' ({}/{})",
-                self.search.query,
-                current,
-                self.search.matches.len()
-            )
+            format!("search '{}' ({}/{})", self.search.query, current, self.search.matches.len())
         };
         format!("line {line}/{total} • {match_status}")
     }
@@ -361,11 +349,7 @@ impl TranscriptReviewState {
         let mut row_index = 0usize;
         for message in &mut self.messages {
             let lowered_lines = message.lowered_lines.get_or_insert_with(|| {
-                message
-                    .lines
-                    .iter()
-                    .map(|line| line.to_ascii_lowercase())
-                    .collect()
+                message.lines.iter().map(|line| line.to_ascii_lowercase()).collect()
             });
             for line in lowered_lines {
                 if line.contains(&needle) {
@@ -416,11 +400,7 @@ fn collect_review_message_lines(session: &Session, index: usize, width: u16) -> 
 }
 
 fn transcript_line_text(line: TranscriptLine) -> String {
-    line.line
-        .spans
-        .iter()
-        .map(|span| span.content.as_ref())
-        .collect()
+    line.line.spans.iter().map(|span| span.content.as_ref()).collect()
 }
 
 pub(crate) fn render_transcript_review(
@@ -436,10 +416,7 @@ pub(crate) fn render_transcript_review(
     let title = Line::from(vec![
         Span::styled(
             " Transcript Review ",
-            session
-                .core
-                .section_title_style()
-                .add_modifier(Modifier::BOLD),
+            session.core.section_title_style().add_modifier(Modifier::BOLD),
         ),
         Span::raw(" "),
         Span::styled(state.status_label(), session.core.header_secondary_style()),
@@ -460,10 +437,8 @@ pub(crate) fn render_transcript_review(
     };
     let content_height = chunks[0].height;
     let lines = state.visible_lines(usize::from(content_height));
-    frame.render_widget(
-        Paragraph::new(lines).style(session.core.styles.default_style()),
-        chunks[0],
-    );
+    frame
+        .render_widget(Paragraph::new(lines).style(session.core.styles.default_style()), chunks[0]);
 
     if show_search && chunks.len() > 1 {
         let input_styles = input_styles_from_theme(&session.core.theme);
@@ -511,19 +486,13 @@ mod tests {
     #[test]
     fn refresh_appends_without_rebuilding_unchanged_messages() {
         let mut session = test_session();
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("alpha")]);
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("beta")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("alpha")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("beta")]);
 
         let mut review = TranscriptReviewState::open(&session, 40, 10);
         let original_first = review.messages[0].revision;
 
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("gamma")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("gamma")]);
         review.refresh(&session, 40, 10);
 
         assert_eq!(review.messages[0].revision, original_first);
@@ -534,22 +503,13 @@ mod tests {
     #[test]
     fn refresh_rebuilds_from_first_dirty_message() {
         let mut session = test_session();
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("alpha")]);
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("beta")]);
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("gamma")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("alpha")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("beta")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("gamma")]);
 
         let mut review = TranscriptReviewState::open(&session, 40, 10);
-        let old_revisions: Vec<u64> = review
-            .messages
-            .iter()
-            .map(|message| message.revision)
-            .collect();
+        let old_revisions: Vec<u64> =
+            review.messages.iter().map(|message| message.revision).collect();
 
         let revision = session.core.next_revision();
         session.core.lines[1].segments = vec![text_segment("beta updated")];
@@ -566,9 +526,7 @@ mod tests {
     #[test]
     fn search_uses_cached_lowercase_lines() {
         let mut session = test_session();
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("Alpha")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("Alpha")]);
         session
             .core
             .push_line(InlineMessageKind::Agent, vec![text_segment("beta alpha")]);
@@ -576,11 +534,8 @@ mod tests {
         let mut review = TranscriptReviewState::open(&session, 40, 10);
         review.search.query = "alpha".to_string();
         review.recompute_matches();
-        let lowered = review.messages[0]
-            .lowered_lines
-            .as_ref()
-            .expect("lowered lines cached")[0]
-            .clone();
+        let lowered =
+            review.messages[0].lowered_lines.as_ref().expect("lowered lines cached")[0].clone();
 
         review.jump_next_match(10);
         review.recompute_matches();
@@ -592,21 +547,14 @@ mod tests {
     #[test]
     fn export_text_is_cached_until_refresh_changes_content() {
         let mut session = test_session();
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("alpha")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("alpha")]);
 
         let mut review = TranscriptReviewState::open(&session, 40, 10);
         let exported = review.export_text();
         assert!(exported.contains("alpha"));
-        assert_eq!(
-            review.cached_export_text.as_deref(),
-            Some(exported.as_str())
-        );
+        assert_eq!(review.cached_export_text.as_deref(), Some(exported.as_str()));
 
-        session
-            .core
-            .push_line(InlineMessageKind::Agent, vec![text_segment("beta")]);
+        session.core.push_line(InlineMessageKind::Agent, vec![text_segment("beta")]);
         review.refresh(&session, 40, 10);
 
         assert_eq!(review.cached_export_text, None);

@@ -22,17 +22,9 @@ impl<'a> Operation<'a> {
             PreparedOperation::Delete { path } => {
                 Operation::Delete(delete::DeleteOperation::new(path))
             }
-            PreparedOperation::Update {
-                path,
-                new_path,
-                chunks,
-                permissions,
-            } => Operation::Update(update::UpdateOperation::new(
-                path,
-                new_path,
-                chunks,
-                permissions,
-            )),
+            PreparedOperation::Update { path, new_path, chunks, permissions } => {
+                Operation::Update(update::UpdateOperation::new(path, new_path, chunks, permissions))
+            }
         }
     }
 

@@ -103,9 +103,7 @@ mod headless {
 
     impl InlineHandle {
         pub fn new_for_tests(sender: UnboundedSender<InlineCommand>) -> Self {
-            Self {
-                sender: Some(sender),
-            }
+            Self { sender: Some(sender) }
         }
 
         fn send_command(&self, command: InlineCommand) {
@@ -123,11 +121,7 @@ mod headless {
             text: String,
             line_count: usize,
         ) {
-            self.send_command(InlineCommand::AppendPastedMessage {
-                kind,
-                text,
-                line_count,
-            });
+            self.send_command(InlineCommand::AppendPastedMessage { kind, text, line_count });
         }
         pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
             self.send_command(InlineCommand::Inline { kind, segment });

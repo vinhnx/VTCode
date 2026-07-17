@@ -109,10 +109,7 @@ impl ManagedLlamaCppServer {
         let status = ServerStatus::default();
         let (status_tx, _) = watch::channel(status.clone());
         Self {
-            state: AsyncMutex::new(ManagedLlamaCppState {
-                child: None,
-                status,
-            }),
+            state: AsyncMutex::new(ManagedLlamaCppState { child: None, status }),
             status_tx,
         }
     }
@@ -129,11 +126,8 @@ static MANAGED_LLAMACPP_SERVERS: LazyLock<Mutex<HashMap<String, Arc<ManagedLlama
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub async fn fetch_llamacpp_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
-    let resolved_base_url = override_base_url(
-        urls::LLAMACPP_API_BASE,
-        base_url,
-        Some(env_vars::LLAMACPP_BASE_URL),
-    );
+    let resolved_base_url =
+        override_base_url(urls::LLAMACPP_API_BASE, base_url, Some(env_vars::LLAMACPP_BASE_URL));
     let models_url = format!("{}/models", resolved_base_url.trim_end_matches('/'));
     let client = vtcode_commons::http::create_client_with_timeout(Duration::from_secs(5));
     let response = client
@@ -163,11 +157,7 @@ pub async fn fetch_llamacpp_models(base_url: Option<String>) -> Result<Vec<Strin
         .await
         .map_err(|e| anyhow::anyhow!("Failed to parse llama.cpp models response: {e}"))?;
 
-    Ok(models_response
-        .data
-        .into_iter()
-        .map(|model| model.id)
-        .collect())
+    Ok(models_response.data.into_iter().map(|model| model.id).collect())
 }
 
 pub struct LlamaCppProvider {
@@ -184,11 +174,7 @@ pub struct LlamaCppProvider {
 
 impl LlamaCppProvider {
     fn resolve_base_url(base_url: Option<String>) -> String {
-        override_base_url(
-            urls::LLAMACPP_API_BASE,
-            base_url,
-            Some(env_vars::LLAMACPP_BASE_URL),
-        )
+        override_base_url(urls::LLAMACPP_API_BASE, base_url, Some(env_vars::LLAMACPP_BASE_URL))
     }
 
     fn build_inner(
@@ -218,9 +204,8 @@ impl LlamaCppProvider {
 
     fn managed_server_for(base_url: &str) -> Arc<ManagedLlamaCppServer> {
         let host_root = base_url_to_host_root(base_url);
-        let mut guard = MANAGED_LLAMACPP_SERVERS
-            .lock()
-            .expect("llama.cpp managed server map poisoned");
+        let mut guard =
+            MANAGED_LLAMACPP_SERVERS.lock().expect("llama.cpp managed server map poisoned");
         guard
             .entry(host_root)
             .or_insert_with(|| Arc::new(ManagedLlamaCppServer::new()))
@@ -307,10 +292,7 @@ impl LlamaCppProvider {
             && !extra_args.trim().is_empty()
         {
             args.extend(shell_words::split(&extra_args).with_context(|| {
-                format!(
-                    "Failed to parse {}: {extra_args}",
-                    env_vars::LLAMACPP_EXTRA_ARGS
-                )
+                format!("Failed to parse {}: {extra_args}", env_vars::LLAMACPP_EXTRA_ARGS)
             })?);
         }
 
@@ -329,10 +311,7 @@ impl LlamaCppProvider {
             .kill_on_drop(true);
 
         command.spawn().with_context(|| {
-            format!(
-                "Failed to start llama.cpp server with `{binary} {}`",
-                args.join(" ")
-            )
+            format!("Failed to start llama.cpp server with `{binary} {}`", args.join(" "))
         })
     }
 
@@ -566,9 +545,7 @@ impl LlamaCppProvider {
                 }
                 ServerPhase::Failed => {
                     return Err(Self::provider_error(
-                        status
-                            .error
-                            .unwrap_or_else(|| LLAMACPP_CONNECTION_ERROR.to_string()),
+                        status.error.unwrap_or_else(|| LLAMACPP_CONNECTION_ERROR.to_string()),
                     ));
                 }
                 ServerPhase::Starting | ServerPhase::NotStarted => {}
@@ -587,11 +564,7 @@ impl LlamaCppProvider {
         }
 
         if discovered_models.len() == 1 {
-            let configured = self
-                .configured_model
-                .as_deref()
-                .map(str::trim)
-                .unwrap_or_default();
+            let configured = self.configured_model.as_deref().map(str::trim).unwrap_or_default();
             if trimmed == models::llamacpp::DEFAULT_MODEL || trimmed == configured {
                 return true;
             }
@@ -603,10 +576,7 @@ impl LlamaCppProvider {
     fn request_model_or_default(&self, request_model: &str) -> String {
         let trimmed = request_model.trim();
         if trimmed.is_empty() {
-            resolve_model(
-                self.configured_model.clone(),
-                models::llamacpp::DEFAULT_MODEL,
-            )
+            resolve_model(self.configured_model.clone(), models::llamacpp::DEFAULT_MODEL)
         } else {
             trimmed.to_string()
         }
@@ -723,19 +693,13 @@ impl LLMProvider for LlamaCppProvider {
         if request.messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("llama.cpp", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 
         for message in request.messages.iter() {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("llama.cpp", &err);
-                return Err(LLMError::InvalidRequest {
-                    message: formatted,
-                    metadata: None,
-                });
+                return Err(LLMError::InvalidRequest { message: formatted, metadata: None });
             }
         }
 

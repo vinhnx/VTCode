@@ -245,12 +245,7 @@ impl ModelPickerState {
         &mut self,
         renderer: &mut AnsiRenderer,
     ) -> Result<ModelPickerProgress> {
-        if self
-            .selection
-            .as_ref()
-            .map(|detail| detail.requires_api_key)
-            .unwrap_or(false)
-        {
+        if self.selection.as_ref().map(|detail| detail.requires_api_key).unwrap_or(false) {
             self.step = PickerStep::AwaitApiKey;
             self.prompt_api_key_step(renderer)?;
             return Ok(ModelPickerProgress::InProgress);
@@ -296,10 +291,8 @@ impl ModelPickerState {
         }
 
         let Some(ref target_model) = current_selection.reasoning_off_model else {
-            renderer.line(
-                MessageStyle::Error,
-                "This model does not have a non-reasoning variant.",
-            )?;
+            renderer
+                .line(MessageStyle::Error, "This model does not have a non-reasoning variant.")?;
             if self.inline_enabled {
                 render_reasoning_inline(renderer, &current_selection, self.current_reasoning)?;
             } else {
@@ -315,10 +308,7 @@ impl ModelPickerState {
         else {
             renderer.line(
                 MessageStyle::Error,
-                &format!(
-                    "Unable to locate the non-reasoning variant {}.",
-                    target_model.as_str()
-                ),
+                &format!("Unable to locate the non-reasoning variant {}.", target_model.as_str()),
             )?;
             if self.inline_enabled {
                 render_reasoning_inline(renderer, &current_selection, self.current_reasoning)?;
@@ -345,15 +335,11 @@ impl ModelPickerState {
     }
 
     pub(super) fn build_result(&self) -> Result<ModelSelectionResult> {
-        let selection = self
-            .selection
-            .as_ref()
-            .ok_or_else(|| anyhow!("Model selection missing"))?;
+        let selection =
+            self.selection.as_ref().ok_or_else(|| anyhow!("Model selection missing"))?;
         let chosen_reasoning = self.selected_reasoning.unwrap_or(self.current_reasoning);
         let reasoning_changed = chosen_reasoning != self.current_reasoning;
-        let chosen_service_tier = self
-            .selected_service_tier
-            .unwrap_or(self.current_service_tier);
+        let chosen_service_tier = self.selected_service_tier.unwrap_or(self.current_service_tier);
         let service_tier_changed = chosen_service_tier != self.current_service_tier;
 
         Ok(ModelSelectionResult {
@@ -528,10 +514,8 @@ impl ModelPickerState {
                 }
                 if ctrl_c_state.is_cancel_requested() {
                     ctrl_c_state.mark_cancel_handled();
-                    renderer.line(
-                        MessageStyle::Info,
-                        "OpenAI ChatGPT authentication cancelled.",
-                    )?;
+                    renderer
+                        .line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
                     return Ok(ModelPickerProgress::InProgress);
                 }
             }
@@ -590,10 +574,8 @@ impl ModelPickerState {
                     if ctrl_c_state.is_exit_requested() {
                         return Ok(ModelPickerProgress::Exit);
                     }
-                    renderer.line(
-                        MessageStyle::Info,
-                        "OpenAI ChatGPT authentication cancelled.",
-                    )?;
+                    renderer
+                        .line(MessageStyle::Info, "OpenAI ChatGPT authentication cancelled.")?;
                     return Ok(ModelPickerProgress::Cancelled);
                 }
                 Err(err) => return Err(err),
@@ -758,9 +740,6 @@ fn oauth_auth_message(selection: &SelectionDetail) -> String {
     } else if matches!(selection.provider_enum, Some(Provider::Copilot)) {
         "Using managed authentication via GitHub Copilot CLI.".to_string()
     } else {
-        format!(
-            "Using OAuth authentication for {}.",
-            selection.provider_label
-        )
+        format!("Using OAuth authentication for {}.", selection.provider_label)
     }
 }

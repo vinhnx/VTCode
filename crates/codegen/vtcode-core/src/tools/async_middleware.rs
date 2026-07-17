@@ -63,9 +63,7 @@ pub struct AsyncMiddlewareChain {
 
 impl AsyncMiddlewareChain {
     pub fn new() -> Self {
-        Self {
-            middlewares: Vec::new(),
-        }
+        Self { middlewares: Vec::new() }
     }
 
     pub fn with_middleware(mut self, middleware: Arc<dyn AsyncMiddleware>) -> Self {
@@ -159,10 +157,7 @@ fn normalize_context(context: &str) -> String {
         }
     }
 
-    if let Some(phase) = parsed
-        .get("plan_phase")
-        .and_then(|v| v.as_str())
-        .filter(|p| !p.is_empty())
+    if let Some(phase) = parsed.get("plan_phase").and_then(|v| v.as_str()).filter(|p| !p.is_empty())
     {
         normalized.insert("plan_phase".into(), Value::String(phase.to_string()));
     }
@@ -320,10 +315,7 @@ impl AsyncCachingMiddleware {
             crate::cache::EvictionPolicy::Lru,
         );
 
-        Self {
-            cache: Arc::new(cache),
-            obs_context,
-        }
+        Self { cache: Arc::new(cache), obs_context }
     }
 
     fn cache_key(tool: &str, args: &str, context: &str) -> String {

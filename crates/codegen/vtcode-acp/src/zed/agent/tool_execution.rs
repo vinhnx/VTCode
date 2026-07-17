@@ -47,10 +47,7 @@ impl ZedAgent {
 
         for call in calls {
             self.pace_tool_call(session).await;
-            results.push(
-                self.execute_tool_call(session, session_id, call, client.as_ref())
-                    .await?,
-            );
+            results.push(self.execute_tool_call(session, session_id, call, client.as_ref()).await?);
         }
 
         Ok(results)
@@ -77,13 +74,11 @@ impl ZedAgent {
         let args_value_for_input = args_value_result.as_ref().ok().cloned();
         let title = match (tool_descriptor, args_value_for_input.as_ref()) {
             (Some(descriptor), Some(args)) => {
-                self.acp_tool_registry
-                    .render_title(descriptor, &func_ref.name, args)
+                self.acp_tool_registry.render_title(descriptor, &func_ref.name, args)
             }
             (Some(descriptor), None) => {
                 let null_args = Value::Null;
-                self.acp_tool_registry
-                    .render_title(descriptor, &func_ref.name, &null_args)
+                self.acp_tool_registry.render_title(descriptor, &func_ref.name, &null_args)
             }
             (None, _) => format!("{} (unsupported)", func_ref.name),
         };
@@ -100,11 +95,8 @@ impl ZedAgent {
             .status(acp::ToolCallStatus::Pending)
             .raw_input(args_value_for_input.clone());
 
-        self.send_update(
-            session_id,
-            acp::SessionUpdate::ToolCall(initial_call.clone()),
-        )
-        .await?;
+        self.send_update(session_id, acp::SessionUpdate::ToolCall(initial_call.clone()))
+            .await?;
 
         let cancel_active = session.cancel_flag.load(Ordering::Relaxed);
         let permission_override = if let (false, Some(descriptor), Ok(args_value)) =
@@ -128,11 +120,8 @@ impl ZedAgent {
             let in_progress_fields =
                 acp::ToolCallUpdateFields::default().status(acp::ToolCallStatus::InProgress);
             let progress_update = acp::ToolCallUpdate::new(call_id.clone(), in_progress_fields);
-            self.send_update(
-                session_id,
-                acp::SessionUpdate::ToolCallUpdate(progress_update),
-            )
-            .await?;
+            self.send_update(session_id, acp::SessionUpdate::ToolCallUpdate(progress_update))
+                .await?;
         }
 
         let mut report = if let Some(report) = permission_override {
@@ -167,8 +156,7 @@ impl ZedAgent {
         }
 
         let update = acp::ToolCallUpdate::new(call_id, Self::update_fields_from_report(&report));
-        self.send_update(session_id, acp::SessionUpdate::ToolCallUpdate(update))
-            .await?;
+        self.send_update(session_id, acp::SessionUpdate::ToolCallUpdate(update)).await?;
 
         Ok(Self::tool_call_result_from_report(call, report))
     }
@@ -238,9 +226,8 @@ impl ZedAgent {
         args: &Value,
     ) -> ToolExecutionReport {
         if should_route_terminal_via_client(tool_name, args)
-            && let Some(report) = self
-                .execute_terminal_via_client(tool_name, client, session_id, args)
-                .await
+            && let Some(report) =
+                self.execute_terminal_via_client(tool_name, client, session_id, args).await
         {
             return report;
         }
@@ -289,15 +276,12 @@ impl ZedAgent {
 
         match Self::requested_terminal_mode(args) {
             Ok(RunTerminalMode::Terminal) => None,
-            Ok(RunTerminalMode::Pty) => Some(
-                match self
-                    .launch_client_terminal(tool_name, client, session_id, args)
-                    .await
-                {
+            Ok(RunTerminalMode::Pty) => {
+                Some(match self.launch_client_terminal(tool_name, client, session_id, args).await {
                     Ok(report) => report,
                     Err(message) => ToolExecutionReport::failure(tool_name, &message),
-                },
-            ),
+                })
+            }
             Err(message) => Some(ToolExecutionReport::failure(tool_name, &message)),
         }
     }
@@ -336,9 +320,7 @@ impl ZedAgent {
             }
         };
         content.push(acp::ToolCallContent::from(summary));
-        content.push(acp::ToolCallContent::Terminal(acp::Terminal::new(
-            terminal_id.clone(),
-        )));
+        content.push(acp::ToolCallContent::Terminal(acp::Terminal::new(terminal_id.clone())));
 
         let payload = json!({
             TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,

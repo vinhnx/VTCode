@@ -13,15 +13,9 @@ impl LifecycleHookEngine {
         let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
         Ok(serde_json::Map::from_iter([
-            (
-                "session_id".to_string(),
-                Value::String(self.inner.session_id.clone()),
-            ),
+            ("session_id".to_string(), Value::String(self.inner.session_id.clone())),
             ("cwd".to_string(), Value::String(cwd)),
-            (
-                "hook_event_name".to_string(),
-                Value::String(hook_event_name.to_string()),
-            ),
+            ("hook_event_name".to_string(), Value::String(hook_event_name.to_string())),
             (
                 "transcript_path".to_string(),
                 transcript_path.map(Value::String).unwrap_or(Value::Null),
@@ -31,10 +25,7 @@ impl LifecycleHookEngine {
 
     pub(super) async fn build_session_start_payload(&self) -> Result<Value> {
         let mut payload = self.base_payload("SessionStart").await?;
-        payload.insert(
-            "source".to_string(),
-            Value::String(self.inner.trigger.as_str().to_owned()),
-        );
+        payload.insert("source".to_string(), Value::String(self.inner.trigger.as_str().to_owned()));
         Ok(Value::Object(payload))
     }
 
@@ -45,10 +36,7 @@ impl LifecycleHookEngine {
     ) -> Result<Value> {
         let mut payload = self.base_payload("SessionEnd").await?;
         payload.insert("turn_id".to_string(), Value::String(turn_id.to_owned()));
-        payload.insert(
-            "reason".to_string(),
-            Value::String(reason.as_str().to_owned()),
-        );
+        payload.insert("reason".to_string(), Value::String(reason.as_str().to_owned()));
         Ok(Value::Object(payload))
     }
 
@@ -63,22 +51,11 @@ impl LifecycleHookEngine {
         transcript_path: Option<&Path>,
     ) -> Result<Value> {
         let mut payload = self.base_payload("SubagentStart").await?;
-        payload.insert(
-            "parent_session_id".to_string(),
-            Value::String(parent_session_id.to_owned()),
-        );
-        payload.insert(
-            "child_thread_id".to_string(),
-            Value::String(child_thread_id.to_owned()),
-        );
-        payload.insert(
-            "agent_name".to_string(),
-            Value::String(agent_name.to_owned()),
-        );
-        payload.insert(
-            "display_label".to_string(),
-            Value::String(display_label.to_owned()),
-        );
+        payload
+            .insert("parent_session_id".to_string(), Value::String(parent_session_id.to_owned()));
+        payload.insert("child_thread_id".to_string(), Value::String(child_thread_id.to_owned()));
+        payload.insert("agent_name".to_string(), Value::String(agent_name.to_owned()));
+        payload.insert("display_label".to_string(), Value::String(display_label.to_owned()));
         payload.insert("background".to_string(), Value::Bool(background));
         payload.insert("status".to_string(), Value::String(status.to_owned()));
         payload.insert(
@@ -101,22 +78,11 @@ impl LifecycleHookEngine {
         transcript_path: Option<&Path>,
     ) -> Result<Value> {
         let mut payload = self.base_payload("SubagentStop").await?;
-        payload.insert(
-            "parent_session_id".to_string(),
-            Value::String(parent_session_id.to_owned()),
-        );
-        payload.insert(
-            "child_thread_id".to_string(),
-            Value::String(child_thread_id.to_owned()),
-        );
-        payload.insert(
-            "agent_name".to_string(),
-            Value::String(agent_name.to_owned()),
-        );
-        payload.insert(
-            "display_label".to_string(),
-            Value::String(display_label.to_owned()),
-        );
+        payload
+            .insert("parent_session_id".to_string(), Value::String(parent_session_id.to_owned()));
+        payload.insert("child_thread_id".to_string(), Value::String(child_thread_id.to_owned()));
+        payload.insert("agent_name".to_string(), Value::String(agent_name.to_owned()));
+        payload.insert("display_label".to_string(), Value::String(display_label.to_owned()));
         payload.insert("background".to_string(), Value::Bool(background));
         payload.insert("status".to_string(), Value::String(status.to_owned()));
         payload.insert(
@@ -147,15 +113,10 @@ impl LifecycleHookEngine {
     ) -> Result<Value> {
         let mut payload = self.base_payload("PreToolUse").await?;
         payload.insert("tool_name".to_string(), Value::String(tool_name.to_owned()));
-        payload.insert(
-            "tool_input".to_string(),
-            tool_input.cloned().unwrap_or(Value::Null),
-        );
+        payload.insert("tool_input".to_string(), tool_input.cloned().unwrap_or(Value::Null));
         payload.insert(
             "tool_call_id".to_string(),
-            tool_call_id
-                .map(|id| Value::String(id.to_owned()))
-                .unwrap_or(Value::Null),
+            tool_call_id.map(|id| Value::String(id.to_owned())).unwrap_or(Value::Null),
         );
         Ok(Value::Object(payload))
     }
@@ -169,16 +130,11 @@ impl LifecycleHookEngine {
     ) -> Result<Value> {
         let mut payload = self.base_payload("PostToolUse").await?;
         payload.insert("tool_name".to_string(), Value::String(tool_name.to_owned()));
-        payload.insert(
-            "tool_input".to_string(),
-            tool_input.cloned().unwrap_or(Value::Null),
-        );
+        payload.insert("tool_input".to_string(), tool_input.cloned().unwrap_or(Value::Null));
         payload.insert("tool_response".to_string(), tool_output.clone());
         payload.insert(
             "tool_call_id".to_string(),
-            tool_call_id
-                .map(|id| Value::String(id.to_owned()))
-                .unwrap_or(Value::Null),
+            tool_call_id.map(|id| Value::String(id.to_owned())).unwrap_or(Value::Null),
         );
         Ok(Value::Object(payload))
     }
@@ -192,10 +148,7 @@ impl LifecycleHookEngine {
     ) -> Result<Value> {
         let mut payload = self.base_payload("PermissionRequest").await?;
         payload.insert("tool_name".to_string(), Value::String(tool_name.to_owned()));
-        payload.insert(
-            "tool_input".to_string(),
-            tool_input.cloned().unwrap_or(Value::Null),
-        );
+        payload.insert("tool_input".to_string(), tool_input.cloned().unwrap_or(Value::Null));
         payload.insert(
             "permission_request".to_string(),
             build_permission_request_summary(permission_request),
@@ -217,10 +170,7 @@ impl LifecycleHookEngine {
             "last_assistant_message".to_string(),
             Value::String(last_assistant_message.to_owned()),
         );
-        payload.insert(
-            "stop_hook_active".to_string(),
-            Value::Bool(stop_hook_active),
-        );
+        payload.insert("stop_hook_active".to_string(), Value::Bool(stop_hook_active));
         Ok(Value::Object(payload))
     }
 
@@ -251,19 +201,11 @@ impl LifecycleHookEngine {
         let mut payload = self.base_payload("PreCompact").await?;
         payload.insert("trigger".to_string(), serde_json::to_value(trigger)?);
         payload.insert("mode".to_string(), serde_json::to_value(mode)?);
-        payload.insert(
-            "original_message_count".to_string(),
-            json!(original_message_count),
-        );
-        payload.insert(
-            "compacted_message_count".to_string(),
-            json!(compacted_message_count),
-        );
+        payload.insert("original_message_count".to_string(), json!(original_message_count));
+        payload.insert("compacted_message_count".to_string(), json!(compacted_message_count));
         payload.insert(
             "history_artifact_path".to_string(),
-            history_artifact_path
-                .map(|path| json!(path))
-                .unwrap_or(Value::Null),
+            history_artifact_path.map(|path| json!(path)).unwrap_or(Value::Null),
         );
         Ok(Value::Object(payload))
     }

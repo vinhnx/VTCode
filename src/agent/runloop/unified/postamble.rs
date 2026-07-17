@@ -46,10 +46,7 @@ pub(crate) fn print_exit_summary(data: ExitData<'_>) {
     let resume_style = fg_256(resume_color);
 
     println!();
-    println!(
-        "{BOLD}{title_style}> {} ({}){RESET}",
-        data.app_name, data.version
-    );
+    println!("{BOLD}{title_style}> {} ({}){RESET}", data.app_name, data.version);
 
     let trust = build_trust_label(data.trust_label);
     if !trust.is_empty() {
@@ -82,10 +79,7 @@ pub(crate) fn print_exit_summary(data: ExitData<'_>) {
 /// eight-parameter call.
 fn build_stats_line(data: &ExitData<'_>) -> String {
     let mut stats = Vec::new();
-    stats.push(format!(
-        "Session {}",
-        format_duration(data.session_duration)
-    ));
+    stats.push(format!("Session {}", format_duration(data.session_duration)));
 
     if data.prompt_tokens > 0 || data.completion_tokens > 0 {
         stats.push(format!(
@@ -101,19 +95,14 @@ fn build_stats_line(data: &ExitData<'_>) -> String {
             cache_stat.push_str(&format!(" ({hit_rate:.1}% hit rate)"));
         }
         if data.cache_creation_tokens > 0 {
-            cache_stat.push_str(&format!(
-                ", {} creation",
-                format_number(data.cache_creation_tokens)
-            ));
+            cache_stat
+                .push_str(&format!(", {} creation", format_number(data.cache_creation_tokens)));
         }
         stats.push(cache_stat);
     }
 
     if data.code_additions > 0 || data.code_deletions > 0 {
-        stats.push(format!(
-            "Code +{} / -{}",
-            data.code_additions, data.code_deletions
-        ));
+        stats.push(format!("Code +{} / -{}", data.code_additions, data.code_deletions));
     }
 
     stats.join(" | ")
@@ -211,10 +200,7 @@ mod tests {
 
     #[test]
     fn trust_line_fallback() {
-        assert_eq!(
-            build_trust_label("some_other").as_ref(),
-            "Trust: some other"
-        );
+        assert_eq!(build_trust_label("some_other").as_ref(), "Trust: some other");
     }
 
     #[test]
@@ -272,16 +258,7 @@ mod tests {
 
     #[test]
     fn stats_line_with_cache_includes_hit_rate_and_creation_tokens() {
-        let data = stats_test_data(
-            Duration::from_secs(95),
-            1_000,
-            200,
-            800,
-            50,
-            Some(80.0),
-            10,
-            2,
-        );
+        let data = stats_test_data(Duration::from_secs(95), 1_000, 200, 800, 50, Some(80.0), 10, 2);
         let line = build_stats_line(&data);
         assert_eq!(
             line,
@@ -293,9 +270,6 @@ mod tests {
     fn stats_line_with_cache_but_no_creation_omits_creation_segment() {
         let data = stats_test_data(Duration::from_secs(10), 500, 100, 400, 0, Some(80.0), 0, 0);
         let line = build_stats_line(&data);
-        assert_eq!(
-            line,
-            "Session 10s | 500 in / 100 out | Cache 400 read (80.0% hit rate)"
-        );
+        assert_eq!(line, "Session 10s | 500 in / 100 out | Cache 400 read (80.0% hit rate)");
     }
 }

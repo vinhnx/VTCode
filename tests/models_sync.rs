@@ -16,9 +16,7 @@ fn constants_cover_models_json() {
     let models_data: Value =
         serde_json::from_str(&json).expect("Failed to parse docs/models.json as valid JSON");
 
-    let providers = models_data
-        .as_object()
-        .expect("docs/models.json should be a JSON object");
+    let providers = models_data.as_object().expect("docs/models.json should be a JSON object");
 
     // Track which providers we validate to ensure we don't miss any
     let mut validated_providers = HashSet::new();
@@ -68,19 +66,17 @@ fn constants_cover_models_json() {
                 constants_models.iter().copied().collect();
 
             // Check for missing models in constants
-            let missing_in_constants: Vec<_> = model_ids_from_json
-                .difference(&model_ids_from_constants)
-                .collect();
+            let missing_in_constants: Vec<_> =
+                model_ids_from_json.difference(&model_ids_from_constants).collect();
 
             // Check for extra models in constants (not in JSON)
-            let extra_in_constants: Vec<_> = model_ids_from_constants
-                .difference(&model_ids_from_json)
-                .collect();
+            let extra_in_constants: Vec<_> =
+                model_ids_from_constants.difference(&model_ids_from_json).collect();
 
             assert!(
                 missing_in_constants.is_empty(),
                 "Missing models in constants.rs for provider '{provider_name}': {missing_in_constants:?}\n\
-                 Add these models to models::{provider_name}::SUPPORTED_MODELS in vtcode-core/src/config/constants.rs"
+                 Add these models to models::{provider_name}::SUPPORTED_MODELS in crates/codegen/vtcode-core/src/config/constants.rs"
             );
 
             assert!(
@@ -155,22 +151,10 @@ fn model_helpers_validation_edge_cases() {
     assert!(!model_helpers::is_valid("openrouter", "invalid-model-id"));
 
     // Test valid models for valid providers
-    assert!(model_helpers::is_valid(
-        "openai",
-        models::openai::DEFAULT_MODEL
-    ));
-    assert!(model_helpers::is_valid(
-        "anthropic",
-        models::anthropic::DEFAULT_MODEL
-    ));
-    assert!(model_helpers::is_valid(
-        "google",
-        models::google::DEFAULT_MODEL
-    ));
-    assert!(model_helpers::is_valid(
-        "openrouter",
-        models::openrouter::DEFAULT_MODEL
-    ));
+    assert!(model_helpers::is_valid("openai", models::openai::DEFAULT_MODEL));
+    assert!(model_helpers::is_valid("anthropic", models::anthropic::DEFAULT_MODEL));
+    assert!(model_helpers::is_valid("google", models::google::DEFAULT_MODEL));
+    assert!(model_helpers::is_valid("openrouter", models::openrouter::DEFAULT_MODEL));
     assert!(model_helpers::is_valid("zai", models::zai::DEFAULT_MODEL));
 }
 
@@ -183,17 +167,8 @@ fn backwards_compatibility_constants() {
     assert!(!models::CLAUDE_HAIKU_4_5.is_empty());
 
     // Test that backwards compatibility constants match the new structure
-    assert_eq!(
-        models::GEMINI_3_FLASH_PREVIEW,
-        models::google::GEMINI_3_FLASH_PREVIEW
-    );
+    assert_eq!(models::GEMINI_3_FLASH_PREVIEW, models::google::GEMINI_3_FLASH_PREVIEW);
     assert_eq!(models::GPT_5, models::openai::GPT_5);
-    assert_eq!(
-        models::CLAUDE_SONNET_4_6,
-        models::anthropic::CLAUDE_SONNET_4_6
-    );
-    assert_eq!(
-        models::CLAUDE_HAIKU_4_5,
-        models::anthropic::CLAUDE_HAIKU_4_5
-    );
+    assert_eq!(models::CLAUDE_SONNET_4_6, models::anthropic::CLAUDE_SONNET_4_6);
+    assert_eq!(models::CLAUDE_HAIKU_4_5, models::anthropic::CLAUDE_HAIKU_4_5);
 }

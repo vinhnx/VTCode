@@ -12,9 +12,7 @@ use crate::config::constants::tools;
 
 impl ToolRegistry {
     async fn process_harness_command_session_output(&self, value: Value) -> Result<Value> {
-        let processed = self
-            .process_tool_output(tools::UNIFIED_EXEC, value, false)
-            .await;
+        let processed = self.process_tool_output(tools::UNIFIED_EXEC, value, false).await;
         Ok(super::normalize_tool_output(processed))
     }
 
@@ -47,10 +45,7 @@ impl ToolRegistry {
     pub fn shared_circuit_breaker(
         &self,
     ) -> Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>> {
-        self.shared_circuit_breaker
-            .read()
-            .ok()
-            .and_then(|g| g.clone())
+        self.shared_circuit_breaker.read().ok().and_then(|g| g.clone())
     }
 
     /// Execute a harness-owned verification command through the same exec/sandbox
@@ -64,9 +59,7 @@ impl ToolRegistry {
     /// Start a harness-owned PTY command session while retaining the session metadata even when
     /// the command exits immediately. ACP terminal sessions use explicit release semantics.
     pub async fn execute_harness_command_session_terminal_run(&self, args: Value) -> Result<Value> {
-        let value = self
-            .execute_harness_command_session_terminal_run_raw(args)
-            .await?;
+        let value = self.execute_harness_command_session_terminal_run_raw(args).await?;
         self.process_harness_command_session_output(value).await
     }
 
@@ -75,9 +68,7 @@ impl ToolRegistry {
         session_id: &str,
         drain: bool,
     ) -> Result<Option<String>> {
-        self.exec_sessions
-            .read_session_output(session_id, drain)
-            .await
+        self.exec_sessions.read_session_output(session_id, drain).await
     }
 
     /// Inline-delegating wrapper over

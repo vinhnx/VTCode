@@ -216,10 +216,7 @@ struct TestRetryCtx {
 
 impl TestRetryCtx {
     fn new(executions: Arc<AtomicUsize>, retry_policy: RetryPolicy) -> Self {
-        Self {
-            executions,
-            retry_policy,
-        }
+        Self { executions, retry_policy }
     }
 }
 
@@ -343,10 +340,7 @@ async fn tool_facade_executes_via_cgp() {
         .expect("should succeed");
 
     assert_eq!(
-        result
-            .get("echoed")
-            .and_then(|v| v.get("msg"))
-            .and_then(|v| v.as_str()),
+        result.get("echoed").and_then(|v| v.get("msg")).and_then(|v| v.as_str()),
         Some("hello")
     );
 }
@@ -384,9 +378,8 @@ async fn tool_facade_dual_output() {
 #[tokio::test]
 async fn handler_facade_executes_via_cgp() {
     let facade = HandlerFacade::new(TestAutoCtx);
-    let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> = Arc::new(
-        crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")),
-    );
+    let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> =
+        Arc::new(crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")));
     let turn = Arc::new(crate::tools::handlers::tool_handler::TurnContext {
         cwd: PathBuf::from("/tmp"),
         turn_id: "test".to_string(),
@@ -407,9 +400,7 @@ async fn handler_facade_executes_via_cgp() {
         tracker: None,
         call_id: "test-call".to_string(),
         tool_name: "echo".to_string(),
-        payload: ToolPayload::Function {
-            arguments: r#"{"msg":"handler"}"#.to_string(),
-        },
+        payload: ToolPayload::Function { arguments: r#"{"msg":"handler"}"#.to_string() },
     };
 
     let output = facade.handle(invocation).await.expect("should succeed");
@@ -421,9 +412,8 @@ async fn handler_facade_executes_via_cgp() {
 #[tokio::test]
 async fn handler_facade_denied_by_ctx() {
     let facade = HandlerFacade::new(TestDenyCtx);
-    let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> = Arc::new(
-        crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")),
-    );
+    let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> =
+        Arc::new(crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")));
     let turn = Arc::new(crate::tools::handlers::tool_handler::TurnContext {
         cwd: PathBuf::from("/tmp"),
         turn_id: "test".to_string(),
@@ -444,9 +434,7 @@ async fn handler_facade_denied_by_ctx() {
         tracker: None,
         call_id: "test-call".to_string(),
         tool_name: "exec".to_string(),
-        payload: ToolPayload::Function {
-            arguments: "{}".to_string(),
-        },
+        payload: ToolPayload::Function { arguments: "{}".to_string() },
     };
 
     let result = facade.handle(invocation).await;
@@ -467,9 +455,8 @@ async fn same_context_both_facades() {
     assert!(tool_result.get("echoed").is_some());
 
     let handler = HandlerFacade::new(TestAutoCtx);
-    let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> = Arc::new(
-        crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")),
-    );
+    let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> =
+        Arc::new(crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")));
     let turn = Arc::new(crate::tools::handlers::tool_handler::TurnContext {
         cwd: PathBuf::from("/tmp"),
         turn_id: "test".to_string(),
@@ -490,15 +477,10 @@ async fn same_context_both_facades() {
         tracker: None,
         call_id: "test-call".to_string(),
         tool_name: "echo".to_string(),
-        payload: ToolPayload::Function {
-            arguments: r#"{"via":"handler"}"#.to_string(),
-        },
+        payload: ToolPayload::Function { arguments: r#"{"via":"handler"}"#.to_string() },
     };
 
-    let handler_output = handler
-        .handle(invocation)
-        .await
-        .expect("handler facade should succeed");
+    let handler_output = handler.handle(invocation).await.expect("handler facade should succeed");
     assert!(handler_output.is_success());
     let content = handler_output.content().expect("should have content");
     assert!(content.contains("handler"));
@@ -574,10 +556,7 @@ async fn retry_provider_retries_failed_execute() {
         .expect("retry should recover the transient failure");
 
     assert_eq!(executions.load(Ordering::SeqCst), 2);
-    assert_eq!(
-        result.get("attempt").and_then(|value| value.as_u64()),
-        Some(2)
-    );
+    assert_eq!(result.get("attempt").and_then(|value| value.as_u64()), Some(2));
 }
 
 // ================================================================
@@ -671,10 +650,7 @@ async fn bridge_interactive_passthrough() {
 
     assert_eq!(result.get("result").and_then(|v| v.as_str()), Some("ok"));
     assert_eq!(
-        result
-            .get("input")
-            .and_then(|v| v.get("query"))
-            .and_then(|v| v.as_str()),
+        result.get("input").and_then(|v| v.get("query")).and_then(|v| v.as_str()),
         Some("test")
     );
 }
@@ -719,10 +695,7 @@ async fn native_typed_tool_preserves_metadata_and_execution() {
         .await
         .expect("should succeed");
     assert_eq!(
-        result
-            .get("input")
-            .and_then(|v| v.get("query"))
-            .and_then(|v| v.as_str()),
+        result.get("input").and_then(|v| v.get("query")).and_then(|v| v.as_str()),
         Some("native")
     );
 }
@@ -732,10 +705,7 @@ async fn bridge_dual_output() {
     let tool: Arc<dyn Tool> = Arc::new(SimpleTool);
     let facade = wrap_tool_interactive(tool, PathBuf::from("/workspace"));
 
-    let result = facade
-        .execute_dual(serde_json::json!({"x": 1}))
-        .await
-        .expect("should succeed");
+    let result = facade.execute_dual(serde_json::json!({"x": 1})).await.expect("should succeed");
 
     assert!(result.success);
     assert_eq!(result.tool_name, "simple");
@@ -750,9 +720,8 @@ async fn bridge_handler_facade() {
     };
     let handler = HandlerFacade::new(bridge_ctx);
 
-    let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> = Arc::new(
-        crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")),
-    );
+    let session: Arc<dyn crate::tools::handlers::tool_handler::ToolSession> =
+        Arc::new(crate::tools::handlers::adapter::DefaultToolSession::new(PathBuf::from("/tmp")));
     let turn = Arc::new(crate::tools::handlers::tool_handler::TurnContext {
         cwd: PathBuf::from("/tmp"),
         turn_id: "test".to_string(),
@@ -773,9 +742,7 @@ async fn bridge_handler_facade() {
         tracker: None,
         call_id: "bridge-test".to_string(),
         tool_name: "simple".to_string(),
-        payload: ToolPayload::Function {
-            arguments: r#"{"via":"bridge"}"#.to_string(),
-        },
+        payload: ToolPayload::Function { arguments: r#"{"via":"bridge"}"#.to_string() },
     };
 
     let output = handler.handle(invocation).await.expect("should succeed");

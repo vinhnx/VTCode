@@ -26,10 +26,7 @@ pub fn is_dangerous_command_windows(command: &[String]) -> bool {
         .to_lowercase();
 
     // ──── PowerShell ────
-    if matches!(
-        base_exe.as_str(),
-        "powershell" | "pwsh" | "powershell.exe" | "pwsh.exe"
-    ) {
+    if matches!(base_exe.as_str(), "powershell" | "pwsh" | "powershell.exe" | "pwsh.exe") {
         return is_dangerous_powershell_invocation(command);
     }
 

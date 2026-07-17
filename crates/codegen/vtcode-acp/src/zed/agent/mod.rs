@@ -97,9 +97,8 @@ impl ZedAgent {
             list_files_enabled,
             local_definitions,
         ));
-        let permission_prompter: Arc<dyn AcpPermissionPrompter + Send + Sync> = Arc::new(
-            DefaultPermissionPrompter::new(Arc::clone(&acp_tool_registry) as Arc<_>),
-        );
+        let permission_prompter: Arc<dyn AcpPermissionPrompter + Send + Sync> =
+            Arc::new(DefaultPermissionPrompter::new(Arc::clone(&acp_tool_registry) as Arc<_>));
 
         Self {
             config,
@@ -130,10 +129,7 @@ impl ZedAgent {
 
     /// Borrow the SACP `cx` handle, if one is attached.
     pub(crate) fn client(&self) -> Option<Arc<ConnectionHandle>> {
-        self.client
-            .lock()
-            .ok()
-            .and_then(|guard| guard.as_ref().cloned())
+        self.client.lock().ok().and_then(|guard| guard.as_ref().cloned())
     }
 
     /// Optional human-readable title used during `initialize`.

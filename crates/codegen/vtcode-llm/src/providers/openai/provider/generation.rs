@@ -43,15 +43,11 @@ fn append_manual_compaction_instructions(
     derived_instructions: Option<&str>,
     manual_instructions: Option<&str>,
 ) -> Option<String> {
-    let manual_instructions = manual_instructions
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?;
+    let manual_instructions =
+        manual_instructions.map(str::trim).filter(|value| !value.is_empty())?;
     let manual_section = format!("{MANUAL_COMPACTION_INSTRUCTIONS_LABEL}\n{manual_instructions}");
 
-    match derived_instructions
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
+    match derived_instructions.map(str::trim).filter(|value| !value.is_empty()) {
         Some(existing) => Some(format!("{existing}\n\n{manual_section}")),
         None => Some(manual_section),
     }
@@ -213,9 +209,7 @@ impl OpenAIProvider {
         });
         if let Some(map) = compact_payload.as_object_mut() {
             let merged_instructions = append_manual_compaction_instructions(
-                responses_request
-                    .get("instructions")
-                    .and_then(Value::as_str),
+                responses_request.get("instructions").and_then(Value::as_str),
                 options.instructions.as_deref(),
             );
             if let Some(instructions) = merged_instructions {
@@ -265,10 +259,7 @@ impl OpenAIProvider {
                     Some(&client_request_id),
                 ),
             );
-            return Err(provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
 
         let response_json: Value = response.json().await.map_err(|e| {
@@ -276,23 +267,15 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to parse compaction response: {e}"),
             );
-            provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
+            provider::LLMError::Provider { message: formatted_error, metadata: None }
         })?;
-        let output = response_json
-            .get("output")
-            .and_then(|value| value.as_array())
-            .ok_or_else(|| {
+        let output =
+            response_json.get("output").and_then(|value| value.as_array()).ok_or_else(|| {
                 let formatted_error = error_display::format_llm_error(
                     "OpenAI",
                     "Invalid compaction response format: missing output array",
                 );
-                provider::LLMError::Provider {
-                    message: formatted_error,
-                    metadata: None,
-                }
+                provider::LLMError::Provider { message: formatted_error, metadata: None }
             })?;
 
         let compacted = parse_compacted_output_messages(output);
@@ -301,10 +284,7 @@ impl OpenAIProvider {
                 "OpenAI",
                 "Compaction response contained no reusable messages",
             );
-            return Err(provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
 
         Ok(compacted)
@@ -528,10 +508,7 @@ impl OpenAIProvider {
                         "OpenAI",
                         &format!("Failed to parse response: {e}"),
                     );
-                    provider::LLMError::Provider {
-                        message: formatted_error,
-                        metadata: None,
-                    }
+                    provider::LLMError::Provider { message: formatted_error, metadata: None }
                 })?;
 
                 let response =
@@ -593,10 +570,7 @@ impl OpenAIProvider {
                             "OpenAI",
                             &format!("Failed to parse response: {e}"),
                         );
-                        provider::LLMError::Provider {
-                            message: formatted_error,
-                            metadata: None,
-                        }
+                        provider::LLMError::Provider { message: formatted_error, metadata: None }
                     })?;
 
                     let response = self.parse_openai_response(openai_response, model.clone())?;
@@ -622,10 +596,7 @@ impl OpenAIProvider {
                     Some(&effective_client_request_id),
                 ),
             );
-            return Err(provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(provider::LLMError::Provider { message: formatted_error, metadata: None });
         }
 
         let openai_response: Value = response.json().await.map_err(|e| {
@@ -633,10 +604,7 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to parse response: {e}"),
             );
-            provider::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
+            provider::LLMError::Provider { message: formatted_error, metadata: None }
         })?;
 
         let response = self.parse_openai_response(openai_response, model.clone())?;

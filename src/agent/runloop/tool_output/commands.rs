@@ -48,28 +48,16 @@ pub(crate) async fn render_terminal_command_panel(
             || inner_json.get("returncode").is_some())
     {
         owned_inner = inner_json;
-        let s = owned_inner
-            .get("stdout")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let e = owned_inner
-            .get("stderr")
-            .and_then(Value::as_str)
-            .unwrap_or("");
+        let s = owned_inner.get("stdout").and_then(Value::as_str).unwrap_or("");
+        let e = owned_inner.get("stderr").and_then(Value::as_str).unwrap_or("");
         (s, e, &owned_inner)
     } else {
         (stdout_raw, stderr_raw, payload)
     };
 
-    let output_raw = unwrapped_payload
-        .get("output")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let output_raw = unwrapped_payload.get("output").and_then(Value::as_str).unwrap_or("");
     let command_tokens = parse_command_tokens(unwrapped_payload);
-    let disable_spool = unwrapped_payload
-        .get("no_spool")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    let disable_spool = unwrapped_payload.get("no_spool").and_then(Value::as_bool).unwrap_or(false);
 
     // Check for session completion status (is_exited indicates if process is still running)
     let exit_code = unwrapped_payload.get("exit_code").and_then(Value::as_i64);
@@ -100,9 +88,8 @@ pub(crate) async fn render_terminal_command_panel(
         .and_then(Value::as_str)
         .filter(|note| !note.trim().is_empty());
 
-    let output_mode = vt_config
-        .map(|cfg| cfg.ui.tool_output_mode)
-        .unwrap_or(ToolOutputMode::Compact);
+    let output_mode =
+        vt_config.map(|cfg| cfg.ui.tool_output_mode).unwrap_or(ToolOutputMode::Compact);
     let tail_limit = resolve_stdout_tail_limit(vt_config);
 
     // Render stdin if available and different from command (avoid repeating the "• Ran" header)
@@ -213,11 +200,7 @@ pub(crate) async fn render_terminal_command_panel(
         Some(rendered_follow_up_body)
     };
 
-    render_tool_follow_up_hints(
-        renderer,
-        unwrapped_payload,
-        rendered_follow_up_body.as_deref(),
-    )?;
+    render_tool_follow_up_hints(renderer, unwrapped_payload, rendered_follow_up_body.as_deref())?;
 
     Ok(())
 }

@@ -45,10 +45,7 @@ impl ConfigWriter {
         // Create temp file in the same directory for atomic rename
         let temp_file = NamedTempFile::new_in(path.parent().unwrap_or_else(|| Path::new(".")))
             .with_context(|| {
-                format!(
-                    "Failed to create temp file in directory: {}",
-                    path.display()
-                )
+                format!("Failed to create temp file in directory: {}", path.display())
             })?;
 
         // Write content to temp file
@@ -211,9 +208,7 @@ user_setting = 1
         assert!(result.contains(VTCODE_BEGIN_MARKER));
         assert!(result.contains(VTCODE_END_MARKER));
         assert!(
-            result
-                .find("vtcode_setting")
-                .expect("missing VT Code setting")
+            result.find("vtcode_setting").expect("missing VT Code setting")
                 < result.find("user_setting").expect("missing user setting")
         );
     }
@@ -231,26 +226,11 @@ user_setting = 1
 
     #[test]
     fn test_detect_format() {
-        assert_eq!(
-            ConfigWriter::detect_format(Path::new("test.toml")),
-            ConfigFormat::Toml
-        );
-        assert_eq!(
-            ConfigWriter::detect_format(Path::new("test.json")),
-            ConfigFormat::Json
-        );
-        assert_eq!(
-            ConfigWriter::detect_format(Path::new("test.yaml")),
-            ConfigFormat::Yaml
-        );
-        assert_eq!(
-            ConfigWriter::detect_format(Path::new("test.js")),
-            ConfigFormat::JavaScript
-        );
-        assert_eq!(
-            ConfigWriter::detect_format(Path::new("test.conf")),
-            ConfigFormat::PlainText
-        );
+        assert_eq!(ConfigWriter::detect_format(Path::new("test.toml")), ConfigFormat::Toml);
+        assert_eq!(ConfigWriter::detect_format(Path::new("test.json")), ConfigFormat::Json);
+        assert_eq!(ConfigWriter::detect_format(Path::new("test.yaml")), ConfigFormat::Yaml);
+        assert_eq!(ConfigWriter::detect_format(Path::new("test.js")), ConfigFormat::JavaScript);
+        assert_eq!(ConfigWriter::detect_format(Path::new("test.conf")), ConfigFormat::PlainText);
     }
 
     #[test]

@@ -45,9 +45,7 @@ impl ContentPart {
 
     /// Create a new refusal content part.
     pub fn refusal(refusal: impl Into<String>) -> Self {
-        Self::Refusal(RefusalContent {
-            refusal: refusal.into(),
-        })
+        Self::Refusal(RefusalContent { refusal: refusal.into() })
     }
 
     /// Returns the text content if this is a text-based content part.

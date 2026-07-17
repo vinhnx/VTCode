@@ -115,10 +115,7 @@ impl AutonomousExecutor {
 
     pub fn with_loop_detector(loop_detector: Arc<RwLock<LoopDetector>>) -> Self {
         Self {
-            verification_tools: VERIFICATION_REQUIRED_TOOLS
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
+            verification_tools: VERIFICATION_REQUIRED_TOOLS.iter().map(|s| s.to_string()).collect(),
             loop_detector,
             execution_stats: Arc::new(RwLock::new(HashMap::new())),
             workspace_dir: std::env::var("WORKSPACE_DIR")
@@ -298,9 +295,7 @@ impl AutonomousExecutor {
             "chown -r",
         ];
 
-        supplemental_patterns
-            .iter()
-            .any(|pattern| cmd_lower.contains(pattern))
+        supplemental_patterns.iter().any(|pattern| cmd_lower.contains(pattern))
     }
 
     /// Validate tool arguments for safety
@@ -338,9 +333,8 @@ impl AutonomousExecutor {
     /// First checks for sensitive system paths via `validate_path_safety`,
     /// then enforces workspace boundary constraints.
     fn validate_file_path(&self, path: Option<&Value>) -> Result<()> {
-        let path_str = path
-            .and_then(|v| v.as_str())
-            .context("Missing or invalid 'path' argument")?;
+        let path_str =
+            path.and_then(|v| v.as_str()).context("Missing or invalid 'path' argument")?;
 
         // Check for sensitive system paths (e.g., /var/db/shadow, /etc/shadow)
         validate_path_safety(path_str)?;
@@ -413,21 +407,14 @@ impl AutonomousExecutor {
         if tool_name == tools::WRITE_FILE
             || (tool_name == tools::UNIFIED_FILE && file_operation_action_is(args, "write"))
         {
-            let path = args
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("unknown");
             let content = args.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let lines = content.lines().count();
             let size_kb = content.len() / 1024;
 
             let preview = if lines > 10 {
                 let first_lines: Vec<_> = content.lines().take(5).collect();
-                format!(
-                    "\n  {}\n  ... ({} more lines)",
-                    first_lines.join("\n  "),
-                    lines - 5
-                )
+                format!("\n  {}\n  ... ({} more lines)", first_lines.join("\n  "), lines - 5)
             } else {
                 format!("\n  {}", content.lines().collect::<Vec<_>>().join("\n  "))
             };
@@ -436,10 +423,7 @@ impl AutonomousExecutor {
         } else if tool_name == tools::EDIT_FILE
             || (tool_name == tools::UNIFIED_FILE && file_operation_action_is(args, "edit"))
         {
-            let path = args
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("unknown");
             let old_str = args.get("old_str").and_then(|v| v.as_str()).unwrap_or("");
             let new_str = args.get("new_str").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -450,10 +434,7 @@ impl AutonomousExecutor {
                 new_str.lines().take(3).collect::<Vec<_>>().join("\n  ")
             )
         } else if Self::is_command_session_run(tool_name, args) {
-            let cmd = command_text(args)
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| "unknown".to_string());
+            let cmd = command_text(args).ok().flatten().unwrap_or_else(|| "unknown".to_string());
             let is_destructive = self.is_destructive_command(&cmd);
 
             let warning = if is_destructive {
@@ -501,8 +482,7 @@ impl AutonomousExecutor {
         } else {
             // Note: We blindly treat all failures as circuit-breaking for now.
             // Ideally, the caller should specify if it's an arg error or system error.
-            self.circuit_breaker
-                .record_failure_for_tool(tool_key, false);
+            self.circuit_breaker.record_failure_for_tool(tool_key, false);
         }
 
         if let Ok(mut stats) = self.execution_stats.write() {
@@ -519,10 +499,7 @@ impl AutonomousExecutor {
     /// Get success rate for a tool
     pub fn get_success_rate(&self, tool_name: &str) -> f64 {
         if let Ok(stats) = self.execution_stats.read() {
-            stats
-                .get(tool_name)
-                .map(|s| s.success_rate())
-                .unwrap_or(0.0)
+            stats.get(tool_name).map(|s| s.success_rate()).unwrap_or(0.0)
         } else {
             0.0
         }
@@ -531,13 +508,9 @@ impl AutonomousExecutor {
     /// Get execution statistics for a tool
     pub fn get_tool_stats(&self, tool_name: &str) -> Option<(usize, usize, usize)> {
         if let Ok(stats) = self.execution_stats.read() {
-            stats.get(tool_name).map(|s| {
-                (
-                    s.total_attempts,
-                    s.successful_executions,
-                    s.failed_executions,
-                )
-            })
+            stats
+                .get(tool_name)
+                .map(|s| (s.total_attempts, s.successful_executions, s.failed_executions))
         } else {
             None
         }
@@ -554,9 +527,8 @@ impl AutonomousExecutor {
     fn record_rate_history(&self, tool_name: &str) {
         let now = Instant::now();
         if let Ok(mut history) = self.rate_history.write() {
-            let entries = history
-                .entry(Self::canonical_tool_key(tool_name).to_string())
-                .or_default();
+            let entries =
+                history.entry(Self::canonical_tool_key(tool_name).to_string()).or_default();
             entries.push_back(now);
             prune_expired_timestamps(entries, now, self.rate_limit_window);
         }
@@ -623,24 +595,17 @@ mod tests {
         let executor = AutonomousExecutor::new();
 
         assert_eq!(
-            executor.get_policy(
-                tools::CODE_SEARCH,
-                &json!({"query": "Widget", "path": "src"})
-            ),
+            executor.get_policy(tools::CODE_SEARCH, &json!({"query": "Widget", "path": "src"})),
             AutonomousPolicy::AutoExecute
         );
         assert_eq!(
-            executor.get_policy(
-                tools::UNIFIED_FILE,
-                &json!({"action": "read", "path": "README.md"})
-            ),
+            executor
+                .get_policy(tools::UNIFIED_FILE, &json!({"action": "read", "path": "README.md"})),
             AutonomousPolicy::AutoExecute
         );
         assert_eq!(
-            executor.get_policy(
-                tools::UNIFIED_EXEC,
-                &json!({"action": "poll", "session_id": "run-1"})
-            ),
+            executor
+                .get_policy(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": "run-1"})),
             AutonomousPolicy::AutoExecute
         );
         assert_eq!(
@@ -914,9 +879,7 @@ mod tests {
         // Parent traversal is rejected before canonical workspace checks.
         let args = json!({"path": "src/../lib/file.rs"});
         let result = executor.validate_args(tools::WRITE_FILE, &args);
-        let err = result
-            .expect_err("parent traversal should fail")
-            .to_string();
+        let err = result.expect_err("parent traversal should fail").to_string();
         assert!(err.contains("Path traversal"), "{err}");
     }
 }

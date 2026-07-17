@@ -167,11 +167,7 @@ fn resolve_child_mcp_providers(
     runtime: &ResolvedAgentRuntimeView,
 ) -> Vec<McpProviderConfig> {
     let mut providers = Vec::new();
-    merge_child_mcp_servers(
-        &mut providers,
-        &parent.mcp.providers,
-        runtime.mcp_servers.as_slice(),
-    );
+    merge_child_mcp_servers(&mut providers, &parent.mcp.providers, runtime.mcp_servers.as_slice());
     providers
 }
 
@@ -253,33 +249,18 @@ fn parent_rule_matches_spec_tools(rule: &str, spec_allowed: &[String]) -> bool {
         return false;
     }
 
-    let prefix = rule
-        .split_once('(')
-        .map_or(rule, |(prefix, _)| prefix)
-        .trim();
+    let prefix = rule.split_once('(').map_or(rule, |(prefix, _)| prefix).trim();
     match prefix.to_ascii_lowercase().as_str() {
-        "read" => spec_allowed
-            .iter()
-            .any(|tool| tool_supports_read_permission(tool)),
-        "edit" => spec_allowed
-            .iter()
-            .any(|tool| tool_supports_edit_permission(tool)),
-        "write" => spec_allowed
-            .iter()
-            .any(|tool| tool_supports_write_permission(tool)),
-        "bash" => spec_allowed
-            .iter()
-            .any(|tool| tool_supports_bash_permission(tool)),
-        "webfetch" => spec_allowed
-            .iter()
-            .any(|tool| tool_supports_web_fetch_permission(tool)),
-        _ if rule.starts_with(MCP_QUALIFIED_TOOL_PREFIX) => spec_allowed
-            .iter()
-            .any(|tool| canonical_mcp_rule_matches_tool(rule, tool)),
+        "read" => spec_allowed.iter().any(|tool| tool_supports_read_permission(tool)),
+        "edit" => spec_allowed.iter().any(|tool| tool_supports_edit_permission(tool)),
+        "write" => spec_allowed.iter().any(|tool| tool_supports_write_permission(tool)),
+        "bash" => spec_allowed.iter().any(|tool| tool_supports_bash_permission(tool)),
+        "webfetch" => spec_allowed.iter().any(|tool| tool_supports_web_fetch_permission(tool)),
+        _ if rule.starts_with(MCP_QUALIFIED_TOOL_PREFIX) => {
+            spec_allowed.iter().any(|tool| canonical_mcp_rule_matches_tool(rule, tool))
+        }
         _ if rule.contains(['(', ')']) => false,
-        _ => spec_allowed
-            .iter()
-            .any(|tool| tool.trim().eq_ignore_ascii_case(rule)),
+        _ => spec_allowed.iter().any(|tool| tool.trim().eq_ignore_ascii_case(rule)),
     }
 }
 
@@ -375,21 +356,13 @@ fn merge_child_hooks(child: &mut VTCodeConfig, hooks: Option<&HooksConfig>) {
         .lifecycle
         .session_start
         .extend(hooks.lifecycle.session_start.clone());
-    child
-        .hooks
-        .lifecycle
-        .session_end
-        .extend(hooks.lifecycle.session_end.clone());
+    child.hooks.lifecycle.session_end.extend(hooks.lifecycle.session_end.clone());
     child
         .hooks
         .lifecycle
         .user_prompt_submit
         .extend(hooks.lifecycle.user_prompt_submit.clone());
-    child
-        .hooks
-        .lifecycle
-        .pre_tool_use
-        .extend(hooks.lifecycle.pre_tool_use.clone());
+    child.hooks.lifecycle.pre_tool_use.extend(hooks.lifecycle.pre_tool_use.clone());
     child
         .hooks
         .lifecycle
@@ -400,11 +373,7 @@ fn merge_child_hooks(child: &mut VTCodeConfig, hooks: Option<&HooksConfig>) {
         .lifecycle
         .permission_request
         .extend(hooks.lifecycle.permission_request.clone());
-    child
-        .hooks
-        .lifecycle
-        .pre_compact
-        .extend(hooks.lifecycle.pre_compact.clone());
+    child.hooks.lifecycle.pre_compact.extend(hooks.lifecycle.pre_compact.clone());
     // Unified stop hook merging: stop + task_completion + task_completed
     child.hooks.lifecycle.stop.extend(
         hooks
@@ -415,11 +384,7 @@ fn merge_child_hooks(child: &mut VTCodeConfig, hooks: Option<&HooksConfig>) {
             .chain(hooks.lifecycle.task_completion.clone())
             .chain(hooks.lifecycle.task_completed.clone()),
     );
-    child
-        .hooks
-        .lifecycle
-        .notification
-        .extend(hooks.lifecycle.notification.clone());
+    child.hooks.lifecycle.notification.extend(hooks.lifecycle.notification.clone());
 }
 
 fn merge_child_mcp_servers(
@@ -433,9 +398,8 @@ fn merge_child_mcp_servers(
                 if providers.iter().any(|provider| provider.name == *name) {
                     continue;
                 }
-                if let Some(parent_provider) = parent_providers
-                    .iter()
-                    .find(|provider| provider.name == *name)
+                if let Some(parent_provider) =
+                    parent_providers.iter().find(|provider| provider.name == *name)
                 {
                     providers.push(parent_provider.clone());
                 }
@@ -456,10 +420,7 @@ fn merge_child_mcp_servers(
 fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProviderConfig> {
     let object = value.as_object()?;
     let mut payload = serde_json::Map::with_capacity(object.len().saturating_add(1));
-    payload.insert(
-        "name".to_string(),
-        serde_json::Value::String(name.to_string()),
-    );
+    payload.insert("name".to_string(), serde_json::Value::String(name.to_string()));
     for (key, value) in object {
         if key == "type" {
             continue;
@@ -577,12 +538,10 @@ pub fn filter_child_tools(
     definitions: Vec<ToolDefinition>,
     read_only: bool,
 ) -> Vec<ToolDefinition> {
-    let allowed = spec.tools.as_ref().map(|tools| {
-        tools
-            .iter()
-            .map(|tool| tool.to_ascii_lowercase())
-            .collect::<Vec<_>>()
-    });
+    let allowed = spec
+        .tools
+        .as_ref()
+        .map(|tools| tools.iter().map(|tool| tool.to_ascii_lowercase()).collect::<Vec<_>>());
     let denied = spec
         .disallowed_tools
         .iter()
@@ -605,9 +564,7 @@ pub fn filter_child_tools(
                 return false;
             }
             if read_only {
-                return NON_MUTATING_TOOL_PREFIXES
-                    .iter()
-                    .any(|candidate| *candidate == name);
+                return NON_MUTATING_TOOL_PREFIXES.iter().any(|candidate| *candidate == name);
             }
             true
         })
@@ -652,10 +609,7 @@ mod slice4_tests {
             ],
             spec.is_read_only(),
         );
-        let names = filtered
-            .iter()
-            .map(ToolDefinition::function_name)
-            .collect::<Vec<_>>();
+        let names = filtered.iter().map(ToolDefinition::function_name).collect::<Vec<_>>();
 
         assert_eq!(names, vec![tools::CODE_SEARCH]);
     }
@@ -848,10 +802,7 @@ mod tests {
 
         // The lightweight profile is the contract under test.
         assert_eq!(child.agent.system_prompt_mode, SystemPromptMode::Minimal);
-        assert_eq!(
-            child.agent.tool_documentation_mode,
-            ToolDocumentationMode::Minimal,
-        );
+        assert_eq!(child.agent.tool_documentation_mode, ToolDocumentationMode::Minimal,);
         // The deterministic env settings must be inherited so the ratio
         // reflects only the mode-driven difference, not environmental noise.
         assert!(!child.agent.include_temporal_context);
@@ -863,10 +814,7 @@ mod tests {
 
         let parent_tokens = parent_report.token_estimate;
         let child_tokens = child_report.token_estimate;
-        assert!(
-            parent_tokens > 0,
-            "parent prompt must be non-empty for a meaningful ratio"
-        );
+        assert!(parent_tokens > 0, "parent prompt must be non-empty for a meaningful ratio");
         // The composed system-prompt reduction from the lightweight profile is
         // bounded by the Default-vs-Minimal base-contract difference (both share
         // `SHARED_CONTRACT_LINES`), so it is ~25% in practice (measured 665 vs

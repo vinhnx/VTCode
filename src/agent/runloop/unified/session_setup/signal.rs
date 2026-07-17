@@ -12,9 +12,7 @@ pub(crate) struct SignalHandlerGuard {
 
 impl SignalHandlerGuard {
     fn new(handle: tokio::task::JoinHandle<()>) -> Self {
-        Self {
-            handle: Some(handle),
-        }
+        Self { handle: Some(handle) }
     }
 }
 

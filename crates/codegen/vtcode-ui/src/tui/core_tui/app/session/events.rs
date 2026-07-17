@@ -29,13 +29,7 @@ fn input_history_entries(
         .input_manager
         .history()
         .iter()
-        .map(|entry| {
-            (
-                entry.content().to_string(),
-                entry.attachment_elements(),
-                entry.timestamp(),
-            )
-        })
+        .map(|entry| (entry.content().to_string(), entry.attachment_elements(), entry.timestamp()))
         .collect()
 }
 
@@ -160,20 +154,14 @@ fn handle_image_paste_shortcut_with(
     mut image_reader: impl FnMut() -> Result<ContentPart, ClipboardImageError>,
 ) {
     if !session.core.image_input_enabled() {
-        push_warning_line(
-            session,
-            image_paste_warning(ClipboardImageError::UnsupportedModel),
-        );
+        push_warning_line(session, image_paste_warning(ClipboardImageError::UnsupportedModel));
         return;
     }
 
     match image_reader() {
         Ok(image) => {
             if let Some(attachment_number) = session.core.input_manager.push_attachment(image) {
-                session
-                    .core
-                    .input_manager
-                    .insert_text(&format!("[Image #{attachment_number}]"));
+                session.core.input_manager.insert_text(&format!("[Image #{attachment_number}]"));
             }
             session
                 .core
@@ -1080,9 +1068,7 @@ pub(super) fn open_history_picker(session: &mut Session) {
 
     session.ensure_inline_lists_visible_for_trigger();
     session.show_transient_surface(TransientSurface::HistoryPicker);
-    session
-        .history_picker_state
-        .open(&session.core.input_manager);
+    session.history_picker_state.open(&session.core.input_manager);
     let history = input_history_entries(session);
     session.history_picker_state.update_search(&history);
     session.mark_dirty();
@@ -1151,10 +1137,9 @@ fn handle_transcript_review_key(
         return TranscriptReviewKeyResult::Handled;
     }
 
-    let review_copy_shortcut = matches!(
-        key.code,
-        KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('\u{3}')
-    ) && has_control;
+    let review_copy_shortcut =
+        matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('\u{3}'))
+            && has_control;
     if review_copy_shortcut && session.core.mouse_selection.has_selection {
         session.core.mouse_selection.request_copy();
         session.mark_dirty();
@@ -1478,33 +1463,27 @@ pub(super) fn handle_diff_preview_key(
         KeyCode::Enter => {
             session.close_diff_overlay();
             session.mark_dirty();
-            Some(InlineEvent::Transient(TransientEvent::Submitted(
-                match mode {
-                    DiffPreviewMode::EditApproval => TransientSubmission::DiffApply,
-                    DiffPreviewMode::FileConflict => TransientSubmission::DiffProceed,
-                    DiffPreviewMode::ReadonlyReview => TransientSubmission::DiffAbort,
-                },
-            )))
+            Some(InlineEvent::Transient(TransientEvent::Submitted(match mode {
+                DiffPreviewMode::EditApproval => TransientSubmission::DiffApply,
+                DiffPreviewMode::FileConflict => TransientSubmission::DiffProceed,
+                DiffPreviewMode::ReadonlyReview => TransientSubmission::DiffAbort,
+            })))
         }
         KeyCode::Char('r') | KeyCode::Char('R')
             if matches!(mode, DiffPreviewMode::FileConflict) =>
         {
             session.close_diff_overlay();
             session.mark_dirty();
-            Some(InlineEvent::Transient(TransientEvent::Submitted(
-                TransientSubmission::DiffReload,
-            )))
+            Some(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::DiffReload)))
         }
         KeyCode::Esc => {
             session.close_diff_overlay();
             session.mark_dirty();
-            Some(InlineEvent::Transient(TransientEvent::Submitted(
-                match mode {
-                    DiffPreviewMode::EditApproval => TransientSubmission::DiffReject,
-                    DiffPreviewMode::FileConflict => TransientSubmission::DiffAbort,
-                    DiffPreviewMode::ReadonlyReview => TransientSubmission::DiffAbort,
-                },
-            )))
+            Some(InlineEvent::Transient(TransientEvent::Submitted(match mode {
+                DiffPreviewMode::EditApproval => TransientSubmission::DiffReject,
+                DiffPreviewMode::FileConflict => TransientSubmission::DiffAbort,
+                DiffPreviewMode::ReadonlyReview => TransientSubmission::DiffAbort,
+            })))
         }
         KeyCode::Char('1') if matches!(mode, DiffPreviewMode::EditApproval) => {
             let diff_state = session.diff_preview_state_mut()?;
@@ -1612,10 +1591,9 @@ mod tests {
     fn ctrl_home_and_end_jump_transcript_in_fullscreen() {
         let mut session = build_session();
         for index in 0..40 {
-            session.core.push_line(
-                InlineMessageKind::Agent,
-                vec![text_segment(format!("line {index}"))],
-            );
+            session
+                .core
+                .push_line(InlineMessageKind::Agent, vec![text_segment(format!("line {index}"))]);
         }
 
         session.core.scroll_page_up();
@@ -1625,19 +1603,14 @@ mod tests {
         assert_eq!(session.core.scroll_offset(), 0);
 
         let _ = session.process_key(KeyEvent::new(KeyCode::Home, KeyModifiers::CONTROL));
-        assert_eq!(
-            session.core.scroll_offset(),
-            session.core.current_max_scroll_offset()
-        );
+        assert_eq!(session.core.scroll_offset(), session.core.current_max_scroll_offset());
     }
 
     #[test]
     fn transcript_review_search_accept_and_cancel_work() {
         let mut session = build_session();
         for line in ["alpha", "beta alpha", "gamma alpha"] {
-            session
-                .core
-                .push_line(InlineMessageKind::Agent, vec![text_segment(line)]);
+            session.core.push_line(InlineMessageKind::Agent, vec![text_segment(line)]);
         }
 
         let _ = session.process_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::ALT));
@@ -1648,10 +1621,7 @@ mod tests {
         let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         let _ = session.process_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
 
-        let status = session
-            .transcript_review_state()
-            .expect("review open")
-            .status_label();
+        let status = session.transcript_review_state().expect("review open").status_label();
         assert!(status.contains("search 'alpha'"));
         assert!(status.contains("(2/3)"));
 
@@ -1659,10 +1629,7 @@ mod tests {
         let _ = session.process_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
         let _ = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
-        let status = session
-            .transcript_review_state()
-            .expect("review open")
-            .status_label();
+        let status = session.transcript_review_state().expect("review open").status_label();
         assert!(status.contains("search 'alpha'"));
     }
 
@@ -1705,10 +1672,9 @@ mod tests {
         let mut session = build_session();
         session.core.fullscreen.interaction.mouse_capture = false;
         for index in 0..20 {
-            session.core.push_line(
-                InlineMessageKind::Agent,
-                vec![text_segment(format!("line {index}"))],
-            );
+            session
+                .core
+                .push_line(InlineMessageKind::Agent, vec![text_segment(format!("line {index}"))]);
         }
         session.core.scroll_page_up();
         let initial_offset = session.core.scroll_offset();

@@ -65,12 +65,7 @@ mod tests {
         let mut output = String::new();
         let mut truncated = false;
 
-        assert!(collect_with_truncation(
-            &mut output,
-            "hello",
-            100,
-            &mut truncated
-        ));
+        assert!(collect_with_truncation(&mut output, "hello", 100, &mut truncated));
         assert_eq!(output, "hello");
         assert!(!truncated);
     }
@@ -80,12 +75,7 @@ mod tests {
         let mut output = String::from("hello");
         let mut truncated = false;
 
-        assert!(!collect_with_truncation(
-            &mut output,
-            " world that exceeds",
-            10,
-            &mut truncated
-        ));
+        assert!(!collect_with_truncation(&mut output, " world that exceeds", 10, &mut truncated));
         assert!(output.contains(TRUNCATION_MARKER));
         assert!(truncated);
     }

@@ -56,10 +56,7 @@ impl BottomStatusLayout {
     }
 
     fn into_status(self) -> (Option<String>, Option<String>) {
-        (
-            join_status_components(self.left),
-            join_status_components(self.right),
-        )
+        (join_status_components(self.left), join_status_components(self.right))
     }
 }
 
@@ -87,10 +84,7 @@ pub(crate) fn update_context_budget(
 }
 
 pub(crate) fn status_line_shows_auto_components(status_config: Option<&StatusLineConfig>) -> bool {
-    match status_config
-        .map(|cfg| cfg.effective_mode())
-        .unwrap_or(StatusLineMode::Auto)
-    {
+    match status_config.map(|cfg| cfg.effective_mode()).unwrap_or(StatusLineMode::Auto) {
         StatusLineMode::Auto | StatusLineMode::Unknown => true,
         StatusLineMode::Command => status_config
             .and_then(|cfg| cfg.command.as_deref())
@@ -110,9 +104,7 @@ pub(crate) async fn update_input_status_if_changed(
 ) -> Result<()> {
     // Get the effective status line mode, using defaults when config is unset
     // (following Codex PR #12015 pattern for default configuration fallback)
-    let mode = status_config
-        .map(|cfg| cfg.effective_mode())
-        .unwrap_or(StatusLineMode::Auto);
+    let mode = status_config.map(|cfg| cfg.effective_mode()).unwrap_or(StatusLineMode::Auto);
     let status_line_hidden = matches!(mode, StatusLineMode::Hidden);
 
     if status_line_hidden {
@@ -330,10 +322,7 @@ fn push_unique(values: &mut Vec<String>, value: String) {
         return;
     }
     let normalized = normalize_for_dedup(trimmed);
-    if values
-        .iter()
-        .any(|existing| normalize_for_dedup(existing) == normalized)
-    {
+    if values.iter().any(|existing| normalize_for_dedup(existing) == normalized) {
         return;
     }
     values.push(trimmed.to_string());
@@ -463,14 +452,14 @@ mod tests {
     fn status_line_shows_ide_context_source() {
         let status = build_model_status_with_context_and_spooled(
             None,
-            Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs"),
+            Some("IDE Context (VS Code): crates/codegen/vtcode-config/src/core/agent.rs"),
             false,
             None,
         );
 
         assert_eq!(
             status.as_deref(),
-            Some("IDE Context (VS Code): vtcode-config/src/core/agent.rs")
+            Some("IDE Context (VS Code): crates/codegen/vtcode-config/src/core/agent.rs")
         );
     }
 
@@ -494,9 +483,6 @@ mod tests {
         let mut state = InputStatusState::default();
         update_thread_context(&mut state, "main", 2);
 
-        assert_eq!(
-            state.thread_context.as_deref(),
-            Some("main · 2 local agents · ↓ explore")
-        );
+        assert_eq!(state.thread_context.as_deref(), Some("main · 2 local agents · ↓ explore"));
     }
 }

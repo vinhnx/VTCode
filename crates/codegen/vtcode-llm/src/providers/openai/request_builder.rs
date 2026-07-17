@@ -146,10 +146,7 @@ fn supports_assistant_phase_replay(model: &str) -> bool {
 
 fn default_replay_instructions(model: &str) -> Option<String> {
     if is_gpt5_codex_model(model) {
-        Some(format!(
-            "You are Codex, based on GPT-5. {}",
-            default_system_prompt()
-        ))
+        Some(format!("You are Codex, based on GPT-5. {}", default_system_prompt()))
     } else if is_gpt55_model(model) || is_gpt56_model(model) {
         Some(default_system_prompt())
     } else {
@@ -285,10 +282,7 @@ fn augment_openai_instructions(model: &str, instructions: String) -> String {
 
 fn allows_sampling_parameters(model: &str, reasoning_effort: Option<ReasoningEffortLevel>) -> bool {
     if GATED_SAMPLING_MODELS.contains(&model) {
-        matches!(
-            reasoning_effort.unwrap_or(ReasoningEffortLevel::None),
-            ReasoningEffortLevel::None
-        )
+        matches!(reasoning_effort.unwrap_or(ReasoningEffortLevel::None), ReasoningEffortLevel::None)
     } else {
         !SAMPLING_DISABLED_MODELS.contains(&model)
     }
@@ -301,10 +295,7 @@ pub(crate) fn build_chat_request(
     for message in request.messages.iter() {
         if let provider::MessageContent::Parts(parts) = &message.content {
             for part in parts {
-                if let provider::ContentPart::File {
-                    file_url: Some(_), ..
-                } = part
-                {
+                if let provider::ContentPart::File { file_url: Some(_), .. } = part {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
                         "Chat Completions does not support file_url inputs; use Responses API or file_id/file_data",
@@ -594,10 +585,8 @@ fn build_responses_request_from_history(
     merge_typed_responses_parameters(&mut openai_request, typed_parameters);
 
     let mut include_values = Vec::new();
-    if let Some(include_fields) = request
-        .responses_include
-        .as_deref()
-        .or(ctx.default_responses_include)
+    if let Some(include_fields) =
+        request.responses_include.as_deref().or(ctx.default_responses_include)
     {
         for field in include_fields {
             push_unique_include(&mut include_values, field);
@@ -608,10 +597,7 @@ fn build_responses_request_from_history(
     }
     if !include_values.is_empty() {
         openai_request["include"] = Value::Array(
-            include_values
-                .iter()
-                .map(|field| responses_include_value(field))
-                .collect(),
+            include_values.iter().map(|field| responses_include_value(field)).collect(),
         );
     }
 
@@ -718,14 +704,10 @@ fn build_responses_request_from_history(
     {
         let reasoning_value = map.entry("reasoning".to_string()).or_insert(json!({}));
         if let Some(reasoning_obj) = reasoning_value.as_object_mut() {
-            reasoning_obj
-                .entry("summary".to_string())
-                .or_insert_with(|| json!("auto"));
+            reasoning_obj.entry("summary".to_string()).or_insert_with(|| json!("auto"));
             // Add reasoning.context for persisted reasoning (GPT-5.6+)
             if let Some(context) = ctx.reasoning_context {
-                reasoning_obj
-                    .entry("context".to_string())
-                    .or_insert_with(|| json!(context));
+                reasoning_obj.entry("context".to_string()).or_insert_with(|| json!(context));
             }
         }
     }
@@ -743,10 +725,8 @@ fn build_responses_request_from_history(
 
     // Add grammar constraint if tools include grammar definitions
     if let Some(ref tools) = request.tools {
-        let grammar_tools: Vec<&provider::ToolDefinition> = tools
-            .iter()
-            .filter(|tool| tool.tool_type == "grammar")
-            .collect();
+        let grammar_tools: Vec<&provider::ToolDefinition> =
+            tools.iter().filter(|tool| tool.tool_type == "grammar").collect();
 
         if !grammar_tools.is_empty() {
             // Use the first grammar definition found
@@ -778,8 +758,7 @@ fn build_responses_request_from_history(
     if let Some(safety_id) = trimmed_non_empty(ctx.safety_identifier)
         && let Some(map) = openai_request.as_object_mut()
     {
-        map.entry("safety_identifier".to_string())
-            .or_insert_with(|| json!(safety_id));
+        map.entry("safety_identifier".to_string()).or_insert_with(|| json!(safety_id));
     }
 
     Ok(openai_request)
@@ -880,12 +859,7 @@ mod tests {
             payload.get("prompt_cache_key").and_then(Value::as_str),
             Some("vtcode:openai:session-123")
         );
-        assert_eq!(
-            payload
-                .get("prompt_cache_retention")
-                .and_then(Value::as_str),
-            Some("24h")
-        );
+        assert_eq!(payload.get("prompt_cache_retention").and_then(Value::as_str), Some("24h"));
     }
 
     #[test]
@@ -934,10 +908,7 @@ mod tests {
             let payload = build_responses_request(&request, &base_context(None))
                 .expect("chatgpt responses request should build");
 
-            assert_eq!(
-                payload.get("stream").and_then(Value::as_bool),
-                Some(requested_stream)
-            );
+            assert_eq!(payload.get("stream").and_then(Value::as_bool), Some(requested_stream));
         }
     }
 }

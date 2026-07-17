@@ -357,11 +357,7 @@ mod tests {
         "#;
         let contexts = ComObjectAnalyzer::analyze_instantiation(script);
         assert!(!contexts.is_empty());
-        assert!(
-            contexts[0]
-                .dangerous_methods_used
-                .contains(&"run".to_string())
-        );
+        assert!(contexts[0].dangerous_methods_used.contains(&"run".to_string()));
     }
 
     #[test]

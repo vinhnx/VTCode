@@ -5,7 +5,7 @@ This index collects provider-specific guides for configuring VT Code with differ
 ## Google Gemini
 
 -   Configuration details are covered in the main [Getting Started guide](../user-guide/getting-started.md#api-requirements).
--   Models and constants are defined in [`vtcode-core/src/config/constants.rs`](../../vtcode-core/src/config/constants.rs).
+-   Models and constants are defined in [`crates/codegen/vtcode-core/src/config/constants.rs`](../../crates/codegen/vtcode-core/src/config/constants.rs).
 
 ## OpenAI
 
@@ -13,7 +13,7 @@ This index collects provider-specific guides for configuring VT Code with differ
     -   [API reference index](https://developers.openai.com/api/reference/llms.txt)
     -   [Models catalog](https://developers.openai.com/api/docs/models)
 - Follow the [Getting Started guide](../user-guide/getting-started.md#api-requirements) for API key setup.
--   See [`vtcode-core/src/config/constants.rs`](../../vtcode-core/src/config/constants.rs) for the latest supported models.
+-   See [`crates/codegen/vtcode-core/src/config/constants.rs`](../../crates/codegen/vtcode-core/src/config/constants.rs) for the latest supported models.
 -   GPT-5.2 reference: See OpenAI documentation for latest models
 -   VT Code's default OpenAI profile is `gpt-5.4` with `reasoning_effort = "none"` and `verbosity = "medium"`; raise reasoning only when the task shape justifies the extra latency.
 -   VT Code applies a compact GPT-5.4 prompt contract rather than a verbatim cookbook prompt: compact outputs, low-risk follow-through, dependency-aware tool use, completeness checks, verification, and conditional grounding/citation rules.
@@ -35,7 +35,7 @@ This index collects provider-specific guides for configuring VT Code with differ
 ## Anthropic
 
 -   Key management and defaults mirror the Gemini/OpenAI flow in [Getting Started](../user-guide/getting-started.md#api-requirements).
--   Supported model IDs live in [`vtcode-core/src/config/constants.rs`](../../vtcode-core/src/config/constants.rs).
+-   Supported model IDs live in [`crates/codegen/vtcode-core/src/config/constants.rs`](../../crates/codegen/vtcode-core/src/config/constants.rs).
 
 ## GitHub Copilot
 

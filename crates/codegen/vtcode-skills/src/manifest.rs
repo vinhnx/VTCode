@@ -57,11 +57,7 @@ pub enum AllowedToolsField {
 /// Parse SKILL.md file and extract manifest + instructions
 pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, String)> {
     let skill_md = skill_path.join("SKILL.md");
-    anyhow::ensure!(
-        skill_md.exists(),
-        "SKILL.md not found at {}",
-        skill_md.display()
-    );
+    anyhow::ensure!(skill_md.exists(), "SKILL.md not found at {}", skill_md.display());
 
     let content = fs::read_to_string(&skill_md)
         .context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
@@ -129,10 +125,7 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
     // Split YAML frontmatter (between --- markers)
     let parts: Vec<&str> = content.splitn(3, "---").collect();
 
-    anyhow::ensure!(
-        parts.len() >= 3,
-        "SKILL.md must start with YAML frontmatter: --- ... ---"
-    );
+    anyhow::ensure!(parts.len() >= 3, "SKILL.md must start with YAML frontmatter: --- ... ---");
 
     let yaml_str = parts[1].trim();
     let instructions = parts[2].trim_start().to_string();
@@ -150,16 +143,10 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
     anyhow::ensure!(!name.is_empty(), "name is required and must not be empty");
 
     let description = yaml.description.trim().to_string();
-    anyhow::ensure!(
-        !description.is_empty(),
-        "description is required and must not be empty"
-    );
+    anyhow::ensure!(!description.is_empty(), "description is required and must not be empty");
 
     // Convert allowed-tools into space-delimited string for compatibility
-    let allowed_tools_string = yaml
-        .allowed_tools
-        .map(normalize_allowed_tools)
-        .transpose()?;
+    let allowed_tools_string = yaml.allowed_tools.map(normalize_allowed_tools).transpose()?;
 
     let manifest = SkillManifest {
         name,
@@ -208,9 +195,7 @@ fn normalize_allowed_tools(field: AllowedToolsField) -> anyhow::Result<String> {
         AllowedToolsField::String(value) => {
             let trimmed = value.trim();
             if trimmed.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "allowed-tools must not be empty if specified"
-                ));
+                return Err(anyhow::anyhow!("allowed-tools must not be empty if specified"));
             }
             let has_commas = trimmed.contains(',');
             if has_commas {

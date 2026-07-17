@@ -18,11 +18,7 @@ async fn apply_patch_supports_patch_alias() {
         .expect("apply_patch should succeed with alias");
 
     assert_eq!(result.get("success").and_then(|v| v.as_bool()), Some(true));
-    let applied = result
-        .get("applied")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
+    let applied = result.get("applied").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     assert_eq!(applied.len(), 1);
 
     let created = temp_dir.path().join("hello.txt");

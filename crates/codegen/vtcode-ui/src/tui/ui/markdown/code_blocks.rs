@@ -106,11 +106,8 @@ fn render_code_block_state(
         );
     }
 
-    let prefix = build_prefix_segments(
-        env.blockquote_depth,
-        env.list_continuation_prefix,
-        env.base_style,
-    );
+    let prefix =
+        build_prefix_segments(env.blockquote_depth, env.list_continuation_prefix, env.base_style);
     highlight_code_block(
         &state.buffer,
         state.language.as_deref(),
@@ -312,11 +309,7 @@ pub(crate) fn normalize_diff_lines(code: &str) -> Vec<String> {
     output.extend(preface);
     for block in blocks {
         output.push(block.header);
-        output.push(format_diff_summary(
-            block.path.as_str(),
-            block.additions,
-            block.deletions,
-        ));
+        output.push(format_diff_summary(block.path.as_str(), block.additions, block.deletions));
         output.extend(block.lines);
     }
     output
@@ -376,11 +369,7 @@ fn render_diff_code_block(
             if is_diff_header_line(trimmed_start) {
                 line.push_segment(style, trimmed);
             } else {
-                let marker_len = trimmed
-                    .chars()
-                    .next()
-                    .map(|ch| ch.len_utf8())
-                    .unwrap_or_default();
+                let marker_len = trimmed.chars().next().map(|ch| ch.len_utf8()).unwrap_or_default();
                 let (marker, content) = trimmed.split_at(marker_len);
                 line.push_segment(style, marker);
                 for segment in
@@ -554,10 +543,7 @@ fn bump_diff_counters(line: &str, additions: &mut usize, deletions: &mut usize) 
 
 fn is_diff_language(language: Option<&str>) -> bool {
     language.is_some_and(|lang| {
-        matches!(
-            lang.to_ascii_lowercase().as_str(),
-            "diff" | "patch" | "udiff" | "git"
-        )
+        matches!(lang.to_ascii_lowercase().as_str(), "diff" | "patch" | "udiff" | "git")
     })
 }
 
@@ -751,10 +737,8 @@ fn try_highlight(
     if let Some(lang) = language
         && !config.enabled_languages.is_empty()
     {
-        let direct_match = config
-            .enabled_languages
-            .iter()
-            .any(|entry| entry.eq_ignore_ascii_case(lang));
+        let direct_match =
+            config.enabled_languages.iter().any(|entry| entry.eq_ignore_ascii_case(lang));
         if !direct_match {
             let syntax_ref = syntax_highlight::find_syntax_by_token(lang);
             let resolved_match = config

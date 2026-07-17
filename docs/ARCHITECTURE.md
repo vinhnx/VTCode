@@ -16,7 +16,7 @@ trait resolution when a boundary starts depending on many overlapping impls,
 associated types, or context-specific behavior. In practice, VT Code treats
 `HasComponent<Name>::Provider` as an elaborated dictionary: the context chooses
 the provider once, and blanket consumer traits delegate through that explicit
-selection. See `vtcode-core/src/components.rs` and `vtcode-core/src/llm/cgp.rs`.
+selection. See `crates/codegen/vtcode-core/src/components.rs` and `crates/codegen/vtcode-core/src/llm/cgp.rs`.
 
 ## Model + Harness
 
@@ -31,8 +31,8 @@ exec/full-auto runtime is built around that split rather than around a separate 
 
 Harness primitives in VT Code map to the runtime like this:
 
-- **Instruction memory**: AGENTS.md loading, project docs, prompt assembly, onboarding guidance, and session bootstrap live in `vtcode-core/src/prompts/`, `vtcode-core/src/core/agent/`, and the workspace instruction loaders.
-- **Tools**: `vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose shell execution, stdin continuation, patch editing, bounded syntactic code search, and protocol-backed capabilities to the model.
+- **Instruction memory**: AGENTS.md loading, project docs, prompt assembly, onboarding guidance, and session bootstrap live in `crates/codegen/vtcode-core/src/prompts/`, `crates/codegen/vtcode-core/src/core/agent/`, and the workspace instruction loaders.
+- **Tools**: `crates/codegen/vtcode-core/src/tools/`, MCP integration, slash commands, and the tool registry expose shell execution, stdin continuation, patch editing, bounded syntactic code search, and protocol-backed capabilities to the model.
 - **Sandbox / execution environment**: `vtcode-bash-runner/`, `vtcode-safety/` (command safety, exec policy, sandboxing), workspace trust, command policies, and tool allow-lists define where generated code runs and what it can touch.
 - **Dynamic context**: context assembly, instruction merging, task tracker state, history, plan sidecars, and spooled tool outputs let VT Code rehydrate long-running work without keeping every token in the live window. The persisted `SessionMemoryEnvelope` is the harness working-memory artifact: it summarizes objective, constraints, touched files, grounded facts, verification status, verification TODOs, and delegated findings for resume and summarized-fork handoff.
 - **Compaction / offloading**: split tool results, spool files, archive transcripts, and provider-aware auto-compaction reduce context rot while preserving recoverable state on disk. On VT Code's local compaction path, older repeated single-file reads are deduplicated before summarization so the summary prompt keeps the newest copy and avoids re-injecting stale file payloads.
@@ -111,15 +111,15 @@ importing `vtcode_core::config` types directly.
 
 The full TUI source tree is now located in:
 
-- `vtcode-ui/src/tui/core_tui/`
+- `crates/codegen/vtcode-ui/src/tui/core_tui/`
 
-`vtcode-core/src/ui/tui.rs` is a compatibility shim that compiles this migrated
+`crates/codegen/vtcode-core/src/ui/tui.rs` is a compatibility shim that compiles this migrated
 source tree to preserve existing `vtcode_core::ui::tui` paths.
 
 The TUI runner is organized into focused modules:
 
 ```
-vtcode-ui/src/tui/core_tui/runner/
+crates/codegen/vtcode-ui/src/tui/core_tui/runner/
  mod.rs           # Orchestration entrypoint (`run_tui`)
  drive.rs         # Main terminal/event loop drive logic
  events.rs        # Async event stream + tick scheduling
@@ -246,7 +246,7 @@ impl ModeTool for MyTool {
 
 ## RL Optimization Loop (Adaptive Action Selection)
 
-- **Module:** `vtcode-core/src/llm/rl` (bandit and actor-critic implementations)
+- **Module:** `crates/codegen/vtcode-core/src/llm/rl` (bandit and actor-critic implementations)
 - **Config:** `[optimization]` with `strategy = "bandit" | "actor_critic"` plus reward shaping knobs
 - **Signals:** Success/timeout + latency feed `RewardSignal`, stored in a rolling `RewardLedger`
 - **Usage:** Construct `RlEngine::from_config(&VTCodeConfig::optimization)` and call `select(actions, PolicyContext)`; on completion emit `apply_reward`

@@ -230,12 +230,7 @@ fn prepare_summary_data(
         command_line_candidate.filter(|_| should_render_command_line(&highlights))
     };
 
-    SummaryData {
-        summary,
-        summary_highlights,
-        command_line,
-        details,
-    }
+    SummaryData { summary, summary_highlights, command_line, details }
 }
 
 fn render_bullet_line(
@@ -247,27 +242,13 @@ fn render_bullet_line(
 ) -> Option<Vec<String>> {
     let mut wrapped_run_segments: Option<Vec<String>> = None;
     if let Some(command) = data.summary.strip_prefix("Ran ") {
-        let wrapped = wrap_text_words(
-            command,
-            RUN_SUMMARY_FIRST_WIDTH,
-            RUN_SUMMARY_CONTINUATION_WIDTH,
-        );
-        let first_segment = wrapped
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "command".to_string());
+        let wrapped =
+            wrap_text_words(command, RUN_SUMMARY_FIRST_WIDTH, RUN_SUMMARY_CONTINUATION_WIDTH);
+        let first_segment = wrapped.first().cloned().unwrap_or_else(|| "command".to_string());
         wrapped_run_segments = Some(wrapped);
-        line.push_str(&render_styled(
-            "Ran",
-            palette.accent,
-            Some("bold".to_string()),
-        ));
+        line.push_str(&render_styled("Ran", palette.accent, Some("bold".to_string())));
         line.push(' ');
-        line.push_str(&render_run_command_segment(
-            &first_segment,
-            main_color,
-            palette.muted,
-        ));
+        line.push_str(&render_run_command_segment(&first_segment, main_color, palette.muted));
     } else {
         line.push_str(&render_summary_with_highlights(
             &data.summary,
@@ -456,18 +437,9 @@ pub(crate) fn stream_label_from_output(
     output: &Value,
     command_success: bool,
 ) -> Option<&'static str> {
-    let has_output = output
-        .get("output")
-        .and_then(Value::as_str)
-        .is_some_and(|s| !s.is_empty());
-    let has_stdout = output
-        .get("stdout")
-        .and_then(Value::as_str)
-        .is_some_and(|s| !s.is_empty());
-    let has_stderr = output
-        .get("stderr")
-        .and_then(Value::as_str)
-        .is_some_and(|s| !s.is_empty());
+    let has_output = output.get("output").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    let has_stdout = output.get("stdout").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    let has_stderr = output.get("stderr").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
     let has_error = output.get("error").is_some() || output.get("error_type").is_some();
 
     if has_output {
@@ -518,10 +490,7 @@ pub(crate) fn describe_tool_action(
         (format!("{}{}", mcp_label(is_mcp_tool), desc), used)
     };
     let fallback = |label: &str| -> (String, HashSet<String>) {
-        (
-            format!("{}{}", mcp_label(is_mcp_tool), label),
-            HashSet::new(),
-        )
+        (format!("{}{}", mcp_label(is_mcp_tool), label), HashSet::new())
     };
 
     match actual_tool_name {
@@ -601,10 +570,9 @@ pub(crate) fn describe_tool_action(
         actual_name if actual_name == tool_names::APPLY_PATCH => {
             let prefix = mcp_label(is_mcp_tool);
             match extract_first_patch_file_path(args) {
-                Some(path) => (
-                    format!("{prefix}Apply patch to {path}"),
-                    HashSet::from(["path".to_string()]),
-                ),
+                Some(path) => {
+                    (format!("{prefix}Apply patch to {path}"), HashSet::from(["path".to_string()]))
+                }
                 None => with_mcp("Apply workspace patch".into(), HashSet::new()),
             }
         }
@@ -612,10 +580,7 @@ pub(crate) fn describe_tool_action(
             let (desc, used) = describe_fetch_action(args);
             with_mcp(desc, used)
         }
-        _ => with_mcp(
-            format!("Use {}", humanize_tool_name(actual_tool_name)),
-            HashSet::new(),
-        ),
+        _ => with_mcp(format!("Use {}", humanize_tool_name(actual_tool_name)), HashSet::new()),
     }
 }
 
@@ -629,10 +594,7 @@ pub(crate) fn humanize_tool_name(name: &str) -> String {
 /// or `*** Delete File: path`. This function parses the patch text from `input`
 /// or `patch` args and returns the first file path found.
 fn extract_first_patch_file_path(args: &Value) -> Option<String> {
-    let patch_text = args
-        .get("input")
-        .or_else(|| args.get("patch"))
-        .and_then(Value::as_str)?;
+    let patch_text = args.get("input").or_else(|| args.get("patch")).and_then(Value::as_str)?;
 
     for line in patch_text.lines() {
         let trimmed = line.trim();
@@ -689,10 +651,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(
-            description,
-            "Read file /tmp/pr-babysitter/SKILL.md (pr-babysitter skill)"
-        );
+        assert_eq!(description, "Read file /tmp/pr-babysitter/SKILL.md (pr-babysitter skill)");
         assert!(used_keys.contains("path"));
     }
 
@@ -736,10 +695,7 @@ mod tests {
         let args = json!({
             "input": "*** Begin Patch\n*** Update File: src/main.rs\n@@ -1,3 +1,4 @@\n+use std::io;\n*** End Patch"
         });
-        assert_eq!(
-            super::extract_first_patch_file_path(&args),
-            Some("src/main.rs".to_string())
-        );
+        assert_eq!(super::extract_first_patch_file_path(&args), Some("src/main.rs".to_string()));
     }
 
     #[test]
@@ -747,10 +703,7 @@ mod tests {
         let args = json!({
             "patch": "*** Begin Patch\n*** Add File: new_file.txt\n+Hello\n*** End Patch"
         });
-        assert_eq!(
-            super::extract_first_patch_file_path(&args),
-            Some("new_file.txt".to_string())
-        );
+        assert_eq!(super::extract_first_patch_file_path(&args), Some("new_file.txt".to_string()));
     }
 
     #[test]
@@ -758,10 +711,7 @@ mod tests {
         let args = json!({
             "input": "*** Begin Patch\n*** Delete File: old.txt\n*** End Patch"
         });
-        assert_eq!(
-            super::extract_first_patch_file_path(&args),
-            Some("old.txt".to_string())
-        );
+        assert_eq!(super::extract_first_patch_file_path(&args), Some("old.txt".to_string()));
     }
 
     #[test]
@@ -769,10 +719,7 @@ mod tests {
         let args = json!({
             "input": "*** Begin Patch\n*** Update File: a.rs\n+line\n*** Update File: b.rs\n+line\n*** End Patch"
         });
-        assert_eq!(
-            super::extract_first_patch_file_path(&args),
-            Some("a.rs".to_string())
-        );
+        assert_eq!(super::extract_first_patch_file_path(&args), Some("a.rs".to_string()));
     }
 
     #[test]
@@ -796,11 +743,8 @@ mod tests {
 
     #[test]
     fn describe_tool_action_apply_patch_falls_back_without_path() {
-        let (description, used_keys) = describe_tool_action(
-            tool_names::APPLY_PATCH,
-            &json!({"input": "not a patch"}),
-            None,
-        );
+        let (description, used_keys) =
+            describe_tool_action(tool_names::APPLY_PATCH, &json!({"input": "not a patch"}), None);
         assert_eq!(description, "Apply workspace patch");
         assert!(used_keys.is_empty());
     }

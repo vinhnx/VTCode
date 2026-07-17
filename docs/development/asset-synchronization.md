@@ -4,7 +4,7 @@ This guide explains the embedded asset synchronization workflow between the work
 
 ## **Overview**
 
-VT Code maintains a synchronization system to mirror canonical prompts and documentation assets from the workspace into the `vtcode-core/embedded_assets_source` directory. This ensures that the Rust crate has access to the most up-to-date versions of these critical assets.
+VT Code maintains a synchronization system to mirror canonical prompts and documentation assets from the workspace into the `crates/codegen/vtcode-core/embedded_assets_source` directory. This ensures that the Rust crate has access to the most up-to-date versions of these critical assets.
 
 ## **Why Asset Synchronization?**
 
@@ -21,7 +21,7 @@ The following assets are currently synchronized:
 
 | Source (Workspace) | Destination (Crate) | Purpose |
 |-------------------|-------------------|---------|
-| `docs/modules/vtcode_docs_map.md` | `vtcode-core/embedded_assets_source/docs/modules/vtcode_docs_map.md` | Documentation map for self-documentation |
+| `docs/modules/vtcode_docs_map.md` | `crates/codegen/vtcode-core/embedded_assets_source/docs/modules/vtcode_docs_map.md` | Documentation map for self-documentation |
 
 ## **Using the Sync Script**
 
@@ -71,7 +71,7 @@ python3 scripts/sync_embedded_assets.py --dry-run
 python3 scripts/sync_embedded_assets.py
 
 # 4. Verify the changes were applied
-git diff vtcode-core/embedded_assets_source/
+git diff crates/codegen/vtcode-core/embedded_assets_source/
 ```
 
 #### **For Prompt Changes**
@@ -129,12 +129,12 @@ Add the sync check to your CI pipeline to ensure assets are always synchronized:
 - Verify the path in `ASSET_MAPPINGS` is correct
 
 **Permission Errors**
-- Ensure you have write permissions to `vtcode-core/embedded_assets_source/`
+- Ensure you have write permissions to `crates/codegen/vtcode-core/embedded_assets_source/`
 - Check that the script has execute permissions: `chmod +x scripts/sync_embedded_assets.py`
 
 **Unexpected Changes**
 - Always use `--dry-run` first to preview changes
-- Review the diff before committing: `git diff vtcode-core/embedded_assets_source/`
+- Review the diff before committing: `git diff crates/codegen/vtcode-core/embedded_assets_source/`
 - Check that you haven't accidentally modified the wrong files
 
 ### **Verification Steps**
@@ -143,10 +143,10 @@ After running the sync, verify it worked correctly:
 
 ```bash
 # 1. Check what changed
-git status vtcode-core/embedded_assets_source/
+git status crates/codegen/vtcode-core/embedded_assets_source/
 
 # 2. Review the differences
-git diff vtcode-core/embedded_assets_source/
+git diff crates/codegen/vtcode-core/embedded_assets_source/
 
 # 3. Ensure tests still pass
 cargo test --package vtcode-core
@@ -202,5 +202,5 @@ python3 scripts/sync_embedded_assets.py --dry-run
 python3 scripts/sync_embedded_assets.py
 
 # Check what changed
-git diff vtcode-core/embedded_assets_source/
+git diff crates/codegen/vtcode-core/embedded_assets_source/
 ```

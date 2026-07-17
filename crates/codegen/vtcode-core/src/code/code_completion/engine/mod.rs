@@ -128,19 +128,14 @@ impl CompletionEngine {
         let mut learning_data = self.learning_data.write().await;
 
         // Update acceptance statistics
-        let current_rate = learning_data
-            .pattern_acceptance
-            .get(suggestion_id)
-            .copied()
-            .unwrap_or(0.0);
+        let current_rate =
+            learning_data.pattern_acceptance.get(suggestion_id).copied().unwrap_or(0.0);
         let new_rate = if accepted {
             (current_rate + 1.0) / 2.0
         } else {
             current_rate * 0.9
         };
-        learning_data
-            .pattern_acceptance
-            .insert(suggestion_id.to_string(), new_rate);
+        learning_data.pattern_acceptance.insert(suggestion_id.to_string(), new_rate);
 
         // Update performance stats
         let mut stats = self.performance_stats.write().await;

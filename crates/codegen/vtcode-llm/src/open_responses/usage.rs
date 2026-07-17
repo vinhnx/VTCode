@@ -205,12 +205,7 @@ mod tests {
 
         assert_eq!(usage.input_tokens, 1000);
         assert_eq!(usage.output_tokens, 250);
-        assert_eq!(
-            usage
-                .input_tokens_details
-                .and_then(|details| details.cached_tokens),
-            Some(400)
-        );
+        assert_eq!(usage.input_tokens_details.and_then(|details| details.cached_tokens), Some(400));
     }
 
     #[test]

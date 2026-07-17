@@ -29,16 +29,9 @@ impl MemoryLock {
         stale_after: Duration,
     ) -> Result<Self> {
         for _ in 0..LOCK_RETRY_ATTEMPTS {
-            match tokio::fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(path)
-                .await
-            {
+            match tokio::fs::OpenOptions::new().create_new(true).write(true).open(path).await {
                 Ok(_) => {
-                    return Ok(Self {
-                        path: path.to_path_buf(),
-                    });
+                    return Ok(Self { path: path.to_path_buf() });
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
                     if let Some(age) = lock_age(path).await {
@@ -58,10 +51,7 @@ impl MemoryLock {
                 }
             }
         }
-        Err(anyhow::anyhow!(
-            "Timed out waiting for persistent memory lock {}",
-            path.display()
-        ))
+        Err(anyhow::anyhow!("Timed out waiting for persistent memory lock {}", path.display()))
     }
 }
 

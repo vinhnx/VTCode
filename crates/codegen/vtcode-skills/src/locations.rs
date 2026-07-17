@@ -95,10 +95,8 @@ impl SkillLocation {
             // For recursive locations, build name with separators
             match skill_path.strip_prefix(&self.base_path) {
                 Ok(relative_path) => {
-                    let name_components: Vec<&str> = relative_path
-                        .components()
-                        .filter_map(|c| c.as_os_str().to_str())
-                        .collect();
+                    let name_components: Vec<&str> =
+                        relative_path.components().filter_map(|c| c.as_os_str().to_str()).collect();
 
                     if name_components.is_empty() {
                         None
@@ -110,10 +108,7 @@ impl SkillLocation {
             }
         } else {
             // For one-level locations, just use the immediate directory name
-            skill_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .map(|s| s.to_string())
+            skill_path.file_name().and_then(|name| name.to_str()).map(|s| s.to_string())
         }
     }
 }
@@ -135,9 +130,7 @@ impl SkillLocations {
         let mut sorted_locations = locations;
         sorted_locations.sort_by_key(|loc| std::cmp::Reverse(loc.location_type));
 
-        Self {
-            locations: sorted_locations,
-        }
+        Self { locations: sorted_locations }
     }
 
     /// Get default skill locations following pi-mono pattern
@@ -195,10 +188,7 @@ impl SkillLocations {
         let mut discovered_skills = HashMap::new(); // skill_name -> (location_type, skill_context)
         let mut discovery_stats = DiscoveryStats::default();
 
-        info!(
-            "Discovering skills across {} locations",
-            self.locations.len()
-        );
+        info!("Discovering skills across {} locations", self.locations.len());
 
         for location in &self.locations {
             if !location.exists() {
@@ -244,11 +234,9 @@ impl SkillLocations {
 
         // Sort by location precedence (highest first) and then by name
         final_skills.sort_by(|a, b| match a.location_type.cmp(&b.location_type) {
-            std::cmp::Ordering::Equal => a
-                .skill_context
-                .manifest()
-                .name
-                .cmp(&b.skill_context.manifest().name),
+            std::cmp::Ordering::Equal => {
+                a.skill_context.manifest().name.cmp(&b.skill_context.manifest().name)
+            }
             other => other.reverse(),
         });
 
@@ -409,9 +397,7 @@ impl SkillLocations {
 
     /// Get location by type
     pub fn get_location(&self, location_type: SkillLocationType) -> Option<&SkillLocation> {
-        self.locations
-            .iter()
-            .find(|loc| loc.location_type == location_type)
+        self.locations.iter().find(|loc| loc.location_type == location_type)
     }
 }
 
@@ -518,17 +504,10 @@ mod tests {
         // Create one-level skill structure
         let skill_path = base_path.join("file-analyzer");
         std::fs::create_dir_all(&skill_path).unwrap();
-        std::fs::write(
-            skill_path.join("SKILL.md"),
-            "---\nname: file-analyzer\n---\n",
-        )
-        .unwrap();
+        std::fs::write(skill_path.join("SKILL.md"), "---\nname: file-analyzer\n---\n").unwrap();
 
-        let location = SkillLocation::new(
-            SkillLocationType::ClaudeProject,
-            base_path.to_path_buf(),
-            true,
-        );
+        let location =
+            SkillLocation::new(SkillLocationType::ClaudeProject, base_path.to_path_buf(), true);
 
         let skill_name = location.get_skill_name(&skill_path);
         assert_eq!(skill_name, Some("file-analyzer".to_string()));
@@ -541,16 +520,8 @@ mod tests {
         let claude_skills = temp_dir.path().join(".claude/skills");
 
         create_test_skill(&project_skills, "docs/doc-generator", "doc-generator");
-        create_test_skill(
-            &project_skills,
-            "spreadsheet-generator",
-            "spreadsheet-generator",
-        );
-        create_test_skill(
-            &project_skills,
-            "reports/pdf-report-generator",
-            "pdf-report-generator",
-        );
+        create_test_skill(&project_skills, "spreadsheet-generator", "spreadsheet-generator");
+        create_test_skill(&project_skills, "reports/pdf-report-generator", "pdf-report-generator");
         // Same manifest name in lower-precedence location should be ignored.
         create_test_skill(&claude_skills, "doc-generator", "doc-generator");
 
@@ -560,10 +531,8 @@ mod tests {
         ]);
 
         let discovered = locations.discover_skills().unwrap();
-        let skill_names: Vec<String> = discovered
-            .iter()
-            .map(|d| d.skill_context.manifest().name.clone())
-            .collect();
+        let skill_names: Vec<String> =
+            discovered.iter().map(|d| d.skill_context.manifest().name.clone()).collect();
         assert!(skill_names.contains(&"doc-generator".to_string()));
         assert!(skill_names.contains(&"spreadsheet-generator".to_string()));
         assert!(skill_names.contains(&"pdf-report-generator".to_string()));
@@ -572,10 +541,7 @@ mod tests {
             .iter()
             .find(|d| d.skill_context.manifest().name == "doc-generator")
             .expect("doc-generator should be discovered");
-        assert_eq!(
-            doc_generator.location_type,
-            SkillLocationType::AgentsProject
-        );
+        assert_eq!(doc_generator.location_type, SkillLocationType::AgentsProject);
     }
 
     #[test]
@@ -585,16 +551,8 @@ mod tests {
         let vtcode_skills = temp_dir.path().join(".vtcode/skills");
 
         create_test_skill(&agents_skills, "doc-generator", "doc-generator");
-        create_test_skill(
-            &agents_skills,
-            "spreadsheet-generator",
-            "spreadsheet-generator",
-        );
-        create_test_skill(
-            &agents_skills,
-            "pdf-report-generator",
-            "pdf-report-generator",
-        );
+        create_test_skill(&agents_skills, "spreadsheet-generator", "spreadsheet-generator");
+        create_test_skill(&agents_skills, "pdf-report-generator", "pdf-report-generator");
         // Lower-precedence duplicate should be overwritten by AgentsProject entry.
         create_test_skill(&vtcode_skills, "doc-generator", "doc-generator");
 
@@ -604,15 +562,10 @@ mod tests {
         ]);
 
         let discovered = locations.discover_skills().unwrap();
-        let skill_names: Vec<String> = discovered
-            .iter()
-            .map(|d| d.skill_context.manifest().name.clone())
-            .collect();
+        let skill_names: Vec<String> =
+            discovered.iter().map(|d| d.skill_context.manifest().name.clone()).collect();
 
-        assert!(
-            skill_names.contains(&"doc-generator".to_string()),
-            "Should find doc-generator"
-        );
+        assert!(skill_names.contains(&"doc-generator".to_string()), "Should find doc-generator");
         assert!(
             skill_names.contains(&"spreadsheet-generator".to_string()),
             "Should find spreadsheet-generator"
@@ -625,9 +578,6 @@ mod tests {
             .iter()
             .find(|d| d.skill_context.manifest().name == "doc-generator")
             .expect("doc-generator should be discovered");
-        assert_eq!(
-            doc_generator.location_type,
-            SkillLocationType::AgentsProject
-        );
+        assert_eq!(doc_generator.location_type, SkillLocationType::AgentsProject);
     }
 }

@@ -13,10 +13,7 @@ pub(crate) struct InlineListRow {
 
 impl InlineListRow {
     pub(crate) fn single(line: Line<'static>, style: Style) -> Self {
-        Self {
-            lines: vec![line],
-            style,
-        }
+        Self { lines: vec![line], style }
     }
 
     pub(crate) fn apply_style(&mut self, style: Style) {

@@ -38,9 +38,7 @@ pub struct WorktreeManager {
 impl WorktreeManager {
     /// Create a new `WorktreeManager` for the given workspace.
     pub fn new(workspace_root: impl Into<PathBuf>) -> Self {
-        Self {
-            workspace_root: workspace_root.into(),
-        }
+        Self { workspace_root: workspace_root.into() }
     }
 
     /// The directory where worktrees are stored.
@@ -65,10 +63,7 @@ impl WorktreeManager {
 
         let worktree_path = worktrees_dir.join(&sanitized);
         if worktree_path.exists() {
-            return Err(anyhow!(
-                "Worktree already exists at {}",
-                worktree_path.display()
-            ));
+            return Err(anyhow!("Worktree already exists at {}", worktree_path.display()));
         }
 
         let branch_name = format!("loop/{sanitized}");
@@ -126,17 +121,8 @@ impl WorktreeManager {
             if !path.starts_with(managed_dir) {
                 return None;
             }
-            let name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            Some(WorktreeInfo {
-                name,
-                path,
-                head: head.take(),
-                is_dirty: false,
-            })
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            Some(WorktreeInfo { name, path, head: head.take(), is_dirty: false })
         }
 
         for line in stdout.lines() {
@@ -298,10 +284,7 @@ mod tests {
     #[test]
     fn worktree_manager_worktrees_dir() {
         let mgr = WorktreeManager::new("/tmp/workspace");
-        assert_eq!(
-            mgr.worktrees_dir(),
-            PathBuf::from("/tmp/workspace/.vtcode/worktrees")
-        );
+        assert_eq!(mgr.worktrees_dir(), PathBuf::from("/tmp/workspace/.vtcode/worktrees"));
     }
 
     // Integration tests below exercise the real `git worktree` CLI against a
@@ -387,10 +370,7 @@ mod tests {
             .current_dir(repo.path())
             .output()
             .expect("check branch");
-        assert!(
-            !branch_check.status.success(),
-            "orphan branch should be deleted on remove"
-        );
+        assert!(!branch_check.status.success(), "orphan branch should be deleted on remove");
     }
 
     #[test]

@@ -149,11 +149,7 @@ impl ColorContext {
         tool_body_color: RgbColor,
         text_color: RgbColor,
     ) -> RgbColor {
-        let candidate = mix(
-            tool_body_color,
-            self.background,
-            ui::THEME_PTY_OUTPUT_MIX_RATIO,
-        );
+        let candidate = mix(tool_body_color, self.background, ui::THEME_PTY_OUTPUT_MIX_RATIO);
         self.guaranteed_text_color(candidate, &[tool_body_color, text_color])
     }
 
@@ -263,10 +259,7 @@ impl ColorContext {
         self.guaranteed_accent_color(
             lighten(primary_color, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
             &[
-                lighten(
-                    primary_color,
-                    ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO,
-                ),
+                lighten(primary_color, ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO),
                 info_color,
                 text_color,
             ],

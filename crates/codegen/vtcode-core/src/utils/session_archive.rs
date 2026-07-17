@@ -70,10 +70,7 @@ pub fn apply_session_history_config_from_vtcode(config: &VTCodeConfig) {
 }
 
 pub fn history_persistence_enabled() -> bool {
-    matches!(
-        session_history_settings().persistence,
-        HistoryPersistence::File
-    )
+    matches!(session_history_settings().persistence, HistoryPersistence::File)
 }
 
 #[cfg(test)]
@@ -225,10 +222,7 @@ impl SessionContinuationMetadata {
     }
 
     pub fn is_budget_limit(&self) -> bool {
-        matches!(
-            self.exhaustion_reason,
-            SessionContinuationExhaustionReason::MaxBudgetUsd
-        )
+        matches!(self.exhaustion_reason, SessionContinuationExhaustionReason::MaxBudgetUsd)
     }
 }
 
@@ -424,9 +418,7 @@ where
 
 #[expect(clippy::box_collection)]
 fn clone_non_empty_boxed_vec<T: Clone>(value: &Option<Box<Vec<T>>>) -> Option<Vec<T>> {
-    value
-        .as_deref()
-        .and_then(|value| (!value.is_empty()).then_some(value.clone()))
+    value.as_deref().and_then(|value| (!value.is_empty()).then_some(value.clone()))
 }
 
 #[expect(clippy::box_collection)]
@@ -620,9 +612,7 @@ fn normalize_workspace_for_match(path: &Path) -> PathBuf {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path)
+        env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(path)
     };
 
     crate::utils::path::normalize_path(&absolute)
@@ -724,22 +714,14 @@ pub fn generate_session_archive_identifier(
     workspace_label: &str,
     custom_suffix: Option<String>,
 ) -> String {
-    let file_name = archive_file_name_for_label(
-        workspace_label,
-        Utc::now(),
-        custom_suffix.as_deref(),
-        Some(0),
-    );
+    let file_name =
+        archive_file_name_for_label(workspace_label, Utc::now(), custom_suffix.as_deref(), Some(0));
     Path::new(&file_name)
         .file_stem()
         .and_then(|stem| stem.to_str())
         .map(str::to_owned)
         .unwrap_or_else(|| {
-            format!(
-                "session-{}-{}",
-                sanitize_component(workspace_label),
-                process::id()
-            )
+            format!("session-{}-{}", sanitize_component(workspace_label), process::id())
         })
 }
 
@@ -753,9 +735,7 @@ fn session_identifier_from_archive_path(path: &Path) -> Result<String> {
 fn is_valid_session_identifier(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 256
-        && value
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+        && value.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
 }
 
 fn validate_session_identifier(session_identifier: &str) -> Result<()> {
@@ -826,9 +806,7 @@ fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) 
         let content = message.content.trim();
         let content: &str = content.as_ref();
         if !content.is_empty()
-            && transcript
-                .last()
-                .is_none_or(|last: &String| last.as_str() != content)
+            && transcript.last().is_none_or(|last: &String| last.as_str() != content)
         {
             transcript.push(content.to_string());
         }
@@ -875,10 +853,8 @@ fn clean_transcript_lines(lines: &[String]) -> Vec<String> {
                 let insertion_index = cleaned.len();
                 push_clean_transcript_line(&mut cleaned, summary);
                 if cleaned.len() > insertion_index {
-                    seen_tool_blocks.insert(
-                        signature,
-                        (insertion_index, 1, cleaned[insertion_index].clone()),
-                    );
+                    seen_tool_blocks
+                        .insert(signature, (insertion_index, 1, cleaned[insertion_index].clone()));
                 }
             }
             index = next_index;
@@ -1103,13 +1079,8 @@ impl ProgressThrottle {
     fn new() -> Self {
         let min_interval =
             Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
-        let last_written = Instant::now()
-            .checked_sub(min_interval)
-            .unwrap_or_else(Instant::now);
-        Self {
-            last_written,
-            last_turn: 0,
-        }
+        let last_written = Instant::now().checked_sub(min_interval).unwrap_or_else(Instant::now);
+        Self { last_written, last_turn: 0 }
     }
 }
 
@@ -1394,12 +1365,9 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
 
     // Collect all session file paths first
     let mut session_paths = Vec::new();
-    for entry in fs::read_dir(&sessions_dir).with_context(|| {
-        format!(
-            "failed to read session directory: {}",
-            sessions_dir.display()
-        )
-    })? {
+    for entry in fs::read_dir(&sessions_dir)
+        .with_context(|| format!("failed to read session directory: {}", sessions_dir.display()))?
+    {
         let entry = entry.with_context(|| {
             format!("failed to read session entry in {}", sessions_dir.display())
         })?;
@@ -1493,9 +1461,7 @@ pub async fn find_session_by_id_or_name(id_or_name: &str) -> Result<SessionListi
         }
     }
 
-    Err(anyhow::anyhow!(
-        "No saved chat found matching '{id_or_name}'."
-    ))
+    Err(anyhow::anyhow!("No saved chat found matching '{id_or_name}'."))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1685,15 +1651,12 @@ fn apply_session_retention_with_limits(
     let age_cutoff = if limits.max_age_days == 0 {
         now
     } else {
-        now.checked_sub(Duration::from_secs(
-            limits.max_age_days.saturating_mul(SECONDS_PER_DAY),
-        ))
-        .unwrap_or(UNIX_EPOCH)
+        now.checked_sub(Duration::from_secs(limits.max_age_days.saturating_mul(SECONDS_PER_DAY)))
+            .unwrap_or(UNIX_EPOCH)
     };
 
-    let (expired, retained): (Vec<_>, Vec<_>) = entries
-        .into_iter()
-        .partition(|entry| entry.modified <= age_cutoff);
+    let (expired, retained): (Vec<_>, Vec<_>) =
+        entries.into_iter().partition(|entry| entry.modified <= age_cutoff);
     remove_session_files(expired);
     entries = retained;
 
@@ -1733,10 +1696,7 @@ fn collect_session_entries(sessions_dir: &Path) -> Result<Vec<SessionFileEntry>>
 
     let mut entries = Vec::new();
     for entry in fs::read_dir(sessions_dir).with_context(|| {
-        format!(
-            "failed to read session directory for retention: {}",
-            sessions_dir.display()
-        )
+        format!("failed to read session directory for retention: {}", sessions_dir.display())
     })? {
         let entry = match entry {
             Ok(value) => value,
@@ -1768,11 +1728,7 @@ fn collect_session_entries(sessions_dir: &Path) -> Result<Vec<SessionFileEntry>>
             continue;
         }
         let modified = metadata.modified().unwrap_or(UNIX_EPOCH);
-        entries.push(SessionFileEntry {
-            path,
-            modified,
-            size: metadata.len(),
-        });
+        entries.push(SessionFileEntry { path, modified, size: metadata.len() });
     }
 
     Ok(entries)
@@ -2022,9 +1978,9 @@ fn shrink_message_content(content: &mut MessageContent) -> bool {
             for part in parts {
                 changed |= match part {
                     crate::llm::provider::ContentPart::Text { text } => shrink_string(text),
-                    crate::llm::provider::ContentPart::Image {
-                        data, mime_type, ..
-                    } => shrink_string(data) | shrink_string(mime_type),
+                    crate::llm::provider::ContentPart::Image { data, mime_type, .. } => {
+                        shrink_string(data) | shrink_string(mime_type)
+                    }
                     crate::llm::provider::ContentPart::File {
                         filename,
                         file_id,
@@ -2127,10 +2083,7 @@ mod metadata_compat_tests {
             SessionArchiveMetadata::new("ws", "/tmp/ws", "gpt-5.4", "openai", "test", "low");
         let mut archive = tokio::runtime::Runtime::new()
             .expect("runtime")
-            .block_on(SessionArchive::new_with_identifier(
-                metadata,
-                "ws-0000".to_string(),
-            ))
+            .block_on(SessionArchive::new_with_identifier(metadata, "ws-0000".to_string()))
             .expect("create archive");
         assert_eq!(archive.metadata().primary_agent, None);
 

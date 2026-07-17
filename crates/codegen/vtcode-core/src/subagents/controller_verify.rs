@@ -93,7 +93,7 @@ impl SubagentController {
         };
 
         let status = self.spawn_custom(spec.clone(), request).await?;
-        let entry = self.wait(&[status.id.clone()], Some(60_000)).await?;
+        let entry = self.wait(std::slice::from_ref(&status.id), Some(60_000)).await?;
 
         match entry {
             Some(entry) if entry.status == SubagentStatus::Completed => {
@@ -122,11 +122,7 @@ impl SubagentController {
                     explicitly_approved && issues.is_empty()
                 };
 
-                Ok(VerificationResult {
-                    approved,
-                    issues,
-                    reasoning: summary,
-                })
+                Ok(VerificationResult { approved, issues, reasoning: summary })
             }
             Some(entry) => {
                 let error = entry.error.unwrap_or_default();

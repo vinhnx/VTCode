@@ -89,9 +89,8 @@ impl A2aClient {
 
     /// Send a message/send RPC
     pub async fn send_message(&self, params: MessageSendParams) -> A2aResult<Task> {
-        let result_value = self
-            .call_rpc(METHOD_MESSAGE_SEND, Some(serde_json::to_value(&params)?))
-            .await?;
+        let result_value =
+            self.call_rpc(METHOD_MESSAGE_SEND, Some(serde_json::to_value(&params)?)).await?;
         let task: Task = serde_json::from_value(result_value)
             .context("Failed to deserialize task")
             .map_err(|e| A2aError::Internal(e.to_string()))?;
@@ -147,6 +146,7 @@ impl A2aClient {
             }
 
             if !buffer.is_empty() {
+                #[allow(clippy::collapsible_if)]
                 if let Some(event) = parse_sse_event(&buffer)? {
                     yield event;
                 }
@@ -158,10 +158,7 @@ impl A2aClient {
 
     /// Get a task by ID
     pub async fn get_task(&self, task_id: String) -> A2aResult<Task> {
-        let params = serde_json::to_value(TaskQueryParams {
-            id: task_id,
-            history_length: None,
-        })?;
+        let params = serde_json::to_value(TaskQueryParams { id: task_id, history_length: None })?;
         let result_value = self.call_rpc(METHOD_TASKS_GET, Some(params)).await?;
         let task: Task = serde_json::from_value(result_value)
             .context("Failed to deserialize task")
@@ -172,10 +169,7 @@ impl A2aClient {
     /// List tasks with filters
     pub async fn list_tasks(&self, params: Option<ListTasksParams>) -> A2aResult<Value> {
         let result_value = self
-            .call_rpc(
-                METHOD_TASKS_LIST,
-                params.map(serde_json::to_value).transpose()?,
-            )
+            .call_rpc(METHOD_TASKS_LIST, params.map(serde_json::to_value).transpose()?)
             .await?;
         Ok(result_value)
     }
@@ -193,16 +187,10 @@ impl A2aClient {
     /// Set push notification config
     pub async fn set_push_config(&self, config: TaskPushNotificationConfig) -> A2aResult<bool> {
         let value = self
-            .call_rpc(
-                METHOD_TASKS_PUSH_CONFIG_SET,
-                Some(serde_json::to_value(config)?),
-            )
+            .call_rpc(METHOD_TASKS_PUSH_CONFIG_SET, Some(serde_json::to_value(config)?))
             .await?;
         // Server returns {"success": true}
-        let success = value
-            .get("success")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let success = value.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
         Ok(success)
     }
 
@@ -212,9 +200,7 @@ impl A2aClient {
         task_id: String,
     ) -> A2aResult<Option<TaskPushNotificationConfig>> {
         let params = serde_json::to_value(TaskIdParams { id: task_id })?;
-        let value = self
-            .call_rpc(METHOD_TASKS_PUSH_CONFIG_GET, Some(params))
-            .await?;
+        let value = self.call_rpc(METHOD_TASKS_PUSH_CONFIG_GET, Some(params)).await?;
         if value.is_null() {
             return Ok(None);
         }
@@ -260,10 +246,7 @@ impl A2aClient {
         } else if let Some(err) = rpc_response.error {
             Err(A2aError::rpc(err.code.into(), err.message))
         } else {
-            Err(A2aError::rpc(
-                A2aErrorCode::InvalidAgentResponse,
-                "Empty RPC response",
-            ))
+            Err(A2aError::rpc(A2aErrorCode::InvalidAgentResponse, "Empty RPC response"))
         }
     }
 }

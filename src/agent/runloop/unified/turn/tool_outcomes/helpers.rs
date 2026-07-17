@@ -46,20 +46,14 @@ impl LoopTracker {
 
     /// Record an attempt and return the count
     pub(crate) fn record(&mut self, signature: String) -> usize {
-        let entry = self
-            .attempts
-            .entry(signature)
-            .or_insert((0, Instant::now()));
+        let entry = self.attempts.entry(signature).or_insert((0, Instant::now()));
         entry.0 += 1;
         entry.1 = Instant::now();
         entry.0
     }
 
     fn record_low_signal(&mut self, signature: String) -> usize {
-        let entry = self
-            .low_signal_attempts
-            .entry(signature)
-            .or_insert((0, Instant::now()));
+        let entry = self.low_signal_attempts.entry(signature).or_insert((0, Instant::now()));
         entry.0 += 1;
         entry.1 = Instant::now();
         entry.0
@@ -72,28 +66,19 @@ impl LoopTracker {
     {
         self.attempts
             .iter()
-            .filter_map(
-                |(sig, (count, _))| {
-                    if exclude(sig) { None } else { Some(*count) }
-                },
-            )
+            .filter_map(|(sig, (count, _))| if exclude(sig) { None } else { Some(*count) })
             .max()
             .unwrap_or(0)
     }
 
     pub(crate) fn max_low_signal_count(&self) -> usize {
-        self.low_signal_attempts
-            .values()
-            .map(|(count, _)| *count)
-            .max()
-            .unwrap_or(0)
+        self.low_signal_attempts.values().map(|(count, _)| *count).max().unwrap_or(0)
     }
 
     /// Number of redundant navigations (total - unique) in the current window.
     /// At least 3 before the navigation loop guard considers firing.
     pub(crate) fn repeated_navigation_count(&self) -> usize {
-        self.consecutive_navigations
-            .saturating_sub(self.nav_signatures.len())
+        self.consecutive_navigations.saturating_sub(self.nav_signatures.len())
     }
 
     fn reset_low_signal_attempts(&mut self) {
@@ -261,10 +246,7 @@ fn tool_response_is_success(message: &uni::Message) -> bool {
     {
         return false;
     }
-    if output
-        .get("status")
-        .is_some_and(|status| status.as_str() != Some("success"))
-    {
+    if output.get("status").is_some_and(|status| status.as_str() != Some("success")) {
         return false;
     }
 
@@ -323,10 +305,7 @@ fn output_is_grep_style_miss(output: &serde_json::Value, command_success: bool) 
     }
 
     let exit_code = output.get("exit_code").and_then(serde_json::Value::as_i64);
-    let command = output
-        .get("command")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default();
+    let command = output.get("command").and_then(serde_json::Value::as_str).unwrap_or_default();
     let stdout_empty = output
         .get("stdout")
         .or_else(|| output.get("output"))
@@ -351,11 +330,7 @@ fn error_is_missing_resource(error: &str) -> bool {
 
 fn is_low_signal_outcome(outcome: &ToolPipelineOutcome, canonical_tool_name: &str) -> bool {
     match &outcome.status {
-        ToolExecutionStatus::Success {
-            output,
-            command_success,
-            ..
-        } => {
+        ToolExecutionStatus::Success { output, command_success, .. } => {
             output_has_empty_search_results(output)
                 || output_reuses_recent_result(output)
                 || (canonical_tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
@@ -729,10 +704,7 @@ mod tests {
         );
 
         assert_eq!(history.len(), 1);
-        assert_eq!(
-            history[0].content.as_text_borrowed(),
-            Some("{\"output\":\"latest\"}")
-        );
+        assert_eq!(history[0].content.as_text_borrowed(), Some("{\"output\":\"latest\"}"));
     }
 
     #[test]
@@ -792,10 +764,7 @@ mod tests {
             Some("{\"output\":\"first\"}"),
             "earlier unrelated Tool result must remain intact"
         );
-        assert_eq!(
-            tool_messages[1].content.as_text_borrowed(),
-            Some("{\"output\":\"second\"}")
-        );
+        assert_eq!(tool_messages[1].content.as_text_borrowed(), Some("{\"output\":\"second\"}"));
     }
 
     #[test]
@@ -840,11 +809,7 @@ mod tests {
             .iter()
             .filter(|message| matches!(message.role, uni::MessageRole::Tool))
             .collect();
-        assert_eq!(
-            tool_messages.len(),
-            2,
-            "must append, not overwrite the earlier file read"
-        );
+        assert_eq!(tool_messages.len(), 2, "must append, not overwrite the earlier file read");
         assert_eq!(
             tool_messages[0].content.as_text_borrowed(),
             Some("{\"output\":\"file content\"}"),
@@ -1393,10 +1358,7 @@ mod tests {
             tools::UNIFIED_FILE,
             &json!({"action":"read","path":"src/main.rs","offset":0,"limit":100}),
         );
-        assert_ne!(
-            key_a, key_c,
-            "different files must produce different normalized keys"
-        );
+        assert_ne!(key_a, key_c, "different files must produce different normalized keys");
 
         // Verify: code-search result limits remain distinct while filter ordering normalises away.
         let s_key_a = read_normalized_signature_key(

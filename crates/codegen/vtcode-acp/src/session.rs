@@ -497,9 +497,7 @@ mod tests {
 
     #[test]
     fn test_session_update_message_delta() {
-        let update = SessionUpdate::MessageDelta {
-            delta: "Hello".to_string(),
-        };
+        let update = SessionUpdate::MessageDelta { delta: "Hello".to_string() };
         let json = serde_json::to_value(&update).unwrap();
         assert_eq!(json["update_type"], "message_delta");
         assert_eq!(json["delta"], "Hello");
@@ -524,10 +522,7 @@ mod tests {
             result: None,
             timestamp: "2025-01-01T00:00:00Z".to_string(),
         };
-        let request = ToolExecutionRequest {
-            request_id: "req-1".to_string(),
-            tool_call,
-        };
+        let request = ToolExecutionRequest { request_id: "req-1".to_string(), tool_call };
         let update = SessionUpdate::ServerRequest { request };
         let json = serde_json::to_value(&update).unwrap();
         assert_eq!(json["update_type"], "server_request");

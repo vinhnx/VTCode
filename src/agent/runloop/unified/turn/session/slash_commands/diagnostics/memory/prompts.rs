@@ -16,23 +16,15 @@ pub(super) async fn prompt_required_text(
     placeholder: &str,
     default_value: Option<String>,
 ) -> Result<Option<String>> {
-    let Some(value) = prompt_text(
-        ctx,
-        title,
-        question,
-        freeform_label,
-        placeholder,
-        default_value,
-        false,
-    )
-    .await?
+    let Some(value) =
+        prompt_text(ctx, title, question, freeform_label, placeholder, default_value, false)
+            .await?
     else {
         return Ok(None);
     };
     let trimmed = value.trim().to_string();
     if trimmed.is_empty() {
-        ctx.renderer
-            .line(MessageStyle::Info, "Input was empty. Nothing changed.")?;
+        ctx.renderer.line(MessageStyle::Info, "Input was empty. Nothing changed.")?;
         return Ok(None);
     }
     Ok(Some(trimmed))
@@ -46,16 +38,7 @@ pub(super) async fn prompt_optional_text(
     placeholder: &str,
     default_value: Option<String>,
 ) -> Result<Option<String>> {
-    prompt_text(
-        ctx,
-        title,
-        question,
-        freeform_label,
-        placeholder,
-        default_value,
-        true,
-    )
-    .await
+    prompt_text(ctx, title, question, freeform_label, placeholder, default_value, true).await
 }
 
 async fn prompt_text(
@@ -83,18 +66,14 @@ async fn prompt_text(
     .await?;
     let value = match outcome {
         WizardModalOutcome::Submitted(selections) => {
-            selections
-                .into_iter()
-                .find_map(|selection| match selection {
-                    InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        other,
-                    } if question_id == MEMORY_PROMPT_QUESTION_ID => {
-                        other.or_else(|| selected.first().cloned())
-                    }
-                    _ => None,
-                })
+            selections.into_iter().find_map(|selection| match selection {
+                InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
+                    if question_id == MEMORY_PROMPT_QUESTION_ID =>
+                {
+                    other.or_else(|| selected.first().cloned())
+                }
+                _ => None,
+            })
         }
         WizardModalOutcome::Cancelled { .. } => None,
     };
@@ -156,10 +135,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(
-            step.freeform_placeholder.as_deref(),
-            Some("**/other-team/.vtcode/rules/**")
-        );
+        assert_eq!(step.freeform_placeholder.as_deref(), Some("**/other-team/.vtcode/rules/**"));
         assert_eq!(step.freeform_default, None);
     }
 

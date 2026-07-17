@@ -29,8 +29,7 @@ impl FileOpsTool {
         let (final_content, is_truncated) =
             if input.offset_lines.is_some() || input.page_size_lines.is_some() {
                 // Line-based paging
-                self.read_file_by_lines(file_path, input, file_size as usize)
-                    .await?
+                self.read_file_by_lines(file_path, input, file_size as usize).await?
             } else {
                 // Byte-based paging (default)
                 self.read_file_by_bytes(file_path, input, file_size).await?
@@ -64,11 +63,7 @@ impl FileOpsTool {
             builder = builder.data("page_size_lines", json!(page_size_lines));
         }
 
-        Ok((
-            final_content,
-            builder.build_json()["metadata"].clone(),
-            is_truncated,
-        ))
+        Ok((final_content, builder.build_json()["metadata"].clone(), is_truncated))
     }
 
     /// Read file content by lines with offset and page size

@@ -93,10 +93,7 @@ pub fn validate_mcp_config(config: &vtcode_config::mcp::McpClientConfig) -> Resu
     if config.server.enabled {
         // Validate port range
         if config.server.port == 0 {
-            return Err(anyhow::anyhow!(
-                "Invalid server port: {}",
-                config.server.port
-            ));
+            return Err(anyhow::anyhow!("Invalid server port: {}", config.server.port));
         }
 
         // Validate bind address
@@ -243,14 +240,9 @@ pub(crate) fn format_tool_markdown(tool: &McpToolInfo) -> String {
         {
             content.push_str("## Parameters\n\n");
             for (param_name, param_schema) in props {
-                let param_type = param_schema
-                    .get("type")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("any");
-                let param_desc = param_schema
-                    .get("description")
-                    .and_then(|d| d.as_str())
-                    .unwrap_or("");
+                let param_type = param_schema.get("type").and_then(|t| t.as_str()).unwrap_or("any");
+                let param_desc =
+                    param_schema.get("description").and_then(|d| d.as_str()).unwrap_or("");
                 let _ = write!(content, "### `{param_name}`\n\n");
                 let _ = writeln!(content, "- **Type**: {param_type}");
                 if !param_desc.is_empty() {
@@ -321,19 +313,14 @@ mod tests {
 
         ensure_timezone_argument(&mut arguments, true).unwrap();
 
-        assert_eq!(
-            arguments.get(TIMEZONE_ARGUMENT).and_then(Value::as_str),
-            Some("Etc/UTC")
-        );
+        assert_eq!(arguments.get(TIMEZONE_ARGUMENT).and_then(Value::as_str), Some("Etc/UTC"));
     }
 
     #[test]
     fn ensure_timezone_does_not_override_existing_value() {
         let mut arguments = Map::new();
-        arguments.insert(
-            TIMEZONE_ARGUMENT.to_string(),
-            Value::String("America/New_York".to_owned()),
-        );
+        arguments
+            .insert(TIMEZONE_ARGUMENT.to_string(), Value::String("America/New_York".to_owned()));
 
         ensure_timezone_argument(&mut arguments, true).unwrap();
 

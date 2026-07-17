@@ -131,10 +131,7 @@ impl CopilotProvider {
             ))
         })?;
 
-        Ok(ResolvedCopilotModel {
-            request_model: requested.to_string(),
-            raw_model,
-        })
+        Ok(ResolvedCopilotModel { request_model: requested.to_string(), raw_model })
     }
 
     fn build_transcript(&self, request: &LLMRequest) -> Result<String, LLMError> {
@@ -168,9 +165,7 @@ impl CopilotProvider {
 
         impl PromptCancellationGuard {
             fn new(cancel_handle: PromptSessionCancelHandle) -> Self {
-                Self {
-                    cancel_handle: Some(cancel_handle),
-                }
+                Self { cancel_handle: Some(cancel_handle) }
             }
 
             fn disarm(&mut self) {
@@ -321,10 +316,7 @@ impl CopilotProvider {
         let model = self.resolve_model(&request)?;
         let transcript = self.build_transcript(&request)?;
         let client = self.client(&model, tools).await?;
-        client
-            .start_prompt(transcript)
-            .await
-            .map_err(map_copilot_error)
+        client.start_prompt(transcript).await.map_err(map_copilot_error)
     }
 }
 
@@ -393,10 +385,7 @@ impl LLMProvider for CopilotProvider {
         let model = self.resolve_model(&request)?;
         let transcript = self.build_transcript(&request)?;
         let client = self.client(&model, &[]).await?;
-        let prompt_session = client
-            .start_prompt(transcript)
-            .await
-            .map_err(map_copilot_error)?;
+        let prompt_session = client.start_prompt(transcript).await.map_err(map_copilot_error)?;
         self.stream_from_session(model, prompt_session).await
     }
 
@@ -405,9 +394,7 @@ impl LLMProvider for CopilotProvider {
         request: LLMRequest,
         tools: &'a [ToolDefinition],
     ) -> Option<CopilotPromptSessionFuture<'a>> {
-        Some(Box::pin(async move {
-            self.start_prompt_session_impl(request, tools).await
-        }))
+        Some(Box::pin(async move { self.start_prompt_session_impl(request, tools).await }))
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -424,11 +411,7 @@ impl LLMProvider for CopilotProvider {
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         validate_request_common(request, "GitHub Copilot", COPILOT_PROVIDER_KEY, None)?;
 
-        if request
-            .tools
-            .as_ref()
-            .is_some_and(|tools| !tools.is_empty())
-        {
+        if request.tools.as_ref().is_some_and(|tools| !tools.is_empty()) {
             return Err(invalid_request(
                 "GitHub Copilot in VT Code v1 does not accept VT Code tool definitions.",
             ));
@@ -464,11 +447,7 @@ fn render_message_for_copilot(message: &Message) -> String {
         sections.push(trimmed.to_string());
     }
 
-    if let Some(tool_calls) = message
-        .tool_calls
-        .as_ref()
-        .filter(|calls| !calls.is_empty())
-    {
+    if let Some(tool_calls) = message.tool_calls.as_ref().filter(|calls| !calls.is_empty()) {
         let mut tool_history = String::from("[VT Code tool call history]");
         for call in tool_calls {
             let (tool_name, args) = call
@@ -529,10 +508,7 @@ fn plural_suffix(count: usize) -> &'static str {
 }
 
 fn invalid_request(message: &str) -> LLMError {
-    LLMError::InvalidRequest {
-        message: message.to_string(),
-        metadata: None,
-    }
+    LLMError::InvalidRequest { message: message.to_string(), metadata: None }
 }
 
 fn map_copilot_error(error: anyhow::Error) -> LLMError {
@@ -545,10 +521,7 @@ fn map_copilot_error(error: anyhow::Error) -> LLMError {
         };
     }
 
-    LLMError::Provider {
-        message,
-        metadata: None,
-    }
+    LLMError::Provider { message, metadata: None }
 }
 
 fn map_stop_reason(stop_reason: &str) -> crate::provider::FinishReason {
@@ -566,11 +539,7 @@ fn copilot_tool_signature(tools: &[ToolDefinition]) -> String {
         .iter()
         .filter_map(|tool| {
             let function = tool.function.as_ref()?;
-            Some(format!(
-                "{}:{}",
-                function.name,
-                serde_json::to_string(&function.parameters).ok()?
-            ))
+            Some(format!("{}:{}", function.name, serde_json::to_string(&function.parameters).ok()?))
         })
         .collect::<Vec<_>>();
     signature_parts.sort_unstable();
@@ -620,9 +589,7 @@ mod tests {
             ..Default::default()
         };
 
-        let transcript = provider
-            .build_transcript(&request)
-            .expect("transcript should build");
+        let transcript = provider.build_transcript(&request).expect("transcript should build");
 
         assert_eq!(
             transcript,
@@ -709,12 +676,7 @@ mod tests {
     fn supported_models_include_copilot_auto() {
         let provider = provider();
 
-        assert!(
-            provider
-                .supported_models()
-                .iter()
-                .any(|model| model == copilot_models::AUTO)
-        );
+        assert!(provider.supported_models().iter().any(|model| model == copilot_models::AUTO));
     }
 
     #[test]

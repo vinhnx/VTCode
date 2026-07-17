@@ -66,11 +66,8 @@ impl FilePalette {
             })
             .collect();
 
-        self.all_files.sort_by(|a, b| {
-            a.relative_path
-                .to_lowercase()
-                .cmp(&b.relative_path.to_lowercase())
-        });
+        self.all_files
+            .sort_by(|a, b| a.relative_path.to_lowercase().cmp(&b.relative_path.to_lowercase()));
     }
 
     /// Build `dir_index`: for every directory, the list of its *direct* children
@@ -145,11 +142,7 @@ impl FilePalette {
         };
 
         let children = index.entry(parent.to_path_buf()).or_default();
-        if is_dir
-            && children
-                .iter()
-                .any(|c| c.display_name == entry.display_name)
-        {
+        if is_dir && children.iter().any(|c| c.display_name == entry.display_name) {
             return;
         }
         children.push(entry);
@@ -157,10 +150,7 @@ impl FilePalette {
 
     fn make_relative(workspace: &Path, file_path: &str) -> String {
         let path = Path::new(file_path);
-        path.strip_prefix(workspace)
-            .unwrap_or(path)
-            .to_string_lossy()
-            .to_string()
+        path.strip_prefix(workspace).unwrap_or(path).to_string_lossy().to_string()
     }
 
     pub fn set_filter(&mut self, query: String) {
@@ -183,19 +173,14 @@ impl FilePalette {
 
         let mut children = self.ensure_dir_listing(&cur);
         children.sort_by(|a, b| {
-            b.is_dir.cmp(&a.is_dir).then_with(|| {
-                a.display_name
-                    .to_lowercase()
-                    .cmp(&b.display_name.to_lowercase())
-            })
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()))
         });
 
         let mut listing: Vec<FileEntry> = Vec::with_capacity(children.len() + 1);
         if cur != root {
-            let parent_path = cur
-                .parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or_else(|| root.clone());
+            let parent_path = cur.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| root.clone());
             let relative_path = Self::make_relative(&root, &parent_path.display().to_string());
             listing.push(FileEntry {
                 path: parent_path.display().to_string(),
@@ -224,17 +209,9 @@ impl FilePalette {
             .into_iter()
             .map(|(path, is_dir)| {
                 let display_name = if is_dir {
-                    format!(
-                        "{}/",
-                        path.file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or_default()
-                    )
+                    format!("{}/", path.file_name().and_then(|n| n.to_str()).unwrap_or_default())
                 } else {
-                    path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or_default()
-                        .to_string()
+                    path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string()
                 };
                 let relative_path =
                     Self::make_relative(&self.workspace_root, &path.display().to_string());
@@ -321,10 +298,7 @@ impl FilePalette {
         scored.sort_unstable_by(|a, b| match (a.is_dir, b.is_dir) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
-            _ => b
-                .score
-                .cmp(&a.score)
-                .then_with(|| a.path_lower.cmp(&b.path_lower)),
+            _ => b.score.cmp(&a.score).then_with(|| a.path_lower.cmp(&b.path_lower)),
         });
 
         self.filtered_files = scored

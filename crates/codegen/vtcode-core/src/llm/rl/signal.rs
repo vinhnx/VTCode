@@ -60,16 +60,8 @@ mod tests {
 
     #[test]
     fn score_rewards_fast_success_and_penalizes_failure() {
-        let good = RewardSignal {
-            success: true,
-            latency_secs: 0.1,
-            cost_usd: 0.0,
-        };
-        let bad = RewardSignal {
-            success: false,
-            latency_secs: 10.0,
-            cost_usd: 1.0,
-        };
+        let good = RewardSignal { success: true, latency_secs: 0.1, cost_usd: 0.0 };
+        let bad = RewardSignal { success: false, latency_secs: 10.0, cost_usd: 1.0 };
         assert!(good.score(0.5) > 0.0);
         assert!(bad.score(0.5) < 0.0);
     }

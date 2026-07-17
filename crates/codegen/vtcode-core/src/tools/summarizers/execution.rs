@@ -141,10 +141,7 @@ fn parse_bash_output(output: &str, metadata: Option<&Value>) -> BashResult {
 
     // Try to parse as JSON first (structured output from bash tool)
     if let Ok(json) = serde_json::from_str::<Value>(output) {
-        result.command = json
-            .get("command")
-            .and_then(|c| c.as_str())
-            .map(|s| s.to_string());
+        result.command = json.get("command").and_then(|c| c.as_str()).map(|s| s.to_string());
 
         result.exit_code = json
             .get("exit_code")
@@ -152,10 +149,8 @@ fn parse_bash_output(output: &str, metadata: Option<&Value>) -> BashResult {
             .and_then(|e| e.as_i64())
             .unwrap_or(0) as i32;
 
-        result.success = json
-            .get("success")
-            .and_then(|s| s.as_bool())
-            .unwrap_or(result.exit_code == 0);
+        result.success =
+            json.get("success").and_then(|s| s.as_bool()).unwrap_or(result.exit_code == 0);
 
         result.duration_ms = json
             .get("duration_ms")
@@ -184,10 +179,7 @@ fn parse_bash_output(output: &str, metadata: Option<&Value>) -> BashResult {
 
         // Extract command from metadata if available
         if let Some(meta) = metadata {
-            result.command = meta
-                .get("command")
-                .and_then(|c| c.as_str())
-                .map(|s| s.to_string());
+            result.command = meta.get("command").and_then(|c| c.as_str()).map(|s| s.to_string());
         }
     }
 
@@ -231,11 +223,7 @@ fn truncate_command(cmd: &str, max_len: usize) -> String {
         cmd.to_string()
     } else {
         let target = max_len.saturating_sub(3);
-        let end = cmd
-            .char_indices()
-            .map(|(i, _)| i)
-            .rfind(|&i| i <= target)
-            .unwrap_or(0);
+        let end = cmd.char_indices().map(|(i, _)| i).rfind(|&i| i <= target).unwrap_or(0);
         format!("{}...", &cmd[..end])
     }
 }

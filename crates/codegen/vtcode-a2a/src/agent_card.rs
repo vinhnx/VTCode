@@ -134,18 +134,12 @@ impl AgentCard {
 
     /// Check if streaming is supported
     pub fn supports_streaming(&self) -> bool {
-        self.capabilities
-            .as_ref()
-            .map(|c| c.streaming)
-            .unwrap_or(false)
+        self.capabilities.as_ref().map(|c| c.streaming).unwrap_or(false)
     }
 
     /// Check if push notifications are supported
     pub fn supports_push_notifications(&self) -> bool {
-        self.capabilities
-            .as_ref()
-            .map(|c| c.push_notifications)
-            .unwrap_or(false)
+        self.capabilities.as_ref().map(|c| c.push_notifications).unwrap_or(false)
     }
 }
 
@@ -180,10 +174,7 @@ pub struct AgentCapabilities {
 impl AgentCapabilities {
     /// Create capabilities with streaming enabled
     pub fn with_streaming() -> Self {
-        Self {
-            streaming: true,
-            ..Default::default()
-        }
+        Self { streaming: true, ..Default::default() }
     }
 
     /// Create capabilities with all features enabled
@@ -267,10 +258,7 @@ pub struct SkillExample {
 impl SkillExample {
     /// Create a new example
     pub fn new(input: impl Into<String>, output: impl Into<String>) -> Self {
-        Self {
-            input: input.into(),
-            output: output.into(),
-        }
+        Self { input: input.into(), output: output.into() }
     }
 }
 

@@ -87,9 +87,7 @@ pub(crate) fn is_giving_up_reasoning(text: &str) -> bool {
         "give up",
     ];
 
-    giving_up_patterns
-        .iter()
-        .any(|pattern| lower.contains(pattern))
+    giving_up_patterns.iter().any(|pattern| lower.contains(pattern))
 }
 
 /// Detects rushing behavior indicating context anxiety.
@@ -203,15 +201,9 @@ mod tests {
         assert!(is_decision_or_tool_line("I will run the tests now"));
         assert!(is_decision_or_tool_line("Let me check the config file"));
         assert!(is_decision_or_tool_line("Step 2: refactor the parser"));
-        assert!(is_decision_or_tool_line(
-            "call the grep tool to find usages"
-        ));
-        assert!(is_decision_or_tool_line(
-            "  Next, I need to execute the migration  "
-        ));
-        assert!(!is_decision_or_tool_line(
-            "The user asked about the build system"
-        ));
+        assert!(is_decision_or_tool_line("call the grep tool to find usages"));
+        assert!(is_decision_or_tool_line("  Next, I need to execute the migration  "));
+        assert!(!is_decision_or_tool_line("The user asked about the build system"));
         assert!(!is_decision_or_tool_line(""));
         assert!(!is_decision_or_tool_line("   "));
     }
@@ -220,10 +212,7 @@ mod tests {
     fn test_analysis() {
         let analysis = analyze_reasoning("I think we should stop here, it's too complex");
         assert!(analysis.has_concerns());
-        assert_eq!(
-            analysis.priority_concern(),
-            Some(ReasoningConcern::GivingUp)
-        );
+        assert_eq!(analysis.priority_concern(), Some(ReasoningConcern::GivingUp));
     }
 
     #[test]

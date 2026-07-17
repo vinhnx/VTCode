@@ -620,12 +620,7 @@ mod tests {
             serde_json::from_str(payload).expect("should deserialize thinking block");
         match event {
             AnthropicStreamEvent::ContentBlockStart {
-                content_block:
-                    AnthropicContentBlock::Thinking {
-                        thinking,
-                        signature,
-                        ..
-                    },
+                content_block: AnthropicContentBlock::Thinking { thinking, signature, .. },
                 ..
             } => {
                 assert_eq!(thinking, "Drafting plan");
@@ -739,10 +734,7 @@ mod tests {
         let block: AnthropicContentBlock =
             serde_json::from_str(payload).expect("should deserialize cited text block");
         match block {
-            AnthropicContentBlock::Text {
-                citations: Some(citations),
-                ..
-            } => {
+            AnthropicContentBlock::Text { citations: Some(citations), .. } => {
                 assert!(matches!(
                     &citations[0],
                     TextCitation::WebSearchResultLocation {

@@ -40,11 +40,7 @@ pub(crate) fn acquire_lock_file(lock_path: &Path, max_age_secs: u64) -> Result<O
 }
 
 fn try_create_new_lock_file(lock_path: &Path) -> Result<Option<File>> {
-    match OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(lock_path)
-    {
+    match OpenOptions::new().create_new(true).write(true).open(lock_path) {
         Ok(file) => Ok(Some(file)),
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(None),
         Err(err) => {

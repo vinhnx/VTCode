@@ -14,7 +14,7 @@ anstyle-parse = "0.2"  # Add this line
 
 ## Step 2: Create Parser Wrapper Module
 
-**File: `vtcode-core/src/utils/ansi_parser.rs`**
+**File: `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`**
 
 ```rust
 //! ANSI escape sequence parser wrapper using anstyle-parse
@@ -298,7 +298,7 @@ mod tests {
 
 ## Step 3: Update Module Exports
 
-**File: `vtcode-core/src/utils/mod.rs`**
+**File: `crates/codegen/vtcode-core/src/utils/mod.rs`**
 
 Add:
 ```rust
@@ -307,7 +307,7 @@ pub mod ansi_parser;
 
 ## Step 4: Replace Manual Parser in PTY
 
-**File: `vtcode-core/src/tools/pty.rs`**
+**File: `crates/codegen/vtcode-core/src/tools/pty.rs`**
 
 Replace the `parse_ansi_sequence` function with:
 
@@ -384,7 +384,7 @@ fn parse_ansi_sequence(text: &str) -> Option<usize> {
 
 ## Step 5: Update ANSI Stripping
 
-**File: `vtcode-core/src/tools/registry/executors.rs`**
+**File: `crates/codegen/vtcode-core/src/tools/registry/executors.rs`**
 
 Replace `strip_ansi` function with:
 
@@ -400,7 +400,7 @@ Simplifies from ~60 lines to 1 line!
 
 ## Step 6: Testing
 
-**File: `vtcode-core/src/utils/ansi_parser.rs` (already included in Step 2)**
+**File: `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` (already included in Step 2)**
 
 Run tests:
 ```bash
@@ -473,8 +473,8 @@ pub fn truncate_with_ansi(text: &str, width: usize) -> String {
 ## Verification Checklist
 
 - [ ] Add `anstyle-parse = "0.2"` to `vtcode-core/Cargo.toml`
-- [ ] Create `vtcode-core/src/utils/ansi_parser.rs`
-- [ ] Add module export to `vtcode-core/src/utils/mod.rs`
+- [ ] Create `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`
+- [ ] Add module export to `crates/codegen/vtcode-core/src/utils/mod.rs`
 - [ ] Run `cargo check` - verifies compilation
 - [ ] Run `cargo test` - all tests pass
 - [ ] Replace `strip_ansi` in `executors.rs`

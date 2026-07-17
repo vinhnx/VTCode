@@ -71,10 +71,7 @@ impl ReverseSearchState {
         self.matches.clear();
 
         for (i, command) in history.iter().enumerate().rev() {
-            if command
-                .to_lowercase()
-                .contains(&self.search_term.to_lowercase())
-            {
+            if command.to_lowercase().contains(&self.search_term.to_lowercase()) {
                 self.matches.push(i);
             }
         }

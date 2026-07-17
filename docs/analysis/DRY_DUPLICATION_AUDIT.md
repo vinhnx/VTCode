@@ -17,7 +17,7 @@ The goal was to remove duplicated logic while preserving the existing output pol
 
 ### 1. Shared preview helpers
 
-Owner: `vtcode-commons/src/preview.rs`
+Owner: `crates/common/vtcode-commons/src/preview.rs`
 
 Added:
 
@@ -34,8 +34,8 @@ Replaced local preview logic in:
 - `src/agent/runloop/tool_output/large_output.rs`
 - `src/agent/runloop/tool_output/streams.rs`
 - `src/agent/runloop/unified/tool_pipeline/pty_stream/state.rs`
-- `vtcode-core/src/tools/output_spooler.rs`
-- `vtcode-core/src/tools/registry/executors.rs`
+- `crates/codegen/vtcode-core/src/tools/output_spooler.rs`
+- `crates/codegen/vtcode-core/src/tools/registry/executors.rs`
 
 Benefits:
 
@@ -47,7 +47,7 @@ Risk level: low. The policy knobs stayed local; only the excerpt/condensation lo
 
 ### 2. Shared diff display model
 
-Owner: `vtcode-commons/src/diff_preview.rs`
+Owner: `crates/common/vtcode-commons/src/diff_preview.rs`
 
 Added:
 
@@ -62,7 +62,7 @@ Kept `format_numbered_unified_diff()` as a compatibility wrapper over the shared
 Replaced duplicate diff semantics in:
 
 - `src/agent/runloop/tool_output/streams.rs`
-- `vtcode-ui/src/tui/core_tui/app/session/diff_preview.rs`
+- `crates/codegen/vtcode-ui/src/tui/core_tui/app/session/diff_preview.rs`
 
 Benefits:
 
@@ -76,18 +76,18 @@ Risk level: low to medium. Rendering adapters still own styling, but parsing/num
 
 Removed duplicate files:
 
-- `vtcode-config/src/constants/instructions.rs`
-- `vtcode-config/src/constants/project_doc.rs`
+- `crates/codegen/vtcode-config/src/constants/instructions.rs`
+- `crates/codegen/vtcode-config/src/constants/project_doc.rs`
 
 Added canonical owner:
 
-- `vtcode-config/src/constants/prompt_budget.rs`
+- `crates/codegen/vtcode-config/src/constants/prompt_budget.rs`
 
 Updated callers in:
 
 - `src/agent/runloop/welcome.rs`
-- `vtcode-core/src/prompts/system.rs`
-- `vtcode-config/src/core/agent.rs`
+- `crates/codegen/vtcode-core/src/prompts/system.rs`
+- `crates/codegen/vtcode-config/src/core/agent.rs`
 
 Benefits:
 
@@ -100,15 +100,15 @@ Risk level: low.
 
 Removed duplicate implementation:
 
-- deleted `vtcode-core/src/ui/file_colorizer.rs`
+- deleted `crates/codegen/vtcode-core/src/ui/file_colorizer.rs`
 
 Canonical owner remains:
 
-- `vtcode-ui/src/tui/ui/file_colorizer.rs`
+- `crates/codegen/vtcode-ui/src/tui/ui/file_colorizer.rs`
 
 Compatibility preserved via re-export from:
 
-- `vtcode-core/src/ui/mod.rs`
+- `crates/codegen/vtcode-core/src/ui/mod.rs`
 
 Benefits:
 
@@ -121,18 +121,18 @@ Risk level: low.
 
 Added canonical image helper:
 
-- `vtcode-commons/src/fs.rs::is_image_path`
+- `crates/common/vtcode-commons/src/fs.rs::is_image_path`
 
 Removed duplicate logic from:
 
-- `vtcode-core/src/tools/file_ops/mod.rs` now re-exports `vtcode_commons::fs::is_image_path`
-- deleted `vtcode-ui/src/tui/utils/file_utils.rs`
+- `crates/codegen/vtcode-core/src/tools/file_ops/mod.rs` now re-exports `vtcode_commons::fs::is_image_path`
+- deleted `crates/codegen/vtcode-ui/src/tui/utils/file_utils.rs`
 
 Updated TUI call sites to use `vtcode-commons::fs` directly:
 
-- `vtcode-ui/src/tui/core_tui/session/config.rs`
-- `vtcode-ui/src/tui/core_tui/session/input.rs`
-- `vtcode-ui/src/tui/utils/mod.rs`
+- `crates/codegen/vtcode-ui/src/tui/core_tui/session/config.rs`
+- `crates/codegen/vtcode-ui/src/tui/core_tui/session/input.rs`
+- `crates/codegen/vtcode-ui/src/tui/utils/mod.rs`
 
 Benefits:
 
@@ -145,9 +145,9 @@ Risk level: low.
 
 Canonical owner for shared UI text/defaults remains:
 
-- `vtcode-config/src/constants/ui.rs`
+- `crates/codegen/vtcode-config/src/constants/ui.rs`
 
-`vtcode-ui/src/tui/config/constants/ui.rs` now aliases a small shared subset instead of redefining it:
+`crates/codegen/vtcode-ui/src/tui/config/constants/ui.rs` now aliases a small shared subset instead of redefining it:
 
 - tool output mode strings
 - default reasoning visibility
@@ -167,14 +167,14 @@ Risk level: low.
 
 Switched local timestamp helpers to the shared owner:
 
-- `vtcode-core/src/context/conversation_memory.rs`
-- `vtcode-core/src/context/entity_resolver.rs`
-- `vtcode-core/src/core/prompt_caching.rs`
-- `vtcode-core/src/memory/mod.rs`
+- `crates/codegen/vtcode-core/src/context/conversation_memory.rs`
+- `crates/codegen/vtcode-core/src/context/entity_resolver.rs`
+- `crates/codegen/vtcode-core/src/core/prompt_caching.rs`
+- `crates/codegen/vtcode-core/src/memory/mod.rs`
 
 Canonical owner:
 
-- `vtcode-commons/src/utils.rs::current_timestamp`
+- `crates/common/vtcode-commons/src/utils.rs::current_timestamp`
 
 Benefits:
 
@@ -185,7 +185,7 @@ Risk level: low.
 
 ## Duplication Intentionally Left Alone
 
-### `vtcode-core/src/utils` wrapper sprawl
+### `crates/codegen/vtcode-core/src/utils` wrapper sprawl
 
 This workspace still contains many thin `vtcode-core::utils::*` compatibility wrappers over `vtcode-commons`.
 
@@ -193,7 +193,7 @@ Reason not removed in this pass:
 
 - the import surface is broad across the workspace
 - deleting them all at once would create high-churn edits with low immediate payoff
-- the narrow wrapper removal in `vtcode-ui/src/tui/utils/file_utils.rs` delivered a safer first reduction
+- the narrow wrapper removal in `crates/codegen/vtcode-ui/src/tui/utils/file_utils.rs` delivered a safer first reduction
 
 Recommended follow-up:
 
@@ -205,7 +205,7 @@ Recommended follow-up:
 
 The storage-location policy split was preserved:
 
-- `vtcode-core/src/tools/output_spooler.rs` keeps workspace-relative spool behavior
+- `crates/codegen/vtcode-core/src/tools/output_spooler.rs` keeps workspace-relative spool behavior
 - `src/agent/runloop/tool_output/large_output.rs` keeps temp-file UI spool behavior
 
 Only shared condensation/excerpt logic was deduplicated.

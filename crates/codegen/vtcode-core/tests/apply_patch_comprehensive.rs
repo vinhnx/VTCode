@@ -12,9 +12,7 @@ async fn setup_registry(root: &std::path::Path) -> ToolRegistry {
 
 fn combined_error_message(result: &Value) -> String {
     let message = result["error"]["message"].as_str().unwrap_or_default();
-    let original = result["error"]["original_error"]
-        .as_str()
-        .unwrap_or_default();
+    let original = result["error"]["original_error"].as_str().unwrap_or_default();
     if original.is_empty() {
         message.to_string()
     } else {
@@ -50,10 +48,7 @@ async fn test_multiple_chunks_precision() {
         .await
         .unwrap();
 
-    assert!(
-        result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {result:?}"
-    );
+    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {result:?}");
 
     let new_content = fs::read_to_string(&file_path).unwrap();
     let expected_content = "line 1\nline 2 modified\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9 modified\nline 10\n";
@@ -84,10 +79,7 @@ async fn test_fuzzy_matching_whitespace() {
         .await
         .unwrap();
 
-    assert!(
-        result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {result:?}"
-    );
+    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {result:?}");
 
     let new_content = fs::read_to_string(&file_path).unwrap();
     // Note: The current implementation might preserve or normalize based on how matcher.rs works.
@@ -112,10 +104,7 @@ async fn test_delete_file_operation() {
         .await
         .unwrap();
 
-    assert!(
-        result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {result:?}"
-    );
+    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {result:?}");
     assert!(!file_path.exists());
 }
 
@@ -146,16 +135,10 @@ async fn test_mixed_operations() {
         .await
         .unwrap();
 
-    assert!(
-        result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {result:?}"
-    );
+    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {result:?}");
 
     assert!(temp_dir.path().join("new.txt").exists());
-    assert_eq!(
-        fs::read_to_string(temp_dir.path().join("new.txt")).unwrap(),
-        "brand new\n"
-    );
+    assert_eq!(fs::read_to_string(temp_dir.path().join("new.txt")).unwrap(), "brand new\n");
     assert!(!delete_path.exists());
     assert_eq!(fs::read_to_string(&update_path).unwrap(), "updated\n");
 }
@@ -180,10 +163,7 @@ async fn test_eof_handling_no_newline() {
         .await
         .unwrap();
 
-    assert!(
-        result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {result:?}"
-    );
+    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {result:?}");
 
     let new_content = fs::read_to_string(&file_path).unwrap();
     // The tool should ideally preserve the missing trailing newline if it was missing,
@@ -210,10 +190,7 @@ async fn test_context_not_found_error() {
         .await
         .unwrap();
 
-    assert!(
-        result["error"].is_object(),
-        "Expected error object, got: {result:?}"
-    );
+    assert!(result["error"].is_object(), "Expected error object, got: {result:?}");
     // Check if it's a SegmentNotFound error
     let error_msg = result["error"]["message"].as_str().unwrap();
     assert!(
@@ -233,10 +210,7 @@ async fn test_empty_patch_error() {
         .await
         .unwrap();
 
-    assert!(
-        result["error"].is_object(),
-        "Expected error object: {result:?}"
-    );
+    assert!(result["error"].is_object(), "Expected error object: {result:?}");
     let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
         error_msg.contains("empty") || error_msg.contains("patch input"),
@@ -255,10 +229,7 @@ async fn test_invalid_format_error() {
         .await
         .unwrap();
 
-    assert!(
-        result["error"].is_object(),
-        "Expected error object: {result:?}"
-    );
+    assert!(result["error"].is_object(), "Expected error object: {result:?}");
     let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
         error_msg.contains("invalid patch")
@@ -285,12 +256,7 @@ async fn test_missing_file_for_update_error() {
         .unwrap();
 
     assert!(result["error"].is_object());
-    assert!(
-        result["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("not found")
-    );
+    assert!(result["error"]["message"].as_str().unwrap().contains("not found"));
 }
 
 #[tokio::test]
@@ -311,12 +277,7 @@ async fn test_add_existing_file_error() {
         .unwrap();
 
     assert!(result["error"].is_object());
-    assert!(
-        result["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("invalid patch operation")
-    );
+    assert!(result["error"]["message"].as_str().unwrap().contains("invalid patch operation"));
 }
 
 #[tokio::test]
@@ -338,10 +299,7 @@ async fn test_crlf_handling() {
         .await
         .unwrap();
 
-    assert!(
-        result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {result:?}"
-    );
+    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {result:?}");
 
     let new_content = fs::read_to_string(&file_path).unwrap();
     // Now we preserve CRLF!
@@ -372,19 +330,13 @@ async fn test_diff_preview_correctness() {
     let applied = result["applied"]
         .as_array()
         .expect("Expected applied array in apply_patch result");
-    let applied_lines = applied
-        .iter()
-        .filter_map(|entry| entry.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let applied_lines =
+        applied.iter().filter_map(|entry| entry.as_str()).collect::<Vec<_>>().join("\n");
     assert!(
         applied_lines.contains("Updated file: preview.txt"),
         "Expected update entry in applied list: {result:?}"
     );
-    assert_eq!(
-        fs::read_to_string(&file_path).unwrap(),
-        "line 1 modified\nline 2\n"
-    );
+    assert_eq!(fs::read_to_string(&file_path).unwrap(), "line 1 modified\nline 2\n");
 }
 
 #[tokio::test]
@@ -408,10 +360,7 @@ async fn test_move_file_operation() {
         .await
         .unwrap();
 
-    assert!(
-        result["success"].as_bool().unwrap_or(false),
-        "Tool failed: {result:?}"
-    );
+    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {result:?}");
     assert!(!source_path.exists());
     assert_eq!(fs::read_to_string(destination_path).unwrap(), "new name\n");
 }
@@ -419,10 +368,8 @@ async fn test_move_file_operation() {
 #[tokio::test]
 async fn test_workspace_escape_is_rejected() {
     let temp_dir = TempDir::new().unwrap();
-    let outside_name = format!(
-        "{}-outside.txt",
-        temp_dir.path().file_name().unwrap().to_string_lossy()
-    );
+    let outside_name =
+        format!("{}-outside.txt", temp_dir.path().file_name().unwrap().to_string_lossy());
     let patch_text = format!(
         "*** Begin Patch\n*** Add File: ../{outside_name}\n+must not be written\n*** End Patch"
     );
@@ -433,15 +380,9 @@ async fn test_workspace_escape_is_rejected() {
         .await
         .unwrap();
 
-    assert!(
-        result["error"].is_object(),
-        "Expected error object: {result:?}"
-    );
+    assert!(result["error"].is_object(), "Expected error object: {result:?}");
     let error_msg = combined_error_message(&result);
-    assert!(
-        error_msg.contains("path escapes workspace"),
-        "Unexpected error message: {error_msg}"
-    );
+    assert!(error_msg.contains("path escapes workspace"), "Unexpected error message: {error_msg}");
     let outside_path = temp_dir.path().parent().unwrap().join(outside_name);
     assert!(!outside_path.exists());
 }

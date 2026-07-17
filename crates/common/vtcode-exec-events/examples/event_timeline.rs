@@ -36,9 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn sample_timeline() -> Vec<ThreadEvent> {
     vec![
-        ThreadEvent::ThreadStarted(ThreadStartedEvent {
-            thread_id: "workspace.setup".into(),
-        }),
+        ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "workspace.setup".into() }),
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::ItemStarted(ItemStartedEvent {
             item: ThreadItem {

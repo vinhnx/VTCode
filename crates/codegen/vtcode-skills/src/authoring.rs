@@ -73,18 +73,12 @@ impl SkillAuthor {
 
         // Check if exists
         if skill_dir.exists() {
-            return Err(anyhow!(
-                "Skill directory already exists: {}",
-                skill_dir.display()
-            ));
+            return Err(anyhow!("Skill directory already exists: {}", skill_dir.display()));
         }
 
         // Create skill directory
         fs::create_dir_all(&skill_dir).with_context(|| {
-            format!(
-                "failed to create skill directory at {}",
-                skill_dir.display()
-            )
+            format!("failed to create skill directory at {}", skill_dir.display())
         })?;
         info!("Created skill directory: {}", skill_dir.display());
 
@@ -150,9 +144,7 @@ impl SkillAuthor {
         let frontmatter: SkillFrontmatter = match serde_saphyr::from_str(parts[1].trim()) {
             Ok(frontmatter) => frontmatter,
             Err(error) => {
-                report
-                    .errors
-                    .push(format!("Invalid YAML frontmatter: {error}"));
+                report.errors.push(format!("Invalid YAML frontmatter: {error}"));
                 return Ok(report);
             }
         };
@@ -175,9 +167,7 @@ impl SkillAuthor {
         // Validate name
         let name = frontmatter.name.trim();
         if name.is_empty() {
-            report
-                .errors
-                .push("Skill name must not be empty".to_string());
+            report.errors.push("Skill name must not be empty".to_string());
         } else if !self.is_valid_skill_name(name) {
             let mut reasons = Vec::new();
             if name.chars().any(|c| c.is_ascii_uppercase()) {
@@ -198,11 +188,9 @@ impl SkillAuthor {
             if name.contains("anthropic") || name.contains("claude") || name.contains("vtcode") {
                 reasons.push("reserved words not allowed");
             }
-            report.errors.push(format!(
-                "Invalid skill name '{}': {}",
-                name,
-                reasons.join(", ")
-            ));
+            report
+                .errors
+                .push(format!("Invalid skill name '{}': {}", name, reasons.join(", ")));
         }
 
         // Validate description
@@ -211,9 +199,7 @@ impl SkillAuthor {
             report.errors.push("Description is required".to_string());
         } else {
             if description.contains("[TODO") {
-                report
-                    .warnings
-                    .push("Description contains TODO placeholder".to_string());
+                report.warnings.push("Description contains TODO placeholder".to_string());
             }
             if description.contains('<') || description.contains('>') {
                 report
@@ -296,9 +282,7 @@ impl SkillAuthor {
     fn is_valid_skill_name(&self, name: &str) -> bool {
         !name.is_empty()
             && name.len() <= 64
-            && name
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
             && !name.starts_with('-')
             && !name.ends_with('-')
             && !name.contains("--")
@@ -337,10 +321,7 @@ impl SkillAuthor {
     fn create_references_dir(&self, skill_dir: &Path, skill_title: &str) -> Result<()> {
         let references_dir = skill_dir.join("references");
         fs::create_dir(&references_dir).with_context(|| {
-            format!(
-                "failed to create references dir at {}",
-                references_dir.display()
-            )
+            format!("failed to create references dir at {}", references_dir.display())
         })?;
 
         let reference_file = references_dir.join("api_reference.md");
@@ -358,10 +339,7 @@ impl SkillAuthor {
             .with_context(|| format!("failed to create assets dir at {}", assets_dir.display()))?;
 
         let placeholder = assets_dir.join(".gitkeep");
-        fs::write(
-            placeholder,
-            "# Place template files, images, icons, etc. here\n",
-        )?;
+        fs::write(placeholder, "# Place template files, images, icons, etc. here\n")?;
 
         info!("Created assets/ directory");
         Ok(())
@@ -582,9 +560,8 @@ mod tests {
         })?;
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
-        let skill_dir = author
-            .create_skill("test-skill", Some(tmp.path().to_path_buf()))
-            .map_err(|e| {
+        let skill_dir =
+            author.create_skill("test-skill", Some(tmp.path().to_path_buf())).map_err(|e| {
                 eprintln!("Failed to write skill file: {e}");
                 e
             })?;
@@ -634,10 +611,7 @@ Use bundled resources when needed.
 
         assert!(!report.valid, "{}", report.format());
         assert!(
-            report
-                .errors
-                .iter()
-                .any(|error| error.contains("Unexpected property")),
+            report.errors.iter().any(|error| error.contains("Unexpected property")),
             "{}",
             report.format()
         );
@@ -669,9 +643,7 @@ Use bundled resources when needed.
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
         // Create first skill
-        author
-            .create_skill("test-skill", Some(tmp.path().to_path_buf()))
-            .unwrap();
+        author.create_skill("test-skill", Some(tmp.path().to_path_buf())).unwrap();
 
         // Try to create duplicate - should fail
         let result = author.create_skill("test-skill", Some(tmp.path().to_path_buf()));
@@ -685,9 +657,8 @@ Use bundled resources when needed.
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
         // Create test skills
-        let skill1_dir = author
-            .create_skill("pdf-analyzer", Some(tmp.path().to_path_buf()))
-            .unwrap();
+        let skill1_dir =
+            author.create_skill("pdf-analyzer", Some(tmp.path().to_path_buf())).unwrap();
         let skill2_dir = author
             .create_skill("spreadsheet-generator", Some(tmp.path().to_path_buf()))
             .unwrap();

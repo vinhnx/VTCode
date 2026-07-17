@@ -66,10 +66,8 @@ impl SubagentController {
             {
                 Ok(Some(output)) => extract_tail_lines(&output, SUBAGENT_PREVIEW_LINES),
                 Ok(None) | Err(_) => {
-                    if let Some(path) = entry
-                        .transcript_path
-                        .as_ref()
-                        .or(entry.archive_path.as_ref())
+                    if let Some(path) =
+                        entry.transcript_path.as_ref().or(entry.archive_path.as_ref())
                     {
                         load_archive_preview(path).await.unwrap_or_default()
                     } else {
@@ -186,11 +184,7 @@ impl SubagentController {
     pub async fn refresh_background_processes(&self) -> Result<Vec<BackgroundSubprocessEntry>> {
         let record_ids = {
             let state = self.state.read().await;
-            state
-                .background_children
-                .keys()
-                .cloned()
-                .collect::<Vec<_>>()
+            state.background_children.keys().cloned().collect::<Vec<_>>()
         };
 
         let mut changed = false;
@@ -208,18 +202,12 @@ impl SubagentController {
             let snapshot = if let Some(exec_session_id) = snapshot_target.as_ref()
                 && !exec_session_id.is_empty()
             {
-                self.config
-                    .exec_sessions
-                    .snapshot_session(exec_session_id)
-                    .await
-                    .ok()
+                self.config.exec_sessions.snapshot_session(exec_session_id).await.ok()
             } else {
                 None
             };
 
-            let respawn = self
-                .update_background_record_state(&record_id, snapshot)
-                .await?;
+            let respawn = self.update_background_record_state(&record_id, snapshot).await?;
 
             if let Some((agent_name, stable_id, restart_attempts)) = respawn {
                 self.ensure_background_record_running(
@@ -374,16 +362,8 @@ impl SubagentController {
         );
 
         if !exec_session_id.is_empty() {
-            let _ = self
-                .config
-                .exec_sessions
-                .terminate_session(&exec_session_id)
-                .await;
-            let _ = self
-                .config
-                .exec_sessions
-                .prune_exited_session(&exec_session_id)
-                .await;
+            let _ = self.config.exec_sessions.terminate_session(&exec_session_id).await;
+            let _ = self.config.exec_sessions.prune_exited_session(&exec_session_id).await;
         }
 
         self.refresh_background_archive_metadata(target).await?;
@@ -414,11 +394,7 @@ impl SubagentController {
         );
 
         if !exec_session_id.is_empty() {
-            let _ = self
-                .config
-                .exec_sessions
-                .close_session(&exec_session_id)
-                .await;
+            let _ = self.config.exec_sessions.close_session(&exec_session_id).await;
         }
 
         self.refresh_background_archive_metadata(target).await?;

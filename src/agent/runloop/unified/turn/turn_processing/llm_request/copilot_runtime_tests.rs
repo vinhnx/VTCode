@@ -45,23 +45,11 @@ fn collect_inline_output(
     while let Ok(command) = receiver.try_recv() {
         match command {
             InlineCommand::AppendLine { segments, .. } => {
-                lines.push(
-                    segments
-                        .into_iter()
-                        .map(|segment| segment.text)
-                        .collect::<String>(),
-                );
+                lines.push(segments.into_iter().map(|segment| segment.text).collect::<String>());
             }
-            InlineCommand::ReplaceLast {
-                lines: replacement_lines,
-                ..
-            } => {
+            InlineCommand::ReplaceLast { lines: replacement_lines, .. } => {
                 for line in replacement_lines {
-                    lines.push(
-                        line.into_iter()
-                            .map(|segment| segment.text)
-                            .collect::<String>(),
-                    );
+                    lines.push(line.into_iter().map(|segment| segment.text).collect::<String>());
                 }
             }
             _ => {}
@@ -88,11 +76,7 @@ fn filter_copilot_tools_keeps_only_allowlisted_names() {
     let filtered = filter_copilot_tools(Some(&tools), &["code_search".to_string()]);
     let names: Vec<_> = filtered
         .iter()
-        .filter_map(|tool| {
-            tool.function
-                .as_ref()
-                .map(|function| function.name.as_str())
-        })
+        .filter_map(|tool| tool.function.as_ref().map(|function| function.name.as_str()))
         .collect();
 
     assert_eq!(names, vec!["code_search"]);
@@ -171,10 +155,7 @@ fn custom_tool_permission_cache_key_scopes_arguments() {
 #[test]
 fn copilot_finish_reason_maps_protocol_values() {
     assert_eq!(map_copilot_finish_reason("end_turn"), FinishReason::Stop);
-    assert_eq!(
-        map_copilot_finish_reason("max_tokens"),
-        FinishReason::Length
-    );
+    assert_eq!(map_copilot_finish_reason("max_tokens"), FinishReason::Length);
     assert_eq!(map_copilot_finish_reason("length"), FinishReason::Length);
     assert_eq!(map_copilot_finish_reason("refusal"), FinishReason::Refusal);
     assert_eq!(
@@ -229,10 +210,7 @@ fn custom_tool_permissions_are_auto_approved_for_session() {
 
     assert_eq!(
         approval,
-        Some((
-            vtcode_core::copilot::CopilotPermissionDecision::ApprovedAlways,
-            true
-        ))
+        Some((vtcode_core::copilot::CopilotPermissionDecision::ApprovedAlways, true))
     );
 }
 
@@ -262,10 +240,7 @@ fn copilot_reasoning_delta_normalizes_chunk_boundaries() {
         ),
         " Running cargo check"
     );
-    assert_eq!(
-        normalize_copilot_reasoning_delta("prefix\n", "next".to_string()),
-        "next"
-    );
+    assert_eq!(normalize_copilot_reasoning_delta("prefix\n", "next".to_string()), "next");
 }
 
 #[test]
@@ -292,9 +267,8 @@ async fn observed_tool_calls_emit_incremental_output_updates() {
     let approval_recorder = ApprovalRecorder::new(workspace.clone());
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let permissions_state = Arc::new(RwLock::new(
-        vtcode_core::config::PermissionsConfig::default(),
-    ));
+    let permissions_state =
+        Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
     let safety_validator = Arc::new(ToolCallSafetyValidator::new());
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
@@ -396,9 +370,8 @@ async fn observed_shell_tool_calls_stream_into_inline_pty_ui() {
     let approval_recorder = ApprovalRecorder::new(workspace.clone());
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let permissions_state = Arc::new(RwLock::new(
-        vtcode_core::config::PermissionsConfig::default(),
-    ));
+    let permissions_state =
+        Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
     let safety_validator = Arc::new(ToolCallSafetyValidator::new());
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
@@ -491,9 +464,8 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
     let approval_recorder = ApprovalRecorder::new(workspace.clone());
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let permissions_state = Arc::new(RwLock::new(
-        vtcode_core::config::PermissionsConfig::default(),
-    ));
+    let permissions_state =
+        Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
     let safety_validator = Arc::new(ToolCallSafetyValidator::new());
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
@@ -604,10 +576,7 @@ async fn copilot_terminal_sessions_bind_local_pty_output_and_release_cleanly() {
         .handle_terminal_release(&response.terminal_id)
         .await
         .expect("release local terminal");
-    runtime_host
-        .handle_terminal_output(&response.terminal_id)
-        .await
-        .unwrap_err();
+    runtime_host.handle_terminal_output(&response.terminal_id).await.unwrap_err();
 }
 
 #[tokio::test]
@@ -631,9 +600,8 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
     let approval_recorder = ApprovalRecorder::new(workspace.clone());
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-    let permissions_state = Arc::new(RwLock::new(
-        vtcode_core::config::PermissionsConfig::default(),
-    ));
+    let permissions_state =
+        Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
     let safety_validator = Arc::new(ToolCallSafetyValidator::new());
     safety_validator.start_turn();
     let traj = TrajectoryLogger::new(&workspace);
@@ -703,10 +671,7 @@ async fn vtcode_tool_calls_render_transcript_output_via_shared_pipeline() {
     let transcript_text = transcript::snapshot().join("\n");
     let stripped_text = vtcode_core::utils::ansi_parser::strip_ansi(&transcript_text);
     assert!(runtime_host.harness_state.tool_calls >= 1);
-    assert!(
-        stripped_text.contains("hello from acp"),
-        "STRIPPED TEXT: {stripped_text:?}"
-    );
+    assert!(stripped_text.contains("hello from acp"), "STRIPPED TEXT: {stripped_text:?}");
     assert!(
         stripped_text.contains("Ran cat") || stripped_text.contains("Run command"),
         "expected command preview in transcript, got: {stripped_text}"

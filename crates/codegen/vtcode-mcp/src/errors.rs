@@ -89,22 +89,14 @@ impl fmt::Display for ErrorCode {
 ///
 /// Error Code: MCP_E001
 pub fn tool_not_found(name: &str) -> anyhow::Error {
-    anyhow!(
-        "[{}] MCP tool '{}' not found",
-        ErrorCode::ToolNotFound.code(),
-        name
-    )
+    anyhow!("[{}] MCP tool '{}' not found", ErrorCode::ToolNotFound.code(), name)
 }
 
 /// Helper to create a "provider not found" error
 ///
 /// Error Code: MCP_E011
 pub fn provider_not_found(name: &str) -> anyhow::Error {
-    anyhow!(
-        "[{}] MCP provider '{}' not found",
-        ErrorCode::ProviderNotFound.code(),
-        name
-    )
+    anyhow!("[{}] MCP provider '{}' not found", ErrorCode::ProviderNotFound.code(), name)
 }
 
 /// Helper to create a "provider unavailable" error
@@ -122,11 +114,7 @@ pub fn provider_unavailable(name: &str) -> anyhow::Error {
 ///
 /// Error Code: MCP_E021
 pub fn schema_invalid(reason: &str) -> anyhow::Error {
-    anyhow!(
-        "[{}] MCP tool schema is invalid: {}",
-        ErrorCode::SchemaInvalid.code(),
-        reason
-    )
+    anyhow!("[{}] MCP tool schema is invalid: {}", ErrorCode::SchemaInvalid.code(), reason)
 }
 
 /// Helper to create a "tool invocation failed" error
@@ -157,11 +145,7 @@ pub fn initialization_timeout(timeout_secs: u64) -> anyhow::Error {
 ///
 /// Error Code: MCP_E031
 pub fn configuration_error(reason: &str) -> anyhow::Error {
-    anyhow!(
-        "[{}] MCP configuration error: {}",
-        ErrorCode::ConfigurationError.code(),
-        reason
-    )
+    anyhow!("[{}] MCP configuration error: {}", ErrorCode::ConfigurationError.code(), reason)
 }
 
 #[cfg(test)]
@@ -183,10 +167,7 @@ mod tests {
     fn test_error_names() {
         assert_eq!(ErrorCode::ToolNotFound.name(), "ToolNotFound");
         assert_eq!(ErrorCode::ProviderNotFound.name(), "ProviderNotFound");
-        assert_eq!(
-            ErrorCode::InitializationTimeout.name(),
-            "InitializationTimeout"
-        );
+        assert_eq!(ErrorCode::InitializationTimeout.name(), "InitializationTimeout");
     }
 
     #[test]

@@ -90,16 +90,14 @@ impl AtomicStats {
     #[inline]
     fn record_success(&self, duration_ms: u64) {
         self.successful_calls.fetch_add(1, Ordering::Relaxed);
-        self.total_duration_ms
-            .fetch_add(duration_ms, Ordering::Relaxed);
+        self.total_duration_ms.fetch_add(duration_ms, Ordering::Relaxed);
         self.duration_count.fetch_add(1, Ordering::Relaxed);
     }
 
     #[inline]
     fn record_failure(&self, duration_ms: u64) {
         self.failed_calls.fetch_add(1, Ordering::Relaxed);
-        self.total_duration_ms
-            .fetch_add(duration_ms, Ordering::Relaxed);
+        self.total_duration_ms.fetch_add(duration_ms, Ordering::Relaxed);
         self.duration_count.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -157,12 +155,7 @@ impl CachedToolExecutor {
         let patterns = Arc::new(RwLock::new(PatternDetector::new(pattern_window)));
         let stats = Arc::new(AtomicStats::new());
 
-        Self {
-            cache,
-            middleware,
-            patterns,
-            stats,
-        }
+        Self { cache, middleware, patterns, stats }
     }
 
     /// Add middleware to the chain.
@@ -206,8 +199,7 @@ impl CachedToolExecutor {
 
         // Before hooks
         if let Err(err) = self.middleware.before_execute(&req).await {
-            self.record_error(tool_name, start.elapsed(), &req, &err)
-                .await;
+            self.record_error(tool_name, start.elapsed(), &req, &err).await;
             return Err(err);
         }
 
@@ -226,8 +218,7 @@ impl CachedToolExecutor {
                 cache_hit: Some(true),
             };
             if let Err(err) = self.middleware.after_execute(&req, &res).await {
-                self.record_error(tool_name, start.elapsed(), &req, &err)
-                    .await;
+                self.record_error(tool_name, start.elapsed(), &req, &err).await;
                 return Err(err);
             }
 
@@ -251,8 +242,7 @@ impl CachedToolExecutor {
             Ok(result) => match result {
                 Ok(result) => result,
                 Err(err) => {
-                    self.record_error(tool_name, start.elapsed(), &req, &err)
-                        .await;
+                    self.record_error(tool_name, start.elapsed(), &req, &err).await;
                     return Err(err);
                 }
             },
@@ -262,8 +252,7 @@ impl CachedToolExecutor {
                     format!("Tool '{tool_name}' timed out after {timeout_secs} seconds"),
                 )
                 .with_tool_name(tool_name);
-                self.record_error(tool_name, start.elapsed(), &req, &err)
-                    .await;
+                self.record_error(tool_name, start.elapsed(), &req, &err).await;
                 return Err(err);
             }
         };
@@ -290,8 +279,7 @@ impl CachedToolExecutor {
 
         // After hooks
         if let Err(err) = self.middleware.after_execute(&req, &res).await {
-            self.record_error(tool_name, start.elapsed(), &req, &err)
-                .await;
+            self.record_error(tool_name, start.elapsed(), &req, &err).await;
             return Err(err);
         }
 
@@ -332,8 +320,7 @@ impl CachedToolExecutor {
         self.stats.record_failure(elapsed.as_millis() as u64);
 
         let _ = self.middleware.on_error(req, err).await;
-        self.record_pattern(tool_name, false, elapsed.as_millis() as u64)
-            .await;
+        self.record_pattern(tool_name, false, elapsed.as_millis() as u64).await;
     }
 
     /// Record event in pattern detector
@@ -483,9 +470,7 @@ mod tests {
         let executor = CachedToolExecutor::new();
 
         // First call - miss
-        let result = executor
-            .execute("test_tool", serde_json::json!({"arg": 1}))
-            .await?;
+        let result = executor.execute("test_tool", serde_json::json!({"arg": 1})).await?;
         assert_eq!(result, serde_json::json!({"status": "ok"}));
 
         let stats = executor.stats().await;
@@ -500,12 +485,8 @@ mod tests {
         let executor = CachedToolExecutor::new();
 
         // Two identical calls
-        executor
-            .execute("test_tool", serde_json::json!({"arg": 1}))
-            .await?;
-        executor
-            .execute("test_tool", serde_json::json!({"arg": 1}))
-            .await?;
+        executor.execute("test_tool", serde_json::json!({"arg": 1})).await?;
+        executor.execute("test_tool", serde_json::json!({"arg": 1})).await?;
 
         let stats = executor.stats().await;
         assert_eq!(stats.total_calls, 2);

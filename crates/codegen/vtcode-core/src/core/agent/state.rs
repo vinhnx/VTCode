@@ -89,8 +89,7 @@ impl HistoryValidationReport {
     /// false positives during crash recovery that would insert synthetic
     /// outputs for tools that are legitimately still running.
     pub fn exclude_pending(&mut self, is_pending: impl Fn(&str) -> bool) {
-        self.missing_outputs
-            .retain(|m| !is_pending(m.call_id.as_str()));
+        self.missing_outputs.retain(|m| !is_pending(m.call_id.as_str()));
     }
 }
 
@@ -130,10 +129,7 @@ impl Default for ApiFailureTracker {
 
 impl ApiFailureTracker {
     pub fn new() -> Self {
-        Self {
-            consecutive_failures: 0,
-            last_failure: None,
-        }
+        Self { consecutive_failures: 0, last_failure: None }
     }
 
     pub fn record_failure(&mut self) {
@@ -212,10 +208,7 @@ pub fn validate_history_invariants(messages: &[Message]) -> HistoryValidationRep
         .map(|output_id| ToolCallId::new(output_id.clone()))
         .collect();
 
-    HistoryValidationReport {
-        missing_outputs,
-        orphan_outputs,
-    }
+    HistoryValidationReport { missing_outputs, orphan_outputs }
 }
 
 /// Find a split point that keeps tool-call outputs paired with their calls.
@@ -306,11 +299,8 @@ pub fn remove_orphan_outputs(messages: &mut Vec<Message>) {
         return;
     }
 
-    let orphan_ids: HashSet<String> = report
-        .orphan_outputs
-        .iter()
-        .map(|id| id.as_str().to_string())
-        .collect();
+    let orphan_ids: HashSet<String> =
+        report.orphan_outputs.iter().map(|id| id.as_str().to_string()).collect();
 
     let initial_len = messages.len();
 
@@ -351,18 +341,12 @@ pub fn recover_history_from_crash(messages: &mut Vec<Message>) {
     let report = validate_history_invariants(messages);
 
     if !report.missing_outputs.is_empty() {
-        tracing::warn!(
-            "Found {} missing outputs during recovery",
-            report.missing_outputs.len()
-        );
+        tracing::warn!("Found {} missing outputs during recovery", report.missing_outputs.len());
         ensure_call_outputs_present(messages);
     }
 
     if !report.orphan_outputs.is_empty() {
-        tracing::warn!(
-            "Found {} orphan outputs during recovery",
-            report.orphan_outputs.len()
-        );
+        tracing::warn!("Found {} orphan outputs during recovery", report.orphan_outputs.len());
         remove_orphan_outputs(messages);
     }
 
@@ -472,11 +456,11 @@ mod tests {
                 .iter()
                 .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "call_1"))
         );
-        assert!(!messages.iter().any(|msg| {
-            msg.tool_call_id
-                .as_ref()
-                .is_some_and(|id| id == "orphan_call")
-        }));
+        assert!(
+            !messages
+                .iter()
+                .any(|msg| { msg.tool_call_id.as_ref().is_some_and(|id| id == "orphan_call") })
+        );
 
         let report = validate_history_invariants(&messages);
         assert!(report.is_valid());
@@ -520,11 +504,11 @@ mod tests {
 
         let report = validate_history_invariants(&messages);
         assert!(report.is_valid());
-        assert!(messages.iter().any(|msg| {
-            msg.tool_call_id
-                .as_ref()
-                .is_some_and(|id| id == "crashed_call")
-        }));
+        assert!(
+            messages
+                .iter()
+                .any(|msg| { msg.tool_call_id.as_ref().is_some_and(|id| id == "crashed_call") })
+        );
         assert!(
             !messages
                 .iter()

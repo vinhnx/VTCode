@@ -40,10 +40,7 @@ mod error_scenarios {
             let back: ErrorCategory = ErrorCategory::from(tool_err);
             // Round-trip should reach the same or a semantically equivalent category.
             // Some categories collapse (e.g. RateLimit → NetworkError → Network).
-            assert!(
-                !back.user_label().is_empty(),
-                "Round-trip for {cat:?} produced empty label"
-            );
+            assert!(!back.user_label().is_empty(), "Round-trip for {cat:?} produced empty label");
         }
     }
 
@@ -80,19 +77,10 @@ mod error_scenarios {
             ("request timed out after 30s", ErrorCategory::Timeout),
             ("429 Too Many Requests", ErrorCategory::RateLimit),
             ("invalid api key", ErrorCategory::Authentication),
-            (
-                "permission denied (os error 13)",
-                ErrorCategory::PermissionDenied,
-            ),
+            ("permission denied (os error 13)", ErrorCategory::PermissionDenied),
             ("rate limit exceeded", ErrorCategory::RateLimit),
-            (
-                "server is overloaded, try again later",
-                ErrorCategory::ServiceUnavailable,
-            ),
-            (
-                "service temporarily unavailable",
-                ErrorCategory::ServiceUnavailable,
-            ),
+            ("server is overloaded, try again later", ErrorCategory::ServiceUnavailable),
+            ("service temporarily unavailable", ErrorCategory::ServiceUnavailable),
         ];
 
         for (msg, expected) in cases {
@@ -119,10 +107,7 @@ mod error_scenarios {
 
         for cat in &retryable {
             match cat.retryability() {
-                Retryability::Retryable {
-                    max_attempts,
-                    backoff,
-                } => {
+                Retryability::Retryable { max_attempts, backoff } => {
                     assert!(
                         (1..=10).contains(&max_attempts),
                         "{cat:?} has unreasonable max_attempts={max_attempts}"
@@ -170,15 +155,9 @@ mod error_scenarios {
 
         for cat in &actionable {
             let suggestions = cat.recovery_suggestions();
-            assert!(
-                !suggestions.is_empty(),
-                "{cat:?} should have recovery suggestions"
-            );
+            assert!(!suggestions.is_empty(), "{cat:?} should have recovery suggestions");
             for s in &suggestions {
-                assert!(
-                    !s.trim().is_empty(),
-                    "{cat:?} has an empty suggestion string"
-                );
+                assert!(!s.trim().is_empty(), "{cat:?} has an empty suggestion string");
             }
         }
     }
@@ -248,10 +227,7 @@ mod error_scenarios {
         let diagnostics = breaker.get_diagnostics("read_file");
         assert!(diagnostics.is_open);
         assert_eq!(diagnostics.tool_name, "read_file");
-        assert_eq!(
-            diagnostics.last_error_category,
-            Some(ErrorCategory::ExecutionError)
-        );
+        assert_eq!(diagnostics.last_error_category, Some(ErrorCategory::ExecutionError));
     }
 
     // -----------------------------------------------------------------------
@@ -274,15 +250,9 @@ mod error_scenarios {
 
         for code in &codes {
             let guidance = code.user_guidance();
-            assert!(
-                !guidance.is_empty(),
-                "{code:?} should have non-empty user_guidance"
-            );
+            assert!(!guidance.is_empty(), "{code:?} should have non-empty user_guidance");
             // Guidance should be a complete sentence or phrase.
-            assert!(
-                guidance.len() > 10,
-                "{code:?} guidance too short to be helpful: {guidance:?}"
-            );
+            assert!(guidance.len() > 10, "{code:?} guidance too short to be helpful: {guidance:?}");
         }
     }
 
@@ -357,10 +327,6 @@ mod error_scenarios {
         let anyhow_err = anyhow::Error::new(inner).context("permission denied while reading file");
 
         let cat = vtcode_commons::classify_anyhow_error(&anyhow_err);
-        assert_eq!(
-            cat,
-            ErrorCategory::PermissionDenied,
-            "Expected PermissionDenied, got {cat:?}"
-        );
+        assert_eq!(cat, ErrorCategory::PermissionDenied, "Expected PermissionDenied, got {cat:?}");
     }
 }

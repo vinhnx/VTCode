@@ -13,10 +13,7 @@ use tracing::warn;
 impl PtyManager {
     pub fn list_sessions(&self) -> Vec<VTCodePtySession> {
         let sessions = self.inner.sessions.lock();
-        sessions
-            .values()
-            .map(|handle| handle.snapshot_metadata())
-            .collect()
+        sessions.values().map(|handle| handle.snapshot_metadata()).collect()
     }
 
     pub fn snapshot_session(&self, session_id: &str) -> Result<VTCodePtySession> {
@@ -60,19 +57,13 @@ impl PtyManager {
                 .as_mut()
                 .ok_or_else(|| anyhow!("PTY session '{session_id}' is no longer writable"))?;
 
-            writer
-                .write_all(data)
-                .context("failed to write input to PTY session")?;
+            writer.write_all(data).context("failed to write input to PTY session")?;
 
             if append_newline {
-                writer
-                    .write_all(b"\n")
-                    .context("failed to write newline to PTY session")?;
+                writer.write_all(b"\n").context("failed to write newline to PTY session")?;
             }
 
-            writer
-                .flush()
-                .context("failed to flush PTY session input")?;
+            writer.flush().context("failed to flush PTY session input")?;
         }
 
         let written = data.len() + if append_newline { 1 } else { 0 };
@@ -84,9 +75,7 @@ impl PtyManager {
 
         {
             let master = handle.master.lock();
-            master
-                .resize(size)
-                .context("failed to resize PTY session")?;
+            master.resize(size).context("failed to resize PTY session")?;
         }
 
         {
@@ -130,10 +119,7 @@ impl PtyManager {
     pub async fn sync_sessions_to_files(&self) -> Result<Vec<std::path::PathBuf>> {
         let terminals_dir = self.workspace_root.join(".vtcode").join("terminals");
         ensure_dir_exists(&terminals_dir).await.with_context(|| {
-            format!(
-                "Failed to create terminals directory: {}",
-                terminals_dir.display()
-            )
+            format!("Failed to create terminals directory: {}", terminals_dir.display())
         })?;
 
         let sessions = self.list_sessions();
@@ -220,10 +206,8 @@ impl PtyManager {
                 if let Some(cwd) = &session.working_dir {
                     content.push_str(&format!("- **Working Dir**: {cwd}\n"));
                 }
-                content.push_str(&format!(
-                    "- **Terminal Size**: {}x{}\n",
-                    session.cols, session.rows
-                ));
+                content
+                    .push_str(&format!("- **Terminal Size**: {}x{}\n", session.cols, session.rows));
                 content.push_str(&format!(
                     "- **File**: `.vtcode/terminals/{}.txt`\n\n",
                     sanitize_session_id(&session.id)
@@ -272,10 +256,7 @@ impl PtyManager {
             if let Some(reader_thread) = thread_guard.take()
                 && let Err(panic) = reader_thread.join()
             {
-                warn!(
-                    "PTY session '{}' reader thread panicked: {:?}",
-                    session_id, panic
-                );
+                warn!("PTY session '{}' reader thread panicked: {:?}", session_id, panic);
             }
         }
 

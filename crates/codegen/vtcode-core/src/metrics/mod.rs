@@ -303,10 +303,7 @@ impl MetricsCollector {
 
     /// Get current SDK metrics snapshot
     pub fn get_sdk_metrics(&self) -> SdkMetrics {
-        self.sdk
-            .lock()
-            .map(|m| m.clone())
-            .unwrap_or_else(|_| SdkMetrics::new())
+        self.sdk.lock().map(|m| m.clone()).unwrap_or_else(|_| SdkMetrics::new())
     }
 
     /// Get current filtering metrics snapshot
@@ -319,10 +316,7 @@ impl MetricsCollector {
 
     /// Get current skill metrics snapshot
     pub fn get_skill_metrics(&self) -> SkillMetrics {
-        self.skills
-            .lock()
-            .map(|m| m.clone())
-            .unwrap_or_else(|_| SkillMetrics::new())
+        self.skills.lock().map(|m| m.clone()).unwrap_or_else(|_| SkillMetrics::new())
     }
 
     /// Get current security metrics snapshot

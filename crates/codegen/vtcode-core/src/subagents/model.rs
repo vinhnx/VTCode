@@ -140,10 +140,7 @@ fn parse_model_or_custom(
         if custom.name.eq_ignore_ascii_case(provider_hint)
             && custom.effective_models().iter().any(|m| m == trimmed)
         {
-            return Ok(ModelId::Custom(
-                custom.name.to_lowercase(),
-                trimmed.to_string(),
-            ));
+            return Ok(ModelId::Custom(custom.name.to_lowercase(), trimmed.to_string()));
         }
     }
 
@@ -165,10 +162,7 @@ fn resolve_explicit_model(
 ) -> Result<ModelId> {
     let resolved = if requested.eq_ignore_ascii_case("small") {
         resolve_lightweight_model(vt_cfg, parent_provider, parent_model, agent_name)
-    } else if matches!(
-        requested.to_ascii_lowercase().as_str(),
-        "haiku" | "sonnet" | "opus"
-    ) {
+    } else if matches!(requested.to_ascii_lowercase().as_str(), "haiku" | "sonnet" | "opus") {
         alias_model_for_provider(parent_provider, requested, parent_model)
     } else {
         requested.to_string()
@@ -245,19 +239,9 @@ pub fn resolve_effective_subagent_model(
         }
     }
 
-    match resolve_subagent_model(
-        vt_cfg,
-        parent_model,
-        parent_provider,
-        spec_model,
-        agent_name,
-    ) {
+    match resolve_subagent_model(vt_cfg, parent_model, parent_provider, spec_model, agent_name) {
         Ok(model) => Ok(model),
-        Err(err)
-            if spec_model
-                .map(str::trim)
-                .is_some_and(|v| v.eq_ignore_ascii_case("small")) =>
-        {
+        Err(err) if spec_model.map(str::trim).is_some_and(|v| v.eq_ignore_ascii_case("small")) => {
             tracing::warn!(
                 agent_name,
                 error = %err,
@@ -299,10 +283,7 @@ fn handle_model_override_failure(
             agent_name,
         );
     }
-    let fallback = spec_model
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .unwrap_or("inherit");
+    let fallback = spec_model.map(str::trim).filter(|v| !v.is_empty()).unwrap_or("inherit");
     tracing::warn!(
         agent_name,
         requested_model = requested.trim(),
@@ -310,22 +291,17 @@ fn handle_model_override_failure(
         error = %err,
         "Failed to resolve subagent model override; falling back"
     );
-    let model = resolve_subagent_model(
-        vt_cfg,
-        parent_model,
-        parent_provider,
-        spec_model,
-        agent_name,
-    )
-    .or_else(|_| {
-        resolve_subagent_model(
-            vt_cfg,
-            parent_model,
-            parent_provider,
-            Some("inherit"),
-            agent_name,
-        )
-    })?;
+    let model =
+        resolve_subagent_model(vt_cfg, parent_model, parent_provider, spec_model, agent_name)
+            .or_else(|_| {
+                resolve_subagent_model(
+                    vt_cfg,
+                    parent_model,
+                    parent_provider,
+                    Some("inherit"),
+                    agent_name,
+                )
+            })?;
     Ok(model)
 }
 
@@ -391,10 +367,7 @@ pub fn load_memory_appendix(
 
     let memory_dir = agent_memory_dir(workspace_root, agent_name, scope);
     std::fs::create_dir_all(&memory_dir).with_context(|| {
-        format!(
-            "Failed to create subagent memory directory {}",
-            memory_dir.display()
-        )
+        format!("Failed to create subagent memory directory {}", memory_dir.display())
     })?;
     let memory_file = memory_dir.join("MEMORY.md");
     if !memory_file.exists() {
@@ -483,9 +456,9 @@ fn agent_memory_dir(
         SubagentMemoryScope::Project => {
             workspace_root.join(".vtcode/agent-memory").join(agent_name)
         }
-        SubagentMemoryScope::Local => workspace_root
-            .join(".vtcode/agent-memory-local")
-            .join(agent_name),
+        SubagentMemoryScope::Local => {
+            workspace_root.join(".vtcode/agent-memory-local").join(agent_name)
+        }
         SubagentMemoryScope::User => dirs::home_dir()
             .unwrap_or_default()
             .join(".vtcode/agent-memory")

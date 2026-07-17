@@ -14,10 +14,7 @@ async fn setup_registry(root: &Path) -> ToolRegistry {
 }
 
 fn error_message(result: &Value) -> String {
-    result["error"]["message"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string()
+    result["error"]["message"].as_str().unwrap_or_default().to_string()
 }
 
 fn create_ast_grep_stub(temp_dir: &TempDir, lines: &[&str]) -> PathBuf {
@@ -104,10 +101,7 @@ async fn rust_function_anchor_resolves_without_exact_context_line() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert_eq!(result["success"].as_bool(), Some(true), "{result:?}");
     let updated = fs::read_to_string(source).unwrap();
@@ -151,10 +145,7 @@ async fn typescript_method_anchor_resolves_without_exact_signature_line() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert_eq!(result["success"].as_bool(), Some(true), "{result:?}");
     let updated = fs::read_to_string(source).unwrap();
@@ -195,10 +186,7 @@ async fn python_function_anchor_preserves_indentation() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert_eq!(result["success"].as_bool(), Some(true), "{result:?}");
     let updated = fs::read_to_string(source).unwrap();
@@ -242,10 +230,7 @@ async fn go_method_anchor_resolves_receiver_signature() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert_eq!(result["success"].as_bool(), Some(true), "{result:?}");
     let updated = fs::read_to_string(source).unwrap();
@@ -296,10 +281,7 @@ async fn semantic_anchor_fails_when_multiple_locations_match() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert!(result["error"].is_object(), "{result:?}");
     assert!(error_message(&result).contains("matched 2 possible locations"));
@@ -310,11 +292,8 @@ async fn semantic_anchor_fails_when_multiple_locations_match() {
 async fn semantic_anchor_falls_back_to_exact_match_for_unsupported_language() {
     let temp_dir = TempDir::new().unwrap();
     let source = temp_dir.path().join("service.txt");
-    fs::write(
-        &source,
-        "class Service\n  def greet(name)\n    \"hi #{name}\"\n  end\nend\n",
-    )
-    .unwrap();
+    fs::write(&source, "class Service\n  def greet(name)\n    \"hi #{name}\"\n  end\nend\n")
+        .unwrap();
 
     let patch = r#"*** Begin Patch
 *** Update File: service.txt
@@ -324,17 +303,11 @@ async fn semantic_anchor_falls_back_to_exact_match_for_unsupported_language() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert!(result["success"].as_bool().unwrap_or(false), "{result:?}");
     let content = fs::read_to_string(&source).unwrap();
-    assert!(
-        content.contains("hello #{name}"),
-        "expected replacement: {content}"
-    );
+    assert!(content.contains("hello #{name}"), "expected replacement: {content}");
 }
 
 #[tokio::test]
@@ -365,17 +338,11 @@ async fn semantic_anchor_fails_when_ast_grep_is_unavailable() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert!(result["error"].is_object(), "{result:?}");
     assert!(error_message(&result).contains("ast-grep is not available"));
-    assert!(
-        error_message(&result).contains("vtcode dependencies install ast-grep"),
-        "{result:?}"
-    );
+    assert!(error_message(&result).contains("vtcode dependencies install ast-grep"), "{result:?}");
 }
 
 #[tokio::test]
@@ -412,10 +379,7 @@ async fn semantic_anchor_fails_when_candidate_region_is_not_safe() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert!(result["error"].is_object(), "{result:?}");
     assert!(error_message(&result).contains("removal/context lines were not found safely"));
@@ -447,10 +411,7 @@ async fn numeric_hunk_headers_do_not_trigger_semantic_fallback() {
 *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    let result = registry
-        .execute_tool("apply_patch", json!({ "patch": patch }))
-        .await
-        .unwrap();
+    let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert!(result["error"].is_object(), "{result:?}");
     let message = error_message(&result);

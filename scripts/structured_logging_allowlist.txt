@@ -1,26 +1,26 @@
 # Scoped exceptions for intentional user-facing terminal output.
 src/** | Root application binary renders CLI and app output directly.
-vtcode-core/src/cli/** | VT Code core CLI adapters intentionally render command output for users.
-vtcode-core/src/commands/** | Command implementations print human-readable summaries and reports.
-vtcode-core/src/config/validation.rs | Configuration validation warnings now use tracing::warn.
-vtcode-core/src/core/agent/core.rs | Interactive agent session headers and summaries are part of the terminal UX.
-vtcode-core/src/core/agent/runner.rs | Interactive agent runner status output is user-facing.
-vtcode-core/src/core/agent/runner/output.rs | Assistant response rendering intentionally writes to stdout.
-vtcode-core/src/core/agent/runner/telemetry.rs | Interactive warnings and errors are surfaced directly to users.
-vtcode-core/src/core/agent/runner/tool_args.rs | Tool argument validation warnings are user-facing terminal output.
-vtcode-core/src/llm/providers/lmstudio/client.rs | Model download progress is intentional terminal feedback.
-vtcode-core/src/marketplace/installer.rs | Marketplace installation progress is intentionally human-readable.
-vtcode-core/src/marketplace/testing.rs | Marketplace smoke-test helper prints human-readable status.
-vtcode-core/src/mcp/cli.rs | MCP CLI entrypoint prints user-facing status and result output.
-vtcode-core/src/plugins/validation.rs | Plugin validation output is intentionally formatted for direct terminal display.
-vtcode-core/src/tool_policy.rs | Tool policy summaries are intentionally rendered for the user.
-vtcode-core/src/tools/ripgrep_installer/mod.rs | Dependency installer progress and remediation are intentionally terminal-facing.
-vtcode-core/src/tools/ripgrep_installer/platform.rs | Dependency installer fallback messaging is intentionally terminal-facing.
-vtcode-core/src/ui/** | UI helpers intentionally print prompts and formatted terminal output.
-vtcode-core/src/tools/cached_executor.rs | ToolExecutor report prints human-readable statistics.
-vtcode-core/src/utils/common.rs | Shared terminal formatting helpers intentionally write to stdout.
-vtcode-core/src/utils/safety.rs | Safety summaries are direct user-facing terminal output.
-vtcode-ui/src/tui/core_tui/mod.rs | TUI startup errors are reported via eprintln! before the UI loop is available.
-vtcode-ui/src/tui/core_tui/panic_hook.rs | Panic hook setup failures use eprintln! before tracing is initialized.
-vtcode-ui/src/tui/session_options.rs | TUI startup errors are reported via eprintln! before the UI loop is available.
-vtcode-bash-runner/src/process.rs | Output stream lag warnings are user-facing diagnostics from the pty runner.
+crates/codegen/vtcode-core/src/cli/** | VT Code core CLI adapters intentionally render command output for users.
+crates/codegen/vtcode-core/src/commands/** | Command implementations print human-readable summaries and reports.
+crates/codegen/vtcode-core/src/config/validation.rs | Configuration validation warnings now use tracing::warn.
+crates/codegen/vtcode-core/src/core/agent/core.rs | Interactive agent session headers and summaries are part of the terminal UX.
+crates/codegen/vtcode-core/src/core/agent/runner.rs | Interactive agent runner status output is user-facing.
+crates/codegen/vtcode-core/src/core/agent/runner/output.rs | Assistant response rendering intentionally writes to stdout.
+crates/codegen/vtcode-core/src/core/agent/runner/telemetry.rs | Interactive warnings and errors are surfaced directly to users.
+crates/codegen/vtcode-core/src/core/agent/runner/tool_args.rs | Tool argument validation warnings are user-facing terminal output.
+crates/codegen/vtcode-core/src/llm/providers/lmstudio/client.rs | Model download progress is intentional terminal feedback.
+crates/codegen/vtcode-core/src/marketplace/installer.rs | Marketplace installation progress is intentionally human-readable.
+crates/codegen/vtcode-core/src/marketplace/testing.rs | Marketplace smoke-test helper prints human-readable status.
+crates/codegen/vtcode-core/src/mcp/cli.rs | MCP CLI entrypoint prints user-facing status and result output.
+crates/codegen/vtcode-core/src/plugins/validation.rs | Plugin validation output is intentionally formatted for direct terminal display.
+crates/codegen/vtcode-core/src/tool_policy.rs | Tool policy summaries are intentionally rendered for the user.
+crates/codegen/vtcode-core/src/tools/ripgrep_installer/mod.rs | Dependency installer progress and remediation are intentionally terminal-facing.
+crates/codegen/vtcode-core/src/tools/ripgrep_installer/platform.rs | Dependency installer fallback messaging is intentionally terminal-facing.
+crates/codegen/vtcode-core/src/ui/** | UI helpers intentionally print prompts and formatted terminal output.
+crates/codegen/vtcode-core/src/tools/cached_executor.rs | ToolExecutor report prints human-readable statistics.
+crates/codegen/vtcode-core/src/utils/common.rs | Shared terminal formatting helpers intentionally write to stdout.
+crates/codegen/vtcode-core/src/utils/safety.rs | Safety summaries are direct user-facing terminal output.
+crates/codegen/vtcode-ui/src/tui/core_tui/mod.rs | TUI startup errors are reported via eprintln! before the UI loop is available.
+crates/codegen/vtcode-ui/src/tui/core_tui/panic_hook.rs | Panic hook setup failures use eprintln! before tracing is initialized.
+crates/codegen/vtcode-ui/src/tui/session_options.rs | TUI startup errors are reported via eprintln! before the UI loop is available.
+crates/codegen/vtcode-bash-runner/src/process.rs | Output stream lag warnings are user-facing diagnostics from the pty runner.

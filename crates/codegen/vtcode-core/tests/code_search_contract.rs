@@ -107,9 +107,7 @@ async fn code_search_validates_five_property_contract() -> Result<()> {
             .preflight_validate_call(tools::CODE_SEARCH, &invalid)
             .expect_err("invalid request must fail preflight");
         assert!(
-            error
-                .to_string()
-                .contains("Invalid arguments for tool 'code_search'"),
+            error.to_string().contains("Invalid arguments for tool 'code_search'"),
             "{invalid}: {error}"
         );
     }

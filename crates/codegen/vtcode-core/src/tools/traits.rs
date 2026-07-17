@@ -245,10 +245,7 @@ pub trait ToolExecutor: Send + Sync {
     /// for callers that want to keep a shared reference.
     async fn execute_shared(&self, name: &str, args: Arc<Value>) -> Result<Arc<Value>> {
         let res = self
-            .execute_tool(
-                name,
-                Arc::try_unwrap(args).unwrap_or_else(|arc| (*arc).clone()),
-            )
+            .execute_tool(name, Arc::try_unwrap(args).unwrap_or_else(|arc| (*arc).clone()))
             .await?;
         Ok(Arc::new(res))
     }

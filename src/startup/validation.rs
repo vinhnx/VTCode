@@ -184,19 +184,13 @@ fn collect_token_overhead_warnings(config: &VTCodeConfig) -> Vec<String> {
         );
     }
 
-    if matches!(
-        config.agent.system_prompt_mode,
-        SystemPromptMode::Specialized
-    ) {
+    if matches!(config.agent.system_prompt_mode, SystemPromptMode::Specialized) {
         warnings.push(
             "agent.system_prompt_mode = 'specialized' sends a larger base system prompt on every request. Prefer 'minimal' or 'lightweight' (default) to reduce token cost.".to_string(),
         );
     }
 
-    if matches!(
-        config.agent.tool_documentation_mode,
-        ToolDocumentationMode::Full
-    ) {
+    if matches!(config.agent.tool_documentation_mode, ToolDocumentationMode::Full) {
         warnings.push(
             "agent.tool_documentation_mode = 'full' sends complete tool documentation on every request. Prefer 'progressive' (default) to keep tool schemas small.".to_string(),
         );
@@ -296,10 +290,7 @@ mod tests {
         let (path, overrides) = parse_cli_config_entries(&entries);
 
         assert_eq!(path, Some(PathBuf::from("custom-config/vtcode.toml")));
-        assert_eq!(
-            overrides,
-            vec![("agent.provider".to_owned(), "openai".to_owned())]
-        );
+        assert_eq!(overrides, vec![("agent.provider".to_owned(), "openai".to_owned())]);
     }
 
     #[test]
@@ -389,9 +380,7 @@ mod tests {
         config.agent.system_prompt_mode = vtcode_core::config::SystemPromptMode::Specialized;
         let warnings = collect_token_overhead_warnings(&config);
         assert!(
-            warnings
-                .iter()
-                .any(|w| w.contains("system_prompt_mode = 'specialized'")),
+            warnings.iter().any(|w| w.contains("system_prompt_mode = 'specialized'")),
             "expected a warning for specialized system prompt mode: {warnings:?}"
         );
     }
@@ -402,9 +391,7 @@ mod tests {
         config.agent.tool_documentation_mode = vtcode_core::config::ToolDocumentationMode::Full;
         let warnings = collect_token_overhead_warnings(&config);
         assert!(
-            warnings
-                .iter()
-                .any(|w| w.contains("tool_documentation_mode = 'full'")),
+            warnings.iter().any(|w| w.contains("tool_documentation_mode = 'full'")),
             "expected a warning for full tool documentation mode: {warnings:?}"
         );
     }
@@ -415,9 +402,7 @@ mod tests {
         config.agent.harness.tool_result_clearing.enabled = false;
         let warnings = collect_token_overhead_warnings(&config);
         assert!(
-            warnings
-                .iter()
-                .any(|w| w.contains("tool_result_clearing is disabled")),
+            warnings.iter().any(|w| w.contains("tool_result_clearing is disabled")),
             "expected a warning for disabled tool-result clearing: {warnings:?}"
         );
     }
@@ -442,9 +427,7 @@ mod tests {
         config.mcp.providers.push(McpProviderConfig::default());
         let warnings = collect_token_overhead_warnings(&config);
         assert!(
-            warnings
-                .iter()
-                .any(|w| w.contains("client_tool_search is disabled")),
+            warnings.iter().any(|w| w.contains("client_tool_search is disabled")),
             "expected a warning for disabled client tool search with MCP: {warnings:?}"
         );
     }
@@ -455,9 +438,7 @@ mod tests {
         config.agent.harness.auto_compaction_enabled = false;
         let warnings = collect_token_overhead_warnings(&config);
         assert!(
-            warnings
-                .iter()
-                .any(|w| w.contains("auto_compaction_enabled is disabled")),
+            warnings.iter().any(|w| w.contains("auto_compaction_enabled is disabled")),
             "expected a warning for disabled auto compaction: {warnings:?}"
         );
     }

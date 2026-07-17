@@ -277,10 +277,7 @@ fn reasoning_preset(
     effort: ReasoningEffortLevel,
     description: &'static str,
 ) -> ReasoningEffortPreset {
-    ReasoningEffortPreset {
-        effort,
-        description: description.to_string(),
-    }
+    ReasoningEffortPreset { effort, description: description.to_string() }
 }
 
 fn openai_reasoning_efforts(
@@ -290,25 +287,16 @@ fn openai_reasoning_efforts(
 ) -> Vec<ReasoningEffortPreset> {
     let mut efforts = Vec::new();
     if include_none {
-        efforts.push(reasoning_preset(
-            ReasoningEffortLevel::None,
-            "Lowest latency",
-        ));
+        efforts.push(reasoning_preset(ReasoningEffortLevel::None, "Lowest latency"));
     }
     efforts.push(reasoning_preset(ReasoningEffortLevel::Low, "Fast"));
     efforts.push(reasoning_preset(ReasoningEffortLevel::Medium, "Balanced"));
     efforts.push(reasoning_preset(ReasoningEffortLevel::High, "Deep"));
     if include_xhigh {
-        efforts.push(reasoning_preset(
-            ReasoningEffortLevel::XHigh,
-            "Maximum reasoning",
-        ));
+        efforts.push(reasoning_preset(ReasoningEffortLevel::XHigh, "Maximum reasoning"));
     }
     if include_max {
-        efforts.push(reasoning_preset(
-            ReasoningEffortLevel::Max,
-            "Maximum adaptive reasoning",
-        ));
+        efforts.push(reasoning_preset(ReasoningEffortLevel::Max, "Maximum adaptive reasoning"));
     }
     efforts
 }
@@ -2342,10 +2330,8 @@ mod tests {
         let providers: Vec<Provider> = Provider::all_providers();
 
         for provider in providers {
-            let default_count = presets
-                .iter()
-                .filter(|p| p.provider == provider && p.is_default)
-                .count();
+            let default_count =
+                presets.iter().filter(|p| p.provider == provider && p.is_default).count();
             assert!(
                 default_count <= 1,
                 "Provider {provider:?} has {default_count} defaults, expected 0 or 1"

@@ -13,9 +13,7 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
         vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     vt_cfg.automation.full_auto.max_turns = 3;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-continuation-success")).await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![
         text_response("The task is complete."),
         tool_call_response(
@@ -52,9 +50,7 @@ async fn runner_keeps_openai_requests_stateless_and_reuses_session_cache_key() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-cache-lineage")).await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     let mut provider = RoleQueuedProvider::new();
     provider
         .build(tool_call_response_with_request_id(
@@ -81,10 +77,7 @@ async fn runner_keeps_openai_requests_stateless_and_reuses_session_cache_key() {
     let requests = recorded.recorded_requests();
     assert!(requests.len() >= 2);
     assert_eq!(requests[0].previous_response_id, None);
-    assert_eq!(
-        requests[0].prompt_cache_key.as_deref(),
-        Some("vtcode:openai:thread-cache-lineage")
-    );
+    assert_eq!(requests[0].prompt_cache_key.as_deref(), Some("vtcode:openai:thread-cache-lineage"));
     assert_eq!(requests[1].previous_response_id, None);
     assert!(requests[1].messages.starts_with(&requests[0].messages));
     assert_eq!(requests[1].prompt_cache_key, requests[0].prompt_cache_key);
@@ -109,9 +102,8 @@ async fn exec_full_auto_runs_verification_before_accepting_completion() {
         vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-verification-success")).await;
     runner.enable_full_auto(&[]).await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
-        "The task is complete.",
-    )]));
+    runner.provider_client =
+        Box::new(QueuedProvider::new(vec![text_response("The task is complete.")]));
 
     let result = Box::pin(runner.execute_task(&task("Verification success", "exec-task"), &[]))
         .await
@@ -154,10 +146,7 @@ async fn exec_full_auto_retries_after_verification_failure() {
         .await
         .expect("task result");
 
-    assert!(matches!(
-        result.outcome,
-        TaskOutcome::TurnLimitReached { .. }
-    ));
+    assert!(matches!(result.outcome, TaskOutcome::TurnLimitReached { .. }));
     assert!(result.turns_executed > 1);
     let events = harness_events(&result);
     assert!(events.contains(&HarnessEventKind::VerificationStarted));
@@ -168,18 +157,11 @@ async fn exec_full_auto_retries_after_verification_failure() {
 #[tokio::test]
 async fn review_runs_skip_continuation_and_finish_single_pass() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-review-skip",
-    ))
-    .await;
-    runner
-        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
-        .await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
-        "The task is complete.",
-    )]));
+    let mut runner =
+        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-review-skip")).await;
+    runner.enable_full_auto(&[tools::UNIFIED_FILE.to_string()]).await;
+    runner.provider_client =
+        Box::new(QueuedProvider::new(vec![text_response("The task is complete.")]));
 
     let result = Box::pin(runner.execute_task(&task("Review task", "review-task"), &[]))
         .await
@@ -235,12 +217,7 @@ fn assert_review_request_exposes_only_code_search(request: &LLMRequest) {
     let tool_names = request
         .tools
         .as_deref()
-        .map(|definitions| {
-            definitions
-                .iter()
-                .map(|tool| tool.function_name())
-                .collect::<Vec<_>>()
-        })
+        .map(|definitions| definitions.iter().map(|tool| tool.function_name()).collect::<Vec<_>>())
         .unwrap_or_default();
     assert!(tool_names.contains(&tools::CODE_SEARCH));
     for mutating_tool in [tools::EXEC_COMMAND, tools::APPLY_PATCH] {
@@ -257,16 +234,9 @@ async fn record_review_request(
     provider_name: &'static str,
     session_id: &str,
 ) -> LLMRequest {
-    let mut runner = Box::pin(make_runner_for_model(
-        temp,
-        VTCodeConfig::default(),
-        session_id,
-        model,
-    ))
-    .await;
-    let allowlist = runner
-        .review_tool_allowlist(&[tools::WILDCARD_ALL.to_string()])
-        .await;
+    let mut runner =
+        Box::pin(make_runner_for_model(temp, VTCodeConfig::default(), session_id, model)).await;
+    let allowlist = runner.review_tool_allowlist(&[tools::WILDCARD_ALL.to_string()]).await;
     runner.enable_full_auto(&allowlist).await;
 
     let provider = RecordingQueuedProvider::with_name(
@@ -292,17 +262,13 @@ async fn record_review_request(
 #[tokio::test]
 async fn planning_workflow_runs_skip_continuation_and_finish_single_pass() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-planning-workflow-skip",
-    ))
-    .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-planning-workflow-skip"))
+            .await;
     runner.enable_full_auto(&[]).await;
     runner.enable_planning();
-    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
-        "The task is complete.",
-    )]));
+    runner.provider_client =
+        Box::new(QueuedProvider::new(vec![text_response("The task is complete.")]));
 
     let result = Box::pin(runner.execute_task(&task("Planning workflow task", "exec-task"), &[]))
         .await
@@ -323,9 +289,8 @@ async fn exec_only_policy_skips_when_full_auto_is_disabled() {
     vt_cfg.agent.harness.continuation_policy =
         vtcode_config::core::agent::ContinuationPolicy::ExecOnly;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-exec-only-skip")).await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response(
-        "The task is complete.",
-    )]));
+    runner.provider_client =
+        Box::new(QueuedProvider::new(vec![text_response("The task is complete.")]));
 
     let result = Box::pin(runner.execute_task(&task("Exec task", "exec-task"), &[]))
         .await
@@ -351,9 +316,7 @@ async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
     vt_cfg.automation.full_auto.max_turns = 1;
     vt_cfg.tools.max_tool_loops = 1;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-tool-loop-blocked")).await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![tool_call_response(
         tools::TASK_TRACKER,
         json!({
@@ -365,10 +328,7 @@ async fn tool_loop_limit_writes_blocked_handoff_artifacts() {
         .await
         .expect("task result");
 
-    assert!(matches!(
-        result.outcome,
-        TaskOutcome::ToolLoopLimitReached { .. }
-    ));
+    assert!(matches!(result.outcome, TaskOutcome::ToolLoopLimitReached { .. }));
     let paths = harness_paths(&result, HarnessEventKind::BlockedHandoffWritten);
     assert_eq!(paths.len(), 2);
     for path in paths {
@@ -387,9 +347,7 @@ async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-plan-build-evaluate")).await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![
         json_response(planner_response_json("pwd")),
         tool_call_response(
@@ -401,11 +359,7 @@ async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
             }),
         ),
         text_response("The task is complete."),
-        json_response(evaluator_response_json(
-            "pass",
-            "Evaluator accepted the implementation.",
-            0,
-        )),
+        json_response(evaluator_response_json("pass", "Evaluator accepted the implementation.", 0)),
     ]));
 
     let result = Box::pin(runner.execute_task(&task("Planner + evaluator", "exec-task"), &[]))
@@ -422,9 +376,7 @@ async fn plan_build_evaluate_exec_creates_spec_and_evaluation_artifacts() {
         "planner should write current_contract.md"
     );
     assert!(
-        workspace
-            .join(".vtcode/tasks/current_evaluation.md")
-            .exists(),
+        workspace.join(".vtcode/tasks/current_evaluation.md").exists(),
         "evaluator should write current_evaluation.md"
     );
     let tracker =
@@ -450,15 +402,9 @@ async fn default_full_auto_exec_uses_plan_build_evaluate_harness() {
     let workspace = workspace_root(&temp);
 
     let vt_cfg = VTCodeConfig::default();
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        vt_cfg,
-        "thread-default-plan-build-evaluate",
-    ))
-    .await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, vt_cfg, "thread-default-plan-build-evaluate")).await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![
         json_response(planner_response_json("pwd")),
         tool_call_response(
@@ -470,11 +416,7 @@ async fn default_full_auto_exec_uses_plan_build_evaluate_harness() {
             }),
         ),
         text_response("The task is complete."),
-        json_response(evaluator_response_json(
-            "pass",
-            "Evaluator accepted the implementation.",
-            0,
-        )),
+        json_response(evaluator_response_json("pass", "Evaluator accepted the implementation.", 0)),
     ]));
 
     let result =
@@ -492,9 +434,7 @@ async fn default_full_auto_exec_uses_plan_build_evaluate_harness() {
         "default full-auto should write current_contract.md"
     );
     assert!(
-        workspace
-            .join(".vtcode/tasks/current_evaluation.md")
-            .exists(),
+        workspace.join(".vtcode/tasks/current_evaluation.md").exists(),
         "default full-auto should write current_evaluation.md"
     );
 
@@ -514,9 +454,7 @@ async fn evaluator_failure_forces_revision_before_success() {
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-revision")).await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     let mut provider = RoleQueuedProvider::new();
     provider
         .planner(json_response(planner_response_json("pwd")))
@@ -561,9 +499,7 @@ async fn evaluator_request_includes_verification_results() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-verification")).await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     let mut provider = RoleQueuedProvider::new();
     provider
         .planner(json_response(planner_response_json("pwd")))
@@ -613,9 +549,7 @@ async fn evaluator_scorecard_below_threshold_forces_revision() {
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-scorecard")).await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     let mut provider = RoleQueuedProvider::new();
     provider
         .planner(json_response(planner_response_json("pwd")))
@@ -667,15 +601,9 @@ async fn evaluator_missing_scorecard_forces_revision() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        vt_cfg,
-        "thread-evaluator-missing-scorecard",
-    ))
-    .await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-missing-scorecard")).await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     let mut provider = RoleQueuedProvider::new();
     provider
         .planner(json_response(planner_response_json("pwd")))
@@ -705,10 +633,9 @@ async fn evaluator_missing_scorecard_forces_revision() {
         )));
     runner.provider_client = Box::new(provider);
 
-    let result = Box::pin(runner.execute_task(
-        &task("Evaluator missing scorecard revision", "exec-task"),
-        &[],
-    ))
+    let result = Box::pin(
+        runner.execute_task(&task("Evaluator missing scorecard revision", "exec-task"), &[]),
+    )
     .await
     .expect("task result");
 
@@ -731,15 +658,9 @@ async fn evaluator_out_of_range_scorecard_forces_revision() {
     vt_cfg.agent.harness.orchestration_mode =
         vtcode_config::core::agent::HarnessOrchestrationMode::PlanBuildEvaluate;
     vt_cfg.automation.full_auto.max_turns = 4;
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        vt_cfg,
-        "thread-evaluator-invalid-scorecard",
-    ))
-    .await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-invalid-scorecard")).await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     let mut provider = RoleQueuedProvider::new();
     provider
         .planner(json_response(planner_response_json("pwd")))
@@ -766,10 +687,9 @@ async fn evaluator_out_of_range_scorecard_forces_revision() {
         )));
     runner.provider_client = Box::new(provider);
 
-    let result = Box::pin(runner.execute_task(
-        &task("Evaluator invalid scorecard revision", "exec-task"),
-        &[],
-    ))
+    let result = Box::pin(
+        runner.execute_task(&task("Evaluator invalid scorecard revision", "exec-task"), &[]),
+    )
     .await
     .expect("task result");
 
@@ -795,9 +715,7 @@ async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
     vt_cfg.agent.harness.max_revision_rounds = 1;
     vt_cfg.automation.full_auto.max_turns = 4;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-evaluator-exhaustion")).await;
-    runner
-        .enable_full_auto(&[tools::TASK_TRACKER.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     let mut provider = RoleQueuedProvider::new();
     provider
         .planner(json_response(planner_response_json("pwd")))
@@ -810,11 +728,7 @@ async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
             }),
         ))
         .build(text_response("The task is complete."))
-        .evaluator(json_response(evaluator_response_json(
-            "fail",
-            "First evaluator rejection.",
-            1,
-        )))
+        .evaluator(json_response(evaluator_response_json("fail", "First evaluator rejection.", 1)))
         .replanner(text_response("Revision 1: task is complete."))
         .evaluator(json_response(evaluator_response_json(
             "fail",
@@ -838,9 +752,5 @@ async fn evaluator_exhaustion_writes_blocked_handoff_with_artifact_paths() {
     }
     assert!(workspace.join(".vtcode/tasks/current_spec.md").exists());
     assert!(workspace.join(".vtcode/tasks/current_contract.md").exists());
-    assert!(
-        workspace
-            .join(".vtcode/tasks/current_evaluation.md")
-            .exists()
-    );
+    assert!(workspace.join(".vtcode/tasks/current_evaluation.md").exists());
 }

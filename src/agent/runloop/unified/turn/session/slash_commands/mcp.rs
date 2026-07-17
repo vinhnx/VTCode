@@ -94,13 +94,8 @@ async fn execute_mcp_action(
             render_mcp_config_edit_guidance(ctx.renderer, ctx.config.workspace.as_path()).await?;
         }
         McpCommandAction::Repair => {
-            if repair_mcp_runtime(
-                ctx.renderer,
-                manager,
-                ctx.tool_registry,
-                ctx.vt_cfg.as_ref(),
-            )
-            .await?
+            if repair_mcp_runtime(ctx.renderer, manager, ctx.tool_registry, ctx.vt_cfg.as_ref())
+                .await?
             {
                 apply_manual_mcp_refresh(ctx, "mcp_repair_refresh").await;
             }
@@ -213,9 +208,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             subtitle: Some("Show tools exposed by active providers".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{MCP_ACTION_PREFIX}tools"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}tools"))),
             search_value: Some("tools list".to_string()),
         },
         InlineListItem {
@@ -243,9 +236,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             subtitle: Some("Show how to edit MCP config files".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{MCP_ACTION_PREFIX}edit"
-            ))),
+            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}edit"))),
             search_value: Some("edit config".to_string()),
         },
         InlineListItem {
@@ -273,9 +264,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             subtitle: Some("Close interactive MCP manager".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                MCP_ACTION_BACK.to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction(MCP_ACTION_BACK.to_string())),
             search_value: Some("back close".to_string()),
         },
     ];
@@ -287,9 +276,7 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             "Use Enter to run an action, Esc to close.".to_string(),
         ],
         items,
-        Some(InlineListSelection::ConfigAction(format!(
-            "{MCP_ACTION_PREFIX}status"
-        ))),
+        Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}status"))),
         None,
     );
 }

@@ -21,9 +21,7 @@ const SYSTEM_SKILLS_MARKER_SALT: &str = "v2";
 ///
 /// This is typically located at `CODEX_HOME/skills/.system`.
 pub fn system_cache_root_dir(codex_home: &Path) -> PathBuf {
-    codex_home
-        .join(SKILLS_DIR_NAME)
-        .join(SYSTEM_SKILLS_DIR_NAME)
+    codex_home.join(SKILLS_DIR_NAME).join(SYSTEM_SKILLS_DIR_NAME)
 }
 
 /// Installs embedded system skills into `CODEX_HOME/skills/.system`.
@@ -104,10 +102,9 @@ fn embedded_system_skills_fingerprint() -> String {
         .iter()
         .map(|entry| match entry {
             include_dir::DirEntry::Dir(dir) => (dir.path().to_string_lossy().to_string(), None),
-            include_dir::DirEntry::File(file) => (
-                file.path().to_string_lossy().to_string(),
-                Some(calculate_sha256(file.contents())),
-            ),
+            include_dir::DirEntry::File(file) => {
+                (file.path().to_string_lossy().to_string(), Some(calculate_sha256(file.contents())))
+            }
         })
         .collect();
     items.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
@@ -148,10 +145,7 @@ fn write_embedded_dir(dir: &Dir<'_>, dest: &Path) -> Result<(), SystemSkillsErro
                     })?;
                 }
                 let contents = std::str::from_utf8(file.contents()).map_err(|source| {
-                    SystemSkillsError::Utf8 {
-                        path: file.path().to_path_buf(),
-                        source,
-                    }
+                    SystemSkillsError::Utf8 { path: file.path().to_path_buf(), source }
                 })?;
                 write_file_with_context_sync(&path, contents, "system skill file").map_err(
                     |source| SystemSkillsError::io("write system skill file", anyhow_to_io(source)),
@@ -208,10 +202,7 @@ mod tests {
             ],
         );
 
-        assert_eq!(
-            fingerprint,
-            "218ca69badb47208804e293074956e23ed68d6946dde5d36e6fe8d56df170170"
-        );
+        assert_eq!(fingerprint, "218ca69badb47208804e293074956e23ed68d6946dde5d36e6fe8d56df170170");
     }
 
     #[test]

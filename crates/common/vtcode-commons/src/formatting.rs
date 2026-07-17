@@ -145,10 +145,8 @@ pub fn truncate_path_middle(path: &str, max_len: usize) -> String {
     // Find the first '/' in the tail portion (from the end)
     let tail_chars: Vec<char> = path.chars().rev().take(tail_budget).collect();
     let tail_str: String = tail_chars.iter().rev().collect();
-    let tail_break_from_end = tail_str
-        .find('/')
-        .map(|pos| tail_str.len() - pos)
-        .unwrap_or(tail_budget);
+    let tail_break_from_end =
+        tail_str.find('/').map(|pos| tail_str.len() - pos).unwrap_or(tail_budget);
 
     let head: String = path.chars().take(head_break).collect();
     let tail: String = path
@@ -202,10 +200,7 @@ pub fn head_tail_truncate(value: &str, max_chars: usize, marker: &str) -> (Strin
     let head_chars = (available * 2) / 3;
     let tail_chars = available.saturating_sub(head_chars);
     let head = value.chars().take(head_chars).collect::<String>();
-    let tail = value
-        .chars()
-        .skip(total_chars.saturating_sub(tail_chars))
-        .collect::<String>();
+    let tail = value.chars().skip(total_chars.saturating_sub(tail_chars)).collect::<String>();
     let mut truncated = String::with_capacity(max_chars + 20);
     truncated.push_str(&head);
     truncated.push_str(marker);
@@ -424,19 +419,13 @@ mod tests {
 
     #[test]
     fn compact_reasoning_text_collapses_blank_runs() {
-        assert_eq!(
-            compact_reasoning_text("line1\n\n\n\nline2\n"),
-            "line1\n\nline2"
-        );
+        assert_eq!(compact_reasoning_text("line1\n\n\n\nline2\n"), "line1\n\nline2");
         assert_eq!(compact_reasoning_text("a\n\n\n\n\n\nb"), "a\n\nb");
     }
 
     #[test]
     fn compact_reasoning_text_preserves_single_paragraph_breaks() {
-        assert_eq!(
-            compact_reasoning_text("para one\n\npara two\n"),
-            "para one\n\npara two"
-        );
+        assert_eq!(compact_reasoning_text("para one\n\npara two\n"), "para one\n\npara two");
     }
 
     #[test]
@@ -453,10 +442,7 @@ mod tests {
 
     #[test]
     fn wrap_text_words_basic_and_continuation_width() {
-        assert_eq!(
-            wrap_text_words("the quick brown fox", 9, 9),
-            vec!["the quick", "brown fox"]
-        );
+        assert_eq!(wrap_text_words("the quick brown fox", 9, 9), vec!["the quick", "brown fox"]);
         // First line wider than continuation lines.
         assert_eq!(
             wrap_text_words("alpha beta gamma delta", 11, 5),

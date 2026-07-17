@@ -177,11 +177,9 @@ fn is_task_tracker_tool(name: &str) -> bool {
 }
 
 fn task_tracker_item_preview(item: &serde_json::Value) -> Option<String> {
-    item.as_str().map(str::to_string).or_else(|| {
-        item.get("description")
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_string)
-    })
+    item.as_str()
+        .map(str::to_string)
+        .or_else(|| item.get("description").and_then(serde_json::Value::as_str).map(str::to_string))
 }
 
 fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
@@ -195,9 +193,7 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     }
     if let Some(index) = args_val.get("index").and_then(serde_json::Value::as_u64) {
         lines.push(format!("  └ Index: {index}"));
-    } else if let Some(index_path) = args_val
-        .get("index_path")
-        .and_then(serde_json::Value::as_str)
+    } else if let Some(index_path) = args_val.get("index_path").and_then(serde_json::Value::as_str)
     {
         lines.push(format!("  └ Index: {index_path}"));
     }
@@ -205,10 +201,7 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
         lines.push(format!("  └ Status: {status}"));
     }
     if let Some(files) = args_val.get("files").and_then(serde_json::Value::as_array) {
-        let display = files
-            .iter()
-            .filter_map(serde_json::Value::as_str)
-            .collect::<Vec<_>>();
+        let display = files.iter().filter_map(serde_json::Value::as_str).collect::<Vec<_>>();
         if !display.is_empty() {
             lines.push(format!("  └ Files: {}", display.join(", ")));
         }
@@ -219,10 +212,9 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     if let Some(verify) = args_val.get("verify") {
         let commands = match verify {
             serde_json::Value::String(command) => vec![command.as_str()],
-            serde_json::Value::Array(values) => values
-                .iter()
-                .filter_map(serde_json::Value::as_str)
-                .collect::<Vec<_>>(),
+            serde_json::Value::Array(values) => {
+                values.iter().filter_map(serde_json::Value::as_str).collect::<Vec<_>>()
+            }
             _ => Vec::new(),
         };
         if !commands.is_empty() {
@@ -232,11 +224,8 @@ fn task_tracker_call_lines(args_val: &serde_json::Value) -> Vec<String> {
     if let Some(items) = args_val.get("items").and_then(serde_json::Value::as_array)
         && !items.is_empty()
     {
-        let preview = items
-            .iter()
-            .filter_map(task_tracker_item_preview)
-            .take(2)
-            .collect::<Vec<_>>();
+        let preview =
+            items.iter().filter_map(task_tracker_item_preview).take(2).collect::<Vec<_>>();
         let suffix = match items.len().saturating_sub(preview.len()) {
             0 => String::new(),
             remaining => format!(" +{remaining} more"),
@@ -254,9 +243,7 @@ fn task_tracker_block_lines(
     output: &serde_json::Value,
 ) -> Vec<String> {
     let mut lines = task_tracker_call_lines(args_val);
-    lines.extend(crate::agent::runloop::tool_output::tracker_view_lines(
-        output,
-    ));
+    lines.extend(crate::agent::runloop::tool_output::tracker_view_lines(output));
     lines
 }
 
@@ -264,12 +251,7 @@ fn task_tracker_block_segments(lines: &[String]) -> Vec<Vec<InlineSegment>> {
     let style = std::sync::Arc::new(InlineTextStyle::default());
     lines
         .iter()
-        .map(|line| {
-            vec![InlineSegment {
-                text: line.clone(),
-                style: style.clone(),
-            }]
-        })
+        .map(|line| vec![InlineSegment { text: line.clone(), style: style.clone() }])
         .collect()
 }
 
@@ -299,16 +281,8 @@ fn extract_command_line(args: &serde_json::Value) -> Option<String> {
     args.get("command")
         .and_then(serde_json::Value::as_str)
         .map(str::to_string)
-        .or_else(|| {
-            args.get("raw_command")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string)
-        })
-        .or_else(|| {
-            args.get("cmd")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string)
-        })
+        .or_else(|| args.get("raw_command").and_then(serde_json::Value::as_str).map(str::to_string))
+        .or_else(|| args.get("cmd").and_then(serde_json::Value::as_str).map(str::to_string))
 }
 
 /// Record the tool-call summary line ("• Ran ...") to the transcript only.
@@ -486,9 +460,7 @@ async fn handle_success_common(
     };
 
     if !payload.modified_files.is_empty() {
-        state
-            .turn_modified_files
-            .extend(collect_modified_files(payload.modified_files));
+        state.turn_modified_files.extend(collect_modified_files(payload.modified_files));
     }
 
     Ok(())
@@ -507,8 +479,7 @@ fn handle_non_success_common(
             render_error_common(ctx.renderer, name, &error.user_message(), "timed out")?;
         }
         ToolExecutionStatus::Cancelled => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Tool execution cancelled")?;
+            ctx.renderer.line(MessageStyle::Info, "Tool execution cancelled")?;
         }
         ToolExecutionStatus::Success { .. } => {}
     }
@@ -526,11 +497,7 @@ async fn process_outcome_common(
 
     match &outcome.status {
         ToolExecutionStatus::Success {
-            output,
-            stdout,
-            modified_files,
-            command_success,
-            ..
+            output, stdout, modified_files, command_success, ..
         } => {
             handle_success_common(
                 ctx,
@@ -559,10 +526,7 @@ pub(crate) async fn handle_pipeline_output(
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<(Vec<PathBuf>, Option<String>)> {
-    let workspace_root = ctx
-        .auto_permission
-        .as_ref()
-        .map(|a| a.config.workspace.as_path());
+    let workspace_root = ctx.auto_permission.as_ref().map(|a| a.config.workspace.as_path());
     let mut output_ctx = OutcomeContext {
         session_stats: ctx.session_stats,
         renderer: ctx.renderer,
@@ -588,12 +552,7 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
     let (modified_files, last_stdout) =
         handle_pipeline_output(&mut run_ctx, name, args_val, outcome, vt_config).await?;
 
-    if let ToolExecutionStatus::Success {
-        output,
-        modified_files,
-        ..
-    } = &outcome.status
-    {
+    if let ToolExecutionStatus::Success { output, modified_files, .. } = &outcome.status {
         let activity_paths = collect_instruction_activity_paths(
             ctx.config.workspace.as_path(),
             args_val,
@@ -601,8 +560,7 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
             modified_files,
         );
         if !activity_paths.is_empty() {
-            ctx.context_manager
-                .record_instruction_activity_paths(activity_paths);
+            ctx.context_manager.record_instruction_activity_paths(activity_paths);
         }
     }
 
@@ -674,15 +632,11 @@ mod tests {
             mcp_panel_state: &mut mcp,
             vt_config: None::<&VTCodeConfig>,
         };
-        let (mod_files, _last_stdout) = process_outcome_common(
-            &mut output_ctx,
-            "write_file",
-            &serde_json::json!({}),
-            &outcome,
-        )
-        .await
-        .expect("render should succeed")
-        .into_tuple();
+        let (mod_files, _last_stdout) =
+            process_outcome_common(&mut output_ctx, "write_file", &serde_json::json!({}), &outcome)
+                .await
+                .expect("render should succeed")
+                .into_tuple();
 
         // Confirm the function recorded the tool call
         let recorded = stats.sorted_tools();
@@ -803,9 +757,8 @@ mod tests {
 
         let mut registry = ToolRegistry::new(workspace.clone()).await;
         let permission_cache_arc = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let permissions_state = Arc::new(RwLock::new(
-            vtcode_core::config::PermissionsConfig::default(),
-        ));
+        let permissions_state =
+            Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
 
         let mut session = spawn_session_with_options(
             inline_theme_from_core_styles(&theme::active_styles()),
@@ -1006,9 +959,8 @@ mod tests {
 
         let mut registry = ToolRegistry::new(workspace.clone()).await;
         let permission_cache_arc = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let permissions_state = Arc::new(RwLock::new(
-            vtcode_core::config::PermissionsConfig::default(),
-        ));
+        let permissions_state =
+            Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
 
         let mut session = spawn_session_with_options(
             inline_theme_from_core_styles(&theme::active_styles()),

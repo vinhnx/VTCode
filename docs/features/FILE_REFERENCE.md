@@ -57,12 +57,12 @@ The file browser appears as a centered modal overlay that:
 
 ### Components
 
-1. **File Palette Module** (`vtcode-core/src/ui/tui/file_palette.rs`)
+1. **File Palette Module** (`crates/codegen/vtcode-core/src/ui/tui/file_palette.rs`)
    - Manages file list state
    - Handles filtering and pagination
    - Integrates with vtcode-indexer
 
-2. **Session Integration** (`vtcode-core/src/ui/tui/session.rs`)
+2. **Session Integration** (`crates/codegen/vtcode-core/src/ui/tui/session.rs`)
    - Detects "@" symbol in input
    - Triggers file palette display
    - Handles file selection events

@@ -419,11 +419,8 @@ async fn detect_mentioned_skills(
 
     // Discover available skills
     let discovery_result = loader.discover_all_skills().await?;
-    let manifests: Vec<SkillManifest> = discovery_result
-        .skills
-        .iter()
-        .map(|s| s.manifest().clone())
-        .collect();
+    let manifests: Vec<SkillManifest> =
+        discovery_result.skills.iter().map(|s| s.manifest().clone()).collect();
 
     // Detect mentions with workspace-aware routing config.
     let detection_options = ConfigManager::load_from_workspace(&workspace)
@@ -473,9 +470,7 @@ mod tests {
         let temp = tempdir().expect("tempdir");
 
         let outcome = handle_skill_command(
-            SkillCommandAction::Info {
-                name: "cmd-status".to_string(),
-            },
+            SkillCommandAction::Info { name: "cmd-status".to_string() },
             temp.path().to_path_buf(),
         )
         .await
@@ -506,11 +501,7 @@ mod tests {
         .expect("use outcome");
 
         match outcome {
-            SkillCommandOutcome::UseBuiltInCommand {
-                name,
-                slash_name,
-                input,
-            } => {
+            SkillCommandOutcome::UseBuiltInCommand { name, slash_name, input } => {
                 assert_eq!(name, "cmd-status");
                 assert_eq!(slash_name, "status");
                 assert_eq!(input, "show session");
@@ -524,9 +515,7 @@ mod tests {
         let temp = tempdir().expect("tempdir");
 
         let outcome = handle_skill_command(
-            SkillCommandAction::Load {
-                name: "cmd-status".to_string(),
-            },
+            SkillCommandAction::Load { name: "cmd-status".to_string() },
             temp.path().to_path_buf(),
         )
         .await
@@ -546,9 +535,7 @@ mod tests {
         let temp = tempdir().expect("tempdir");
 
         let outcome = handle_skill_command(
-            SkillCommandAction::List {
-                query: Some("cmd-status".to_string()),
-            },
+            SkillCommandAction::List { query: Some("cmd-status".to_string()) },
             temp.path().to_path_buf(),
         )
         .await

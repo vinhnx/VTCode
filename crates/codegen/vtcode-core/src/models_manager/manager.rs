@@ -264,10 +264,7 @@ impl ModelsManager {
     /// List available models for a specific provider
     pub async fn list_models_for_provider(&self, provider: Provider) -> Vec<ModelPreset> {
         let all_models = self.list_models().await;
-        all_models
-            .into_iter()
-            .filter(|m| m.provider == provider)
-            .collect()
+        all_models.into_iter().filter(|m| m.provider == provider).collect()
     }
 
     /// Try to list models without async refresh (uses cache only)
@@ -300,10 +297,8 @@ impl ModelsManager {
     /// Get the default model for a specific provider
     pub fn get_default_model_for_provider(&self, provider: Provider) -> String {
         // First check if there's a default in local presets
-        if let Some(preset) = self
-            .local_models
-            .iter()
-            .find(|p| p.provider == provider && p.is_default)
+        if let Some(preset) =
+            self.local_models.iter().find(|p| p.provider == provider && p.is_default)
         {
             return preset.model.clone();
         }
@@ -449,10 +444,8 @@ impl ModelsManager {
             return existing_presets;
         }
 
-        let remote_slugs: HashSet<String> = remote_presets
-            .iter()
-            .map(|preset| preset.model.clone())
-            .collect();
+        let remote_slugs: HashSet<String> =
+            remote_presets.iter().map(|preset| preset.model.clone()).collect();
 
         let mut merged_presets = remote_presets;
         for mut preset in existing_presets {
@@ -492,9 +485,7 @@ impl ModelsManager {
     /// Find a model preset by ID
     pub async fn find_model(&self, model_id: &str) -> Option<ModelPreset> {
         let models = self.list_models().await;
-        models
-            .into_iter()
-            .find(|m| m.model == model_id || m.id == model_id)
+        models.into_iter().find(|m| m.model == model_id || m.id == model_id)
     }
 
     /// Check if a model exists
@@ -507,9 +498,7 @@ impl ModelsManager {
     /// This is a fast, non-blocking check that only looks at local presets.
     /// Use `model_exists` for the async version that includes remote models.
     pub fn model_exists_sync(&self, model_id: &str) -> bool {
-        self.local_models
-            .iter()
-            .any(|m| m.model == model_id || m.id == model_id)
+        self.local_models.iter().any(|m| m.model == model_id || m.id == model_id)
     }
 
     /// Get all supported providers
@@ -584,9 +573,7 @@ mod tests {
     #[tokio::test]
     async fn test_construct_model_family() {
         let manager = ModelsManager::new();
-        let family = manager
-            .construct_model_family("gemini-3-flash-preview")
-            .await;
+        let family = manager.construct_model_family("gemini-3-flash-preview").await;
         assert_eq!(family.family, "gemini-3");
         assert_eq!(family.provider, Provider::Gemini);
     }

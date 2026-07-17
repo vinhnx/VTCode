@@ -99,9 +99,7 @@ impl OptimizedToolRegistry {
     /// The LRU cache automatically evicts the least-recently-used entry
     /// when capacity is reached.
     fn promote_to_hot_cache(&self, tool_name: &str, metadata: &Arc<CachedToolMetadata>) {
-        self.hot_cache
-            .write()
-            .push(tool_name.to_string(), Arc::clone(metadata));
+        self.hot_cache.write().push(tool_name.to_string(), Arc::clone(metadata));
     }
 
     /// Record execution statistics with minimal blocking

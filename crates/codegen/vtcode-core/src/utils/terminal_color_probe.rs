@@ -142,10 +142,7 @@ fn drain_tty_input(tty: &mut File) {
         if poll(&mut pollfd, timeout).unwrap_or(0) == 0 {
             break;
         }
-        let ready = pollfd[0]
-            .revents()
-            .unwrap_or(PollFlags::empty())
-            .contains(PollFlags::POLLIN);
+        let ready = pollfd[0].revents().unwrap_or(PollFlags::empty()).contains(PollFlags::POLLIN);
         if !ready {
             break;
         }
@@ -157,9 +154,7 @@ fn drain_tty_input(tty: &mut File) {
 
 #[cfg(unix)]
 fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
-    let poll_tty = tty
-        .try_clone()
-        .context("failed to duplicate tty for polling")?;
+    let poll_tty = tty.try_clone().context("failed to duplicate tty for polling")?;
     let overall_deadline = Instant::now() + timeout;
     let mut buffer = Vec::with_capacity(1024);
     let mut settle_deadline = None;
@@ -184,22 +179,15 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
         let timeout = PollTimeout::try_from(remaining_ms).unwrap_or(PollTimeout::MAX);
         let mut pollfd = [PollFd::new(poll_tty.as_fd(), PollFlags::POLLIN)];
         let poll_result = poll(&mut pollfd, timeout).context("poll failed during OSC probe")?;
-        let ready = pollfd[0]
-            .revents()
-            .unwrap_or(PollFlags::empty())
-            .contains(PollFlags::POLLIN);
+        let ready = pollfd[0].revents().unwrap_or(PollFlags::empty()).contains(PollFlags::POLLIN);
         if poll_result == 0 || !ready {
             continue;
         }
 
         let mut chunk = [0_u8; 4096];
-        let bytes_read = tty
-            .read(&mut chunk)
-            .context("failed to read OSC probe response")?;
+        let bytes_read = tty.read(&mut chunk).context("failed to read OSC probe response")?;
         if bytes_read == 0 {
-            return Err(anyhow!(
-                "terminal closed while waiting for OSC probe response"
-            ));
+            return Err(anyhow!("terminal closed while waiting for OSC probe response"));
         }
         buffer.extend_from_slice(&chunk[..bytes_read]);
         if settle_deadline.is_some() {
@@ -231,10 +219,7 @@ fn parse_four_colors(response: &[u8]) -> Result<[(u8, u8, u8); 4]> {
     }
 
     if parsed.len() != 4 {
-        return Err(anyhow!(
-            "expected 4 colors from OSC probe, got {}",
-            parsed.len()
-        ));
+        return Err(anyhow!("expected 4 colors from OSC probe, got {}", parsed.len()));
     }
 
     Ok([parsed[0], parsed[1], parsed[2], parsed[3]])

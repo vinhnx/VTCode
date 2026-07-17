@@ -18,10 +18,7 @@ pub(crate) struct BackgroundLaunchSpec {
 // ─── Background State Persistence ──────────────────────────────────────────
 
 pub(crate) fn background_state_path(workspace_root: &Path) -> PathBuf {
-    workspace_root
-        .join(".vtcode")
-        .join("state")
-        .join("background_subagents.json")
+    workspace_root.join(".vtcode").join("state").join("background_subagents.json")
 }
 
 pub(crate) async fn load_background_state(
@@ -68,9 +65,7 @@ pub(crate) fn build_background_launch_spec(
     reasoning_override: Option<&str>,
 ) -> Result<BackgroundLaunchSpec> {
     if agent_name == BACKGROUND_DEMO_AGENT {
-        let script = workspace_root
-            .join("scripts")
-            .join("demo-background-subagent.sh");
+        let script = workspace_root.join("scripts").join("demo-background-subagent.sh");
         return Ok(BackgroundLaunchSpec {
             command: vec![script.to_string_lossy().into_owned()],
             use_pty: false,
@@ -189,10 +184,7 @@ pub fn extract_tail_lines(content: &str, max_lines: usize) -> String {
 
 pub async fn load_archive_preview(path: &Path) -> Result<String> {
     let listing = load_session_listing(path).await?;
-    Ok(extract_tail_lines(
-        &listing.snapshot.transcript.join("\n"),
-        SUBAGENT_PREVIEW_LINES,
-    ))
+    Ok(extract_tail_lines(&listing.snapshot.transcript.join("\n"), SUBAGENT_PREVIEW_LINES))
 }
 
 async fn load_session_listing(path: &Path) -> Result<SessionListing> {
@@ -201,10 +193,7 @@ async fn load_session_listing(path: &Path) -> Result<SessionListing> {
         .with_context(|| format!("Failed to read session archive {}", path.display()))?;
     let snapshot: SessionSnapshot = serde_json::from_str(&raw)
         .with_context(|| format!("Failed to parse session archive {}", path.display()))?;
-    Ok(SessionListing {
-        path: path.to_path_buf(),
-        snapshot,
-    })
+    Ok(SessionListing { path: path.to_path_buf(), snapshot })
 }
 
 #[must_use]
@@ -216,10 +205,7 @@ pub(crate) fn exec_session_is_running(session: &crate::tools::types::VTCodeExecS
 }
 
 pub fn subagent_display_label(spec: &vtcode_config::SubagentSpec) -> String {
-    spec.nickname_candidates
-        .first()
-        .cloned()
-        .unwrap_or_else(|| spec.name.clone())
+    spec.nickname_candidates.first().cloned().unwrap_or_else(|| spec.name.clone())
 }
 
 #[cfg(test)]

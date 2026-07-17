@@ -1,8 +1,8 @@
 [package]
 name = "vtcode-acp"
 version.workspace = true
-edition.workspace = true
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "ACP bridge and client implementation for VT Code"
 license.workspace = true
@@ -29,9 +29,9 @@ tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 url = { workspace = true }
 percent-encoding = "2.3"
-vtcode-core = { path = "../vtcode-core", version = "0.135.11" }
-vtcode-config = { path = "../vtcode-config", version = "0.135.11" }
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.11" }
+vtcode-core = { workspace = true }
+vtcode-config = { workspace = true }
+vtcode-commons = { workspace = true }
 
 [dev-dependencies]
 assert_fs = { workspace = true }

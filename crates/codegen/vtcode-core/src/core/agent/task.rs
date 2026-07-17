@@ -22,12 +22,7 @@ pub struct Task {
 impl Task {
     /// Construct a task with the provided metadata.
     pub fn new(id: String, title: String, description: String) -> Self {
-        Self {
-            id,
-            title,
-            description,
-            instructions: None,
-        }
+        Self { id, title, description, instructions: None }
     }
 }
 
@@ -94,22 +89,13 @@ impl TaskOutcome {
         match self {
             Self::Success => "Task completed successfully".into(),
             Self::StoppedNoAction => "Stopped after agent signaled no further actions".into(),
-            Self::TurnLimitReached {
-                max_turns,
-                actual_turns,
-            } => format!(
+            Self::TurnLimitReached { max_turns, actual_turns } => format!(
                 "Stopped after reaching turn limit (max: {max_turns}, reached: {actual_turns})"
             ),
-            Self::BudgetLimitReached {
-                max_budget_usd,
-                actual_cost_usd,
-            } => format!(
+            Self::BudgetLimitReached { max_budget_usd, actual_cost_usd } => format!(
                 "Stopped after reaching budget limit (max: ${max_budget_usd:.4}, spent: ${actual_cost_usd:.4})"
             ),
-            Self::ToolLoopLimitReached {
-                max_tool_loops,
-                actual_tool_loops,
-            } => {
+            Self::ToolLoopLimitReached { max_tool_loops, actual_tool_loops } => {
                 if *max_tool_loops == 0 {
                     format!(
                         "Stopped after a tool-loop safeguard halted execution (reached: {actual_tool_loops})"
@@ -126,12 +112,7 @@ impl TaskOutcome {
             Self::Escalated { reason, tool_name } => {
                 format!("Task escalated: {tool_name} — {reason}")
             }
-            Self::Failed {
-                reason,
-                accomplished,
-                recovery_suggestion,
-                ..
-            } => {
+            Self::Failed { reason, accomplished, recovery_suggestion, .. } => {
                 let mut parts = vec![format!("Task failed: {reason}")];
                 if !accomplished.is_empty() {
                     parts.push(format!("Accomplished: {}", accomplished.join(", ")));
@@ -181,24 +162,15 @@ impl TaskOutcome {
     }
 
     pub fn turn_limit_reached(max_turns: usize, actual_turns: usize) -> Self {
-        Self::TurnLimitReached {
-            max_turns,
-            actual_turns,
-        }
+        Self::TurnLimitReached { max_turns, actual_turns }
     }
 
     pub fn budget_limit_reached(max_budget_usd: f64, actual_cost_usd: f64) -> Self {
-        Self::BudgetLimitReached {
-            max_budget_usd,
-            actual_cost_usd,
-        }
+        Self::BudgetLimitReached { max_budget_usd, actual_cost_usd }
     }
 
     pub fn tool_loop_limit_reached(max_tool_loops: usize, actual_tool_loops: usize) -> Self {
-        Self::ToolLoopLimitReached {
-            max_tool_loops,
-            actual_tool_loops,
-        }
+        Self::ToolLoopLimitReached { max_tool_loops, actual_tool_loops }
     }
 
     pub fn failed(

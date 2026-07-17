@@ -182,9 +182,7 @@ impl AuditEntry {
 
     /// Verify the entry hash is valid.
     pub fn verify(&self) -> bool {
-        self.entry_hash
-            .as_ref()
-            .is_some_and(|hash| *hash == self.compute_hash())
+        self.entry_hash.as_ref().is_some_and(|hash| *hash == self.compute_hash())
     }
 }
 
@@ -238,10 +236,7 @@ impl AuditLog {
             "0000000000000000000000000000000000000000000000000000000000000000";
 
         let mut file = File::open(log_path).with_context(|| "Failed to open audit log")?;
-        let len = file
-            .metadata()
-            .with_context(|| "Failed to read audit log metadata")?
-            .len();
+        let len = file.metadata().with_context(|| "Failed to read audit log metadata")?.len();
         if len == 0 {
             return Ok(DEFAULT_HASH.to_string());
         }
@@ -252,8 +247,7 @@ impl AuditLog {
         file.seek(SeekFrom::End(-(window as i64)))
             .with_context(|| "Failed to seek audit log")?;
         let mut buf = Vec::with_capacity(window as usize);
-        file.read_to_end(&mut buf)
-            .with_context(|| "Failed to read audit log tail")?;
+        file.read_to_end(&mut buf).with_context(|| "Failed to read audit log tail")?;
 
         let text = String::from_utf8_lossy(&buf);
         let mut last_hash = DEFAULT_HASH.to_string();
@@ -301,8 +295,7 @@ impl AuditLog {
         writeln!(file, "{json}").with_context(|| "Failed to write audit entry")?;
 
         // Ensure data is flushed to disk
-        file.sync_all()
-            .with_context(|| "Failed to sync audit log")?;
+        file.sync_all().with_context(|| "Failed to sync audit log")?;
 
         Ok(())
     }
@@ -322,11 +315,7 @@ impl AuditLog {
 
         loop {
             line.clear();
-            if reader
-                .read_line(&mut line)
-                .with_context(|| "Failed to read audit log line")?
-                == 0
-            {
+            if reader.read_line(&mut line).with_context(|| "Failed to read audit log line")? == 0 {
                 break;
             }
             let raw = line.trim_end_matches(['\n', '\r']);
@@ -380,10 +369,7 @@ impl AuditLog {
     /// Get entries for a specific file.
     pub async fn get_entries_for_file(&self, file_path: &str) -> Result<Vec<AuditEntry>> {
         let entries = self.get_entries().await?;
-        Ok(entries
-            .into_iter()
-            .filter(|e| e.file_path == file_path)
-            .collect())
+        Ok(entries.into_iter().filter(|e| e.file_path == file_path).collect())
     }
 
     /// Get recent entries (last N).

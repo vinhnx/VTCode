@@ -17,10 +17,7 @@ pub(super) fn build_combined_reasoning(
     reasoning: &[ReasoningSegment],
     detail_reasoning: Option<&str>,
 ) -> Option<String> {
-    let capacity = reasoning
-        .iter()
-        .map(|segment| segment.text.len())
-        .sum::<usize>()
+    let capacity = reasoning.iter().map(|segment| segment.text.len()).sum::<usize>()
         + reasoning.len().saturating_sub(1);
     let mut combined_reasoning = String::with_capacity(capacity);
 
@@ -122,11 +119,7 @@ fn is_diff_like_fenced_recap(text: &str) -> bool {
 }
 
 fn has_recent_git_diff_tool_output(history: &[uni::Message]) -> bool {
-    history
-        .iter()
-        .rev()
-        .take(12)
-        .any(message_is_git_diff_tool_output)
+    history.iter().rev().take(12).any(message_is_git_diff_tool_output)
 }
 
 fn message_is_git_diff_tool_output(message: &uni::Message) -> bool {

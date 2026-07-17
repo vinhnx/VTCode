@@ -66,10 +66,7 @@ pub fn set_ast_grep_binary_override_for_tests(path: Option<PathBuf>) -> AstGrepB
 /// that mock the binary as missing through the patch (semantic) registry.
 pub(crate) fn is_binary_override_missing() -> bool {
     matches!(
-        AST_GREP_OVERRIDE
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone(),
+        AST_GREP_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()).clone(),
         AstGrepBinaryOverride::Missing
     )
 }
@@ -112,20 +109,13 @@ impl StructuralCandidate {
             return None;
         }
 
-        let start_line = entry
-            .range
-            .start
-            .line
-            .min(file_lines.len().saturating_sub(1));
+        let start_line = entry.range.start.line.min(file_lines.len().saturating_sub(1));
         let end_line = entry.range.end.line.min(file_lines.len().saturating_sub(1));
         if start_line > end_line {
             return None;
         }
 
-        Some(Self {
-            start_line,
-            end_line,
-        })
+        Some(Self { start_line, end_line })
     }
 
     fn end_exclusive(self, file_len: usize) -> usize {
@@ -206,13 +196,11 @@ pub(crate) async fn resolve_semantic_match(
             0,
             chunk.is_end_of_file(),
         ) {
-            resolved
-                .entry(candidate.start_line + local_start)
-                .or_insert(SemanticMatch {
-                    start_idx: candidate.start_line + local_start,
-                    old_segment: candidate_old,
-                    new_segment: candidate_new,
-                });
+            resolved.entry(candidate.start_line + local_start).or_insert(SemanticMatch {
+                start_idx: candidate.start_line + local_start,
+                old_segment: candidate_old,
+                new_segment: candidate_new,
+            });
         }
     }
 

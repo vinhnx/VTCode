@@ -48,17 +48,13 @@ impl AutoSkillVerifier {
         }
 
         // Enhance the output with file verification
-        let enhanced = self
-            .tracker
-            .enhance_skill_output(original_output.clone())
-            .await?;
+        let enhanced = self.tracker.enhance_skill_output(original_output.clone()).await?;
 
         // Add skill-specific header
         let final_output = if enhanced.len() > original_output.len() {
             // Files were detected and verification added
-            let verification = enhanced
-                .strip_prefix(&format!("{original_output}\n\n"))
-                .unwrap_or(&enhanced);
+            let verification =
+                enhanced.strip_prefix(&format!("{original_output}\n\n")).unwrap_or(&enhanced);
 
             format!(
                 "✓ Skill '{}' executed\n\n{}{}",
@@ -181,10 +177,7 @@ mod tests {
         let verifier = AutoSkillVerifier::new(temp_dir.path().to_path_buf());
 
         let output = "Generated report.pdf".to_string();
-        let enhanced = verifier
-            .process_skill_output("test-skill", output)
-            .await
-            .unwrap();
+        let enhanced = verifier.process_skill_output("test-skill", output).await.unwrap();
 
         assert!(enhanced.contains("test-skill"));
         assert!(enhanced.contains("Generated report.pdf"));

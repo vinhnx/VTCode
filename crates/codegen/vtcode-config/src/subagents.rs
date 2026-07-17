@@ -281,24 +281,18 @@ impl SubagentSpec {
         }
 
         let tools = self.tools.as_ref().map_or_else(Vec::new, Clone::clone);
-        let lower_tools = tools
-            .iter()
-            .map(|tool| tool.to_ascii_lowercase())
-            .collect::<Vec<_>>();
+        let lower_tools = tools.iter().map(|tool| tool.to_ascii_lowercase()).collect::<Vec<_>>();
         let lower_denied = self
             .disallowed_tools
             .iter()
             .map(|tool| tool.to_ascii_lowercase())
             .collect::<Vec<_>>();
 
-        let denies_writes = lower_denied
-            .iter()
-            .any(|tool| is_mutating_tool_name(tool.as_str()));
+        let denies_writes = lower_denied.iter().any(|tool| is_mutating_tool_name(tool.as_str()));
 
         if self.tools.is_some() {
-            let exposes_mutation = lower_tools
-                .iter()
-                .any(|tool| is_mutating_tool_name(tool.as_str()));
+            let exposes_mutation =
+                lower_tools.iter().any(|tool| is_mutating_tool_name(tool.as_str()));
             !exposes_mutation
         } else {
             denies_writes
@@ -325,10 +319,7 @@ impl SubagentSpec {
     #[must_use]
     pub fn matches_name(&self, candidate: &str) -> bool {
         self.name.eq_ignore_ascii_case(candidate)
-            || self
-                .aliases
-                .iter()
-                .any(|alias| alias.eq_ignore_ascii_case(candidate))
+            || self.aliases.iter().any(|alias| alias.eq_ignore_ascii_case(candidate))
     }
 }
 
@@ -480,9 +471,7 @@ pub fn discover_subagents(input: &SubagentDiscoveryInput) -> Result<DiscoveredSu
         if !path.exists() || !path.is_file() {
             continue;
         }
-        let source = SubagentSource::Plugin {
-            plugin: plugin_name.clone(),
-        };
+        let source = SubagentSource::Plugin { plugin: plugin_name.clone() };
         discovered.push(load_subagent_from_file(path, source)?);
     }
 
@@ -836,18 +825,12 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
         };
         let description = required_string(config, "description")
             .with_context(|| format!("CLI subagent '{name}' is missing description"))?;
-        let prompt = config
-            .get("prompt")
-            .and_then(JsonValue::as_str)
-            .unwrap_or_default()
-            .to_string();
+        let prompt =
+            config.get("prompt").and_then(JsonValue::as_str).unwrap_or_default().to_string();
         let tools = optional_string_list(config.get("tools"))?;
         let disallowed_tools =
             optional_string_list(config.get("disallowedTools"))?.unwrap_or_default();
-        let model = config
-            .get("model")
-            .and_then(JsonValue::as_str)
-            .map(ToString::to_string);
+        let model = config.get("model").and_then(JsonValue::as_str).map(ToString::to_string);
         let color = config
             .get("color")
             .or_else(|| config.get("badgeColor"))
@@ -862,21 +845,15 @@ fn load_cli_agents(value: &JsonValue) -> Result<Vec<SubagentSpec>> {
             .and_then(ReasoningEffortLevel::parse);
         let permissions = parse_required_permissions(config)?;
         let skills = optional_string_list(config.get("skills"))?.unwrap_or_default();
-        let mcp_servers = optional_mcp_servers(
-            config
-                .get("mcpServers")
-                .or_else(|| config.get("mcp_servers")),
-        )?;
+        let mcp_servers =
+            optional_mcp_servers(config.get("mcpServers").or_else(|| config.get("mcp_servers")))?;
         let hooks = optional_hooks(config.get("hooks"))?;
         let max_turns = config
             .get("maxTurns")
             .or_else(|| config.get("max_turns"))
             .and_then(JsonValue::as_u64)
             .map(|value| value as usize);
-        let background = config
-            .get("background")
-            .and_then(JsonValue::as_bool)
-            .unwrap_or(false);
+        let background = config.get("background").and_then(JsonValue::as_bool).unwrap_or(false);
         let mode = config
             .get("mode")
             .and_then(JsonValue::as_str)
@@ -951,11 +928,7 @@ fn parse_markdown_subagent(content: &str, source: SubagentSource) -> Result<Suba
         bail!("subagent frontmatter must be a YAML mapping");
     };
     let prompt = if prompt_body.is_empty() {
-        object
-            .get("prompt")
-            .and_then(JsonValue::as_str)
-            .unwrap_or_default()
-            .to_string()
+        object.get("prompt").and_then(JsonValue::as_str).unwrap_or_default().to_string()
     } else {
         prompt_body
     };
@@ -1013,10 +986,7 @@ fn subagent_spec_from_json_map(
         )?
         .unwrap_or_default(),
     );
-    let model = object
-        .get("model")
-        .and_then(JsonValue::as_str)
-        .map(ToString::to_string);
+    let model = object.get("model").and_then(JsonValue::as_str).map(ToString::to_string);
     let color = object
         .get("color")
         .or_else(|| object.get("badgeColor"))
@@ -1031,16 +1001,10 @@ fn subagent_spec_from_json_map(
         .and_then(ReasoningEffortLevel::parse);
     let permissions = parse_required_permissions(object)?;
     let skills = optional_string_list(object.get("skills"))?.unwrap_or_default();
-    let mcp_servers = optional_mcp_servers(
-        object
-            .get("mcpServers")
-            .or_else(|| object.get("mcp_servers")),
-    )?;
+    let mcp_servers =
+        optional_mcp_servers(object.get("mcpServers").or_else(|| object.get("mcp_servers")))?;
     let hooks = optional_hooks(object.get("hooks"))?;
-    let background = object
-        .get("background")
-        .and_then(JsonValue::as_bool)
-        .unwrap_or(false);
+    let background = object.get("background").and_then(JsonValue::as_bool).unwrap_or(false);
     let mode = object
         .get("mode")
         .and_then(JsonValue::as_str)
@@ -1135,9 +1099,7 @@ fn normalize_subagent_tools(tools: Vec<String>) -> Vec<String> {
         let mapped_names = normalize_subagent_tool_name(trimmed);
         if mapped_names.is_empty() {
             if !trimmed.is_empty()
-                && !normalized
-                    .iter()
-                    .any(|existing| existing.eq_ignore_ascii_case(trimmed))
+                && !normalized.iter().any(|existing| existing.eq_ignore_ascii_case(trimmed))
             {
                 normalized.push(trimmed.to_string());
             }
@@ -1155,10 +1117,7 @@ fn normalize_subagent_tools(tools: Vec<String>) -> Vec<String> {
 
 fn normalize_subagent_tool_name(tool: &str) -> &'static [&'static str] {
     let normalized = tool.trim().to_ascii_lowercase();
-    let normalized = normalized
-        .strip_suffix("(*)")
-        .map(str::trim)
-        .unwrap_or(normalized.as_str());
+    let normalized = normalized.strip_suffix("(*)").map(str::trim).unwrap_or(normalized.as_str());
 
     match normalized {
         "read" | "read_file" | "readfile" | "grep" | "grep_file" | "grepfile" | "glob" | "list"
@@ -1293,30 +1252,23 @@ fn warn_legacy_permission_rules(permissions: &AgentPermissionsConfig) -> Vec<Str
 
 fn apply_plugin_restrictions(spec: &mut SubagentSpec) {
     if spec.hooks.take().is_some() {
-        spec.warnings
-            .push("plugin subagent hooks are ignored for safety".to_string());
+        spec.warnings.push("plugin subagent hooks are ignored for safety".to_string());
     }
     if !spec.mcp_servers.is_empty() {
         spec.mcp_servers.clear();
         spec.warnings
             .push("plugin subagent mcp_servers are ignored for safety".to_string());
     }
-    let default_restricted = matches!(
-        spec.permissions.default,
-        PermissionDefault::Allow | PermissionDefault::Auto
-    );
+    let default_restricted =
+        matches!(spec.permissions.default, PermissionDefault::Allow | PermissionDefault::Auto);
     if default_restricted {
         spec.permissions.default = PermissionDefault::Ask;
     }
 
     let allow_len = spec.permissions.allow.len();
-    spec.permissions
-        .allow
-        .retain(|rule| !permission_rule_allows_mutation(rule));
+    spec.permissions.allow.retain(|rule| !permission_rule_allows_mutation(rule));
     let auto_len = spec.permissions.auto.len();
-    spec.permissions
-        .auto
-        .retain(|rule| !permission_rule_allows_mutation(rule));
+    spec.permissions.auto.retain(|rule| !permission_rule_allows_mutation(rule));
 
     if default_restricted
         || spec.permissions.allow.len() != allow_len
@@ -1330,10 +1282,7 @@ fn apply_plugin_restrictions(spec: &mut SubagentSpec) {
 fn parse_required_permissions(
     object: &JsonMap<String, JsonValue>,
 ) -> Result<AgentPermissionsConfig> {
-    if let Some(legacy_field) = object
-        .keys()
-        .find(|field| is_legacy_permission_field(field))
-    {
+    if let Some(legacy_field) = object.keys().find(|field| is_legacy_permission_field(field)) {
         bail!("unsupported legacy subagent field '{legacy_field}'; use 'permissions.default'");
     }
 
@@ -1402,10 +1351,9 @@ fn optional_mcp_servers(value: Option<&JsonValue>) -> Result<Vec<SubagentMcpServ
 
     match value {
         JsonValue::Null => Ok(Vec::new()),
-        JsonValue::Array(entries) => entries
-            .iter()
-            .map(parse_mcp_server_value)
-            .collect::<Result<Vec<_>>>(),
+        JsonValue::Array(entries) => {
+            entries.iter().map(parse_mcp_server_value).collect::<Result<Vec<_>>>()
+        }
         JsonValue::Object(map) => {
             let mut servers = Vec::with_capacity(map.len());
             for (name, config) in map {
@@ -1423,9 +1371,7 @@ fn parse_mcp_server_value(value: &JsonValue) -> Result<SubagentMcpServer> {
     match value {
         JsonValue::String(name) => Ok(SubagentMcpServer::Named(name.clone())),
         JsonValue::Object(map) => Ok(SubagentMcpServer::Inline(
-            map.iter()
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect(),
+            map.iter().map(|(key, value)| (key.clone(), value.clone())).collect(),
         )),
         _ => bail!("invalid mcp_servers entry"),
     }
@@ -1439,9 +1385,7 @@ fn optional_hooks(value: Option<&JsonValue>) -> Result<Option<HooksConfig>> {
         return Ok(None);
     }
 
-    let object = value
-        .as_object()
-        .ok_or_else(|| anyhow!("subagent hooks must be an object"))?;
+    let object = value.as_object().ok_or_else(|| anyhow!("subagent hooks must be an object"))?;
 
     if object.contains_key("lifecycle") {
         let hooks = serde_json::from_value::<HooksConfig>(value.clone())
@@ -1467,18 +1411,13 @@ fn optional_hooks(value: Option<&JsonValue>) -> Result<Option<HooksConfig>> {
 }
 
 fn parse_hook_groups(value: &JsonValue) -> Result<Vec<HookGroupConfig>> {
-    let groups = value
-        .as_array()
-        .ok_or_else(|| anyhow!("hook groups must be arrays"))?;
+    let groups = value.as_array().ok_or_else(|| anyhow!("hook groups must be arrays"))?;
     let mut parsed = Vec::with_capacity(groups.len());
     for group in groups {
         let Some(object) = group.as_object() else {
             bail!("hook group must be an object");
         };
-        let matcher = object
-            .get("matcher")
-            .and_then(JsonValue::as_str)
-            .map(ToString::to_string);
+        let matcher = object.get("matcher").and_then(JsonValue::as_str).map(ToString::to_string);
         let hooks = object
             .get("hooks")
             .and_then(JsonValue::as_array)
@@ -1602,10 +1541,7 @@ mod tests {
 
     #[test]
     fn classifies_agent_spec_fields_for_primary_and_subagent_roles() {
-        assert_eq!(
-            classify_agent_spec_field("name"),
-            Some(AgentSpecFieldClass::Shared)
-        );
+        assert_eq!(classify_agent_spec_field("name"), Some(AgentSpecFieldClass::Shared));
         assert_eq!(
             classify_agent_spec_field("description"),
             Some(AgentSpecFieldClass::PrimaryMetadata)
@@ -1626,18 +1562,12 @@ mod tests {
             classify_agent_spec_field("mcpServers"),
             Some(AgentSpecFieldClass::PrimaryRuntime)
         );
-        assert_eq!(
-            classify_agent_spec_field("maxTurns"),
-            Some(AgentSpecFieldClass::SubagentOnly)
-        );
+        assert_eq!(classify_agent_spec_field("maxTurns"), Some(AgentSpecFieldClass::SubagentOnly));
         assert_eq!(
             classify_agent_spec_field("initial_prompt"),
             Some(AgentSpecFieldClass::SubagentOnly)
         );
-        assert_eq!(
-            classify_agent_spec_field("mode"),
-            Some(AgentSpecFieldClass::Availability)
-        );
+        assert_eq!(classify_agent_spec_field("mode"), Some(AgentSpecFieldClass::Availability));
         assert_eq!(classify_agent_spec_field("unknown"), None);
     }
 
@@ -1709,10 +1639,7 @@ Prompt."#,
         )?;
 
         let err = load_subagent_from_file(&path, SubagentSource::ProjectVtcode).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("failed to parse subagent permissions")
-        );
+        assert!(err.to_string().contains("failed to parse subagent permissions"));
         Ok(())
     }
 
@@ -1829,10 +1756,7 @@ Primary prompt."#,
         assert!(matches!(spec.mcp_servers[1], SubagentMcpServer::Inline(_)));
         assert_eq!(spec.memory, Some(SubagentMemoryScope::Project));
         assert_eq!(spec.color.as_deref(), Some("blue"));
-        assert_eq!(
-            spec.aliases,
-            vec!["builder".to_string(), "implementer".to_string()]
-        );
+        assert_eq!(spec.aliases, vec!["builder".to_string(), "implementer".to_string()]);
         assert_eq!(spec.mode, AgentMode::Primary);
         assert!(spec.hooks.is_some());
         assert!(spec.warnings.is_empty());
@@ -2218,12 +2142,8 @@ hooks:
 Plugin prompt"#,
         )?;
 
-        let spec = load_subagent_from_file(
-            &path,
-            SubagentSource::Plugin {
-                plugin: "demo".to_string(),
-            },
-        )?;
+        let spec =
+            load_subagent_from_file(&path, SubagentSource::Plugin { plugin: "demo".to_string() })?;
         assert!(spec.mcp_servers.is_empty());
         assert!(spec.hooks.is_none());
         assert_eq!(spec.warnings.len(), 2);
@@ -2248,12 +2168,8 @@ permissions:
 Plugin prompt"#,
         )?;
 
-        let spec = load_subagent_from_file(
-            &path,
-            SubagentSource::Plugin {
-                plugin: "demo".to_string(),
-            },
-        )?;
+        let spec =
+            load_subagent_from_file(&path, SubagentSource::Plugin { plugin: "demo".to_string() })?;
 
         assert_eq!(spec.permissions.default, PermissionDefault::Ask);
         assert_eq!(
@@ -2300,24 +2216,16 @@ Hook prompt"#,
         let hooks = spec.hooks.expect("hooks");
         assert_eq!(hooks.lifecycle.subagent_start.len(), 1);
         assert_eq!(hooks.lifecycle.subagent_stop.len(), 1);
-        assert_eq!(
-            hooks.lifecycle.subagent_start[0].matcher.as_deref(),
-            Some("worker")
-        );
+        assert_eq!(hooks.lifecycle.subagent_start[0].matcher.as_deref(), Some("worker"));
         Ok(())
     }
 
     #[test]
     fn builtin_aliases_cover_compat_names() {
         let builtins = builtin_subagents();
-        let explorer = builtins
-            .iter()
-            .find(|spec| spec.name == "explorer")
-            .expect("explorer builtin");
-        let worker = builtins
-            .iter()
-            .find(|spec| spec.name == "worker")
-            .expect("worker builtin");
+        let explorer =
+            builtins.iter().find(|spec| spec.name == "explorer").expect("explorer builtin");
+        let worker = builtins.iter().find(|spec| spec.name == "worker").expect("worker builtin");
         assert!(explorer.matches_name("explore"));
         assert!(worker.matches_name("general"));
         assert!(worker.matches_name("general-purpose"));
@@ -2346,10 +2254,7 @@ Hook prompt"#,
             .expect("missing explorer built-in");
         assert_eq!(explorer.permissions.default, PermissionDefault::Deny);
         assert_eq!(explorer.permissions.allow, vec!["read".to_string()]);
-        assert_eq!(
-            explorer.tools.as_deref(),
-            Some(expected_readonly_tools.as_slice())
-        );
+        assert_eq!(explorer.tools.as_deref(), Some(expected_readonly_tools.as_slice()));
         assert!(
             !explorer
                 .tools
@@ -2373,10 +2278,7 @@ Hook prompt"#,
             };
             assert_eq!(spec.permissions.default, expected_default);
             if matches!(name, "duck" | "plan") {
-                assert_eq!(
-                    spec.tools.as_deref(),
-                    Some(expected_primary_readonly_tools.as_slice())
-                );
+                assert_eq!(spec.tools.as_deref(), Some(expected_primary_readonly_tools.as_slice()));
                 assert!(
                     !spec
                         .tools
@@ -2504,10 +2406,7 @@ Legacy prompt."#,
     #[test]
     fn builtin_plan_agent_exposes_request_user_input() {
         let spec = builtin_plan_agent();
-        let tools = spec
-            .tools
-            .as_ref()
-            .expect("plan agent should have tool list");
+        let tools = spec.tools.as_ref().expect("plan agent should have tool list");
         assert!(
             tools.iter().any(|t| t == tools::REQUEST_USER_INPUT),
             "plan agent should expose request_user_input for clarifying questions"
@@ -2517,10 +2416,7 @@ Legacy prompt."#,
     #[test]
     fn builtin_duck_agent_exposes_request_user_input() {
         let spec = builtin_primary_duck_agent();
-        let tools = spec
-            .tools
-            .as_ref()
-            .expect("duck agent should have tool list");
+        let tools = spec.tools.as_ref().expect("duck agent should have tool list");
         assert!(
             tools.iter().any(|t| t == tools::REQUEST_USER_INPUT),
             "duck agent should expose request_user_input for clarifying questions"

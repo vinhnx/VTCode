@@ -130,10 +130,7 @@ async fn persisted_approval_hit_key(
     primary_target: &shell_approval::ApprovalLearningTarget,
     exact_shell_target: Option<&shell_approval::ApprovalLearningTarget>,
 ) -> Option<String> {
-    if tool_registry
-        .has_persisted_approval(&primary_target.approval_key)
-        .await
-    {
+    if tool_registry.has_persisted_approval(&primary_target.approval_key).await {
         return Some(primary_target.approval_key.clone());
     }
 
@@ -158,9 +155,7 @@ fn session_approval_cache_keys<'a>(
     };
     std::iter::once(cache_key)
         .chain(bare_if_different)
-        .chain(std::iter::once(
-            approval_learning_target.approval_key.as_str(),
-        ))
+        .chain(std::iter::once(approval_learning_target.approval_key.as_str()))
         .chain(exact_shell_approval_target.map(|target| target.approval_key.as_str()))
 }
 
@@ -552,10 +547,7 @@ async fn reuse_saved_approval(
     )
     .any(|key| permission_cache.can_use_cached(key))
     {
-        tracing::debug!(
-            "Using cached ACP permission for tool invocation: {}",
-            cache_key
-        );
+        tracing::debug!("Using cached ACP permission for tool invocation: {}", cache_key);
         drop(permission_cache);
         return Some(approve_tool_permission_no_cache(tool_registry, tool_name).await);
     }
@@ -708,16 +700,12 @@ async fn finalize_permission_decision(
                     perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Denied);
                 }
 
-                if let Err(err) = tool_registry
-                    .set_tool_policy(tool_name, ToolPolicy::Deny)
-                    .await
-                {
+                if let Err(err) = tool_registry.set_tool_policy(tool_name, ToolPolicy::Deny).await {
                     tracing::warn!("Failed to persist denial for tool '{}': {}", tool_name, err);
                 }
 
-                if let Err(err) = tool_registry
-                    .persist_mcp_tool_policy(tool_name, ToolPolicy::Deny)
-                    .await
+                if let Err(err) =
+                    tool_registry.persist_mcp_tool_policy(tool_name, ToolPolicy::Deny).await
                 {
                     tracing::warn!(
                         "Failed to persist MCP denial for tool '{}': {}",
@@ -752,9 +740,7 @@ fn auto_permission_safe_builtin_allow(
             request.builtin_file_mutation
                 && request.protected_write_paths.is_empty()
                 && !paths.is_empty()
-                && paths
-                    .iter()
-                    .all(|path| path.strip_prefix(workspace_root).is_ok())
+                && paths.iter().all(|path| path.strip_prefix(workspace_root).is_ok())
         }
         PermissionRequestKind::Bash { .. }
         | PermissionRequestKind::WebFetch { .. }
@@ -1037,10 +1023,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     let mut hook_requires_prompt = false;
 
     if let Some(hooks) = hooks {
-        match hooks
-            .run_pre_tool_use(tool_name, tool_args, tool_call_id)
-            .await
-        {
+        match hooks.run_pre_tool_use(tool_name, tool_args, tool_call_id).await {
             Ok(outcome) => {
                 render_hook_messages(renderer, &outcome.messages)?;
                 match outcome.decision {
@@ -1053,10 +1036,8 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
                 }
             }
             Err(err) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to run pre-tool hooks: {err}"),
-                )?;
+                renderer
+                    .line(MessageStyle::Error, &format!("Failed to run pre-tool hooks: {err}"))?;
             }
         }
     }
@@ -1073,9 +1054,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     // Evaluate the tool policy against the intent-qualified name where the
     // tool has distinct permission classes.
     let policy_eval_name = policy_evaluation_name(tool_name, tool_args);
-    let policy_decision = tool_registry
-        .evaluate_tool_policy(policy_eval_name.as_ref())
-        .await?;
+    let policy_decision = tool_registry.evaluate_tool_policy(policy_eval_name.as_ref()).await?;
     if policy_decision == ToolPermissionDecision::Deny {
         // Show HITL prompt with "Enable" option so the user can fix the policy at runtime
         if !skip_confirmations {
@@ -1094,9 +1073,8 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
             match decision {
                 HitlDecision::Enable => {
                     // Update tool policy to Allow and clear cached denials
-                    if let Err(err) = tool_registry
-                        .set_tool_policy(tool_name, ToolPolicy::Allow)
-                        .await
+                    if let Err(err) =
+                        tool_registry.set_tool_policy(tool_name, ToolPolicy::Allow).await
                     {
                         tracing::warn!("Failed to update tool policy for '{}': {}", tool_name, err);
                     }
@@ -1140,9 +1118,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
 
     let full_auto_allowlist_active = tool_registry.current_full_auto_allowlist().await.is_some();
     if full_auto_allowlist_active
-        && !tool_registry
-            .is_allowed_in_full_auto(&normalized_tool_name)
-            .await
+        && !tool_registry.is_allowed_in_full_auto(&normalized_tool_name).await
     {
         return Ok(ToolPermissionFlow::Denied);
     }
@@ -1182,11 +1158,8 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     }
 
     let display_labels = tool_display_labels(tool_name, tool_args);
-    let approval_learning_target = approval_learning_target(
-        &normalized_tool_name,
-        tool_args,
-        &display_labels.learning_label,
-    );
+    let approval_learning_target =
+        approval_learning_target(&normalized_tool_name, tool_args, &display_labels.learning_label);
     let exact_shell_approval_target = exact_shell_approval_target(
         &normalized_tool_name,
         tool_args,
@@ -1401,9 +1374,8 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     let mut risk_context = build_tool_risk_context(&normalized_tool_name, tool_args);
 
     if let Some(recorder) = approval_recorder {
-        risk_context.recent_approvals = recorder
-            .get_approval_count(&approval_learning_target.approval_key)
-            .await as usize;
+        risk_context.recent_approvals =
+            recorder.get_approval_count(&approval_learning_target.approval_key).await as usize;
     }
     let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
 

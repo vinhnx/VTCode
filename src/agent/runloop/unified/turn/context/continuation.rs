@@ -193,9 +193,7 @@ fn last_clause_contains_conclusive_marker(lower: &str) -> bool {
         .rfind(|(_, ch)| ['.', '!', '\n', '—', '…'].contains(ch))
         .map(|(idx, ch)| lower[idx + ch.len_utf8()..].trim_start())
         .unwrap_or(lower);
-    conclusive_markers
-        .iter()
-        .any(|marker| last_clause.contains(marker))
+    conclusive_markers.iter().any(|marker| last_clause.contains(marker))
 }
 
 pub(super) fn is_interim_progress_update(text: &str) -> bool {
@@ -329,10 +327,7 @@ fn contains_user_input_request(lower: &str) -> bool {
         "your choice",
         "your decision",
     ];
-    if anywhere_patterns
-        .iter()
-        .any(|pattern| lower.contains(pattern))
-    {
+    if anywhere_patterns.iter().any(|pattern| lower.contains(pattern)) {
         return true;
     }
 
@@ -376,9 +371,7 @@ fn contains_user_input_request(lower: &str) -> bool {
 }
 
 fn contains_phrase_at_clause_start(lower: &str, phrase: &str) -> bool {
-    lower
-        .match_indices(phrase)
-        .any(|(idx, _)| is_clause_start(lower, idx))
+    lower.match_indices(phrase).any(|(idx, _)| is_clause_start(lower, idx))
 }
 
 fn is_clause_start(text: &str, idx: usize) -> bool {
@@ -478,10 +471,7 @@ fn core_intent_matches(text: &str) -> bool {
     }
 
     // <modal> <action> — exclude conclusive follow-ups
-    if let Some(rest) = text
-        .strip_prefix("will ")
-        .or_else(|| text.strip_prefix("'ll "))
-    {
+    if let Some(rest) = text.strip_prefix("will ").or_else(|| text.strip_prefix("'ll ")) {
         return !rest.starts_with("be ") && !rest.starts_with("now be ");
     }
 
@@ -521,9 +511,7 @@ fn starts_with_present_progress_update(lower: &str) -> bool {
         " to inspect",
     ];
 
-    present_progress_prefixes
-        .iter()
-        .any(|prefix| lower.starts_with(prefix))
+    present_progress_prefixes.iter().any(|prefix| lower.starts_with(prefix))
         && forward_markers.iter().any(|marker| lower.contains(marker))
 }
 
@@ -548,53 +536,37 @@ mod tests {
         assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like("continue."));
         assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like("go on"));
         assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like("please continue"));
-        assert!(
-            crate::agent::runloop::unified::state::is_follow_up_prompt_like(
-                "Continue autonomously from the last stalled turn. Stall reason: x."
-            )
-        );
-        assert!(
-            !crate::agent::runloop::unified::state::is_follow_up_prompt_like(
-                "run cargo clippy and fix"
-            )
-        );
+        assert!(crate::agent::runloop::unified::state::is_follow_up_prompt_like(
+            "Continue autonomously from the last stalled turn. Stall reason: x."
+        ));
+        assert!(!crate::agent::runloop::unified::state::is_follow_up_prompt_like(
+            "run cargo clippy and fix"
+        ));
     }
 
     #[test]
     fn interim_progress_detection_requires_non_conclusive_intent_text() {
-        assert!(is_interim_progress_update(
-            "Let me fix the second collapsible if statement:"
-        ));
+        assert!(is_interim_progress_update("Let me fix the second collapsible if statement:"));
         assert!(is_interim_progress_update(
             "Let me fix the second collapsible if statement in the Anthropic provider:"
         ));
         assert!(is_interim_progress_update(
             "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:"
         ));
-        assert!(is_interim_progress_update(
-            "I'll continue with the next fix."
-        ));
+        assert!(is_interim_progress_update("I'll continue with the next fix."));
         assert!(is_interim_progress_update(
             "Running formatter now, then I'll do a quick follow-up check (`cargo check`) to confirm nothing regressed."
         ));
         assert!(is_interim_progress_update(
             "The structural search keeps returning empty results. Let me verify the indexer is working and try with a simpler known pattern:"
         ));
-        assert!(!is_interim_progress_update(
-            "I need you to choose which option to apply."
-        ));
-        assert!(!is_interim_progress_update(
-            "Let me know what you'd like to dig into next."
-        ));
+        assert!(!is_interim_progress_update("I need you to choose which option to apply."));
+        assert!(!is_interim_progress_update("Let me know what you'd like to dig into next."));
         assert!(!is_interim_progress_update(
             "Running cargo fmt uses rustfmt to rewrite the source files."
         ));
-        assert!(!is_interim_progress_update(
-            "Completed. All requested fixes are done."
-        ));
-        assert!(!is_interim_progress_update(
-            "Final review: two blockers remain with next action."
-        ));
+        assert!(!is_interim_progress_update("Completed. All requested fixes are done."));
+        assert!(!is_interim_progress_update("Final review: two blockers remain with next action."));
     }
 
     #[test]
@@ -725,10 +697,7 @@ mod tests {
             .await
             .expect("recovery response should be handled");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(!ctx.is_recovery_active());
     }
 
@@ -750,10 +719,7 @@ mod tests {
             .await
             .expect("recovery response should be handled");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(!ctx.is_recovery_active());
     }
 
@@ -770,9 +736,8 @@ mod tests {
         // cycle no existing bound catches.
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
-        ctx.working_history.push(uni::Message::user(
-            "run cargo nextest and summarize".to_string(),
-        ));
+        ctx.working_history
+            .push(uni::Message::user("run cargo nextest and summarize".to_string()));
         ctx.working_history
             .push(uni::Message::assistant(String::new()).with_tool_calls(vec![
                 uni::ToolCall::function(
@@ -781,10 +746,8 @@ mod tests {
                     "{}".to_string(),
                 ),
             ]));
-        ctx.working_history.push(uni::Message::tool_response(
-            "call_1".to_string(),
-            "test result: ok".to_string(),
-        ));
+        ctx.working_history
+            .push(uni::Message::tool_response("call_1".to_string(), "test result: ok".to_string()));
         ctx.activate_recovery("post-tool follow-up failure");
         assert!(ctx.consume_recovery_pass());
         assert!(ctx.recovery_is_tool_free());
@@ -818,10 +781,7 @@ mod tests {
             .expect("recovery response should be handled");
 
         assert!(
-            matches!(
-                outcome,
-                TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-            ),
+            matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)),
             "tool-free recovery text with continuation intent must end the turn, \
              not re-enable tools and loop"
         );
@@ -835,18 +795,10 @@ mod tests {
 
     #[test]
     fn detects_new_intent_prefixes_as_interim() {
-        assert!(is_interim_progress_update(
-            "I'd like to check the next file before proceeding."
-        ));
-        assert!(is_interim_progress_update(
-            "I want to verify the output of the previous step."
-        ));
-        assert!(is_interim_progress_update(
-            "My next step is to run the full test suite."
-        ));
-        assert!(is_interim_progress_update(
-            "Time to fix the remaining lint warnings."
-        ));
+        assert!(is_interim_progress_update("I'd like to check the next file before proceeding."));
+        assert!(is_interim_progress_update("I want to verify the output of the previous step."));
+        assert!(is_interim_progress_update("My next step is to run the full test suite."));
+        assert!(is_interim_progress_update("Time to fix the remaining lint warnings."));
         assert!(is_interim_progress_update(
             "Let me now inspect the second module for regressions."
         ));
@@ -857,16 +809,12 @@ mod tests {
         assert!(is_interim_progress_update(
             "First check passed—now let me verify the second component."
         ));
-        assert!(has_interim_intent_clause(
-            "done with the first task—now i'll move to the next"
-        ));
+        assert!(has_interim_intent_clause("done with the first task—now i'll move to the next"));
     }
 
     #[test]
     fn ellipsis_boundary_detected_as_interim() {
-        assert!(has_interim_intent_clause(
-            "checking results…now i need to update the config"
-        ));
+        assert!(has_interim_intent_clause("checking results…now i need to update the config"));
         assert!(is_interim_progress_update(
             "Scanning the logs…now let me check for error patterns."
         ));
@@ -916,10 +864,7 @@ mod tests {
             Starting with the networking module, I'll remove the unused imports and \
             then fix the memory leak in the connection handler. After that, I'll \
             run the linter again to verify the warnings are resolved.";
-        assert!(
-            long_analysis.len() > 280,
-            "test text must exceed original 280-char limit"
-        );
+        assert!(long_analysis.len() > 280, "test text must exceed original 280-char limit");
 
         let history = vec![
             uni::Message::user("run cargo clippy and fix warnings".to_string()),
@@ -987,9 +932,8 @@ mod tests {
     async fn tool_enabled_recovery_pass_can_continue_after_interim_progress() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
-        ctx.working_history.push(uni::Message::user(
-            "run cargo fmt and follow up".to_string(),
-        ));
+        ctx.working_history
+            .push(uni::Message::user("run cargo fmt and follow up".to_string()));
         ctx.activate_recovery_with_mode("empty response", RecoveryMode::ToolEnabledRetry);
         assert!(ctx.consume_recovery_pass());
 
@@ -1057,10 +1001,7 @@ mod tests {
             .await
             .expect("completed text response should be handled");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         let last_assistant = ctx
             .working_history
             .iter()
@@ -1130,8 +1071,7 @@ mod tests {
     async fn first_turn_handoff_offer_completes_without_continue_directive() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
-        ctx.working_history
-            .push(uni::Message::user("what's in this repo?".to_string()));
+        ctx.working_history.push(uni::Message::user("what's in this repo?".to_string()));
         ctx.working_history
             .push(uni::Message::assistant(String::new()).with_tool_calls(vec![
                 uni::ToolCall::function(
@@ -1140,10 +1080,8 @@ mod tests {
                     "{}".to_string(),
                 ),
             ]));
-        ctx.working_history.push(uni::Message::tool_response(
-            "call_1".to_string(),
-            "README summary".to_string(),
-        ));
+        ctx.working_history
+            .push(uni::Message::tool_response("call_1".to_string(), "README summary".to_string()));
 
         let outcome = ctx
             .handle_text_response(
@@ -1156,10 +1094,7 @@ mod tests {
             .await
             .expect("repo overview response should be handled");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         let last_assistant = ctx
             .working_history
             .iter()
@@ -1290,21 +1225,15 @@ mod tests {
 
     #[test]
     fn contains_user_input_request_detects_various_patterns() {
-        assert!(contains_user_input_request(
-            "how would you like to proceed?"
-        ));
+        assert!(contains_user_input_request("how would you like to proceed?"));
         assert!(contains_user_input_request("what would you like me to do?"));
         assert!(contains_user_input_request("which option should i choose?"));
         assert!(contains_user_input_request("shall i continue?"));
         assert!(contains_user_input_request("do you want me to retry?"));
         assert!(contains_user_input_request("please confirm and i'll retry"));
         assert!(contains_user_input_request("let me know how to proceed"));
-        assert!(contains_user_input_request(
-            "let me know what you'd like to dig into next"
-        ));
-        assert!(contains_user_input_request(
-            "tell me which area you want next"
-        ));
+        assert!(contains_user_input_request("let me know what you'd like to dig into next"));
+        assert!(contains_user_input_request("tell me which area you want next"));
         assert!(contains_user_input_request("waiting for your approval"));
         assert!(!contains_user_input_request(
             "The compiler errors tell me what to fix next. Let me update the parser branch now."

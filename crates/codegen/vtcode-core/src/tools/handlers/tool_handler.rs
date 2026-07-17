@@ -172,9 +172,7 @@ pub struct Constrained<T> {
 
 impl<T> Constrained<T> {
     pub fn allow_any(initial_value: T) -> Self {
-        Self {
-            value: initial_value,
-        }
+        Self { value: initial_value }
     }
 
     pub fn get(&self) -> &T {

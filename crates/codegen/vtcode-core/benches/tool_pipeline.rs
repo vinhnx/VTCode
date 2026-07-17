@@ -5,10 +5,7 @@ use std::hint::black_box;
 use vtcode_core::tools::rate_limiter::{RateLimiter, RateLimiterConfig};
 
 pub fn rate_limiter_benchmark(c: &mut Criterion) {
-    let config = RateLimiterConfig {
-        per_sec: 100,
-        burst: 200,
-    };
+    let config = RateLimiterConfig { per_sec: 100, burst: 200 };
 
     c.bench_function("rate_limiter_acquire", |b| {
         let mut limiter = RateLimiter::new_with_config(config);
@@ -72,11 +69,7 @@ fn simulated_tool_outcome_clone(c: &mut Criterion) {
             let mod_files_copy = mod_files.clone();
 
             let _outcome = PipelineOutcome {
-                status: ExecutionStatus {
-                    output,
-                    stdout,
-                    modified_files: mod_files,
-                },
+                status: ExecutionStatus { output, stdout, modified_files: mod_files },
                 stdout: stdout_copy,
                 modified_files: mod_files_copy,
             };
@@ -84,9 +77,5 @@ fn simulated_tool_outcome_clone(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    benches,
-    rate_limiter_benchmark,
-    simulated_tool_outcome_clone
-);
+criterion_group!(benches, rate_limiter_benchmark, simulated_tool_outcome_clone);
 criterion_main!(benches);

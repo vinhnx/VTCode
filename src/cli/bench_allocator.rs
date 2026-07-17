@@ -45,9 +45,8 @@ async fn run_burst(events: usize, tokens_per_task: usize, payload_bytes: usize) 
         events_set.spawn(async move {
             let _permit = permit;
             let payload = make_payload(payload_bytes);
-            let tokens: Vec<String> = (0..tokens_per_task)
-                .map(|i| format!("token-{i}-{:064}", i))
-                .collect();
+            let tokens: Vec<String> =
+                (0..tokens_per_task).map(|i| format!("token-{i}-{:064}", i)).collect();
             let mut tasks: JoinSet<()> = JoinSet::new();
             for token in &tokens {
                 let token = token.clone();

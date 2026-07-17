@@ -42,9 +42,7 @@ pub(crate) async fn maybe_run_first_run_setup(
     let full_auto_requested = args.full_auto.is_some();
     let non_interactive = args.skip_confirmations || full_auto_requested;
     let mode = if non_interactive {
-        SetupMode::NonInteractive {
-            full_auto: full_auto_requested,
-        }
+        SetupMode::NonInteractive { full_auto: full_auto_requested }
     } else {
         SetupMode::Interactive
     };
@@ -72,30 +70,18 @@ async fn run_first_run_setup(
     initialize_dot_folder().await.ok();
 
     if !workspace.exists() {
-        return Err(anyhow!(
-            "Workspace '{}' does not exist for setup",
-            workspace.display()
-        ));
+        return Err(anyhow!("Workspace '{}' does not exist for setup", workspace.display()));
     }
 
     let workspace_dot_dir = workspace.join(".vtcode");
     ensure_dir_exists_sync(&workspace_dot_dir).with_context(|| {
-        format!(
-            "Failed to create workspace .vtcode directory at {}",
-            workspace_dot_dir.display()
-        )
+        format!("Failed to create workspace .vtcode directory at {}", workspace_dot_dir.display())
     })?;
 
     let mut renderer = AnsiRenderer::stdout();
-    renderer.line(
-        MessageStyle::Info,
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    )?;
+    renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
     renderer.line(MessageStyle::Info, "  VT Code - First-time setup wizard")?;
-    renderer.line(
-        MessageStyle::Info,
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    )?;
+    renderer.line(MessageStyle::Info, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
     let (provider, model, lightweight_model, reasoning, persistent_memory, trust) = match mode {
         SetupMode::Interactive => {
             renderer.line(
@@ -135,14 +121,7 @@ async fn run_first_run_setup(
             let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
             renderer.line(MessageStyle::Info, "")?;
 
-            (
-                provider,
-                model,
-                lightweight_model,
-                reasoning,
-                persistent_memory,
-                trust,
-            )
+            (provider, model, lightweight_model, reasoning, persistent_memory, trust)
         }
         SetupMode::NonInteractive { full_auto } => {
             renderer.line(
@@ -163,48 +142,28 @@ async fn run_first_run_setup(
                 WorkspaceTrustLevel::ToolsPolicy
             };
 
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Provider: {}", provider.label()),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("Provider: {}", provider.label()))?;
             renderer.line(MessageStyle::Info, &format!("Model: {model}"))?;
             renderer.line(
                 MessageStyle::Info,
                 "Lightweight model: Automatic (same-provider lightweight route)",
             )?;
+            renderer
+                .line(MessageStyle::Info, &format!("Reasoning effort: {}", reasoning.as_str()))?;
             renderer.line(
                 MessageStyle::Info,
-                &format!("Reasoning effort: {}", reasoning.as_str()),
-            )?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Persistent memory: {}",
-                    persistent_memory_label(persistent_memory)
-                ),
+                &format!("Persistent memory: {}", persistent_memory_label(persistent_memory)),
             )?;
             renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Workspace trust: {}", trust_label(trust)),
-            )?;
+            renderer
+                .line(MessageStyle::Info, &format!("Workspace trust: {}", trust_label(trust)))?;
             renderer.line(MessageStyle::Info, "")?;
 
-            (
-                provider,
-                model,
-                lightweight_model,
-                reasoning,
-                persistent_memory,
-                trust,
-            )
+            (provider, model, lightweight_model, reasoning, persistent_memory, trust)
         }
     };
 
-    renderer.line(
-        MessageStyle::Status,
-        "Saving your configuration to vtcode.toml ...",
-    )?;
+    renderer.line(MessageStyle::Status, "Saving your configuration to vtcode.toml ...")?;
 
     // Compute provider key once to avoid repeated allocations from `to_string()`.
     let provider_key = provider.to_string();
@@ -221,22 +180,14 @@ async fn run_first_run_setup(
 
     let config_path = workspace.join("vtcode.toml");
     ConfigManager::save_config_to_path(&config_path, config).with_context(|| {
-        format!(
-            "Failed to write initial configuration to {}",
-            config_path.display()
-        )
+        format!("Failed to write initial configuration to {}", config_path.display())
     })?;
 
     update_model_preference(&provider_key, &model).await.ok();
 
-    update_workspace_trust(workspace, trust)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to persist workspace trust level for {}",
-                workspace.display()
-            )
-        })?;
+    update_workspace_trust(workspace, trust).await.with_context(|| {
+        format!("Failed to persist workspace trust level for {}", workspace.display())
+    })?;
 
     renderer.line(MessageStyle::Info, "")?;
     render_setup_summary(
@@ -329,10 +280,7 @@ fn setup_summary_lines(
             trust_label(trust)
         ),
     ));
-    lines.push((
-        MessageStyle::Status,
-        format!("Auth: {}", api_key_hint(provider)),
-    ));
+    lines.push((MessageStyle::Status, format!("Auth: {}", api_key_hint(provider))));
     lines.push((MessageStyle::Status, "What's available now:".to_string()));
     lines.extend(
         capability_highlight_lines(persistent_memory_enabled)
@@ -375,10 +323,7 @@ fn api_key_hint(provider: Provider) -> String {
     if provider.is_local() {
         "No API key required for local provider.".to_string()
     } else {
-        format!(
-            "Set {} in your environment.",
-            provider.default_api_key_env()
-        )
+        format!("Set {} in your environment.", provider.default_api_key_env())
     }
 }
 
@@ -402,14 +347,7 @@ mod tests {
     fn edit_startup_mode_keeps_permissions_config_shape() {
         let mut config = base_config();
 
-        apply_selection(
-            &mut config,
-            "openai",
-            "gpt-5.4",
-            "",
-            ReasoningEffortLevel::None,
-            false,
-        );
+        apply_selection(&mut config, "openai", "gpt-5.4", "", ReasoningEffortLevel::None, false);
 
         assert!(config.permissions.allow.is_empty());
         assert_eq!(config.default_primary_agent, "build");
@@ -419,14 +357,7 @@ mod tests {
     fn first_run_selection_does_not_write_old_mode_fields() {
         let mut config = base_config();
 
-        apply_selection(
-            &mut config,
-            "openai",
-            "gpt-5.4",
-            "",
-            ReasoningEffortLevel::None,
-            false,
-        );
+        apply_selection(&mut config, "openai", "gpt-5.4", "", ReasoningEffortLevel::None, false);
 
         assert!(config.permissions.allow.is_empty());
         assert!(config.permissions.deny.is_empty());
@@ -437,14 +368,7 @@ mod tests {
     fn persistent_memory_selection_persists_opt_in() {
         let mut config = base_config();
 
-        apply_selection(
-            &mut config,
-            "openai",
-            "gpt-5.4",
-            "",
-            ReasoningEffortLevel::None,
-            true,
-        );
+        apply_selection(&mut config, "openai", "gpt-5.4", "", ReasoningEffortLevel::None, true);
 
         assert!(config.features.memories);
         assert!(config.agent.persistent_memory.enabled);
@@ -456,14 +380,7 @@ mod tests {
         config.features.memories = true;
         config.agent.persistent_memory.enabled = true;
 
-        apply_selection(
-            &mut config,
-            "openai",
-            "gpt-5.4",
-            "",
-            ReasoningEffortLevel::None,
-            false,
-        );
+        apply_selection(&mut config, "openai", "gpt-5.4", "", ReasoningEffortLevel::None, false);
 
         assert!(!config.features.memories);
         assert!(!config.agent.persistent_memory.enabled);
@@ -479,11 +396,7 @@ mod tests {
             false,
             WorkspaceTrustLevel::ToolsPolicy,
         );
-        let rendered = lines
-            .into_iter()
-            .map(|(_style, line)| line)
-            .collect::<Vec<_>>()
-            .join("\n");
+        let rendered = lines.into_iter().map(|(_style, line)| line).collect::<Vec<_>>().join("\n");
 
         assert!(rendered.contains("`--full-auto` is separate"));
         assert!(rendered.contains("Persistent repository memory"));

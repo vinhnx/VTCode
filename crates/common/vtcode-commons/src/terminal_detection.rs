@@ -163,10 +163,7 @@ impl TerminalType {
 
     /// Whether `/terminal-setup` should appear in slash discovery surfaces.
     pub fn should_offer_terminal_setup(&self) -> bool {
-        matches!(
-            self.terminal_setup_availability(),
-            TerminalSetupAvailability::Offered
-        )
+        matches!(self.terminal_setup_availability(), TerminalSetupAvailability::Offered)
     }
 
     /// Get the configuration file path for this terminal.
@@ -196,23 +193,15 @@ impl TerminalType {
                 if cfg!(target_os = "windows") {
                     let appdata =
                         env::var("APPDATA").context("APPDATA environment variable not set")?;
-                    PathBuf::from(appdata)
-                        .join("alacritty")
-                        .join("alacritty.toml")
+                    PathBuf::from(appdata).join("alacritty").join("alacritty.toml")
                 } else {
-                    home_dir
-                        .join(".config")
-                        .join("alacritty")
-                        .join("alacritty.toml")
+                    home_dir.join(".config").join("alacritty").join("alacritty.toml")
                 }
             }
             TerminalType::WezTerm => home_dir.join(".wezterm.lua"),
             TerminalType::TerminalApp => {
                 if cfg!(target_os = "macos") {
-                    home_dir
-                        .join("Library")
-                        .join("Preferences")
-                        .join("com.apple.Terminal.plist")
+                    home_dir.join("Library").join("Preferences").join("com.apple.Terminal.plist")
                 } else {
                     anyhow::bail!("Terminal.app is only available on macOS")
                 }
@@ -242,10 +231,7 @@ impl TerminalType {
             }
             TerminalType::ITerm2 => {
                 if cfg!(target_os = "macos") {
-                    home_dir
-                        .join("Library")
-                        .join("Preferences")
-                        .join("com.googlecode.iterm2.plist")
+                    home_dir.join("Library").join("Preferences").join("com.googlecode.iterm2.plist")
                 } else {
                     anyhow::bail!("iTerm2 is only available on macOS")
                 }
@@ -254,10 +240,7 @@ impl TerminalType {
                 if cfg!(target_os = "windows") {
                     let appdata =
                         env::var("APPDATA").context("APPDATA environment variable not set")?;
-                    PathBuf::from(appdata)
-                        .join("Code")
-                        .join("User")
-                        .join("settings.json")
+                    PathBuf::from(appdata).join("Code").join("User").join("settings.json")
                 } else if cfg!(target_os = "macos") {
                     home_dir
                         .join("Library")
@@ -266,11 +249,7 @@ impl TerminalType {
                         .join("User")
                         .join("settings.json")
                 } else {
-                    home_dir
-                        .join(".config")
-                        .join("Code")
-                        .join("User")
-                        .join("settings.json")
+                    home_dir.join(".config").join("Code").join("User").join("settings.json")
                 }
             }
             TerminalType::WindowsTerminal => {
@@ -355,9 +334,7 @@ pub fn is_ghostty_terminal(term_program: Option<&str>, term: Option<&str>) -> bo
 }
 
 fn terminal_name_contains(value: Option<&str>, needle: &str) -> bool {
-    value
-        .map(|value| value.to_ascii_lowercase().contains(needle))
-        .unwrap_or(false)
+    value.map(|value| value.to_ascii_lowercase().contains(needle)).unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -424,9 +401,6 @@ mod tests {
     fn ghostty_helper_matches_term_program_or_term() {
         assert!(is_ghostty_terminal(Some("Ghostty"), None));
         assert!(is_ghostty_terminal(None, Some("xterm-ghostty")));
-        assert!(!is_ghostty_terminal(
-            Some("WezTerm"),
-            Some("xterm-256color")
-        ));
+        assert!(!is_ghostty_terminal(Some("WezTerm"), Some("xterm-256color")));
     }
 }

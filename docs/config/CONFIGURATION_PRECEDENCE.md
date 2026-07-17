@@ -37,7 +37,7 @@ working directory.
 
 Layered defaults are defined in the Rust sources so the application can generate a baseline configuration and reason about missing fields:
 
--   **Global configuration defaults** live in `vtcode-core/src/config/defaults/`
+-   **Global configuration defaults** live in `crates/codegen/vtcode-core/src/config/defaults/`
 -   **Syntax highlighting defaults** are centralized in `syntax_highlighting.rs` and reused by the loader and serde
 -   **Context and tooling defaults** remain close to their owning modules but consume the shared constants exported by the defaults module
 
@@ -107,4 +107,4 @@ aggressive_compression_threshold = 15000
 
 -   Prefer updating the shared defaults module when adding new configuration knobs so CLI bootstrapping and serde defaults stay aligned.
 -   Add focused validation routines next to the structs that own the data to keep error messages specific and maintainable.
--   Update unit tests in `vtcode-core/src/config/loader/mod.rs` when adjusting precedence rules or default values to avoid regressions.
+-   Update unit tests in `crates/codegen/vtcode-core/src/config/loader/mod.rs` when adjusting precedence rules or default values to avoid regressions.

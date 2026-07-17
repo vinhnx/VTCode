@@ -65,18 +65,14 @@ fn test_streaming_event_sequence_compliance() {
 
     // 1. Response Created
     builder.process_event(
-        &ThreadEvent::ThreadStarted(ThreadStartedEvent {
-            thread_id: "t1".to_string(),
-        }),
+        &ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "t1".to_string() }),
         &mut emitter,
     );
 
     // 2. Item Started
     let item = ThreadItem {
         id: "msg_1".to_string(),
-        details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-            text: "Hello".to_string(),
-        }),
+        details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello".to_string() }),
     };
     builder.process_event(
         &ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }),
@@ -109,9 +105,7 @@ fn test_streaming_event_sequence_compliance() {
 
     // 5. Response Completed
     builder.process_event(
-        &ThreadEvent::TurnCompleted(TurnCompletedEvent {
-            usage: Usage::default(),
-        }),
+        &ThreadEvent::TurnCompleted(TurnCompletedEvent { usage: Usage::default() }),
         &mut emitter,
     );
 
@@ -131,10 +125,7 @@ fn test_streaming_event_sequence_compliance() {
 
     // Check ordering (simplified)
     let created_idx = types.iter().position(|&t| t == "response.created").unwrap();
-    let completed_idx = types
-        .iter()
-        .position(|&t| t == "response.completed")
-        .unwrap();
+    let completed_idx = types.iter().position(|&t| t == "response.completed").unwrap();
     assert!(created_idx < completed_idx);
 }
 
@@ -208,21 +199,14 @@ fn test_reasoning_item_compliance() {
         &mut emitter,
     );
 
-    builder.process_event(
-        &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
-        &mut emitter,
-    );
+    builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
     let response = builder.build();
     assert_eq!(response.output.len(), 1);
     assert!(matches!(response.output[0], OutputItem::Reasoning(_)));
 
     let events = emitter.into_events();
-    assert!(
-        events
-            .iter()
-            .any(|e| e.event_type() == "response.reasoning.done")
-    );
+    assert!(events.iter().any(|e| e.event_type() == "response.reasoning.done"));
 }
 
 #[test]
@@ -240,10 +224,7 @@ fn test_tool_call_compliance() {
         }),
     };
 
-    builder.process_event(
-        &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
-        &mut emitter,
-    );
+    builder.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
     let response = builder.build();
     if let OutputItem::FunctionCall(fc) = &response.output[0] {

@@ -8,7 +8,7 @@ The Agent Justification System enables VT Code to capture and present agent reas
 
 ### Core Components
 
-#### 1. **ToolJustification** (`vtcode-core/src/tools/registry/justification.rs`)
+#### 1. **ToolJustification** (`crates/codegen/vtcode-core/src/tools/registry/justification.rs`)
 
 Represents a single justification for tool execution.
 
@@ -28,7 +28,7 @@ pub struct ToolJustification {
 -   `with_outcome()` - Add expected outcome description
 -   `format_for_dialog()` - Format for TUI display with text wrapping
 
-#### 2. **JustificationManager** (`vtcode-core/src/tools/registry/justification.rs`)
+#### 2. **JustificationManager** (`crates/codegen/vtcode-core/src/tools/registry/justification.rs`)
 
 Manages approval pattern learning and persistence.
 
@@ -53,7 +53,7 @@ pub struct JustificationManager {
 -   `approval_rate()` - Approval percentage (0.0-1.0)
 -   `has_high_approval_rate()` - True if ≥3 approvals AND >80% rate
 
-#### 3. **ApprovalRecorder** (`vtcode-core/src/tools/registry/approval_recorder.rs`)
+#### 3. **ApprovalRecorder** (`crates/codegen/vtcode-core/src/tools/registry/approval_recorder.rs`)
 
 Async wrapper for recording approval decisions in concurrent contexts.
 
@@ -70,7 +70,7 @@ pub struct ApprovalRecorder {
 -   `get_auto_approval_suggestion()` - UX hint for frequent approvals
 -   `get_approval_count()` - Query approval stats
 
-#### 4. **JustificationExtractor** (`vtcode-core/src/tools/registry/justification_extractor.rs`)
+#### 4. **JustificationExtractor** (`crates/codegen/vtcode-core/src/tools/registry/justification_extractor.rs`)
 
 Extracts reasoning from the decision ledger for justification creation.
 
@@ -170,7 +170,7 @@ Stored in `~/.vtcode/cache/approval_patterns.json`:
 -   Passes decision_ledger reference for context extraction
 -   Records approval decision after user responds
 
-### 3. Decision Ledger (`vtcode-core/src/core/decision_tracker.rs`)
+### 3. Decision Ledger (`crates/codegen/vtcode-core/src/core/decision_tracker.rs`)
 
 -   `latest_decision()` - Returns most recent decision
 -   `recent_decisions(count)` - Returns last N decisions

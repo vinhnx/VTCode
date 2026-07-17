@@ -134,11 +134,7 @@ impl OpenRouterProvider {
     }
 
     fn request_includes_tools(request: &LLMRequest) -> bool {
-        request
-            .tools
-            .as_ref()
-            .map(|tools| !tools.is_empty())
-            .unwrap_or(false)
+        request.tools.as_ref().map(|tools| !tools.is_empty()).unwrap_or(false)
     }
 
     fn enforce_tool_capabilities<'a>(&'a self, request: &'a LLMRequest) -> Cow<'a, LLMRequest> {
@@ -229,9 +225,7 @@ impl OpenRouterProvider {
             fallback_payload["stream"] = Value::Bool(stream_flag);
         }
 
-        let fallback_response = self
-            .dispatch_request(&fallback_url, &fallback_payload)
-            .await?;
+        let fallback_response = self.dispatch_request(&fallback_url, &fallback_payload).await?;
         if fallback_response.status().is_success() {
             return Ok(Some(fallback_response));
         }
@@ -247,10 +241,7 @@ impl OpenRouterProvider {
             "HTTP {original_status}: {original_error} | {label} fallback failed with HTTP {fallback_status}: {fallback_text}"
         );
         let formatted_error = error_display::format_llm_error("OpenRouter", &combined_error);
-        Err(LLMError::Provider {
-            message: formatted_error,
-            metadata: None,
-        })
+        Err(LLMError::Provider { message: formatted_error, metadata: None })
     }
 
     /// Attempt a feature-specific fallback when the provider rejects a request.
@@ -278,23 +269,14 @@ impl OpenRouterProvider {
             warn!("{}", warn_message);
             let fallback_request = strip_feature(request);
             return self
-                .retry_with_fallback(
-                    status,
-                    error_text,
-                    &fallback_request,
-                    stream_override,
-                    label,
-                )
+                .retry_with_fallback(status, error_text, &fallback_request, stream_override, label)
                 .await;
         }
         Ok(None)
     }
 
     fn build_provider_payload(&self, request: &LLMRequest) -> Result<(Value, String), LLMError> {
-        Ok((
-            self.convert_to_openrouter_format(request)?,
-            chat_completions_url(&self.base_url),
-        ))
+        Ok((self.convert_to_openrouter_format(request)?, chat_completions_url(&self.base_url)))
     }
 
     async fn dispatch_request(&self, url: &str, payload: &Value) -> Result<Response, LLMError> {

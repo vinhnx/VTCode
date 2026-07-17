@@ -27,11 +27,7 @@ fn capitalize_first_letter(s: &str) -> String {
 }
 
 fn format_model_summary_label(model: &str) -> String {
-    model
-        .split('-')
-        .map(capitalize_first_letter)
-        .collect::<Vec<_>>()
-        .join("-")
+    model.split('-').map(capitalize_first_letter).collect::<Vec<_>>().join("-")
 }
 
 fn primary_agent_header_label(name: Option<&str>) -> String {
@@ -96,17 +92,12 @@ impl Session {
         let text_style = self.header_primary_style().add_modifier(Modifier::DIM);
 
         if self.appearance.hide_header {
-            return Paragraph::new(lines.to_vec())
-                .style(text_style)
-                .wrap(Wrap { trim: true });
+            return Paragraph::new(lines.to_vec()).style(text_style).wrap(Wrap { trim: true });
         }
 
         let mut border_style = Style::default();
-        if let Some(accent) = self
-            .theme
-            .tool_accent
-            .or(self.theme.primary)
-            .or(self.theme.foreground)
+        if let Some(accent) =
+            self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground)
         {
             border_style = border_style.fg(ratatui_color_from_ansi(accent));
         }
@@ -171,9 +162,8 @@ impl Session {
             let left_width = spans.iter().map(Span::width).sum::<usize>();
             let summary_width = right_spans.iter().map(Span::width).sum::<usize>();
             let available_width = usize::from(width);
-            let spacer_width = available_width
-                .saturating_sub(left_width.saturating_add(summary_width))
-                .max(1);
+            let spacer_width =
+                available_width.saturating_sub(left_width.saturating_add(summary_width)).max(1);
             spans.push(Span::raw(" ".repeat(spacer_width)));
             spans.extend(right_spans);
         }
@@ -191,11 +181,8 @@ impl Session {
         let agent_label = primary_agent_header_label(self.header_context.primary_agent.as_deref());
         let model_summary_spans = self.header_compact_model_summary_spans();
         if !agent_label.trim().is_empty() {
-            let fallback = self
-                .theme
-                .primary
-                .map(ratatui_color_from_ansi)
-                .unwrap_or(Color::LightMagenta);
+            let fallback =
+                self.theme.primary.map(ratatui_color_from_ansi).unwrap_or(Color::LightMagenta);
             let agent_style = super::super::style::agent_color_style(
                 self.header_context.primary_agent_color.as_deref(),
                 fallback,
@@ -204,10 +191,7 @@ impl Session {
         }
 
         if !spans.is_empty() && !model_summary_spans.is_empty() {
-            spans.push(Span::styled(
-                " · ".to_owned(),
-                self.header_secondary_style(),
-            ));
+            spans.push(Span::styled(" · ".to_owned(), self.header_secondary_style()));
         }
         spans.extend(model_summary_spans);
 
@@ -247,10 +231,7 @@ impl Session {
         if !reasoning.is_empty() && !reasoning.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)
         {
             if !spans.is_empty() {
-                spans.push(Span::styled(
-                    " · ".to_owned(),
-                    self.header_secondary_style(),
-                ));
+                spans.push(Span::styled(" · ".to_owned(), self.header_secondary_style()));
             }
             let value_style = self.header_secondary_style().add_modifier(Modifier::ITALIC);
             spans.push(Span::styled(reasoning, value_style));
@@ -292,9 +273,8 @@ impl Session {
 
             if let Some(stage) = &self.header_context.reasoning_stage {
                 let mut stage_style = style;
-                stage_style = stage_style
-                    .remove_modifier(Modifier::DIM)
-                    .add_modifier(Modifier::BOLD);
+                stage_style =
+                    stage_style.remove_modifier(Modifier::DIM).add_modifier(Modifier::BOLD);
                 spans.push(Span::styled(format!("[{stage}]"), stage_style));
                 spans.push(Span::raw(" "));
             }
@@ -391,24 +371,16 @@ impl Session {
 
     pub fn header_provider_short_value(&self) -> String {
         let value = self.header_provider_value();
-        Self::strip_prefix(&value, ui::HEADER_PROVIDER_PREFIX)
-            .trim()
-            .to_owned()
+        Self::strip_prefix(&value, ui::HEADER_PROVIDER_PREFIX).trim().to_owned()
     }
 
     pub fn header_model_short_value(&self) -> String {
         let value = self.header_model_value();
-        let model = Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX)
-            .trim()
-            .to_owned();
+        let model = Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX).trim().to_owned();
 
         match self.header_context.context_window_size {
             Some(context_window_size) if context_window_size > 0 => {
-                format!(
-                    "{} ({})",
-                    model,
-                    compact_context_window_label(context_window_size)
-                )
+                format!("{} ({})", model, compact_context_window_label(context_window_size))
             }
             _ => model,
         }
@@ -416,9 +388,7 @@ impl Session {
 
     pub fn header_reasoning_short_value(&self) -> String {
         let value = self.header_reasoning_value().unwrap_or_default();
-        Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX)
-            .trim()
-            .to_owned()
+        Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX).trim().to_owned()
     }
 
     pub fn header_chain_values(&self) -> Vec<String> {
@@ -461,17 +431,17 @@ impl Session {
         let mut first_section = true;
         let separator_style = self.header_secondary_style();
 
-        let push_badge =
-            |spans: &mut Vec<Span<'static>>, text: String, style: Style, first: &mut bool| {
-                if !*first {
-                    spans.push(Span::styled(
-                        ui::HEADER_SECONDARY_SEPARATOR.to_owned(),
-                        separator_style,
-                    ));
-                }
-                spans.push(Span::styled(text, style));
-                *first = false;
-            };
+        let push_badge = |spans: &mut Vec<Span<'static>>,
+                          text: String,
+                          style: Style,
+                          first: &mut bool| {
+            if !*first {
+                spans
+                    .push(Span::styled(ui::HEADER_SECONDARY_SEPARATOR.to_owned(), separator_style));
+            }
+            spans.push(Span::styled(text, style));
+            *first = false;
+        };
 
         let agent_badge_color = self
             .theme
@@ -479,9 +449,7 @@ impl Session {
             .or(self.theme.foreground)
             .map(ratatui_color_from_ansi)
             .unwrap_or(Color::LightMagenta);
-        let agent_style = Style::default()
-            .fg(agent_badge_color)
-            .add_modifier(Modifier::BOLD);
+        let agent_style = Style::default().fg(agent_badge_color).add_modifier(Modifier::BOLD);
         push_badge(
             &mut spans,
             primary_agent_header_label(self.header_context.primary_agent.as_deref()),
@@ -499,15 +467,8 @@ impl Session {
                 .or(self.theme.foreground)
                 .map(ratatui_color_from_ansi)
                 .unwrap_or(Color::LightCyan);
-            let badge_style = Style::default()
-                .fg(auto_badge_color)
-                .add_modifier(Modifier::BOLD);
-            push_badge(
-                &mut spans,
-                "Full-auto".to_string(),
-                badge_style,
-                &mut first_section,
-            );
+            let badge_style = Style::default().fg(auto_badge_color).add_modifier(Modifier::BOLD);
+            push_badge(&mut spans, "Full-auto".to_string(), badge_style, &mut first_section);
         } else if trust_value.contains("tools policy") || trust_value.contains("tools_policy") {
             let safe_badge_color = self
                 .theme
@@ -515,15 +476,8 @@ impl Session {
                 .or(self.theme.foreground)
                 .map(ratatui_color_from_ansi)
                 .unwrap_or(Color::LightGreen);
-            let badge_style = Style::default()
-                .fg(safe_badge_color)
-                .add_modifier(Modifier::BOLD);
-            push_badge(
-                &mut spans,
-                "Safe".to_string(),
-                badge_style,
-                &mut first_section,
-            );
+            let badge_style = Style::default().fg(safe_badge_color).add_modifier(Modifier::BOLD);
+            push_badge(&mut spans, "Safe".to_string(), badge_style, &mut first_section);
         }
 
         // Show active subagent badge (first one, matching input block behavior)
@@ -538,12 +492,7 @@ impl Session {
             } else {
                 format!("{} +{}", badge.text, hidden)
             };
-            push_badge(
-                &mut spans,
-                format!(" {label} "),
-                badge_style,
-                &mut first_section,
-            );
+            push_badge(&mut spans, format!(" {label} "), badge_style, &mut first_section);
         }
 
         if spans.is_empty() {
@@ -606,10 +555,8 @@ impl Session {
             .map(|line| line.trim())
             .filter(|line| !line.is_empty())
             .map(|line| {
-                let stripped = line
-                    .strip_prefix("- ")
-                    .or_else(|| line.strip_prefix("• "))
-                    .unwrap_or(line);
+                let stripped =
+                    line.strip_prefix("- ").or_else(|| line.strip_prefix("• ")).unwrap_or(line);
                 stripped.trim().to_owned()
             })
             .collect();
@@ -703,10 +650,7 @@ impl Session {
     }
 
     pub(crate) fn section_title_style(&self) -> Style {
-        let mut style = self
-            .styles
-            .default_style()
-            .add_modifier(Modifier::BOLD | Modifier::DIM);
+        let mut style = self.styles.default_style().add_modifier(Modifier::BOLD | Modifier::DIM);
         if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(primary));
         }

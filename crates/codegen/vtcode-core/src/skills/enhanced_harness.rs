@@ -85,9 +85,7 @@ impl EnhancedSkillHarness {
             String::new()
         };
 
-        Ok(format!(
-            "✓ Generated {file_type}: {filename}\n\n{verification}{details_section}"
-        ))
+        Ok(format!("✓ Generated {file_type}: {filename}\n\n{verification}{details_section}"))
     }
 
     /// Creates a quick sample response with immediate file verification

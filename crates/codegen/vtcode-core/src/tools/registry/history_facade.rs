@@ -33,8 +33,7 @@ impl ToolRegistry {
         args: &Value,
         max_age: Duration,
     ) -> Option<Value> {
-        self.execution_history
-            .find_recent_spooled_result(tool_name, args, max_age)
+        self.execution_history.find_recent_spooled_result(tool_name, args, max_age)
     }
 
     /// Find a recent successful output for a tool call with identical args.
@@ -44,8 +43,7 @@ impl ToolRegistry {
         args: &Value,
         max_age: Duration,
     ) -> Option<Value> {
-        self.execution_history
-            .find_recent_successful_result(tool_name, args, max_age)
+        self.execution_history.find_recent_successful_result(tool_name, args, max_age)
     }
 
     /// Find the most recent successful output for a read-only tool call that
@@ -69,8 +67,7 @@ impl ToolRegistry {
         path: &str,
         max_age: Duration,
     ) -> Option<(usize, usize)> {
-        self.execution_history
-            .find_recent_read_file_spool_progress(path, max_age)
+        self.execution_history.find_recent_read_file_spool_progress(path, max_age)
     }
 
     /// Clear the execution history.

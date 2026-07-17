@@ -250,13 +250,14 @@ fn builtin_code_tool_description(name: &str) -> String {
 
 impl ToolRegistry {
     pub fn set_self_ref(&self, registry: Arc<ToolRegistry>) {
-        *self.self_ref.write().unwrap() = Some(Arc::downgrade(&registry));
+        *self.self_ref.write().unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some(Arc::downgrade(&registry));
     }
 
     pub(crate) fn builtin_executor_for_code(&self) -> Option<Arc<dyn BuiltinToolExecutor>> {
         self.self_ref
             .read()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
             .and_then(Weak::upgrade)
             .map(|registry| registry as Arc<dyn BuiltinToolExecutor>)
@@ -372,22 +373,14 @@ mod tests {
         registry: &'a ToolRegistry,
         args: Value,
     ) -> BoxFuture<'a, Result<Value>> {
-        Box::pin(async move {
-            registry
-                .execute_tool_ref(MUTUAL_REENTRANT_TOOL_B, &args)
-                .await
-        })
+        Box::pin(async move { registry.execute_tool_ref(MUTUAL_REENTRANT_TOOL_B, &args).await })
     }
 
     fn mutual_reentrant_tool_b_executor<'a>(
         registry: &'a ToolRegistry,
         args: Value,
     ) -> BoxFuture<'a, Result<Value>> {
-        Box::pin(async move {
-            registry
-                .execute_tool_ref(MUTUAL_REENTRANT_TOOL_A, &args)
-                .await
-        })
+        Box::pin(async move { registry.execute_tool_ref(MUTUAL_REENTRANT_TOOL_A, &args).await })
     }
 
     fn replacement_first_executor<'a>(
@@ -424,11 +417,7 @@ mod tests {
     async fn policy_catalogue_test_hooks(
         registry: &ToolRegistry,
     ) -> Arc<policy::PolicyCatalogueTestHooks> {
-        registry
-            .policy_gateway
-            .lock()
-            .await
-            .full_auto_catalogue_test_hooks()
+        registry.policy_gateway.lock().await.full_auto_catalogue_test_hooks()
     }
 
     async fn wait_for_catalogue_pause(pause: &policy::PolicyCatalogueTestPause) {
@@ -565,10 +554,7 @@ mod tests {
             .map(String::as_str)
             .collect::<Vec<_>>();
         property_names.sort_unstable();
-        assert_eq!(
-            property_names,
-            ["file_types", "max_results", "path", "query", "result_types"]
-        );
+        assert_eq!(property_names, ["file_types", "max_results", "path", "query", "result_types"]);
 
         Ok(())
     }
@@ -726,9 +712,7 @@ mod tests {
         let available = registry.available_tools().await;
         assert!(!available.contains(&CUSTOM_TOOL_NAME.to_string()));
 
-        let response = registry
-            .execute_tool(CUSTOM_TOOL_NAME, json!({"input": "value"}))
-            .await?;
+        let response = registry.execute_tool(CUSTOM_TOOL_NAME, json!({"input": "value"})).await?;
         assert!(response["success"].as_bool().unwrap_or(false));
         Ok(())
     }
@@ -752,20 +736,12 @@ mod tests {
             .await?;
 
         let config: ToolPolicyConfig = serde_json::from_str(&fs::read_to_string(&policy_path)?)?;
-        assert!(
-            config
-                .available_tools
-                .contains(&CUSTOM_TOOL_NAME.to_string())
-        );
+        assert!(config.available_tools.contains(&CUSTOM_TOOL_NAME.to_string()));
 
         registry.unregister_tool(CUSTOM_TOOL_NAME).await?;
 
         let config: ToolPolicyConfig = serde_json::from_str(&fs::read_to_string(&policy_path)?)?;
-        assert!(
-            !config
-                .available_tools
-                .contains(&CUSTOM_TOOL_NAME.to_string())
-        );
+        assert!(!config.available_tools.contains(&CUSTOM_TOOL_NAME.to_string()));
 
         Ok(())
     }
@@ -815,15 +791,10 @@ mod tests {
             .get_tool_schema(REPLACE_DISPATCH_TOOL_NAME)
             .await
             .expect("replacement schema should be present");
-        assert_eq!(
-            schema.pointer("/parameters/properties/new/type"),
-            Some(&json!("string"))
-        );
+        assert_eq!(schema.pointer("/parameters/properties/new/type"), Some(&json!("string")));
         assert!(schema.pointer("/parameters/properties/old").is_none());
 
-        let response = registry
-            .execute_tool(REPLACE_DISPATCH_TOOL_NAME, json!({}))
-            .await?;
+        let response = registry.execute_tool(REPLACE_DISPATCH_TOOL_NAME, json!({})).await?;
         assert_eq!(response.get("version"), Some(&json!(2)));
 
         Ok(())
@@ -844,9 +815,7 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let args = json!({"input": "value"});
-        let response = registry
-            .execute_tool_ref_prevalidated(CUSTOM_TOOL_NAME, &args)
-            .await?;
+        let response = registry.execute_tool_ref_prevalidated(CUSTOM_TOOL_NAME, &args).await?;
         assert!(response["success"].as_bool().unwrap_or(false));
 
         Ok(())
@@ -892,16 +861,10 @@ mod tests {
             .to_string();
         assert_eq!(response["exit_code"], 0);
         assert_eq!(response["output"].as_str(), Some("vtcode-terminal"));
-        assert_eq!(
-            registry.harness_exec_session_completed(&session_id).await?,
-            Some(0)
-        );
+        assert_eq!(registry.harness_exec_session_completed(&session_id).await?, Some(0));
 
         registry.close_harness_exec_session(&session_id).await?;
-        registry
-            .harness_exec_session_completed(&session_id)
-            .await
-            .unwrap_err();
+        registry.harness_exec_session_completed(&session_id).await.unwrap_err();
 
         Ok(())
     }
@@ -936,9 +899,7 @@ mod tests {
             )
             .await?;
 
-        let output = response["output"]
-            .as_str()
-            .expect("settled exec output should be text");
+        let output = response["output"].as_str().expect("settled exec output should be text");
         assert!(output.contains("first"));
         assert!(output.contains("second"));
         assert_eq!(response["exit_code"], 0);
@@ -953,9 +914,8 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
 
-        let initial = registry
-            .execute_harness_command_session(delayed_exec_args(false, 50))
-            .await?;
+        let initial =
+            registry.execute_harness_command_session(delayed_exec_args(false, 50)).await?;
         let session_id = initial["session_id"]
             .as_str()
             .expect("partial run should expose session_id")
@@ -982,9 +942,8 @@ mod tests {
             .await?;
 
         assert_eq!(response["exit_code"], 0);
-        let settled_output = response["output"]
-            .as_str()
-            .expect("settled poll output should be text");
+        let settled_output =
+            response["output"].as_str().expect("settled poll output should be text");
         assert!(initial_output.contains("second") || settled_output.contains("second"));
         assert!(response.get("next_continue_args").is_none());
 
@@ -1037,10 +996,7 @@ mod tests {
 
         let initial = registry.execute_harness_command_session(run_args).await?;
         assert_eq!(initial["session_id"], "check_sh");
-        assert_eq!(
-            initial["next_continue_args"],
-            json!({ "session_id": "check_sh" })
-        );
+        assert_eq!(initial["next_continue_args"], json!({ "session_id": "check_sh" }));
 
         let response = registry
             .execute_harness_command_session(json!({
@@ -1188,14 +1144,10 @@ mod tests {
             "mode": "overwrite",
         });
 
-        let first = registry
-            .execute_tool_ref(tools::READ_FILE, &read_args)
-            .await?;
+        let first = registry.execute_tool_ref(tools::READ_FILE, &read_args).await?;
         assert_eq!(first["content"], "original");
 
-        let second = registry
-            .execute_tool(tools::READ_FILE, read_args.clone())
-            .await?;
+        let second = registry.execute_tool(tools::READ_FILE, read_args.clone()).await?;
         assert_eq!(second["content"], "original");
 
         let write_result = registry.execute_tool(tools::WRITE_FILE, write_args).await?;
@@ -1222,17 +1174,10 @@ mod tests {
             "cmd": format!("cat {}", test_file.to_string_lossy()),
         });
 
-        let first = registry
-            .execute_tool_ref(tools::EXEC_COMMAND, &cat_args)
-            .await?;
-        assert!(
-            first.get("reused_recent_result").is_none(),
-            "first call should not be reused"
-        );
+        let first = registry.execute_tool_ref(tools::EXEC_COMMAND, &cat_args).await?;
+        assert!(first.get("reused_recent_result").is_none(), "first call should not be reused");
 
-        let second = registry
-            .execute_tool_ref(tools::EXEC_COMMAND, &cat_args)
-            .await?;
+        let second = registry.execute_tool_ref(tools::EXEC_COMMAND, &cat_args).await?;
         assert_eq!(
             second.get("reused_recent_result"),
             Some(&json!(true)),
@@ -1310,10 +1255,7 @@ mod tests {
         fs::create_dir_all(&plans_dir)?;
         let plan_file = plans_dir.join("adaptive-test.md");
         fs::write(&plan_file, "# Adaptive test\n")?;
-        registry
-            .planning_workflow_state()
-            .set_plan_file(Some(plan_file))
-            .await;
+        registry.planning_workflow_state().set_plan_file(Some(plan_file)).await;
 
         let args = json!({"action": "create", "items": ["Track step"]});
 
@@ -1402,7 +1344,7 @@ mod tests {
         let read_err = registry
             .preflight_validate_call(
                 "repo_browser.read_file",
-                &json!({"path": "vtcode-core/src/lib.rs"}),
+                &json!({"path": "crates/codegen/vtcode-core/src/lib.rs"}),
             )
             .expect_err("repo_browser.read_file alias should be rejected");
         assert!(read_err.to_string().contains("Unknown tool"));
@@ -1410,7 +1352,7 @@ mod tests {
         let list_err = registry
             .preflight_validate_call(
                 "repo_browser.list_files",
-                &json!({"path": "vtcode-core/src"}),
+                &json!({"path": "crates/codegen/vtcode-core/src"}),
             )
             .expect_err("repo_browser.list_files alias should be rejected");
         assert!(list_err.to_string().contains("Unknown tool"));
@@ -1424,14 +1366,17 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         let read_err = registry
-            .preflight_validate_call(tools::READ_FILE, &json!({"path": "vtcode-core/src/lib.rs"}))
+            .preflight_validate_call(
+                tools::READ_FILE,
+                &json!({"path": "crates/codegen/vtcode-core/src/lib.rs"}),
+            )
             .expect_err("read_file should be rejected");
         assert!(read_err.to_string().contains("Unknown tool"));
 
         let list_err = registry
             .preflight_validate_call(
                 tools::LIST_FILES,
-                &json!({"path": "vtcode-core/src", "page": 1, "per_page": 20}),
+                &json!({"path": "crates/codegen/vtcode-core/src", "page": 1, "per_page": 20}),
             )
             .expect_err("list_files should be rejected");
         assert!(list_err.to_string().contains("Unknown tool"));
@@ -1447,13 +1392,16 @@ mod tests {
         let read = registry
             .preflight_validate_harness_call(
                 tools::READ_FILE,
-                &json!({"path": "vtcode-core/src/lib.rs"}),
+                &json!({"path": "crates/codegen/vtcode-core/src/lib.rs"}),
             )
             .expect("harness path should admit read_file");
         assert_eq!(read.normalized_tool_name, tools::READ_FILE);
 
         let list = registry
-            .preflight_validate_harness_call(tools::LIST_FILES, &json!({"path": "vtcode-core/src"}))
+            .preflight_validate_harness_call(
+                tools::LIST_FILES,
+                &json!({"path": "crates/codegen/vtcode-core/src"}),
+            )
             .expect("harness path should admit list_files");
         assert_eq!(list.normalized_tool_name, tools::LIST_FILES);
 
@@ -1490,7 +1438,7 @@ mod tests {
         let err = registry
             .execute_public_tool_ref_prevalidated(
                 tools::READ_FILE,
-                &json!({"path": "vtcode-core/src/lib.rs"}),
+                &json!({"path": "crates/codegen/vtcode-core/src/lib.rs"}),
             )
             .await
             .expect_err("model-public entry must reject read_file even when prevalidated");
@@ -1600,10 +1548,7 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let err = registry
-            .execute_public_tool_ref(
-                "repo_browser.read_file",
-                &json!({"path": "public-route.txt"}),
-            )
+            .execute_public_tool_ref("repo_browser.read_file", &json!({"path": "public-route.txt"}))
             .await
             .expect_err("repo_browser.read_file should not resolve publicly");
 
@@ -1622,18 +1567,10 @@ mod tests {
             ToolRegistry::new_with_custom_policy(temp_dir.path().to_path_buf(), policy_manager)
                 .await;
 
-        registry
-            .set_tool_policy(tools::EXEC_COMMAND, ToolPolicy::Deny)
-            .await?;
+        registry.set_tool_policy(tools::EXEC_COMMAND, ToolPolicy::Deny).await?;
 
-        assert_eq!(
-            registry.get_tool_policy(tools::EXEC_COMMAND).await,
-            ToolPolicy::Deny
-        );
-        assert_eq!(
-            registry.get_tool_policy(tools::WRITE_STDIN).await,
-            ToolPolicy::Allow
-        );
+        assert_eq!(registry.get_tool_policy(tools::EXEC_COMMAND).await, ToolPolicy::Deny);
+        assert_eq!(registry.get_tool_policy(tools::WRITE_STDIN).await, ToolPolicy::Allow);
 
         Ok(())
     }
@@ -1650,23 +1587,13 @@ mod tests {
 
         let mut config = ToolsConfig::default();
         config.policies.clear();
-        config
-            .policies
-            .insert(tools::EXEC_COMMAND.to_string(), ToolPolicy::Allow);
-        config
-            .policies
-            .insert(tools::APPLY_PATCH.to_string(), ToolPolicy::Deny);
+        config.policies.insert(tools::EXEC_COMMAND.to_string(), ToolPolicy::Allow);
+        config.policies.insert(tools::APPLY_PATCH.to_string(), ToolPolicy::Deny);
 
         registry.apply_config_policies(&config).await?;
 
-        assert_eq!(
-            registry.get_tool_policy(tools::EXEC_COMMAND).await,
-            ToolPolicy::Allow
-        );
-        assert_eq!(
-            registry.get_tool_policy(tools::APPLY_PATCH).await,
-            ToolPolicy::Deny
-        );
+        assert_eq!(registry.get_tool_policy(tools::EXEC_COMMAND).await, ToolPolicy::Allow);
+        assert_eq!(registry.get_tool_policy(tools::APPLY_PATCH).await, ToolPolicy::Deny);
 
         Ok(())
     }
@@ -1685,16 +1612,11 @@ mod tests {
             profile: ToolProfile::AdvancedVtCode,
             ..ToolsConfig::default()
         };
-        config
-            .policies
-            .insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Deny);
+        config.policies.insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Deny);
 
         registry.apply_config_policies(&config).await?;
 
-        assert_eq!(
-            registry.get_tool_policy(tools::CODE_SEARCH).await,
-            ToolPolicy::Deny
-        );
+        assert_eq!(registry.get_tool_policy(tools::CODE_SEARCH).await, ToolPolicy::Deny);
 
         Ok(())
     }
@@ -1830,25 +1752,18 @@ mod tests {
             .await
             .insert("search".to_string(), "context7".to_string());
 
-        registry
-            .persist_mcp_tool_policy(&public_name, ToolPolicy::Allow)
-            .await?;
+        registry.persist_mcp_tool_policy(&public_name, ToolPolicy::Allow).await?;
 
         let manager =
             crate::tool_policy::ToolPolicyManager::new_with_config_path(&policy_path).await?;
-        assert_eq!(
-            manager.get_mcp_tool_policy("context7", "search"),
-            ToolPolicy::Allow
-        );
+        assert_eq!(manager.get_mcp_tool_policy("context7", "search"), ToolPolicy::Allow);
 
         assert_eq!(
             registry.evaluate_tool_policy(&public_name).await?,
             ToolPermissionDecision::Allow
         );
         assert_eq!(
-            registry
-                .evaluate_tool_policy("mcp::context7::search")
-                .await?,
+            registry.evaluate_tool_policy("mcp::context7::search").await?,
             ToolPermissionDecision::Allow
         );
 
@@ -1863,17 +1778,12 @@ mod tests {
 
         let patch =
             "*** Begin Patch\n*** Add File: patched_via_alias.txt\n+patched\n*** End Patch\n";
-        let response = registry
-            .execute_tool(tools::APPLY_PATCH, json!({ "patch": patch }))
-            .await?;
+        let response = registry.execute_tool(tools::APPLY_PATCH, json!({ "patch": patch })).await?;
 
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
         assert_eq!(
             response.get("modified_files"),
-            Some(&json!([temp_dir
-                .path()
-                .join("patched_via_alias.txt")
-                .to_string_lossy()]))
+            Some(&json!([temp_dir.path().join("patched_via_alias.txt").to_string_lossy()]))
         );
 
         let file_contents = fs::read_to_string(temp_dir.path().join("patched_via_alias.txt"))?;
@@ -1892,30 +1802,18 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let patch = "*** Begin Patch\n*** Add File: src/add.rs\n+new\n*** Delete File: src/delete.rs\n*** Update File: src/old.rs\n*** Move to: src/new.rs\n@@\n-old\n+new\n*** End Patch\n";
-        let response = registry
-            .execute_tool(tools::APPLY_PATCH, json!({ "input": patch }))
-            .await?;
+        let response = registry.execute_tool(tools::APPLY_PATCH, json!({ "input": patch })).await?;
 
         let mut expected = ["add.rs", "delete.rs", "new.rs", "old.rs"]
             .into_iter()
-            .map(|name| {
-                temp_dir
-                    .path()
-                    .join("src")
-                    .join(name)
-                    .to_string_lossy()
-                    .into_owned()
-            })
+            .map(|name| temp_dir.path().join("src").join(name).to_string_lossy().into_owned())
             .collect::<Vec<_>>();
         expected.sort();
         assert_eq!(response["modified_files"], json!(expected));
         assert!(temp_dir.path().join("src/add.rs").exists());
         assert!(!temp_dir.path().join("src/delete.rs").exists());
         assert!(!temp_dir.path().join("src/old.rs").exists());
-        assert_eq!(
-            fs::read_to_string(temp_dir.path().join("src/new.rs"))?,
-            "new\n"
-        );
+        assert_eq!(fs::read_to_string(temp_dir.path().join("src/new.rs"))?, "new\n");
 
         Ok(())
     }
@@ -1954,9 +1852,7 @@ mod tests {
 
         let patch =
             "*** Begin Patch\n*** Add File: patched_via_input.txt\n+patched\n*** End Patch\n";
-        let response = registry
-            .execute_tool(tools::APPLY_PATCH, json!({ "input": patch }))
-            .await?;
+        let response = registry.execute_tool(tools::APPLY_PATCH, json!({ "input": patch })).await?;
 
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
 
@@ -1974,9 +1870,7 @@ mod tests {
 
         let patch =
             "*** Begin Patch\n*** Add File: patched_via_raw_string.txt\n+patched\n*** End Patch\n";
-        let response = registry
-            .execute_public_tool_ref(tools::APPLY_PATCH, &json!(patch))
-            .await?;
+        let response = registry.execute_public_tool_ref(tools::APPLY_PATCH, &json!(patch)).await?;
 
         assert_eq!(response.get("success").and_then(Value::as_bool), Some(true));
 
@@ -2004,9 +1898,7 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let args = json!({"input": "value"});
-        let response = registry
-            .execute_tool(CUSTOM_TOOL_NAME, args.clone())
-            .await?;
+        let response = registry.execute_tool(CUSTOM_TOOL_NAME, args.clone()).await?;
         assert!(response["success"].as_bool().unwrap_or(false));
 
         let records = registry.get_recent_tool_records(1);
@@ -2035,20 +1927,11 @@ mod tests {
             .await?;
         registry.allow_all_tools().await?;
 
-        let response = registry
-            .execute_tool(REENTRANT_TOOL_NAME, json!({"input": "loop"}))
-            .await?;
+        let response = registry.execute_tool(REENTRANT_TOOL_NAME, json!({"input": "loop"})).await?;
 
+        assert_eq!(response.get("reentrant_call_blocked").and_then(Value::as_bool), Some(true));
         assert_eq!(
-            response
-                .get("reentrant_call_blocked")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            response
-                .pointer("/error/error_type")
-                .and_then(Value::as_str),
+            response.pointer("/error/error_type").and_then(Value::as_str),
             Some("PolicyViolation")
         );
         assert!(
@@ -2089,23 +1972,13 @@ mod tests {
             .execute_tool(MUTUAL_REENTRANT_TOOL_A, json!({"input": "cycle"}))
             .await?;
 
+        assert_eq!(response.get("reentrant_call_blocked").and_then(Value::as_bool), Some(true));
         assert_eq!(
-            response
-                .get("reentrant_call_blocked")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            response
-                .pointer("/error/error_type")
-                .and_then(Value::as_str),
+            response.pointer("/error/error_type").and_then(Value::as_str),
             Some("PolicyViolation")
         );
 
-        let stack_trace = response
-            .get("stack_trace")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let stack_trace = response.get("stack_trace").and_then(Value::as_str).unwrap_or_default();
         assert!(stack_trace.contains(MUTUAL_REENTRANT_TOOL_A));
         assert!(stack_trace.contains(MUTUAL_REENTRANT_TOOL_B));
 
@@ -2117,21 +1990,11 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        registry
-            .enable_full_auto_permission(&[tools::EXEC_COMMAND.to_string()])
-            .await;
+        registry.enable_full_auto_permission(&[tools::EXEC_COMMAND.to_string()]).await;
 
-        assert!(
-            registry
-                .preflight_tool_permission(tools::EXEC_COMMAND)
-                .await?
-        );
+        assert!(registry.preflight_tool_permission(tools::EXEC_COMMAND).await?);
         assert!(!registry.preflight_tool_permission(tools::READ_FILE).await?);
-        assert!(
-            !registry
-                .preflight_tool_permission(tools::RUN_PTY_CMD)
-                .await?
-        );
+        assert!(!registry.preflight_tool_permission(tools::RUN_PTY_CMD).await?);
 
         Ok(())
     }
@@ -2296,14 +2159,8 @@ mod tests {
 
     #[test]
     fn normalizes_mcp_tool_identifiers() {
-        assert_eq!(
-            normalize_mcp_tool_identifier("sequential-thinking"),
-            "sequentialthinking"
-        );
-        assert_eq!(
-            normalize_mcp_tool_identifier("Context7.Lookup"),
-            "context7lookup"
-        );
+        assert_eq!(normalize_mcp_tool_identifier("sequential-thinking"), "sequentialthinking");
+        assert_eq!(normalize_mcp_tool_identifier("Context7.Lookup"), "context7lookup");
         assert_eq!(normalize_mcp_tool_identifier("alpha_beta"), "alphabeta");
     }
 
@@ -2319,14 +2176,8 @@ mod tests {
 
         let policy = ToolTimeoutPolicy::from_config(&config);
         assert_eq!(policy.ceiling_for(ToolTimeoutCategory::Default), None);
-        assert_eq!(
-            policy.ceiling_for(ToolTimeoutCategory::Pty),
-            Some(Duration::from_secs(600))
-        );
-        assert_eq!(
-            policy.ceiling_for(ToolTimeoutCategory::Mcp),
-            Some(Duration::from_secs(90))
-        );
+        assert_eq!(policy.ceiling_for(ToolTimeoutCategory::Pty), Some(Duration::from_secs(600)));
+        assert_eq!(policy.ceiling_for(ToolTimeoutCategory::Mcp), Some(Duration::from_secs(90)));
         assert!((policy.warning_fraction() - 0.75).abs() < f32::EPSILON);
     }
 
@@ -2369,16 +2220,9 @@ mod tests {
         assert_eq!(error.category, vtcode_commons::ErrorCategory::Timeout);
         assert!(error.is_recoverable);
         assert!(error.retry_after_ms.is_some());
-        assert!(
-            error
-                .message
-                .contains("exceeded the standard timeout ceiling")
-        );
+        assert!(error.message.contains("exceeded the standard timeout ceiling"));
         assert_eq!(
-            error
-                .debug_context
-                .as_ref()
-                .and_then(|ctx| ctx.surface.as_deref()),
+            error.debug_context.as_ref().and_then(|ctx| ctx.surface.as_deref()),
             Some("tool_registry")
         );
 
@@ -2405,9 +2249,7 @@ mod tests {
         fs::write(temp_dir.path().join("Widget.rs"), "struct Widget;\n")?;
         let policy_path = temp_dir.path().join("tool-policy.json");
         let mut config = ToolPolicyConfig::default();
-        config
-            .policies
-            .insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Allow);
+        config.policies.insert(tools::CODE_SEARCH.to_string(), ToolPolicy::Allow);
         config.constraints.insert(
             tools::CODE_SEARCH.to_string(),
             ToolConstraints {

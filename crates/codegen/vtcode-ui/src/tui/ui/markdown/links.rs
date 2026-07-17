@@ -50,9 +50,7 @@ pub(crate) fn extract_hidden_location_suffix(dest_url: &str) -> Option<String> {
         return normalize_hash_location(fragment);
     }
 
-    COLON_LOCATION_SUFFIX_RE
-        .find(dest_url)
-        .map(|m| m.as_str().to_string())
+    COLON_LOCATION_SUFFIX_RE.find(dest_url).map(|m| m.as_str().to_string())
 }
 
 pub(crate) fn normalize_hash_location(fragment: &str) -> Option<String> {

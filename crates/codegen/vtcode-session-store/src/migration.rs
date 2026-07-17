@@ -55,12 +55,8 @@ pub fn migrate_legacy(
             let session_id = name.to_string();
             let bytes = std::fs::read(&path).map_err(|e| SessionStoreError::io(path.clone(), e))?;
             let dir = session_dir(workspace, &session_id);
-            std::fs::create_dir_all(dir.join(crate::DERIVED_DIR)).map_err(|e| {
-                SessionStoreError::CreateDir {
-                    path: dir.clone(),
-                    source: e,
-                }
-            })?;
+            std::fs::create_dir_all(dir.join(crate::DERIVED_DIR))
+                .map_err(|e| SessionStoreError::CreateDir { path: dir.clone(), source: e })?;
             let dest = dir.join(crate::DERIVED_DIR).join("memory.json");
             std::fs::write(&dest, &bytes).map_err(|e| SessionStoreError::io(dest, e))?;
             write_manifest(&dir, &session_id, &path, "completed")?;
@@ -88,12 +84,8 @@ pub fn migrate_legacy(
             let session_id = format!("traj-{}", name.trim_start_matches("trajectory-"));
             let bytes = std::fs::read(&path).map_err(|e| SessionStoreError::io(path.clone(), e))?;
             let dir = session_dir(workspace, &session_id);
-            std::fs::create_dir_all(dir.join(crate::DERIVED_DIR)).map_err(|e| {
-                SessionStoreError::CreateDir {
-                    path: dir.clone(),
-                    source: e,
-                }
-            })?;
+            std::fs::create_dir_all(dir.join(crate::DERIVED_DIR))
+                .map_err(|e| SessionStoreError::CreateDir { path: dir.clone(), source: e })?;
             let dest = dir.join(crate::DERIVED_DIR).join("trajectory.jsonl");
             std::fs::write(&dest, &bytes).map_err(|e| SessionStoreError::io(dest, e))?;
             write_manifest(&dir, &session_id, &path, "completed")?;

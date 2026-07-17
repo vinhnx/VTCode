@@ -61,10 +61,8 @@ fn request_with_tools(model: &str) -> LLMRequest {
 }
 
 fn test_provider(base_url: &str, model: &str) -> OpenRouterProvider {
-    let http_client = reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .expect("test client should build");
+    let http_client =
+        reqwest::Client::builder().no_proxy().build().expect("test client should build");
     OpenRouterProvider::new_with_client(
         "test-key".to_string(),
         model.to_string(),
@@ -131,10 +129,7 @@ fn enforce_tool_capabilities_keeps_apply_patch_for_supported_models() {
 
     match provider.enforce_tool_capabilities(&request) {
         Cow::Borrowed(borrowed) => {
-            let tools = borrowed
-                .tools
-                .as_ref()
-                .expect("tools should remain enabled");
+            let tools = borrowed.tools.as_ref().expect("tools should remain enabled");
             assert_eq!(tools.len(), 1);
             assert_eq!(tools[0].function_name(), "apply_patch");
         }
@@ -172,10 +167,7 @@ fn test_parse_stream_payload_chat_chunk() {
     );
 
     let fragments = delta.expect("delta should exist").into_fragments();
-    assert_eq!(
-        fragments,
-        vec![StreamFragment::Content("Hello".to_string())]
-    );
+    assert_eq!(fragments, vec![StreamFragment::Content("Hello".to_string())]);
     assert_eq!(aggregated, "Hello");
     assert!(builders.is_empty());
     assert!(usage.is_none());
@@ -210,10 +202,7 @@ fn test_parse_stream_payload_response_delta() {
     );
 
     let fragments = delta.expect("delta should exist").into_fragments();
-    assert_eq!(
-        fragments,
-        vec![StreamFragment::Content("Stream".to_string())]
-    );
+    assert_eq!(fragments, vec![StreamFragment::Content("Stream".to_string())]);
     assert_eq!(aggregated, "Stream");
 }
 
@@ -419,10 +408,7 @@ data: [DONE]\n\n",
         .and_then(|calls| calls.first())
         .map(|call| call.id.clone())
         .expect("finalized tool call expected");
-    assert_eq!(
-        start_id, finalized_id,
-        "streamed id must match the finalized tool call id"
-    );
+    assert_eq!(start_id, finalized_id, "streamed id must match the finalized tool call id");
 }
 
 #[tokio::test]
@@ -472,8 +458,5 @@ data: [DONE]\n\n",
         ids.push(start_id);
     }
 
-    assert_ne!(
-        ids[0], ids[1],
-        "fabricated ids must differ across separate streams"
-    );
+    assert_ne!(ids[0], ids[1], "fabricated ids must differ across separate streams");
 }

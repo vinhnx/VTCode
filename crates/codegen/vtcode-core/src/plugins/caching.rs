@@ -23,10 +23,7 @@ pub struct PluginCache {
 impl PluginCache {
     /// Create a new plugin cache
     pub fn new(cache_dir: PathBuf) -> Self {
-        Self {
-            cache_dir,
-            cached_plugins: HashMap::new(),
-        }
+        Self { cache_dir, cached_plugins: HashMap::new() }
     }
 
     /// Cache a plugin from its source path
@@ -62,8 +59,7 @@ impl PluginCache {
         self.copy_plugin_to_cache(source_path, &cache_path).await?;
 
         // Store in cache mapping
-        self.cached_plugins
-            .insert(plugin_id.to_string(), cache_path.clone());
+        self.cached_plugins.insert(plugin_id.to_string(), cache_path.clone());
 
         Ok(cache_path)
     }
@@ -145,9 +141,7 @@ impl PluginCache {
         // Check that the plugin doesn't contain paths that traverse outside its expected directory
         // This is a more thorough check - we scan all files in the plugin directory
         if !plugin_path.exists() {
-            return Err(PluginError::LoadingError(
-                "Plugin path does not exist".to_string(),
-            ));
+            return Err(PluginError::LoadingError("Plugin path does not exist".to_string()));
         }
 
         // Check the plugin path itself for traversal attempts

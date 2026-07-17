@@ -30,11 +30,7 @@ impl ZeroTrustContext {
 
     pub fn wrap(&self, payload: Value) -> PayloadEnvelope {
         let integrity = IntegrityTag::new(&payload, &self.integrity_salt);
-        PayloadEnvelope {
-            payload,
-            integrity,
-            issued_at: SystemTime::now(),
-        }
+        PayloadEnvelope { payload, integrity, issued_at: SystemTime::now() }
     }
 }
 
@@ -60,12 +56,7 @@ impl IntegrityTag {
             Err(_) => return false,
         };
 
-        hmac::verify(
-            &key,
-            payload.to_string().as_bytes(),
-            &expected_signature_bytes,
-        )
-        .is_ok()
+        hmac::verify(&key, payload.to_string().as_bytes(), &expected_signature_bytes).is_ok()
     }
 }
 
@@ -79,10 +70,7 @@ pub struct PayloadEnvelope {
 
 impl PayloadEnvelope {
     pub fn validate(&self, salt: &str) -> Result<()> {
-        ensure!(
-            self.integrity.verify(&self.payload, salt),
-            "payload integrity check failed"
-        );
+        ensure!(self.integrity.verify(&self.payload, salt), "payload integrity check failed");
         Ok(())
     }
 }

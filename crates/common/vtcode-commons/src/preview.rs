@@ -218,9 +218,7 @@ pub fn condense_text_bytes(content: &str, head_bytes: usize, tail_bytes: usize) 
     let tail_start_raw = byte_len.saturating_sub(tail_bytes);
     let tail_start = ceil_char_boundary(content, tail_start_raw);
 
-    let omitted = byte_len
-        .saturating_sub(head_end)
-        .saturating_sub(byte_len - tail_start);
+    let omitted = byte_len.saturating_sub(head_end).saturating_sub(byte_len - tail_start);
 
     format!(
         "{}\n\n{}\n\n{}",
@@ -374,10 +372,7 @@ mod tests {
 
     #[test]
     fn tail_preview_text_keeps_last_lines_only() {
-        let input = (0..20)
-            .map(|index| format!("line-{index}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let input = (0..20).map(|index| format!("line-{index}")).collect::<Vec<_>>().join("\n");
 
         let preview = tail_preview_text(&input, 40, 3);
         assert!(preview.contains("bytes omitted"));

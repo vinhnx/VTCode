@@ -40,10 +40,7 @@ fn should_suppress_pre_tool_result_claim(
     if assistant_text.trim().is_empty() {
         return false;
     }
-    if !tool_calls
-        .iter()
-        .any(PreparedAssistantToolCall::is_command_execution)
-    {
+    if !tool_calls.iter().any(PreparedAssistantToolCall::is_command_execution) {
         return false;
     }
 
@@ -219,9 +216,8 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 && (crate::agent::runloop::text_tools::detect_textual_tool_call(&text).is_some()
                     || crate::agent::runloop::text_tools::contains_pseudo_tool_call_markers(&text))
             {
-                let cleaned = crate::agent::runloop::text_tools::strip_dsml_markup(&text)
-                    .trim()
-                    .to_string();
+                let cleaned =
+                    crate::agent::runloop::text_tools::strip_dsml_markup(&text).trim().to_string();
                 // If DSML stripping produced a clean, markup-free text, use it.
                 // Otherwise try stripping the entire detected non-DSML tool-call
                 // region while preserving surrounding prose.
@@ -281,10 +277,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 )
                 .trim()
                 .to_string();
-                params
-                    .ctx
-                    .harness_state
-                    .record_recovery_rejected_synthesis(salvage);
+                params.ctx.harness_state.record_recovery_rejected_synthesis(salvage);
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                     reason: Some(RECOVERY_CONTRACT_VIOLATION_REASON.to_string()),
                 }));
@@ -347,18 +340,13 @@ pub(crate) async fn handle_turn_processing_result<'a>(
 
             let recovery_mode = empty_response_recovery_mode(params.ctx.working_history);
             let recovery_reason = empty_response_recovery_reason(recovery_mode).to_string();
-            params
-                .ctx
-                .activate_recovery_with_mode(recovery_reason.clone(), recovery_mode);
+            params.ctx.activate_recovery_with_mode(recovery_reason.clone(), recovery_mode);
             params
                 .ctx
                 .renderer
                 .line(MessageStyle::Info, empty_response_notice(recovery_mode))
                 .unwrap_or(());
-            params
-                .ctx
-                .working_history
-                .push(uni::Message::system(recovery_reason));
+            params.ctx.working_history.push(uni::Message::system(recovery_reason));
 
             Ok(TurnHandlerOutcome::Continue)
         }
@@ -402,10 +390,7 @@ mod tests {
     #[test]
     fn keeps_non_result_preamble_for_run_tools() {
         let tool_calls = vec![prepared_command_tool_call()];
-        assert!(!should_suppress_pre_tool_result_claim(
-            "Running cargo clippy now.",
-            &tool_calls
-        ));
+        assert!(!should_suppress_pre_tool_result_claim("Running cargo clippy now.", &tool_calls));
     }
 
     #[test]
@@ -427,10 +412,7 @@ mod tests {
         assert_eq!(last.role, uni::MessageRole::Assistant);
         assert_eq!(last.phase, Some(uni::AssistantPhase::Commentary));
         assert_eq!(
-            last.tool_calls
-                .as_ref()
-                .map(|calls| calls[0].id.clone())
-                .as_deref(),
+            last.tool_calls.as_ref().map(|calls| calls[0].id.clone()).as_deref(),
             Some("call_1")
         );
     }
@@ -448,17 +430,12 @@ mod tests {
         record_assistant_tool_calls(&mut history, &tool_calls, len_before_assistant);
 
         assert_eq!(history.len(), 2);
-        let last = history
-            .last()
-            .expect("synthetic assistant tool call message");
+        let last = history.last().expect("synthetic assistant tool call message");
         assert_eq!(last.role, uni::MessageRole::Assistant);
         assert_eq!(last.content.as_text(), "");
         assert_eq!(last.phase, Some(uni::AssistantPhase::Commentary));
         assert_eq!(
-            last.tool_calls
-                .as_ref()
-                .map(|calls| calls[0].id.clone())
-                .as_deref(),
+            last.tool_calls.as_ref().map(|calls| calls[0].id.clone()).as_deref(),
             Some("call_1")
         );
     }
@@ -526,10 +503,7 @@ mod tests {
         .await
         .expect("recovery empty response should be handled");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(backing.last_history_message_contains(
             "I couldn't produce a final synthesis because the model returned no answer on the recovery pass."
         ));
@@ -539,8 +513,7 @@ mod tests {
     async fn recovery_empty_response_fallback_includes_user_request_and_recent_tool_outputs() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
-        ctx.working_history
-            .push(uni::Message::user("tell me more".to_string()));
+        ctx.working_history.push(uni::Message::user("tell me more".to_string()));
         ctx.working_history.push(uni::Message::tool_response(
             "call_1".to_string(),
             "first tool output".to_string(),
@@ -568,10 +541,7 @@ mod tests {
         .await
         .expect("recovery empty response should be handled");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(backing.last_history_message_contains("Latest user request: tell me more"));
         assert!(backing.last_history_message_contains("Tool output 1: second tool output"));
         assert!(backing.last_history_message_contains("Tool output 2: first tool output"));
@@ -581,10 +551,7 @@ mod tests {
     async fn recovery_empty_response_fallback_uses_spool_excerpt_when_available() {
         let mut backing = TestTurnProcessingBacking::new(4).await;
         let mut ctx = backing.turn_processing_context();
-        let spool_dir = ctx
-            .tool_registry
-            .workspace_root()
-            .join(".vtcode/context/tool_outputs");
+        let spool_dir = ctx.tool_registry.workspace_root().join(".vtcode/context/tool_outputs");
         std::fs::create_dir_all(&spool_dir).expect("spool dir");
         std::fs::write(
             spool_dir.join("read_1.txt"),
@@ -624,10 +591,7 @@ mod tests {
         .await
         .expect("recovery empty response should be handled");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(backing.last_history_message_contains("source_path: src/main.rs"));
         assert!(backing.last_history_message_contains("fallback-line-1"));
         assert!(backing.last_history_message_contains("Spool excerpt:"));
@@ -657,10 +621,7 @@ mod tests {
         .await
         .expect("recovery retry empty response should be handled");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(backing.last_history_message_contains(
             "I couldn't continue because the model returned no answer twice in a row."
         ));
@@ -683,7 +644,7 @@ mod tests {
 <minimax:tool_call>
 <invoke name="apply_patch">
 <parameter name="action">read</parameter>
-<parameter name="path">vtcode-core/src/core/agent/runtime/mod.rs</parameter>
+<parameter name="path">crates/codegen/vtcode-core/src/core/agent/runtime/mod.rs</parameter>
 </invoke>
 </minimax:tool_call>
 "#
@@ -745,10 +706,7 @@ Please re-run with tools enabled."#
         .await
         .expect("recovery textual tool markup should be stripped");
 
-        assert!(matches!(
-            outcome,
-            TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-        ));
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)));
         assert!(backing.last_history_message_contains(
             "The requested change was not applied because tools were disabled."
         ));
@@ -800,10 +758,8 @@ Please re-run with tools enabled."#
                     )],
                 ),
             );
-            ctx.working_history.push(uni::Message::tool_response(
-                "call_1".to_string(),
-                "formatted".to_string(),
-            ));
+            ctx.working_history
+                .push(uni::Message::tool_response("call_1".to_string(), "formatted".to_string()));
 
             handle_turn_processing_result(HandleTurnProcessingResultParams {
                 ctx: &mut ctx,
@@ -906,10 +862,7 @@ Please re-run with tools enabled."#
         .expect("clean recovery prose should be handled");
 
         assert!(
-            matches!(
-                outcome,
-                TurnHandlerOutcome::Break(TurnLoopResult::Completed)
-            ),
+            matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed)),
             "clean prose in recovery should complete the turn normally"
         );
         assert!(backing.last_history_message_contains("3 matches"));

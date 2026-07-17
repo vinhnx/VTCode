@@ -93,7 +93,7 @@ const MAX_RECOVERY_RETRIES: u8 = 3;
 /// outline 4+ times, wasting context and tokens).
 ///
 /// Observed in checkpoint turn_594: a simple "what functions/structs are
-/// defined in vtcode-core/src/tools/registry?" task produced 4 identical
+/// defined in crates/codegen/vtcode-core/src/tools/registry?" task produced 4 identical
 /// 6500-token outline responses and burned ~90 seconds.  Capping at 2
 /// responses terminates the runaway loop while still allowing one retry
 /// for genuine recovery scenarios.
@@ -345,14 +345,13 @@ impl<'a> TurnLoopContext<'a> {
     }
 
     pub(crate) fn as_run_loop_context(&mut self) -> RunLoopContext<'_> {
-        let auto_permission = Some(
-            crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
+        let auto_permission =
+            Some(crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
                 config: self.config,
                 vt_cfg: self.vt_cfg,
                 provider_client: self.provider_client.as_mut(),
                 working_history: &[],
-            },
-        );
+            });
 
         let mut ctx = RunLoopContext::new_with_auto_permission_context(
             self.renderer,
@@ -509,8 +508,7 @@ pub(crate) async fn run_turn_loop(
             turn_config.max_session_turns,
             ctx.is_planning_active(),
         );
-        ctx.safety_validator
-            .set_limits(max_per_turn, max_per_session);
+        ctx.safety_validator.set_limits(max_per_turn, max_per_session);
         ctx.safety_validator.start_turn();
     }
 
@@ -635,19 +633,14 @@ pub(crate) async fn run_turn_loop(
         // paused long enough for the provider prompt cache to have expired,
         // so this request may unexpectedly re-pay full input cost.
         let cache_gap_provider_name = turn_processing_ctx.config.provider.clone();
-        if let Some(threshold) = turn_processing_ctx.vt_cfg.and_then(|cfg| {
-            cfg.prompt_cache
-                .gap_threshold_secs(&cache_gap_provider_name)
-        }) {
+        if let Some(threshold) = turn_processing_ctx
+            .vt_cfg
+            .and_then(|cfg| cfg.prompt_cache.gap_threshold_secs(&cache_gap_provider_name))
+        {
             let threshold = Duration::from_secs(threshold);
-            if turn_processing_ctx
-                .session_stats
-                .total_usage()
-                .cached_input_tokens
-                > 0
-                && let Some(elapsed) = turn_processing_ctx
-                    .session_stats
-                    .cache_gap_exceeds(threshold)
+            if turn_processing_ctx.session_stats.total_usage().cached_input_tokens > 0
+                && let Some(elapsed) =
+                    turn_processing_ctx.session_stats.cache_gap_exceeds(threshold)
             {
                 let _ = turn_processing_ctx.renderer.line(
                     MessageStyle::Info,
@@ -731,9 +724,7 @@ pub(crate) async fn run_turn_loop(
                             Some(&env_path),
                         );
                         for line in &guidance {
-                            turn_processing_ctx
-                                .renderer
-                                .line(MessageStyle::Info, line)?;
+                            turn_processing_ctx.renderer.line(MessageStyle::Info, line)?;
                         }
                     } else {
                         let suggestions = err_cat.recovery_suggestions();
@@ -760,23 +751,16 @@ pub(crate) async fn run_turn_loop(
         let response_usage = response.usage.clone();
         let provider_name = turn_processing_ctx.config.provider.clone();
         accumulate_turn_usage(&provider_name, &mut turn_usage, &response_usage);
+        turn_processing_ctx.session_stats.record_usage(&provider_name, &response_usage);
         turn_processing_ctx
             .session_stats
-            .record_usage(&provider_name, &response_usage);
-        turn_processing_ctx
-            .session_stats
-            .set_stop_reason(Some(stop_reason_from_finish_reason(
-                &response.finish_reason,
-            )));
-        let max_budget_usd = turn_processing_ctx
-            .vt_cfg
-            .and_then(|cfg| cfg.agent.harness.max_budget_usd);
+            .set_stop_reason(Some(stop_reason_from_finish_reason(&response.finish_reason)));
+        let max_budget_usd =
+            turn_processing_ctx.vt_cfg.and_then(|cfg| cfg.agent.harness.max_budget_usd);
         let total_usage = turn_processing_ctx.session_stats.total_usage();
         match estimate_session_costs(&provider_name, &active_model, &total_usage) {
             Some(estimate) => {
-                turn_processing_ctx
-                    .session_stats
-                    .set_total_cost_usd(Some(estimate.raw_usd));
+                turn_processing_ctx.session_stats.set_total_cost_usd(Some(estimate.raw_usd));
                 let threshold = turn_processing_ctx
                     .vt_cfg
                     .map(|cfg| cfg.agent.harness.budget_warning_threshold)
@@ -790,9 +774,7 @@ pub(crate) async fn run_turn_loop(
                         turn_processing_ctx
                             .session_stats
                             .mark_budget_limit_reached(max, estimate.raw_usd);
-                        turn_processing_ctx
-                            .context_manager
-                            .update_token_usage(&response_usage);
+                        turn_processing_ctx.context_manager.update_token_usage(&response_usage);
                         #[cfg(debug_assertions)]
                         turn_processing_ctx
                             .context_manager
@@ -832,9 +814,7 @@ pub(crate) async fn run_turn_loop(
                     vtcode_core::llm::usage_cost::BudgetStatus::Warning { max, .. }
                         if !turn_processing_ctx.session_stats.budget_warning_emitted() =>
                     {
-                        turn_processing_ctx
-                            .session_stats
-                            .mark_budget_warning_emitted();
+                        turn_processing_ctx.session_stats.mark_budget_warning_emitted();
                         let _ = turn_processing_ctx.renderer.line(
                             MessageStyle::Info,
                             &format!(
@@ -853,9 +833,7 @@ pub(crate) async fn run_turn_loop(
                 if max_budget_usd.is_some()
                     && !turn_processing_ctx.session_stats.cost_warning_emitted()
                 {
-                    turn_processing_ctx
-                        .session_stats
-                        .mark_cost_warning_emitted();
+                    turn_processing_ctx.session_stats.mark_cost_warning_emitted();
                     tracing::warn!(
                         provider = %provider_name,
                         model = %active_model,
@@ -974,10 +952,7 @@ pub(crate) async fn run_turn_loop(
         // rather than immediately falling back to the deterministic final answer.
         if tool_free_recovery
             && matches!(processing_result, TurnProcessingResult::Empty)
-            && response
-                .tool_calls
-                .as_ref()
-                .is_some_and(|tc| !tc.is_empty())
+            && response.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
             && turn_processing_ctx.recovery_retry_count() < MAX_RECOVERY_RETRIES
         {
             let directive = if turn_processing_ctx.is_planning_active() {
@@ -1152,11 +1127,7 @@ pub(crate) async fn run_turn_loop(
 
     // Final outcome with the correct result status
     ctx.session_stats.record_turn_completed();
-    Ok(TurnLoopOutcome {
-        result,
-        turn_modified_files,
-        pending_primary_agent,
-    })
+    Ok(TurnLoopOutcome { result, turn_modified_files, pending_primary_agent })
 }
 
 /// Finalize the turn: terminate sessions if needed, emit outcome events,

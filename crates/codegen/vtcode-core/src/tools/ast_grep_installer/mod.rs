@@ -52,9 +52,7 @@ impl AstGrepStatus {
                 managed: binary.starts_with(managed_ast_grep_bin_dir()),
                 binary,
             },
-            Err(err) => Self::Error {
-                reason: err.to_string(),
-            },
+            Err(err) => Self::Error { reason: err.to_string() },
         }
     }
 
@@ -65,10 +63,7 @@ impl AstGrepStatus {
         if !InstallationCache::is_stale(&paths)
             && let Ok(cache) = InstallationCache::load(&paths)
             && cache.status == "failed"
-            && !cache
-                .failure_reason
-                .as_deref()
-                .is_some_and(should_retry_without_cooldown)
+            && !cache.failure_reason.as_deref().is_some_and(should_retry_without_cooldown)
         {
             let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
             bail!(
@@ -195,9 +190,7 @@ mod tests {
 
     #[test]
     fn unrelated_failures_still_use_cooldown() {
-        assert!(!should_retry_without_cooldown(
-            "Failed to fetch ast-grep release metadata"
-        ));
+        assert!(!should_retry_without_cooldown("Failed to fetch ast-grep release metadata"));
     }
 
     #[tokio::test]

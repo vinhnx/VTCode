@@ -196,11 +196,7 @@ impl A2aError {
 
     /// Create a new RPC error
     pub fn rpc(code: A2aErrorCode, message: impl Into<String>) -> Self {
-        A2aError::RpcError {
-            code,
-            message: message.into(),
-            data: None,
-        }
+        A2aError::RpcError { code, message: message.into(), data: None }
     }
 
     /// Create a new internal error
@@ -219,10 +215,7 @@ mod tests {
     #[test]
     fn test_error_code_conversion() {
         assert_eq!(i32::from(A2aErrorCode::TaskNotFound), TASK_NOT_FOUND_ERROR);
-        assert_eq!(
-            A2aErrorCode::from(TASK_NOT_FOUND_ERROR),
-            A2aErrorCode::TaskNotFound
-        );
+        assert_eq!(A2aErrorCode::from(TASK_NOT_FOUND_ERROR), A2aErrorCode::TaskNotFound);
     }
 
     #[test]

@@ -12,9 +12,7 @@ pub struct Scheduler {
 
 impl Scheduler {
     pub fn new() -> Self {
-        Self {
-            queue: Mutex::new(VecDeque::new()),
-        }
+        Self { queue: Mutex::new(VecDeque::new()) }
     }
 
     pub async fn enqueue(&self, work: ScheduledWork) {

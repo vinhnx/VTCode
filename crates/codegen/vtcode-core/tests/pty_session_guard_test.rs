@@ -90,18 +90,11 @@ fn pty_session_guard_max_sessions() {
     // Should fail: max sessions reached
     let result = manager.start_session();
     assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("Maximum PTY sessions")
-    );
+    assert!(result.unwrap_err().to_string().contains("Maximum PTY sessions"));
 
     // After dropping one, should succeed
     drop(_guard1);
-    let _guard3 = manager
-        .start_session()
-        .expect("session 3 after freeing slot");
+    let _guard3 = manager.start_session().expect("session 3 after freeing slot");
     assert_eq!(manager.active_sessions(), 2);
 }
 

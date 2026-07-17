@@ -87,20 +87,12 @@ impl JsonRpcRequest {
 
     /// Create a message/send request
     pub fn message_send(params: MessageSendParams, id: Value) -> Self {
-        Self::new(
-            METHOD_MESSAGE_SEND,
-            Some(serde_json::to_value(params).unwrap_or_default()),
-            id,
-        )
+        Self::new(METHOD_MESSAGE_SEND, Some(serde_json::to_value(params).unwrap_or_default()), id)
     }
 
     /// Create a tasks/get request
     pub fn tasks_get(task_id: impl Into<String>, id: Value) -> Self {
-        Self::new(
-            METHOD_TASKS_GET,
-            Some(serde_json::json!({ "id": task_id.into() })),
-            id,
-        )
+        Self::new(METHOD_TASKS_GET, Some(serde_json::json!({ "id": task_id.into() })), id)
     }
 }
 
@@ -166,20 +158,12 @@ pub struct JsonRpcError {
 impl JsonRpcError {
     /// Create a new error
     pub fn new(code: i32, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: None,
-        }
+        Self { code, message: message.into(), data: None }
     }
 
     /// Create an error with additional data
     pub fn with_data(code: i32, message: impl Into<String>, data: Value) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: Some(data),
-        }
+        Self { code, message: message.into(), data: Some(data) }
     }
 
     /// Create an error from A2aErrorCode
@@ -217,10 +201,7 @@ impl JsonRpcError {
 
     /// Create a task not found error
     pub fn task_not_found(task_id: impl Into<String>) -> Self {
-        Self::from_code(
-            A2aErrorCode::TaskNotFound,
-            format!("Task not found: {}", task_id.into()),
-        )
+        Self::from_code(A2aErrorCode::TaskNotFound, format!("Task not found: {}", task_id.into()))
     }
 }
 

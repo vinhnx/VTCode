@@ -134,9 +134,7 @@ pub(super) fn missing_command_session_action_error(args: &Value) -> anyhow::Erro
 pub(super) fn is_valid_pty_session_id(session_id: &str) -> bool {
     !session_id.trim().is_empty()
         && session_id.len() <= 128
-        && session_id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && session_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 pub(super) fn validate_exec_session_id<'a>(
@@ -154,9 +152,8 @@ pub(super) fn validate_exec_session_id<'a>(
 }
 
 fn build_session_command_display_parts(command: &str, args: &[String]) -> String {
-    if let Some(flag_index) = args
-        .iter()
-        .position(|arg| matches!(arg.as_str(), "-c" | "/C" | "-Command"))
+    if let Some(flag_index) =
+        args.iter().position(|arg| matches!(arg.as_str(), "-c" | "/C" | "-Command"))
         && let Some(command) = args.get(flag_index + 1)
         && !command.trim().is_empty()
     {
@@ -239,9 +236,7 @@ pub(super) fn attach_pty_continuation(response: &mut Value, session_id: &str) {
 }
 
 pub(super) fn clamp_exec_yield_ms(value: Option<u64>, default: u64) -> u64 {
-    value
-        .unwrap_or(default)
-        .clamp(MIN_EXEC_YIELD_MS, MAX_EXEC_YIELD_MS)
+    value.unwrap_or(default).clamp(MIN_EXEC_YIELD_MS, MAX_EXEC_YIELD_MS)
 }
 
 pub(super) fn clamp_peek_yield_ms(value: Option<u64>) -> u64 {
@@ -287,11 +282,7 @@ pub(super) fn build_exec_output_preview(
     let mut output = raw_output[..preview_end].to_string();
     output.push_str(EXEC_OUTPUT_TRUNCATED_SENTINEL);
 
-    ExecOutputPreview {
-        raw_output,
-        output,
-        truncated: true,
-    }
+    ExecOutputPreview { raw_output, output, truncated: true }
 }
 
 pub(super) fn build_exec_response(
@@ -303,11 +294,7 @@ pub(super) fn build_exec_response(
     query_truncated: bool,
     running_process_id: Option<&str>,
 ) -> Value {
-    let ExecOutputPreview {
-        raw_output,
-        output,
-        truncated,
-    } = output_preview;
+    let ExecOutputPreview { raw_output, output, truncated } = output_preview;
     let cargo_test_diagnostics =
         cargo_test_failure_diagnostics(command, &raw_output, capture.exit_code);
     let mut response = json!({
@@ -357,10 +344,7 @@ pub(super) fn exec_run_output_config(
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned),
-        inspect_literal: payload
-            .get("literal")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        inspect_literal: payload.get("literal").and_then(Value::as_bool).unwrap_or(false),
         inspect_max_matches: clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64)),
     }
 }
@@ -485,14 +469,16 @@ pub(super) fn filter_lines(
     } else {
         // Reuse the previously compiled regex when the query is unchanged.
         let compiled = {
-            let guard = FILTER_LINES_REGEX.lock().unwrap();
+            let guard =
+                FILTER_LINES_REGEX.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             match &*guard {
                 Some((q, re)) if q == query => re.clone(),
                 _ => {
                     drop(guard);
                     let re = Regex::new(query)
                         .with_context(|| format!("Invalid regex query: {query}"))?;
-                    *FILTER_LINES_REGEX.lock().unwrap() = Some((query.to_string(), re.clone()));
+                    *FILTER_LINES_REGEX.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+                        Some((query.to_string(), re.clone()));
                     re
                 }
             }
@@ -508,10 +494,7 @@ pub(super) fn filter_lines(
         let is_match = if literal {
             line.contains(query)
         } else {
-            matcher
-                .as_ref()
-                .map(|regex| regex.is_match(line))
-                .unwrap_or(false)
+            matcher.as_ref().map(|regex| regex.is_match(line)).unwrap_or(false)
         };
         if !is_match {
             continue;
@@ -599,10 +582,7 @@ pub(super) fn parse_command_parts(
             .map_err(|error| anyhow!(error))
     })
     .transpose()?;
-    let payload = normalized_payload
-        .as_ref()
-        .and_then(Value::as_object)
-        .unwrap_or(payload);
+    let payload = normalized_payload.as_ref().and_then(Value::as_object).unwrap_or(payload);
 
     let (mut parts, raw_command) = match payload.get("command") {
         Some(Value::String(command)) => {
@@ -657,18 +637,15 @@ pub(super) fn parse_exec_env_overrides(
         Value::Object(map) => map
             .iter()
             .map(|(key, value)| {
-                let value = value
-                    .as_str()
-                    .ok_or_else(|| anyhow!("env values must be strings"))?;
+                let value = value.as_str().ok_or_else(|| anyhow!("env values must be strings"))?;
                 Ok((key.clone(), value.to_string()))
             })
             .collect(),
         Value::Array(entries) => {
             let mut env = HashMap::new();
             for entry in entries {
-                let object = entry
-                    .as_object()
-                    .ok_or_else(|| anyhow!("env entries must be objects"))?;
+                let object =
+                    entry.as_object().ok_or_else(|| anyhow!("env entries must be objects"))?;
                 let name = object
                     .get("name")
                     .and_then(Value::as_str)
@@ -683,9 +660,7 @@ pub(super) fn parse_exec_env_overrides(
             }
             Ok(env)
         }
-        _ => Err(anyhow!(
-            "env must be an object or array of {{name, value}} entries"
-        )),
+        _ => Err(anyhow!("env must be an object or array of {{name, value}} entries")),
     }
 }
 
@@ -794,9 +769,7 @@ pub(super) fn prepare_exec_command(
     let requested_command = command.clone();
 
     let normalized_shell = normalized_shell_name(shell_program);
-    let existing_shell = command
-        .first()
-        .map(|existing| normalized_shell_name(existing));
+    let existing_shell = command.first().map(|existing| normalized_shell_name(existing));
 
     if existing_shell != Some(normalized_shell.clone()) {
         let raw_command = payload
@@ -880,9 +853,7 @@ fn join_windows_command(parts: &[String]) -> String {
 pub(super) fn parse_pty_dimension(name: &str, value: Option<&Value>, default: u16) -> Result<u16> {
     match value {
         Some(v) => {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| anyhow!("{name} must be a number"))?;
+            let n = v.as_u64().ok_or_else(|| anyhow!("{name} must be a number"))?;
             Ok(n as u16)
         }
         None => Ok(default),
@@ -916,9 +887,7 @@ pub(super) fn enforce_pty_command_policy(display_command: &str, confirm: bool) -
     let trimmed = lower.trim();
     let is_standalone = trimmed.split_whitespace().count() == 1;
 
-    let deny_match = PTY_DENY_PREFIXES
-        .iter()
-        .any(|prefix| trimmed.starts_with(prefix));
+    let deny_match = PTY_DENY_PREFIXES.iter().any(|prefix| trimmed.starts_with(prefix));
     let standalone_denied = is_standalone && PTY_DENY_STANDALONE.contains(&trimmed);
 
     if deny_match || standalone_denied {

@@ -91,20 +91,14 @@ pub(crate) fn resolve_session_primary_agent(
     // preference), unless the user explicitly configured a primary agent.
     if !primary_agent_explicitly_configured {
         if let Some(resumed) = resumed_primary_agent.filter(|name| !name.trim().is_empty()) {
-            return Ok(ActivePrimaryAgentState::from_specs_with_default(
-                specs,
-                resumed.trim(),
-            ));
+            return Ok(ActivePrimaryAgentState::from_specs_with_default(specs, resumed.trim()));
         }
     }
 
     let default_primary_agent = vt_cfg
         .map(|cfg| cfg.default_primary_agent.as_str())
         .unwrap_or(DEFAULT_PRIMARY_AGENT_NAME);
-    Ok(ActivePrimaryAgentState::from_specs_with_default(
-        specs,
-        default_primary_agent,
-    ))
+    Ok(ActivePrimaryAgentState::from_specs_with_default(specs, default_primary_agent))
 }
 
 /// Positional convenience wrapper around [`resolve_session_primary_agent`],

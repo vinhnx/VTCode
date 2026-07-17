@@ -54,9 +54,7 @@ pub(crate) struct ToolPipelineOutcome {
 impl ToolPipelineOutcome {
     pub(crate) fn from_status(status: ToolExecutionStatus) -> Self {
         let command_success = match &status {
-            ToolExecutionStatus::Success {
-                command_success, ..
-            } => *command_success,
+            ToolExecutionStatus::Success { command_success, .. } => *command_success,
             _ => false,
         };
         ToolPipelineOutcome {
@@ -82,10 +80,8 @@ impl ToolPipelineOutcome {
 
     pub(crate) fn set_command_success(&mut self, command_success: bool) {
         self.command_success = command_success;
-        if let ToolExecutionStatus::Success {
-            command_success: status_success,
-            ..
-        } = &mut self.status
+        if let ToolExecutionStatus::Success { command_success: status_success, .. } =
+            &mut self.status
         {
             *status_success = command_success;
         }
@@ -146,16 +142,12 @@ pub(crate) struct ToolBatchStats {
 impl ToolBatchOutcome {
     /// Create a new empty batch.
     pub(crate) fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
+        Self { entries: Vec::new() }
     }
 
     /// Record the result of one tool call.
     pub(crate) fn record(&mut self, status: &ToolExecutionStatus) {
-        self.entries.push(ToolBatchEntry {
-            result: ToolBatchResult::from(status),
-        });
+        self.entries.push(ToolBatchEntry { result: ToolBatchResult::from(status) });
     }
 
     /// Compute aggregate statistics.

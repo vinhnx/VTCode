@@ -51,10 +51,7 @@ impl TerminalModeGuard {
 
     pub(super) fn enter_alternate_screen(&mut self, stderr: &mut io::Stderr) -> Result<()> {
         execute!(stderr, EnterAlternateScreen).with_context(|| {
-            format!(
-                "Failed to enter alternate screen for {} selector",
-                self.label
-            )
+            format!("Failed to enter alternate screen for {} selector", self.label)
         })?;
         self.alternate_screen = true;
         Ok(())
@@ -83,10 +80,7 @@ impl TerminalModeGuard {
 
         if self.alternate_screen {
             execute!(terminal.backend_mut(), LeaveAlternateScreen).with_context(|| {
-                format!(
-                    "Failed to leave alternate screen after {} selector",
-                    self.label
-                )
+                format!("Failed to leave alternate screen after {} selector", self.label)
             })?;
             self.alternate_screen = false;
         }

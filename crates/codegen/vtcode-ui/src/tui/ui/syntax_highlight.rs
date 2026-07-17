@@ -64,9 +64,7 @@ static SHARED_THEME_SET: Lazy<ThemeSet> = Lazy::new(|| match ThemeSet::load_defa
     defaults if !defaults.themes.is_empty() => defaults,
     _ => {
         warn!("Failed to load default syntax highlighting themes");
-        ThemeSet {
-            themes: Default::default(),
-        }
+        ThemeSet { themes: Default::default() }
     }
 });
 
@@ -108,12 +106,7 @@ pub fn find_syntax_plain_text() -> &'static SyntaxReference {
 }
 
 fn fallback_theme() -> Theme {
-    SHARED_THEME_SET
-        .themes
-        .values()
-        .next()
-        .cloned()
-        .unwrap_or_default()
+    SHARED_THEME_SET.themes.values().next().cloned().unwrap_or_default()
 }
 
 fn plain_text_line_segments(code: &str) -> Vec<Vec<(syntect::highlighting::Style, String)>> {
@@ -122,10 +115,7 @@ fn plain_text_line_segments(code: &str) -> Vec<Vec<(syntect::highlighting::Style
     for line in LinesWithEndings::from(code) {
         ends_with_newline = line.ends_with('\n');
         let trimmed = line.trim_end_matches('\n');
-        result.push(vec![(
-            syntect::highlighting::Style::default(),
-            trimmed.to_string(),
-        )]);
+        result.push(vec![(syntect::highlighting::Style::default(), trimmed.to_string())]);
     }
 
     if ends_with_newline {
@@ -145,32 +135,24 @@ fn plain_text_line_segments(code: &str) -> Vec<Vec<(syntect::highlighting::Style
 /// Cloned theme instance (safe for multi-threaded use)
 pub fn load_theme(theme_name: &str, cache: bool) -> Theme {
     // Try cache first if caching is enabled
-    if cache {
-        if let Ok(cache) = THEME_CACHE.read() {
-            if let Some(theme) = cache.get(theme_name) {
-                return theme.clone();
-            }
-        }
+    if cache
+        && let Ok(cache) = THEME_CACHE.read()
+        && let Some(theme) = cache.get(theme_name)
+    {
+        return theme.clone();
     }
 
     // Load from ThemeSet
     let theme = if let Some(theme) = SHARED_THEME_SET.themes.get(theme_name) {
         theme.clone()
     } else {
-        warn!(
-            theme = theme_name,
-            "Unknown syntax highlighting theme, falling back to default"
-        );
+        warn!(theme = theme_name, "Unknown syntax highlighting theme, falling back to default");
         fallback_theme()
     };
 
     // Cache the theme if caching is enabled
-    if cache {
-        if let Ok(mut cache) = THEME_CACHE.write() {
-            cache
-                .entry(theme_name.to_string())
-                .or_insert_with(|| theme.clone());
-        }
+    if cache && let Ok(mut cache) = THEME_CACHE.write() {
+        cache.entry(theme_name.to_string()).or_insert_with(|| theme.clone());
     }
 
     theme
@@ -287,9 +269,7 @@ fn convert_syntect_style(style: syntect::highlighting::Style) -> AnstyleStyle {
 
 #[inline]
 fn select_syntax(language: Option<&str>) -> &'static SyntaxReference {
-    language
-        .map(find_syntax_by_token)
-        .unwrap_or_else(find_syntax_plain_text)
+    language.map(find_syntax_by_token).unwrap_or_else(find_syntax_plain_text)
 }
 
 /// Highlight code and return styled segments per line.
@@ -323,10 +303,9 @@ fn highlight_code_to_line_segments_with_theme(
         ends_with_newline = line.ends_with('\n');
         let trimmed = line.trim_end_matches('\n');
         let segments = match highlighter.highlight_line(trimmed, syntax_set()) {
-            Ok(ranges) => ranges
-                .into_iter()
-                .map(|(style, text)| (style, text.to_string()))
-                .collect(),
+            Ok(ranges) => {
+                ranges.into_iter().map(|(style, text)| (style, text.to_string())).collect()
+            }
             Err(_) => vec![(syntect::highlighting::Style::default(), trimmed.to_string())],
         };
         result.push(segments);
@@ -418,9 +397,7 @@ pub fn highlight_line_for_diff(
     language: Option<&str>,
     theme_name: &str,
 ) -> Option<Vec<(syntect::highlighting::Style, String)>> {
-    highlight_code_to_line_segments(line, language, theme_name)
-        .into_iter()
-        .next()
+    highlight_code_to_line_segments(line, language, theme_name).into_iter().next()
 }
 
 /// Convert code to ANSI escape sequences
@@ -498,18 +475,8 @@ mod tests {
     #[test]
     fn convert_syntect_style_uses_named_ansi_for_low_palette_indexes() {
         let style = convert_syntect_style(syntect::highlighting::Style {
-            foreground: SyntectColor {
-                r: 0x02,
-                g: 0,
-                b: 0,
-                a: ANSI_ALPHA_INDEX,
-            },
-            background: SyntectColor {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: OPAQUE_ALPHA,
-            },
+            foreground: SyntectColor { r: 0x02, g: 0, b: 0, a: ANSI_ALPHA_INDEX },
+            background: SyntectColor { r: 0, g: 0, b: 0, a: OPAQUE_ALPHA },
             font_style: FontStyle::empty(),
         });
 
@@ -519,18 +486,8 @@ mod tests {
     #[test]
     fn convert_syntect_style_uses_ansi256_for_high_palette_indexes() {
         let style = convert_syntect_style(syntect::highlighting::Style {
-            foreground: SyntectColor {
-                r: 0x9a,
-                g: 0,
-                b: 0,
-                a: ANSI_ALPHA_INDEX,
-            },
-            background: SyntectColor {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: OPAQUE_ALPHA,
-            },
+            foreground: SyntectColor { r: 0x9a, g: 0, b: 0, a: ANSI_ALPHA_INDEX },
+            background: SyntectColor { r: 0, g: 0, b: 0, a: OPAQUE_ALPHA },
             font_style: FontStyle::empty(),
         });
 
@@ -540,18 +497,8 @@ mod tests {
     #[test]
     fn convert_syntect_style_uses_terminal_default_for_alpha_one() {
         let style = convert_syntect_style(syntect::highlighting::Style {
-            foreground: SyntectColor {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: ANSI_ALPHA_DEFAULT,
-            },
-            background: SyntectColor {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: OPAQUE_ALPHA,
-            },
+            foreground: SyntectColor { r: 0, g: 0, b: 0, a: ANSI_ALPHA_DEFAULT },
+            background: SyntectColor { r: 0, g: 0, b: 0, a: OPAQUE_ALPHA },
             font_style: FontStyle::empty(),
         });
 
@@ -561,18 +508,8 @@ mod tests {
     #[test]
     fn convert_syntect_style_falls_back_to_rgb_for_unexpected_alpha() {
         let style = convert_syntect_style(syntect::highlighting::Style {
-            foreground: SyntectColor {
-                r: 10,
-                g: 20,
-                b: 30,
-                a: 0x80,
-            },
-            background: SyntectColor {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: OPAQUE_ALPHA,
-            },
+            foreground: SyntectColor { r: 10, g: 20, b: 30, a: 0x80 },
+            background: SyntectColor { r: 0, g: 0, b: 0, a: OPAQUE_ALPHA },
             font_style: FontStyle::empty(),
         });
 
@@ -582,18 +519,8 @@ mod tests {
     #[test]
     fn convert_syntect_style_preserves_effects() {
         let style = convert_syntect_style(syntect::highlighting::Style {
-            foreground: SyntectColor {
-                r: 10,
-                g: 20,
-                b: 30,
-                a: OPAQUE_ALPHA,
-            },
-            background: SyntectColor {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: OPAQUE_ALPHA,
-            },
+            foreground: SyntectColor { r: 10, g: 20, b: 30, a: OPAQUE_ALPHA },
+            background: SyntectColor { r: 0, g: 0, b: 0, a: OPAQUE_ALPHA },
             font_style: FontStyle::BOLD | FontStyle::ITALIC | FontStyle::UNDERLINE,
         });
 
@@ -607,18 +534,8 @@ mod tests {
     fn highlight_pipeline_decodes_alpha_encoded_theme_colors() {
         let theme = Theme {
             settings: ThemeSettings {
-                foreground: Some(SyntectColor {
-                    r: 0x02,
-                    g: 0,
-                    b: 0,
-                    a: ANSI_ALPHA_INDEX,
-                }),
-                background: Some(SyntectColor {
-                    r: 0,
-                    g: 0,
-                    b: 0,
-                    a: ANSI_ALPHA_DEFAULT,
-                }),
+                foreground: Some(SyntectColor { r: 0x02, g: 0, b: 0, a: ANSI_ALPHA_INDEX }),
+                background: Some(SyntectColor { r: 0, g: 0, b: 0, a: ANSI_ALPHA_DEFAULT }),
                 ..ThemeSettings::default()
             },
             ..Theme::default()
@@ -628,10 +545,7 @@ mod tests {
             highlight_code_to_anstyle_line_segments_with_theme("plain text", None, &theme, false);
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].len(), 1);
-        assert_eq!(
-            segments[0][0].0.get_fg_color(),
-            Some(AnsiColor::Green.into())
-        );
+        assert_eq!(segments[0][0].0.get_fg_color(), Some(AnsiColor::Green.into()));
         assert_eq!(segments[0][0].0.get_bg_color(), None);
         assert_eq!(segments[0][0].1, "plain text");
     }
@@ -666,13 +580,7 @@ mod tests {
         };
 
         let rgbs = diff_scope_background_rgbs_for_theme(&theme);
-        assert_eq!(
-            rgbs,
-            DiffScopeBackgroundRgbs {
-                inserted: None,
-                deleted: None,
-            }
-        );
+        assert_eq!(rgbs, DiffScopeBackgroundRgbs { inserted: None, deleted: None });
     }
 
     #[test]

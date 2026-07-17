@@ -66,11 +66,7 @@ This is a new project created with VT Code.
         features.iter().map(|f| format!("- {f}\n")).join("")
     );
 
-    write_file_with_context_sync(
-        &project_path.join("README.md"),
-        &readme_content,
-        "README.md",
-    )?;
+    write_file_with_context_sync(&project_path.join("README.md"), &readme_content, "README.md")?;
 
     // Create Cargo.toml for Rust projects
     let cargo_content = r#"[package]
@@ -81,11 +77,7 @@ edition = "2021"
 [dependencies]
 "#;
 
-    write_file_with_context_sync(
-        &project_path.join("Cargo.toml"),
-        cargo_content,
-        "Cargo.toml",
-    )?;
+    write_file_with_context_sync(&project_path.join("Cargo.toml"), cargo_content, "Cargo.toml")?;
 
     Ok(())
 }
@@ -103,10 +95,6 @@ path = "."
 verbose = false
 "#;
 
-    write_file_with_context_sync(
-        &project_path.join("vtcode.toml"),
-        config_content,
-        "vtcode.toml",
-    )?;
+    write_file_with_context_sync(&project_path.join("vtcode.toml"), config_content, "vtcode.toml")?;
     Ok(())
 }

@@ -18,10 +18,7 @@ pub struct TestHarness {
 impl TestHarness {
     pub fn new() -> Result<Self> {
         let temp_dir = TempDir::new().context(ERR_CREATE_DIR)?;
-        Ok(Self {
-            temp_dir,
-            session_id: next_session_id(),
-        })
+        Ok(Self { temp_dir, session_id: next_session_id() })
     }
 
     pub fn workspace(&self) -> &Path {

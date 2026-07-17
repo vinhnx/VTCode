@@ -397,9 +397,8 @@ fn normalized_tool_payload(
 }
 
 fn normalize_shell_payload(command: &str, tool_args: Option<&Value>) -> String {
-    if let Some(command_words) = tool_args
-        .and_then(|args| command_args::command_words(args).ok())
-        .flatten()
+    if let Some(command_words) =
+        tool_args.and_then(|args| command_args::command_words(args).ok()).flatten()
         && let Some(segments) = parse_bash_lc_commands(&command_words)
     {
         let rendered = segments
@@ -496,9 +495,8 @@ fn referenced_script_path(
 }
 
 fn normalized_shell_segments(command: &str, tool_args: Option<&Value>) -> Vec<Vec<String>> {
-    if let Some(command_words) = tool_args
-        .and_then(|args| command_args::command_words(args).ok())
-        .flatten()
+    if let Some(command_words) =
+        tool_args.and_then(|args| command_args::command_words(args).ok()).flatten()
         && let Some(segments) = parse_bash_lc_commands(&command_words)
     {
         return segments;
@@ -521,10 +519,7 @@ fn first_script_path_in_segment(segment: &[String]) -> Option<PathBuf> {
         0
     };
 
-    segment
-        .iter()
-        .skip(start_index)
-        .find_map(|token| script_like_path(token))
+    segment.iter().skip(start_index).find_map(|token| script_like_path(token))
 }
 
 fn script_like_path(token: &str) -> Option<PathBuf> {
@@ -536,9 +531,7 @@ fn script_like_path(token: &str) -> Option<PathBuf> {
     let looks_like_script = trimmed.contains('/')
         || trimmed.starts_with("./")
         || trimmed.starts_with("../")
-        || [".sh", ".py", ".js", ".rb"]
-            .iter()
-            .any(|suffix| trimmed.ends_with(suffix));
+        || [".sh", ".py", ".js", ".rb"].iter().any(|suffix| trimmed.ends_with(suffix));
 
     looks_like_script.then(|| PathBuf::from(trimmed))
 }
@@ -586,11 +579,7 @@ async fn raw_completion(
         stream: false,
         ..Default::default()
     };
-    match provider
-        .generate(request.clone())
-        .await
-        .map_err(|err| anyhow!(err))
-    {
+    match provider.generate(request.clone()).await.map_err(|err| anyhow!(err)) {
         Ok(response) => Ok(response.content_text().trim().to_string()),
         Err(primary_err) => {
             let Some(fallback_model) = fallback_model.filter(|candidate| *candidate != model)
@@ -603,14 +592,8 @@ async fn raw_completion(
                 error = %primary_err,
                 "auto permission review lightweight request failed; retrying with main model"
             );
-            let fallback_request = uni::LLMRequest {
-                model: fallback_model.to_string(),
-                ..request
-            };
-            let response = provider
-                .generate(fallback_request)
-                .await
-                .map_err(|err| anyhow!(err))?;
+            let fallback_request = uni::LLMRequest { model: fallback_model.to_string(), ..request };
+            let response = provider.generate(fallback_request).await.map_err(|err| anyhow!(err))?;
             Ok(response.content_text().trim().to_string())
         }
     }
@@ -621,12 +604,8 @@ fn parse_stage_two_decision(raw: &str) -> Result<StageTwoDecision> {
         return Ok(parsed);
     }
 
-    let start = raw
-        .find('{')
-        .ok_or_else(|| anyhow!("missing JSON object"))?;
-    let end = raw
-        .rfind('}')
-        .ok_or_else(|| anyhow!("missing JSON object"))?;
+    let start = raw.find('{').ok_or_else(|| anyhow!("missing JSON object"))?;
+    let end = raw.rfind('}').ok_or_else(|| anyhow!("missing JSON object"))?;
     serde_json::from_str(&raw[start..=end]).context("parse auto permission review stage-2 JSON")
 }
 
@@ -804,29 +783,15 @@ mod tests {
         ];
 
         let transcript = build_classifier_transcript(Path::new("."), &history);
-        assert!(
-            transcript
-                .iter()
-                .any(|entry| entry.contains("USER: clean up old branches"))
-        );
-        assert!(
-            transcript
-                .iter()
-                .any(|entry| entry.contains("git push --force"))
-        );
+        assert!(transcript.iter().any(|entry| entry.contains("USER: clean up old branches")));
+        assert!(transcript.iter().any(|entry| entry.contains("git push --force")));
         assert!(!transcript.iter().any(|entry| entry.contains("thinking")));
-        assert!(
-            !transcript
-                .iter()
-                .any(|entry| entry.contains("{\"ok\":true}"))
-        );
+        assert!(!transcript.iter().any(|entry| entry.contains("{\"ok\":true}")));
     }
 
     #[tokio::test]
     async fn probe_reviews_non_heuristic_tool_output() {
-        let mut provider = StaticProvider {
-            response: "SUSPECT".to_string(),
-        };
+        let mut provider = StaticProvider { response: "SUSPECT".to_string() };
 
         let warning = probe_tool_output(
             &mut provider,

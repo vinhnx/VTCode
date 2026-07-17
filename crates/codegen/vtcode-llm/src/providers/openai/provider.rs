@@ -296,10 +296,7 @@ impl OpenAIProvider {
         let default_state = Self::default_responses_state(&model);
         let is_chatgpt_backend = backend_setup.is_chatgpt_codex_backend();
         let is_xai = resolved_base_url.contains("api.x.ai");
-        let websocket_mode = openai
-            .as_ref()
-            .map(|cfg| cfg.websocket_mode)
-            .unwrap_or(false);
+        let websocket_mode = openai.as_ref().map(|cfg| cfg.websocket_mode).unwrap_or(false);
         let responses_store = openai.as_ref().and_then(|cfg| cfg.responses_store);
         let responses_include = openai
             .as_ref()
@@ -313,10 +310,7 @@ impl OpenAIProvider {
             })
             .unwrap_or_default();
         let service_tier = openai.as_ref().and_then(|cfg| cfg.service_tier);
-        let hosted_shell = openai
-            .as_ref()
-            .map(|cfg| cfg.hosted_shell.clone())
-            .unwrap_or_default();
+        let hosted_shell = openai.as_ref().map(|cfg| cfg.hosted_shell.clone()).unwrap_or_default();
 
         let initial_state = if is_xai {
             ResponsesApiState::Disabled
@@ -466,10 +460,7 @@ impl OpenAIProvider {
     }
 
     fn format_network_error(&self, error: impl std::fmt::Display) -> provider::LLMError {
-        let label = self
-            .provider_display_override
-            .as_deref()
-            .unwrap_or("OpenAI");
+        let label = self.provider_display_override.as_deref().unwrap_or("OpenAI");
         provider::LLMError::Network {
             message: error_display::format_llm_error(label, &format!("Network error: {error}")),
             metadata: None,
@@ -477,10 +468,7 @@ impl OpenAIProvider {
     }
 
     fn format_auth_error(&self, error: impl std::fmt::Display) -> provider::LLMError {
-        let label = self
-            .provider_display_override
-            .as_deref()
-            .unwrap_or("OpenAI");
+        let label = self.provider_display_override.as_deref().unwrap_or("OpenAI");
         provider::LLMError::Authentication {
             message: error_display::format_llm_error(
                 label,
@@ -492,23 +480,15 @@ impl OpenAIProvider {
 
     async fn current_api_key(&self) -> Result<String, provider::LLMError> {
         if let Some(handle) = &self.custom_provider_auth {
-            return handle
-                .current_token()
-                .await
-                .map_err(|e| self.format_auth_error(e));
+            return handle.current_token().await.map_err(|e| self.format_auth_error(e));
         }
 
         let Some(handle) = &self.openai_chatgpt_auth else {
             return Ok(self.api_key.to_string());
         };
 
-        handle
-            .refresh_if_needed()
-            .await
-            .map_err(|e| self.format_auth_error(e))?;
-        handle
-            .current_api_key()
-            .map_err(|e| self.format_auth_error(e))
+        handle.refresh_if_needed().await.map_err(|e| self.format_auth_error(e))?;
+        handle.current_api_key().map_err(|e| self.format_auth_error(e))
     }
 
     fn request_auth_from_session(&self, session: OpenAIChatGptSession) -> OpenAIRequestAuth {
@@ -518,10 +498,7 @@ impl OpenAIProvider {
     async fn current_request_auth(&self) -> Result<OpenAIRequestAuth, provider::LLMError> {
         if let Some(handle) = &self.custom_provider_auth {
             return Ok(OpenAIRequestAuth::bearer_token(
-                handle
-                    .current_token()
-                    .await
-                    .map_err(|e| self.format_auth_error(e))?,
+                handle.current_token().await.map_err(|e| self.format_auth_error(e))?,
             ));
         }
 
@@ -529,10 +506,7 @@ impl OpenAIProvider {
             return Ok(OpenAIRequestAuth::bearer_token(self.api_key.to_string()));
         };
 
-        handle
-            .refresh_if_needed()
-            .await
-            .map_err(|e| self.format_auth_error(e))?;
+        handle.refresh_if_needed().await.map_err(|e| self.format_auth_error(e))?;
         let session = handle.snapshot().map_err(|e| self.format_auth_error(e))?;
         Ok(self.request_auth_from_session(session))
     }
@@ -542,10 +516,7 @@ impl OpenAIProvider {
     ) -> Result<OpenAIRequestAuth, provider::LLMError> {
         if let Some(handle) = &self.custom_provider_auth {
             return Ok(OpenAIRequestAuth::bearer_token(
-                handle
-                    .force_refresh()
-                    .await
-                    .map_err(|e| self.format_auth_error(e))?,
+                handle.force_refresh().await.map_err(|e| self.format_auth_error(e))?,
             ));
         }
 
@@ -553,33 +524,22 @@ impl OpenAIProvider {
             return Ok(OpenAIRequestAuth::bearer_token(self.api_key.to_string()));
         };
 
-        handle
-            .force_refresh()
-            .await
-            .map_err(|e| self.format_auth_error(e))?;
+        handle.force_refresh().await.map_err(|e| self.format_auth_error(e))?;
         let session = handle.snapshot().map_err(|e| self.format_auth_error(e))?;
         Ok(self.request_auth_from_session(session))
     }
 
     async fn refresh_api_key_for_retry(&self) -> Result<String, provider::LLMError> {
         if let Some(handle) = &self.custom_provider_auth {
-            return handle
-                .force_refresh()
-                .await
-                .map_err(|e| self.format_auth_error(e));
+            return handle.force_refresh().await.map_err(|e| self.format_auth_error(e));
         }
 
         let Some(handle) = &self.openai_chatgpt_auth else {
             return Ok(self.api_key.to_string());
         };
 
-        handle
-            .force_refresh()
-            .await
-            .map_err(|e| self.format_auth_error(e))?;
-        handle
-            .current_api_key()
-            .map_err(|e| self.format_auth_error(e))
+        handle.force_refresh().await.map_err(|e| self.format_auth_error(e))?;
+        handle.current_api_key().map_err(|e| self.format_auth_error(e))
     }
 
     async fn send_authorized<F>(
@@ -590,10 +550,8 @@ impl OpenAIProvider {
         F: Fn(&OpenAIRequestAuth) -> reqwest::RequestBuilder,
     {
         let auth = self.current_request_auth().await?;
-        let response = build_request(&auth)
-            .send()
-            .await
-            .map_err(|e| self.format_network_error(e))?;
+        let response =
+            build_request(&auth).send().await.map_err(|e| self.format_network_error(e))?;
 
         if self.uses_refreshable_auth() && Self::auth_retryable_status(response.status()) {
             let retry_auth = self.refresh_request_auth_for_retry().await?;
@@ -658,12 +616,7 @@ impl OpenAIProvider {
             };
 
             for part in parts {
-                let provider::ContentPart::File {
-                    filename,
-                    file_data,
-                    ..
-                } = part
-                else {
+                let provider::ContentPart::File { filename, file_data, .. } = part else {
                     continue;
                 };
                 let Some(file_data) = file_data else {
@@ -675,10 +628,7 @@ impl OpenAIProvider {
                         "OpenAI",
                         &format!("Invalid inline input_file payload: {error}"),
                     );
-                    provider::LLMError::InvalidRequest {
-                        message: formatted,
-                        metadata: None,
-                    }
+                    provider::LLMError::InvalidRequest { message: formatted, metadata: None }
                 })?;
 
                 if inline_file_bytes > max_inline_file_bytes {
@@ -714,10 +664,7 @@ impl OpenAIProvider {
                     "{INLINE_FILE_LIMIT_ERROR_PREFIX}: total inline file bytes = {total_inline_file_bytes}"
                 ),
             );
-            return Err(provider::LLMError::InvalidRequest {
-                message: formatted,
-                metadata: None,
-            });
+            return Err(provider::LLMError::InvalidRequest { message: formatted, metadata: None });
         }
 
         Ok(())

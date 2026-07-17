@@ -13,30 +13,20 @@ impl FileOpsTool {
         let search_root = self.workspace_root.join(&input.path);
 
         if !search_root.exists() {
-            let suggestion = self
-                .missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any)
-                .await;
-            return Err(anyhow!(
-                "Path '{}' does not exist{}",
-                input.path,
-                suggestion,
-            ));
+            let suggestion =
+                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
+            return Err(anyhow!("Path '{}' does not exist{}", input.path, suggestion,));
         }
 
         if self.should_exclude(&search_root).await {
-            return Err(anyhow!(
-                "Path '{}' is excluded by .vtcodegitignore",
-                input.path
-            ));
+            return Err(anyhow!("Path '{}' is excluded by .vtcodegitignore", input.path));
         }
 
         let normalize_extension = |value: &str| value.trim_start_matches('.').to_lowercase();
-        let extension_filter: Option<HashSet<String>> =
-            input.file_extensions.as_ref().map(|exts| {
-                exts.iter()
-                    .map(|ext| normalize_extension(ext))
-                    .collect::<HashSet<_>>()
-            });
+        let extension_filter: Option<HashSet<String>> = input
+            .file_extensions
+            .as_ref()
+            .map(|exts| exts.iter().map(|ext| normalize_extension(ext)).collect::<HashSet<_>>());
 
         let path_has_hidden = |path: &Path| {
             path.components().any(|component| {
@@ -74,10 +64,8 @@ impl FileOpsTool {
                 }
 
                 if let Some(ref filters) = extension_filter_clone {
-                    let extension = path
-                        .extension()
-                        .and_then(|ext| ext.to_str())
-                        .map(normalize_extension);
+                    let extension =
+                        path.extension().and_then(|ext| ext.to_str()).map(normalize_extension);
 
                     match extension {
                         Some(ext) if filters.contains(&ext) => {}
@@ -97,10 +85,8 @@ impl FileOpsTool {
                     continue;
                 }
 
-                let relative_path = path
-                    .strip_prefix(&workspace_root)
-                    .unwrap_or(path)
-                    .to_path_buf();
+                let relative_path =
+                    path.strip_prefix(&workspace_root).unwrap_or(path).to_path_buf();
                 let modified = metadata
                     .modified()
                     .ok()
@@ -176,10 +162,7 @@ impl FileOpsTool {
 
         let note = format!(
             "Results sorted by file size (descending). Showing top {} file(s).",
-            output
-                .get("count")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0)
+            output.get("count").and_then(|value| value.as_u64()).unwrap_or(0)
         );
         if let Some(obj) = output.as_object_mut() {
             obj.entry("message".to_string())

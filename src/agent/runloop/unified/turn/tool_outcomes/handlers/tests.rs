@@ -155,9 +155,8 @@ impl TestContextBacking {
         let tools = Arc::new(RwLock::new(Vec::new()));
         let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
         let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
-        let permissions_state = Arc::new(RwLock::new(
-            vtcode_core::config::PermissionsConfig::default(),
-        ));
+        let permissions_state =
+            Arc::new(RwLock::new(vtcode_core::config::PermissionsConfig::default()));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
         let session_stats = SessionStats::default();
@@ -319,12 +318,7 @@ impl TestContextBacking {
             runtime_steering: &mut self.runtime_steering,
         };
 
-        TurnProcessingContext::from_parts(TurnProcessingContextParts {
-            tool,
-            llm,
-            ui,
-            state,
-        })
+        TurnProcessingContext::from_parts(TurnProcessingContextParts { tool, llm, ui, state })
     }
 
     fn select_primary_agent_from_specs(&mut self, specs: &[SubagentSpec], requested: &str) {

@@ -9,10 +9,7 @@ fn validate_session_id_suffix(suffix: &str) -> Result<()> {
     if suffix.len() > 64 {
         bail!("Custom session ID suffix too long (maximum 64 characters)");
     }
-    if !suffix
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-    {
+    if !suffix.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
         bail!(
             "Custom session ID suffix must contain only alphanumeric characters, dashes, or underscores"
         );
@@ -60,10 +57,7 @@ pub(super) fn validate_resume_all_usage(
         && !matches!(args.command, Some(Commands::Continue))
         && !matches!(
             args.command,
-            Some(Commands::Exec {
-                command: Some(ExecSubcommand::Resume(_)),
-                ..
-            })
+            Some(Commands::Exec { command: Some(ExecSubcommand::Resume(_)), .. })
         )
     {
         bail!("--all can only be used with resume, continue, fork-session, or exec resume");

@@ -19,9 +19,7 @@ impl Default for FeedbackProcessor {
 
 impl FeedbackProcessor {
     pub fn new() -> Self {
-        Self {
-            feedback_history: Vec::new(),
-        }
+        Self { feedback_history: Vec::new() }
     }
 
     /// Process user feedback

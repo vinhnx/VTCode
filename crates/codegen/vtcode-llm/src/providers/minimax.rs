@@ -103,21 +103,14 @@ fn resolve_minimax_base_url(base_url: Option<String>) -> String {
 
     let resolved = base_url
         .and_then(|value| sanitize(&value))
-        .or_else(|| {
-            env::var(env_vars::MINIMAX_BASE_URL)
-                .ok()
-                .and_then(|value| sanitize(&value))
-        })
+        .or_else(|| env::var(env_vars::MINIMAX_BASE_URL).ok().and_then(|value| sanitize(&value)))
         .or_else(|| sanitize(urls::MINIMAX_API_BASE))
         .unwrap_or_else(|| urls::MINIMAX_API_BASE.trim_end_matches('/').to_string());
 
     let mut normalized = resolved;
 
     if normalized.ends_with("/messages") {
-        normalized = normalized
-            .trim_end_matches("/messages")
-            .trim_end_matches('/')
-            .to_string();
+        normalized = normalized.trim_end_matches("/messages").trim_end_matches('/').to_string();
     }
 
     if let Some(pos) = normalized.find("/v1/") {
@@ -126,10 +119,7 @@ fn resolve_minimax_base_url(base_url: Option<String>) -> String {
 
     let mut without_v1 = normalized.trim_end_matches('/').to_string();
     if without_v1.ends_with("/v1") {
-        without_v1 = without_v1
-            .trim_end_matches("/v1")
-            .trim_end_matches('/')
-            .to_string();
+        without_v1 = without_v1.trim_end_matches("/v1").trim_end_matches('/').to_string();
     }
 
     if is_official_minimax_host(&without_v1)
@@ -206,10 +196,7 @@ impl LLMProvider for MinimaxProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        models::minimax::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+        models::minimax::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
@@ -228,10 +215,7 @@ mod tests {
 
     #[test]
     fn resolve_minimax_base_url_defaults_to_anthropic_v1() {
-        assert_eq!(
-            resolve_minimax_base_url(None),
-            "https://api.minimax.io/anthropic/v1"
-        );
+        assert_eq!(resolve_minimax_base_url(None), "https://api.minimax.io/anthropic/v1");
     }
 
     #[test]

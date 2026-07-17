@@ -82,10 +82,7 @@ impl Approvable<ApplyPatchRequest> for ApplyPatchRuntime {
     type ApprovalKey = ApplyPatchApprovalKey;
 
     fn approval_key(&self, req: &ApplyPatchRequest) -> Self::ApprovalKey {
-        ApplyPatchApprovalKey {
-            patch: req.patch.clone(),
-            cwd: req.cwd.clone(),
-        }
+        ApplyPatchApprovalKey { patch: req.patch.clone(), cwd: req.cwd.clone() }
     }
 
     fn exec_approval_requirement(
@@ -165,10 +162,7 @@ impl ToolHandler for ApplyPatchHandler {
     }
 
     fn matches_kind(&self, payload: &ToolPayload) -> bool {
-        matches!(
-            payload,
-            ToolPayload::Function { .. } | ToolPayload::Custom { .. }
-        )
+        matches!(payload, ToolPayload::Function { .. } | ToolPayload::Custom { .. })
     }
 
     async fn is_mutating(&self, _invocation: &ToolInvocation) -> bool {
@@ -257,11 +251,7 @@ impl ToolHandler for ApplyPatchHandler {
             ToolEventCtx::new(session.as_ref(), turn.as_ref(), &call_id, tracker.as_ref());
         let content = emitter.finish(event_ctx, result).await?;
 
-        Ok(ToolOutput::Function {
-            content,
-            content_items: None,
-            success: Some(true),
-        })
+        Ok(ToolOutput::Function { content, content_items: None, success: Some(true) })
     }
 }
 
@@ -273,30 +263,18 @@ fn convert_patch_to_changes(patch: &Patch, cwd: &Path) -> HashMap<PathBuf, FileC
         match op {
             PatchOperation::AddFile { path, content } => {
                 let full_path = cwd.join(path);
-                changes.insert(
-                    full_path,
-                    FileChange::Add {
-                        content: content.clone(),
-                    },
-                );
+                changes.insert(full_path, FileChange::Add { content: content.clone() });
             }
             PatchOperation::DeleteFile { path } => {
                 let full_path = cwd.join(path);
                 changes.insert(full_path, FileChange::Delete);
             }
-            PatchOperation::UpdateFile {
-                path,
-                new_path,
-                chunks: _,
-            } => {
+            PatchOperation::UpdateFile { path, new_path, chunks: _ } => {
                 let full_path = cwd.join(path);
                 if let Some(new_path) = new_path {
                     changes.insert(
                         full_path,
-                        FileChange::Rename {
-                            new_path: cwd.join(new_path),
-                            content: None,
-                        },
+                        FileChange::Rename { new_path: cwd.join(new_path), content: None },
                     );
                 } else {
                     // For updates, we track as update with empty placeholders
@@ -479,31 +457,24 @@ mod tests {
                 .expect("json args should parse");
 
         assert_eq!(parsed.input, None);
-        assert_eq!(
-            parsed.patch.as_deref(),
-            Some("*** Begin Patch\n*** End Patch\n")
-        );
+        assert_eq!(parsed.patch.as_deref(), Some("*** Begin Patch\n*** End Patch\n"));
     }
 
     #[test]
     fn wants_no_sandbox_approval_reject_respects_sandbox_flag() {
         let runtime = ApplyPatchRuntime::new();
         assert!(runtime.wants_no_sandbox_approval(AskForApproval::OnRequest));
-        assert!(
-            !runtime.wants_no_sandbox_approval(AskForApproval::Reject(RejectConfig {
-                sandbox_approval: true,
-                rules: false,
-                request_permissions: false,
-                mcp_elicitations: false,
-            }))
-        );
-        assert!(
-            runtime.wants_no_sandbox_approval(AskForApproval::Reject(RejectConfig {
-                sandbox_approval: false,
-                rules: false,
-                request_permissions: false,
-                mcp_elicitations: false,
-            }))
-        );
+        assert!(!runtime.wants_no_sandbox_approval(AskForApproval::Reject(RejectConfig {
+            sandbox_approval: true,
+            rules: false,
+            request_permissions: false,
+            mcp_elicitations: false,
+        })));
+        assert!(runtime.wants_no_sandbox_approval(AskForApproval::Reject(RejectConfig {
+            sandbox_approval: false,
+            rules: false,
+            request_permissions: false,
+            mcp_elicitations: false,
+        })));
     }
 }

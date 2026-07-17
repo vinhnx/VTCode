@@ -1,1 +1,6 @@
 edition = "2024"
+use_field_init_shorthand = true
+imports_granularity = "Crate"
+struct_lit_width = 50
+chain_width = 80
+fn_call_width = 100

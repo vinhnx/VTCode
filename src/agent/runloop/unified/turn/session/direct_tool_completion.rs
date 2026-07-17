@@ -176,10 +176,8 @@ fn latest_direct_tool_completion(history: &[uni::Message]) -> Option<DirectToolC
             continue;
         }
 
-        let Some(tool_call_id) = tool_message
-            .tool_call_id
-            .as_deref()
-            .filter(|id| id.starts_with("direct_"))
+        let Some(tool_call_id) =
+            tool_message.tool_call_id.as_deref().filter(|id| id.starts_with("direct_"))
         else {
             continue;
         };
@@ -233,9 +231,7 @@ impl DirectToolCompletion<'_> {
                 .and_then(|value| value.get("agent_name"))
                 .and_then(Value::as_str)
                 .or_else(|| {
-                    args.as_ref()
-                        .and_then(|value| value.get("agent_type"))
-                        .and_then(Value::as_str)
+                    args.as_ref().and_then(|value| value.get("agent_type")).and_then(Value::as_str)
                 })
                 .map(|agent| format!("{agent} subagent"))
                 .unwrap_or_else(|| function.name.clone()),
@@ -351,10 +347,7 @@ impl DirectToolCompletion<'_> {
             return Some("Failure details are shown above.".to_string());
         }
         if self.is_spawn_tool() {
-            let background = payload
-                .get("background")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
+            let background = payload.get("background").and_then(Value::as_bool).unwrap_or(false)
                 || self.is_background_spawn_tool();
             return Some(if background {
                 "The subagent is running without blocking this turn. Use `/agent` to inspect or continue it.".to_string()
@@ -887,9 +880,6 @@ mod tests {
         let base = "status";
         let steps = vec!["step one".to_string(), "step two".to_string()];
         let result = super::append_next_steps(base, &steps);
-        assert_eq!(
-            result,
-            "status\n\nSuggested next steps:\n- step one\n- step two"
-        );
+        assert_eq!(result, "status\n\nSuggested next steps:\n- step one\n- step two");
     }
 }

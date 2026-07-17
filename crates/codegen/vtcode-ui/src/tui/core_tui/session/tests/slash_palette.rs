@@ -160,12 +160,7 @@ fn slash_palette_keeps_base_input_and_cursor_active() {
     let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
 
     assert!(session.core.input_enabled());
-    assert!(
-        session
-            .core
-            .build_input_widget_data(VIEW_WIDTH, 1)
-            .cursor_should_be_visible
-    );
+    assert!(session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
 }
 
 #[test]
@@ -237,14 +232,9 @@ fn slash_palette_uses_full_width_header_background_and_divider() {
         .expect("slash divider row");
     let panel_area = session.core.bottom_panel_area().expect("panel area");
     let buffer = terminal.backend().buffer();
-    let title_left = buffer
-        .cell((panel_area.x, title_row as u16))
-        .expect("title left cell");
+    let title_left = buffer.cell((panel_area.x, title_row as u16)).expect("title left cell");
     let title_right = buffer
-        .cell((
-            panel_area.x + panel_area.width.saturating_sub(1),
-            title_row as u16,
-        ))
+        .cell((panel_area.x + panel_area.width.saturating_sub(1), title_row as u16))
         .expect("title right cell");
     let divider_row = (0..panel_area.width)
         .filter_map(|x| buffer.cell((panel_area.x + x, divider_row_index as u16)))
@@ -255,10 +245,7 @@ fn slash_palette_uses_full_width_header_background_and_divider() {
 
     assert_eq!(title_left.style().bg, Some(Color::Rgb(0x2B, 0x2D, 0x33)));
     assert_eq!(title_right.style().bg, Some(Color::Rgb(0x2B, 0x2D, 0x33)));
-    assert_eq!(
-        divider_row,
-        ui::INLINE_BLOCK_HORIZONTAL.repeat(panel_area.width as usize)
-    );
+    assert_eq!(divider_row, ui::INLINE_BLOCK_HORIZONTAL.repeat(panel_area.width as usize));
 }
 
 #[test]
@@ -272,20 +259,13 @@ fn slash_panel_height_stays_fixed_for_short_results() {
     }
 
     let _ = rendered_app_session_lines(&mut short_session, 20);
-    let short_height = short_session
-        .core
-        .bottom_panel_area()
-        .expect("short slash panel area")
-        .height;
+    let short_height =
+        short_session.core.bottom_panel_area().expect("short slash panel area").height;
 
     let mut full_session = session_with_slash_palette_commands();
     let _ = full_session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
     let _ = rendered_app_session_lines(&mut full_session, 20);
-    let full_height = full_session
-        .core
-        .bottom_panel_area()
-        .expect("full slash panel area")
-        .height;
+    let full_height = full_session.core.bottom_panel_area().expect("full slash panel area").height;
 
     assert_eq!(
         short_height, full_height,

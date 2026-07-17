@@ -14,11 +14,7 @@ pub(super) fn render_resume_state_if_present(
         return Ok(());
     };
 
-    let ended_local = session
-        .snapshot()
-        .ended_at
-        .with_timezone(&Local)
-        .format("%Y-%m-%d %H:%M");
+    let ended_local = session.snapshot().ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
     let action = if session.is_fork() {
         "Forking"
     } else {
@@ -34,10 +30,8 @@ pub(super) fn render_resume_state_if_present(
             session.message_count()
         ),
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Previous archive: {}", session.path().display()),
-    )?;
+    renderer
+        .line(MessageStyle::Info, &format!("Previous archive: {}", session.path().display()))?;
     if session.is_fork() {
         renderer.line(MessageStyle::Info, "Starting independent forked session")?;
     }
@@ -47,10 +41,7 @@ pub(super) fn render_resume_state_if_present(
         let lines = build_structured_resume_lines(session.history(), supports_reasoning);
         render_resume_lines(renderer, &lines)?;
     } else if !session.snapshot().transcript.is_empty() {
-        renderer.line(
-            MessageStyle::Info,
-            "Conversation history (legacy transcript):",
-        )?;
+        renderer.line(MessageStyle::Info, "Conversation history (legacy transcript):")?;
         let lines = build_legacy_resume_lines(&session.snapshot().transcript);
         render_resume_lines(renderer, &lines)?;
     }
@@ -66,10 +57,7 @@ pub(crate) struct ResumeRenderLine {
 
 impl ResumeRenderLine {
     fn new(style: MessageStyle, text: impl Into<String>) -> Self {
-        Self {
-            style,
-            text: text.into(),
-        }
+        Self { style, text: text.into() }
     }
 }
 
@@ -241,11 +229,7 @@ fn format_tool_arguments_for_resume(arguments: &str) -> String {
     let mut summary_parts = Vec::new();
 
     // For command_session: show command
-    if let Some(cmd) = obj
-        .get("command")
-        .or_else(|| obj.get("cmd"))
-        .and_then(|v| v.as_str())
-    {
+    if let Some(cmd) = obj.get("command").or_else(|| obj.get("cmd")).and_then(|v| v.as_str()) {
         summary_parts.push(format!("command: {cmd}"));
     }
     // For file_operation / task_tracker: show action and related fields
@@ -378,12 +362,7 @@ fn project_content_text(content: &uni::MessageContent) -> Option<String> {
                     uni::ContentPart::Image { mime_type, .. } => {
                         fragments.push(format!("[image content: {mime_type}]"));
                     }
-                    uni::ContentPart::File {
-                        filename,
-                        file_id,
-                        file_url,
-                        ..
-                    } => {
+                    uni::ContentPart::File { filename, file_id, file_url, .. } => {
                         if let Some(name) = filename {
                             fragments.push(format!("[file attachment: {name}]"));
                         } else if let Some(id) = file_id {

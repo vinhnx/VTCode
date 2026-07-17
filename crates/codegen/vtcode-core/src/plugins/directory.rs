@@ -34,11 +34,9 @@ impl PluginTemplate {
         let manifest_path = vtcode_plugin_dir.join("plugin.json");
         let manifest_json =
             serde_json::to_string_pretty(manifest).map_err(PluginError::JsonError)?;
-        fs::write(&manifest_path, &manifest_json)
-            .await
-            .map_err(|e| {
-                PluginError::LoadingError(format!("Failed to write plugin manifest: {e}"))
-            })?;
+        fs::write(&manifest_path, &manifest_json).await.map_err(|e| {
+            PluginError::LoadingError(format!("Failed to write plugin manifest: {e}"))
+        })?;
 
         // Create standard directories if specified in manifest
         Self::create_standard_directories(plugin_dir, manifest).await?;
@@ -123,11 +121,9 @@ This command demonstrates how to create a plugin command for VT Code.
 "#,
                     plugin_name = manifest.name
                 );
-                fs::write(&example_command, example_content)
-                    .await
-                    .map_err(|e| {
-                        PluginError::LoadingError(format!("Failed to create example command: {e}"))
-                    })?;
+                fs::write(&example_command, example_content).await.map_err(|e| {
+                    PluginError::LoadingError(format!("Failed to create example command: {e}"))
+                })?;
             }
         }
 
@@ -155,11 +151,9 @@ This agent can be used to demonstrate how agents work in VT Code plugins.
 "#,
                     plugin_name = manifest.name
                 );
-                fs::write(&example_agent, example_content)
-                    .await
-                    .map_err(|e| {
-                        PluginError::LoadingError(format!("Failed to create example agent: {e}"))
-                    })?;
+                fs::write(&example_agent, example_content).await.map_err(|e| {
+                    PluginError::LoadingError(format!("Failed to create example agent: {e}"))
+                })?;
             }
         }
 
@@ -219,13 +213,9 @@ This skill demonstrates how to create a model-invoked capability in VT Code.
     ]
   }
 }"#;
-                fs::write(&hooks_config, example_content)
-                    .await
-                    .map_err(|e| {
-                        PluginError::LoadingError(format!(
-                            "Failed to create example hooks config: {e}"
-                        ))
-                    })?;
+                fs::write(&hooks_config, example_content).await.map_err(|e| {
+                    PluginError::LoadingError(format!("Failed to create example hooks config: {e}"))
+                })?;
             }
         }
 

@@ -14,9 +14,7 @@ fn resolve_workspace_spool_path(workspace_root: &Path, raw_path: &str) -> Option
     };
     let normalized = vtcode_core::utils::path::normalize_path(&absolute);
     let normalized_workspace = vtcode_core::utils::path::normalize_path(workspace_root);
-    normalized
-        .starts_with(&normalized_workspace)
-        .then_some(normalized)
+    normalized.starts_with(&normalized_workspace).then_some(normalized)
 }
 
 fn structured_tool_preview_from_spool(
@@ -138,17 +136,12 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
         raw_text: &str,
         workspace_root: Option<&Path>,
     ) -> Option<(String, u8)> {
-        let obj = serde_json::from_str::<Value>(raw_text)
-            .ok()?
-            .as_object()?
-            .clone();
+        let obj = serde_json::from_str::<Value>(raw_text).ok()?.as_object()?.clone();
         let guidance = obj.get("error").and_then(Value::as_object).unwrap_or(&obj);
         let mut parts = Vec::new();
         let mut priority = 0u8;
-        let matches_array = obj
-            .get("matches")
-            .or_else(|| obj.get("results"))
-            .and_then(Value::as_array);
+        let matches_array =
+            obj.get("matches").or_else(|| obj.get("results")).and_then(Value::as_array);
         if let Some(matches) = matches_array {
             let path = trimmed_json_str(&obj, "path");
             let summary = if matches.is_empty() {
@@ -179,10 +172,7 @@ pub(crate) fn build_recovery_context_previews_with_workspace(
             push_unique(&mut parts, Some(format!("Listed {total} items")));
             priority = priority.max(10);
         } else if let Some(files) = obj.get("files").and_then(Value::as_array) {
-            let total = obj
-                .get("total")
-                .and_then(Value::as_u64)
-                .unwrap_or(files.len() as u64);
+            let total = obj.get("total").and_then(Value::as_u64).unwrap_or(files.len() as u64);
             push_unique(&mut parts, Some(format!("Listed {total} files")));
             priority = priority.max(10);
         }

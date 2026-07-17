@@ -62,31 +62,16 @@ fn print_ast_grep_next_steps() {
 fn install_ripgrep() -> Result<()> {
     match RipgrepStatus::check() {
         RipgrepStatus::Available { version } => {
-            println!(
-                "{} ripgrep already available: {}",
-                "✓".green(),
-                version.green()
-            );
+            println!("{} ripgrep already available: {}", "✓".green(), version.green());
         }
         RipgrepStatus::NotFound => {
-            println!(
-                "{} Installing ripgrep using a supported system installer",
-                "→".cyan()
-            );
+            println!("{} Installing ripgrep using a supported system installer", "→".cyan());
             RipgrepStatus::install()?;
             report_ripgrep_status();
         }
         RipgrepStatus::Error { reason } => {
-            println!(
-                "{} ripgrep was found but could not be verified: {}",
-                "!".yellow(),
-                reason
-            );
-            println!(
-                "{} Retrying installation via `{}`",
-                "→".cyan(),
-                RIPGREP_INSTALL_COMMAND
-            );
+            println!("{} ripgrep was found but could not be verified: {}", "!".yellow(), reason);
+            println!("{} Retrying installation via `{}`", "→".cyan(), RIPGREP_INSTALL_COMMAND);
             RipgrepStatus::install()?;
             report_ripgrep_status();
         }
@@ -97,16 +82,8 @@ fn install_ripgrep() -> Result<()> {
 
 async fn install_ast_grep() -> Result<()> {
     match AstGrepStatus::check() {
-        AstGrepStatus::Available {
-            version,
-            binary,
-            managed,
-        } => {
-            println!(
-                "{} ast-grep already available: {}",
-                "✓".green(),
-                version.green()
-            );
+        AstGrepStatus::Available { version, binary, managed } => {
+            println!("{} ast-grep already available: {}", "✓".green(), version.green());
             println!("{} Binary: {}", "→".cyan(), binary.display());
             println!(
                 "{} Source: {}",
@@ -146,14 +123,8 @@ async fn install_ast_grep() -> Result<()> {
                 println!("{} {}", "⚠".yellow(), warning);
             }
 
-            println!(
-                "{} Add this to your shell if you want ast-grep outside VT Code:",
-                "→".cyan()
-            );
-            println!(
-                "  export PATH=\"{}:$PATH\"",
-                outcome.managed_bin_dir.display()
-            );
+            println!("{} Add this to your shell if you want ast-grep outside VT Code:", "→".cyan());
+            println!("  export PATH=\"{}:$PATH\"", outcome.managed_bin_dir.display());
             print_ast_grep_next_steps();
         }
     }
@@ -183,11 +154,7 @@ fn report_ripgrep_status() {
 
 fn report_ast_grep_status() {
     match AstGrepStatus::check() {
-        AstGrepStatus::Available {
-            version,
-            binary,
-            managed,
-        } => {
+        AstGrepStatus::Available { version, binary, managed } => {
             println!("{} ast-grep available: {}", "✓".green(), version.green());
             println!("{} Binary: {}", "→".cyan(), binary.display());
             println!(

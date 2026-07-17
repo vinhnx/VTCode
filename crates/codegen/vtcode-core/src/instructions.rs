@@ -153,22 +153,17 @@ impl MatchContext {
                 project_root.join(raw_path)
             };
 
-            let normalized = tokio::fs::canonicalize(&candidate)
-                .await
-                .unwrap_or_else(|_| candidate.clone());
+            let normalized =
+                tokio::fs::canonicalize(&candidate).await.unwrap_or_else(|_| candidate.clone());
             let relative = normalized
                 .strip_prefix(project_root)
                 .ok()
                 .or_else(|| {
-                    canonical_root
-                        .as_ref()
-                        .and_then(|root| normalized.strip_prefix(root).ok())
+                    canonical_root.as_ref().and_then(|root| normalized.strip_prefix(root).ok())
                 })
                 .or_else(|| candidate.strip_prefix(project_root).ok())
                 .or_else(|| {
-                    canonical_root
-                        .as_ref()
-                        .and_then(|root| candidate.strip_prefix(root).ok())
+                    canonical_root.as_ref().and_then(|root| candidate.strip_prefix(root).ok())
                 });
             let Some(relative) = relative else {
                 continue;
@@ -182,10 +177,7 @@ impl MatchContext {
             let is_dir = normalized.is_dir();
             let key = format!("{relative}:{is_dir}");
             if seen.insert(key) {
-                candidates.push(MatchCandidate {
-                    relative_path: relative,
-                    is_dir,
-                });
+                candidates.push(MatchCandidate { relative_path: relative, is_dir });
             }
         }
 
@@ -326,10 +318,7 @@ pub fn render_instruction_markdown(
     highlight_limit: usize,
     truncation_note: &str,
 ) -> String {
-    let combined_len = segments
-        .iter()
-        .map(|segment| segment.contents.len())
-        .sum::<usize>();
+    let combined_len = segments.iter().map(|segment| segment.contents.len()).sum::<usize>();
     let mut section = String::with_capacity(combined_len.saturating_add(512));
     let _ = writeln!(section, "## {title}\n");
     section.push_str(
@@ -441,10 +430,7 @@ pub fn instruction_source_label(source: &InstructionSource) -> String {
             instruction_file_label(&source.path),
         ),
         InstructionSourceKind::Extra => {
-            format!(
-                "{} extra instructions",
-                instruction_scope_label(&source.scope)
-            )
+            format!("{} extra instructions", instruction_scope_label(&source.scope))
         }
         InstructionSourceKind::Rule if source.matched => {
             format!("{} matched rule", instruction_scope_label(&source.scope))
@@ -530,10 +516,7 @@ pub async fn discover_instruction_sources(
             &excludes,
         )
         .await?;
-        for source in user_unconditional_rules
-            .into_iter()
-            .chain(user_matched_rules.into_iter())
-        {
+        for source in user_unconditional_rules.into_iter().chain(user_matched_rules.into_iter()) {
             if seen_paths.insert(source.path.clone()) {
                 sources.push(source);
             }
@@ -675,10 +658,7 @@ pub async fn read_instruction_bundle(
 
             bytes_read += slice_len;
             remaining = remaining.saturating_sub(slice_len);
-            segments.push(InstructionSegment {
-                source,
-                contents: visible,
-            });
+            segments.push(InstructionSegment { source, contents: visible });
         }
 
         Ok::<_, anyhow::Error>((segments, truncated, bytes_read))
@@ -689,11 +669,7 @@ pub async fn read_instruction_bundle(
     if segments.is_empty() {
         Ok(None)
     } else {
-        Ok(Some(InstructionBundle {
-            segments,
-            truncated,
-            bytes_read,
-        }))
+        Ok(Some(InstructionBundle { segments, truncated, bytes_read }))
     }
 }
 
@@ -869,15 +845,10 @@ async fn discover_rule_sources(
 
     unconditional.sort_by(|left, right| left.path.cmp(&right.path));
     matched.sort_by(|(left_specificity, left), (right_specificity, right)| {
-        left_specificity
-            .cmp(right_specificity)
-            .then(left.path.cmp(&right.path))
+        left_specificity.cmp(right_specificity).then(left.path.cmp(&right.path))
     });
 
-    Ok((
-        unconditional,
-        matched.into_iter().map(|(_, source)| source).collect(),
-    ))
+    Ok((unconditional, matched.into_iter().map(|(_, source)| source).collect()))
 }
 
 async fn read_rule_descriptor(path: &Path) -> Result<RuleDescriptor> {
@@ -892,10 +863,7 @@ async fn read_rule_descriptor(path: &Path) -> Result<RuleDescriptor> {
         .max()
         .unwrap_or(0);
 
-    Ok(RuleDescriptor {
-        patterns: frontmatter.paths,
-        specificity,
-    })
+    Ok(RuleDescriptor { patterns: frontmatter.paths, specificity })
 }
 
 async fn expand_instruction_patterns(
@@ -926,10 +894,7 @@ async fn expand_instruction_patterns(
                 Ok(Some(canonical)) if seen.insert(canonical.clone()) => matches.push(canonical),
                 Ok(Some(_)) | Ok(None) => {}
                 Err(err) => {
-                    warn!(
-                        "Failed to inspect potential instruction `{}`: {err:#}",
-                        path.display()
-                    );
+                    warn!("Failed to inspect potential instruction `{}`: {err:#}", path.display());
                 }
             }
         }
@@ -967,11 +932,9 @@ fn resolve_pattern(pattern: &str, project_root: &Path, home_dir: Option<&Path>) 
     };
 
     if !contains_glob_meta(pattern) && full_path.exists() {
-        return Ok(
-            canonicalize_with_context(&full_path, "instruction pattern")?
-                .to_string_lossy()
-                .into_owned(),
-        );
+        return Ok(canonicalize_with_context(&full_path, "instruction pattern")?
+            .to_string_lossy()
+            .into_owned());
     }
 
     Ok(full_path.to_string_lossy().into_owned())
@@ -1120,10 +1083,7 @@ fn expand_inline_imports(
 }
 
 fn infer_instruction_kind(path: &Path) -> InstructionSourceKind {
-    if path
-        .components()
-        .any(|component| component.as_os_str() == "rules")
-    {
+    if path.components().any(|component| component.as_os_str() == "rules") {
         InstructionSourceKind::Rule
     } else if path.file_name().and_then(|value| value.to_str()) == Some(AGENTS_FILENAME)
         || path.file_name().and_then(|value| value.to_str()) == Some(AGENTS_OVERRIDE_FILENAME)
@@ -1140,10 +1100,7 @@ fn parse_rule_frontmatter(contents: &str, path: &Path) -> Result<RuleFrontmatter
     };
 
     serde_saphyr::from_str(frontmatter).with_context(|| {
-        format!(
-            "Failed to parse YAML frontmatter for instruction rule {}",
-            path.display()
-        )
+        format!("Failed to parse YAML frontmatter for instruction rule {}", path.display())
     })
 }
 
@@ -1180,13 +1137,11 @@ fn pattern_matches_candidate(pattern: &Pattern, candidate: &MatchCandidate) -> b
         return true;
     }
 
-    zero_directory_pattern_variants(pattern.as_str())
-        .into_iter()
-        .any(|variant| {
-            Pattern::new(&variant)
-                .ok()
-                .is_some_and(|variant_pattern| pattern_matches_path(&variant_pattern, candidate))
-        })
+    zero_directory_pattern_variants(pattern.as_str()).into_iter().any(|variant| {
+        Pattern::new(&variant)
+            .ok()
+            .is_some_and(|variant_pattern| pattern_matches_path(&variant_pattern, candidate))
+    })
 }
 
 fn pattern_matches_path(pattern: &Pattern, candidate: &MatchCandidate) -> bool {
@@ -1235,9 +1190,7 @@ fn rule_specificity(pattern: &str) -> usize {
 }
 
 fn contains_glob_meta(pattern: &str) -> bool {
-    pattern
-        .chars()
-        .any(|ch| matches!(ch, '*' | '?' | '[' | ']' | '{' | '}'))
+    pattern.chars().any(|ch| matches!(ch, '*' | '?' | '[' | ']' | '{' | '}'))
 }
 
 fn strip_html_comments(contents: &str) -> String {
@@ -1342,12 +1295,9 @@ fn resolve_import_path(
     containing_file: &Path,
     allowed_roots: &[PathBuf],
 ) -> Result<Option<PathBuf>> {
-    let parent = containing_file.parent().ok_or_else(|| {
-        anyhow!(
-            "Instruction file {} has no parent",
-            containing_file.display()
-        )
-    })?;
+    let parent = containing_file
+        .parent()
+        .ok_or_else(|| anyhow!("Instruction file {} has no parent", containing_file.display()))?;
     let home_dir = dirs::home_dir();
 
     let candidate = if let Some(stripped) = import.strip_prefix("~/") {
@@ -1402,28 +1352,19 @@ fn resolve_import_path(
 
 fn allowed_import_roots(project_root: &Path, home_dir: Option<&Path>) -> Result<Vec<PathBuf>> {
     let mut roots = Vec::new();
-    roots.push(canonicalize_with_context(
-        project_root,
-        "project root import root",
-    )?);
+    roots.push(canonicalize_with_context(project_root, "project root import root")?);
 
     if let Some(home) = home_dir {
         roots.push(canonicalize_with_context(home, "home import root")?);
 
         let vtcode_dir = home.join(".vtcode");
         if vtcode_dir.exists() {
-            roots.push(canonicalize_with_context(
-                &vtcode_dir,
-                "vtcode user import root",
-            )?);
+            roots.push(canonicalize_with_context(&vtcode_dir, "vtcode user import root")?);
         }
 
         let legacy_dir = home.join(GLOBAL_CONFIG_DIRECTORY);
         if legacy_dir.exists() {
-            roots.push(canonicalize_with_context(
-                &legacy_dir,
-                "legacy vtcode user import root",
-            )?);
+            roots.push(canonicalize_with_context(&legacy_dir, "legacy vtcode user import root")?);
         }
     }
 
@@ -1518,10 +1459,7 @@ mod tests {
         ))
         .await?;
 
-        let labels = sources
-            .iter()
-            .map(instruction_source_label)
-            .collect::<Vec<_>>();
+        let labels = sources.iter().map(instruction_source_label).collect::<Vec<_>>();
 
         assert_eq!(
             labels,
@@ -1648,11 +1586,7 @@ mod tests {
 
         assert_eq!(sources.len(), 1);
         assert_eq!(
-            sources[0]
-                .path
-                .file_name()
-                .and_then(|value| value.to_str())
-                .unwrap_or_default(),
+            sources[0].path.file_name().and_then(|value| value.to_str()).unwrap_or_default(),
             "AGENTS.md"
         );
 

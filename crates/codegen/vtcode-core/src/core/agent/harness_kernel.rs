@@ -31,9 +31,7 @@ impl ExecutionFailure {
         let directive = if error.retryable {
             RecoveryDirective::Retry { delay: retry_after }
         } else {
-            RecoveryDirective::SurfaceHint {
-                message: error.user_message(),
-            }
+            RecoveryDirective::SurfaceHint { message: error.user_message() }
         };
         Self {
             category: error.category,
@@ -53,9 +51,7 @@ impl ExecutionFailure {
         let directive = if retryable {
             RecoveryDirective::Retry { delay: retry_after }
         } else {
-            RecoveryDirective::SurfaceHint {
-                message: error.to_string(),
-            }
+            RecoveryDirective::SurfaceHint { message: error.to_string() }
         };
         Self {
             category,
@@ -135,20 +131,13 @@ fn mask_tool_actions_for_mode(tool: &ToolDefinition, planning_active: bool) -> T
 
     let mut masked = tool.clone();
     if let Some(func) = masked.function.as_mut()
-        && let Some(action_prop) = func
-            .parameters
-            .get_mut("properties")
-            .and_then(|p| p.get_mut("action"))
+        && let Some(action_prop) =
+            func.parameters.get_mut("properties").and_then(|p| p.get_mut("action"))
         && let Some(obj) = action_prop.as_object_mut()
     {
         obj.insert(
             "enum".to_string(),
-            Value::Array(
-                allowed
-                    .iter()
-                    .map(|a| Value::String((*a).to_string()))
-                    .collect(),
-            ),
+            Value::Array(allowed.iter().map(|a| Value::String((*a).to_string())).collect()),
         );
     }
     masked
@@ -277,11 +266,7 @@ mod tests {
         );
 
         assert_eq!(batches.len(), 3);
-        assert!(
-            batches
-                .iter()
-                .all(|batch| batch.kind == PreparedToolBatchKind::Sequential)
-        );
+        assert!(batches.iter().all(|batch| batch.kind == PreparedToolBatchKind::Sequential));
         assert_eq!(batches[0].calls[0].canonical_name, "read_a");
         assert_eq!(batches[1].calls[0].canonical_name, "edit");
         assert_eq!(batches[2].calls[0].canonical_name, "read_b");
@@ -298,11 +283,7 @@ mod tests {
         );
 
         assert_eq!(batches.len(), 2);
-        assert!(
-            batches
-                .iter()
-                .all(|batch| batch.kind == PreparedToolBatchKind::Sequential)
-        );
+        assert!(batches.iter().all(|batch| batch.kind == PreparedToolBatchKind::Sequential));
     }
 
     #[test]
@@ -316,11 +297,7 @@ mod tests {
         );
 
         assert_eq!(batches.len(), 2);
-        assert!(
-            batches
-                .iter()
-                .all(|batch| batch.kind == PreparedToolBatchKind::Sequential)
-        );
+        assert!(batches.iter().all(|batch| batch.kind == PreparedToolBatchKind::Sequential));
     }
 
     #[test]
@@ -389,9 +366,7 @@ mod tests {
             .with_defer_loading(true),
         ];
 
-        let expected = serde_json::to_string(&tools)
-            .ok()
-            .map(|text| hash_value(&text));
+        let expected = serde_json::to_string(&tools).ok().map(|text| hash_value(&text));
 
         assert_eq!(hash_tool_definitions(Some(&tools)), expected);
     }
@@ -476,10 +451,7 @@ mod tests {
             .expect("action enum should exist");
 
         let action_strings: Vec<&str> = action_enum.iter().filter_map(|v| v.as_str()).collect();
-        assert_eq!(
-            action_strings,
-            vec!["run", "poll", "list", "inspect", "continue"]
-        );
+        assert_eq!(action_strings, vec!["run", "poll", "list", "inspect", "continue"]);
     }
 
     #[test]

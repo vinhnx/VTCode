@@ -28,9 +28,7 @@ pub struct ScheduledTasksConfig {
 
 impl Default for ScheduledTasksConfig {
     fn default() -> Self {
-        Self {
-            enabled: default_scheduled_tasks_enabled(),
-        }
+        Self { enabled: default_scheduled_tasks_enabled() }
     }
 }
 

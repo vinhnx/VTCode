@@ -21,9 +21,8 @@ impl Drop for PtySessionGuard {
 }
 
 fn decrement_active_sessions(active_sessions: &AtomicUsize) {
-    let _ = active_sessions.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
-        current.checked_sub(1)
-    });
+    let _ = active_sessions
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| current.checked_sub(1));
 }
 
 #[derive(Clone)]
@@ -86,9 +85,7 @@ impl PtySessionManager {
                 .compare_exchange_weak(current, current + 1, Ordering::Relaxed, Ordering::Relaxed)
                 .is_ok()
             {
-                return Ok(PtySessionGuard {
-                    active_sessions: Arc::clone(&self.active_sessions),
-                });
+                return Ok(PtySessionGuard { active_sessions: Arc::clone(&self.active_sessions) });
             }
         }
     }

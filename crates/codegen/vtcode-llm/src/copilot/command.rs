@@ -128,10 +128,7 @@ pub fn spawn_copilot_acp_process(
         .kill_on_drop(true);
 
     if let Some(raw_model) = raw_model.filter(|value| !value.trim().is_empty())
-        && matches!(
-            model_selection_mode,
-            CopilotModelSelectionMode::EnvironmentVariable
-        )
+        && matches!(model_selection_mode, CopilotModelSelectionMode::EnvironmentVariable)
     {
         command.env("COPILOT_MODEL", raw_model);
     } else {
@@ -142,10 +139,7 @@ pub fn spawn_copilot_acp_process(
     }
 
     command.spawn().with_context(|| {
-        format!(
-            "failed to spawn GitHub Copilot ACP runtime using `{}`",
-            resolved.display()
-        )
+        format!("failed to spawn GitHub Copilot ACP runtime using `{}`", resolved.display())
     })
 }
 
@@ -153,10 +147,7 @@ pub fn spawn_copilot_server_process(
     resolved: &ResolvedCopilotCommand,
     cwd: &Path,
 ) -> Result<Child> {
-    let extra_args = SERVER_FLAGS
-        .iter()
-        .map(|flag| (*flag).to_string())
-        .collect::<Vec<_>>();
+    let extra_args = SERVER_FLAGS.iter().map(|flag| (*flag).to_string()).collect::<Vec<_>>();
     let mut command = resolved.command(Some(cwd), &extra_args);
     command
         .stdin(Stdio::piped())
@@ -170,10 +161,7 @@ pub fn spawn_copilot_server_process(
     }
 
     command.spawn().with_context(|| {
-        format!(
-            "failed to spawn GitHub Copilot CLI server using `{}`",
-            resolved.display()
-        )
+        format!("failed to spawn GitHub Copilot CLI server using `{}`", resolved.display())
     })
 }
 

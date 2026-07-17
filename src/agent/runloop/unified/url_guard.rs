@@ -41,10 +41,7 @@ impl UrlGuardPrompt {
         }
 
         let host = parsed.host_str()?.to_ascii_lowercase();
-        let port = parsed
-            .port()
-            .map(|value| format!(":{value}"))
-            .unwrap_or_default();
+        let port = parsed.port().map(|value| format!(":{value}")).unwrap_or_default();
         let host_label = format!("{host}{port}");
 
         Some(Self {
@@ -182,16 +179,11 @@ pub(crate) fn open_external_url(url: &str) -> Result<()> {
 }
 
 fn is_trusted_host(host: &str) -> bool {
-    TRUSTED_HOSTS
-        .iter()
-        .any(|trusted| host_matches_domain(host, trusted))
+    TRUSTED_HOSTS.iter().any(|trusted| host_matches_domain(host, trusted))
 }
 
 fn host_matches_domain(host: &str, domain: &str) -> bool {
-    host == domain
-        || host
-            .strip_suffix(domain)
-            .is_some_and(|prefix| prefix.ends_with('.'))
+    host == domain || host.strip_suffix(domain).is_some_and(|prefix| prefix.ends_with('.'))
 }
 
 fn is_local_or_private_host(host: &str) -> bool {
@@ -242,11 +234,7 @@ mod tests {
             UrlGuardPrompt::parse("http://example.com/docs".to_string()).expect("http prompt");
 
         let lines = prompt.lines();
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("Plain HTTP is insecure"))
-        );
+        assert!(lines.iter().any(|line| line.contains("Plain HTTP is insecure")));
     }
 
     #[test]
@@ -255,11 +243,7 @@ mod tests {
             .expect("trusted host");
 
         let lines = prompt.lines();
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("built-in trusted host list"))
-        );
+        assert!(lines.iter().any(|line| line.contains("built-in trusted host list")));
     }
 
     #[test]
@@ -268,11 +252,7 @@ mod tests {
             .expect("localhost prompt");
 
         let lines = prompt.lines();
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("local or private address"))
-        );
+        assert!(lines.iter().any(|line| line.contains("local or private address")));
     }
 
     #[test]
@@ -282,11 +262,7 @@ mod tests {
 
         let lines = prompt.cli_lines();
         assert!(!lines.iter().any(|line| line.starts_with("URL: ")));
-        assert!(
-            !lines
-                .iter()
-                .any(|line| line.starts_with("Choose Open to continue"))
-        );
+        assert!(!lines.iter().any(|line| line.starts_with("Choose Open to continue")));
     }
 
     #[test]

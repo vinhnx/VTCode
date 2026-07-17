@@ -22,8 +22,7 @@ impl ToolRegistry {
         self.mcp_tool_index.write().await.clear();
         self.mcp_reverse_index.write().await.clear();
         *self.cached_available_tools.write() = None;
-        self.initialized
-            .store(false, std::sync::atomic::Ordering::Relaxed);
+        self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
         self
     }
 
@@ -33,8 +32,7 @@ impl ToolRegistry {
         self.mcp_tool_index.write().await.clear();
         self.mcp_reverse_index.write().await.clear();
         *self.cached_available_tools.write() = None;
-        self.initialized
-            .store(false, std::sync::atomic::Ordering::Relaxed);
+        self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Detach the current MCP client and clear MCP tool indexes.
@@ -43,8 +41,7 @@ impl ToolRegistry {
         self.mcp_tool_index.write().await.clear();
         self.mcp_reverse_index.write().await.clear();
         *self.cached_available_tools.write() = None;
-        self.initialized
-            .store(false, std::sync::atomic::Ordering::Relaxed);
+        self.initialized.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Get the MCP client if available.
@@ -121,10 +118,7 @@ impl ToolRegistry {
     pub async fn refresh_mcp_tools(&self) -> Result<()> {
         let mcp_client_opt = self.mcp_client.read().clone();
         if let Some(mcp_client) = mcp_client_opt {
-            debug!(
-                "Refreshing MCP tools for {} providers",
-                mcp_client.get_status().provider_count
-            );
+            debug!("Refreshing MCP tools for {} providers", mcp_client.get_status().provider_count);
 
             let mut tools: Option<Vec<McpToolInfo>> = None;
             let mut last_err: Option<anyhow::Error> = None;
@@ -174,9 +168,7 @@ impl ToolRegistry {
                 index
                     .iter()
                     .flat_map(|(provider, names)| {
-                        names
-                            .iter()
-                            .map(move |name| format!("mcp::{provider}::{name}"))
+                        names.iter().map(move |name| format!("mcp::{provider}::{name}"))
                     })
                     .collect()
             };
@@ -211,10 +203,7 @@ impl ToolRegistry {
             }
 
             for tool in tools {
-                provider_map
-                    .entry(tool.provider.clone())
-                    .or_default()
-                    .push(tool.name.clone());
+                provider_map.entry(tool.provider.clone()).or_default().push(tool.name.clone());
             }
 
             for tools in provider_map.values_mut() {
@@ -236,24 +225,17 @@ impl ToolRegistry {
 
             let mcp_index = self.mcp_tool_index.read().await;
             // Convert FxHashMap to std HashMap for policy manager API compatibility
-            let std_index: hashbrown::HashMap<String, Vec<String>> = mcp_index
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-            if let Some(allowlist) = self
-                .policy_gateway
-                .lock()
-                .await
-                .update_mcp_tools(&std_index)
-                .await?
+            let std_index: hashbrown::HashMap<String, Vec<String>> =
+                mcp_index.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            if let Some(allowlist) =
+                self.policy_gateway.lock().await.update_mcp_tools(&std_index).await?
             {
                 mcp_client.update_allowlist(allowlist);
             }
 
             *self.cached_available_tools.write() = None;
             self.rebuild_tool_assembly().await;
-            self.tool_catalog_state
-                .note_explicit_refresh("mcp_tool_refresh");
+            self.tool_catalog_state.note_explicit_refresh("mcp_tool_refresh");
             self.sync_policy_catalog().await;
             // MP-3: Record success in circuit breaker
             self.mcp_circuit_breaker.record_success();

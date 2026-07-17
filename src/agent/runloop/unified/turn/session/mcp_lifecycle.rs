@@ -145,10 +145,8 @@ pub(crate) async fn handle_mcp_updates(
         }
 
         if let Ok(known_tools) = tool_registry.list_mcp_tools().await {
-            let current_tool_keys: Vec<String> = known_tools
-                .iter()
-                .map(|t| format!("{}-{}", t.provider, t.name))
-                .collect();
+            let current_tool_keys: Vec<String> =
+                known_tools.iter().map(|t| format!("{}-{}", t.provider, t.name)).collect();
 
             if matches!(
                 decide_refresh_action(false, current_tool_keys != *last_known_mcp_tools),
@@ -169,22 +167,13 @@ mod tests {
 
     #[test]
     fn decide_refresh_action_marks_pending_on_change() {
-        assert_eq!(
-            decide_refresh_action(false, true),
-            RefreshDecision::MarkPending
-        );
+        assert_eq!(decide_refresh_action(false, true), RefreshDecision::MarkPending);
     }
 
     #[test]
     fn decide_refresh_action_applies_pending_first() {
-        assert_eq!(
-            decide_refresh_action(true, true),
-            RefreshDecision::ApplyPending
-        );
-        assert_eq!(
-            decide_refresh_action(true, false),
-            RefreshDecision::ApplyPending
-        );
+        assert_eq!(decide_refresh_action(true, true), RefreshDecision::ApplyPending);
+        assert_eq!(decide_refresh_action(true, false), RefreshDecision::ApplyPending);
     }
 
     #[test]

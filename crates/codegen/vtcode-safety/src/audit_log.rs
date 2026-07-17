@@ -19,7 +19,7 @@
 //! Sinks are `Send + Sync`. Writes are non-blocking from the caller's perspective:
 //! each sink uses an internal lock or background task to serialize I/O.
 //!
-//! See also `vtcode-core/src/tools/untrusted_data.rs` for the prompt-injection
+//! See also `crates/codegen/vtcode-core/src/tools/untrusted_data.rs` for the prompt-injection
 //! defense that pairs with this log.
 
 use std::fs::{File, OpenOptions};
@@ -148,10 +148,7 @@ impl InMemorySink {
 
     /// Snapshot all entries recorded so far.
     pub fn entries(&self) -> Vec<ToolAuditEntry> {
-        self.entries
-            .lock()
-            .expect("in-memory sink poisoned")
-            .clone()
+        self.entries.lock().expect("in-memory sink poisoned").clone()
     }
 
     /// Number of recorded entries.
@@ -166,19 +163,13 @@ impl InMemorySink {
 
     /// Drop all recorded entries.
     pub fn clear(&self) {
-        self.entries
-            .lock()
-            .expect("in-memory sink poisoned")
-            .clear();
+        self.entries.lock().expect("in-memory sink poisoned").clear();
     }
 }
 
 impl ToolAuditSink for InMemorySink {
     fn write(&self, entry: &ToolAuditEntry) {
-        self.entries
-            .lock()
-            .expect("in-memory sink poisoned")
-            .push(entry.clone());
+        self.entries.lock().expect("in-memory sink poisoned").push(entry.clone());
     }
 }
 
@@ -228,10 +219,7 @@ impl JsonlFileSink {
             path,
             max_size_bytes,
             max_files: max_files.max(1),
-            state: Mutex::new(JsonlFileState {
-                writer: Some(BufWriter::new(file)),
-                bytes_written,
-            }),
+            state: Mutex::new(JsonlFileState { writer: Some(BufWriter::new(file)), bytes_written }),
         })
     }
 
@@ -335,9 +323,7 @@ pub struct MultiSink {
 
 impl std::fmt::Debug for MultiSink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MultiSink")
-            .field("sink_count", &self.inner.len())
-            .finish()
+        f.debug_struct("MultiSink").field("sink_count", &self.inner.len()).finish()
     }
 }
 

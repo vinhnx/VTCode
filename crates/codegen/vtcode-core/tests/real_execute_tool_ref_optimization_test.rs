@@ -166,28 +166,20 @@ async fn test_execute_tool_ref_performance_comparison() {
     let args = json!({"path": "."});
 
     // Warm up both registries
-    let _ = registry_unoptimized
-        .execute_tool_ref(tools::LIST_FILES, &args)
-        .await;
-    let _ = registry_optimized
-        .execute_tool_ref(tools::LIST_FILES, &args)
-        .await;
+    let _ = registry_unoptimized.execute_tool_ref(tools::LIST_FILES, &args).await;
+    let _ = registry_optimized.execute_tool_ref(tools::LIST_FILES, &args).await;
 
     // Time unoptimized execution
     let start = std::time::Instant::now();
     for _ in 0..5 {
-        let _ = registry_unoptimized
-            .execute_tool_ref(tools::LIST_FILES, &args)
-            .await;
+        let _ = registry_unoptimized.execute_tool_ref(tools::LIST_FILES, &args).await;
     }
     let unoptimized_duration = start.elapsed();
 
     // Time optimized execution
     let start = std::time::Instant::now();
     for _ in 0..5 {
-        let _ = registry_optimized
-            .execute_tool_ref(tools::LIST_FILES, &args)
-            .await;
+        let _ = registry_optimized.execute_tool_ref(tools::LIST_FILES, &args).await;
     }
     let optimized_duration = start.elapsed();
 

@@ -78,12 +78,7 @@ impl ContextManager {
 
     #[cfg(test)]
     pub(crate) fn default_for_test() -> Self {
-        Self::new(
-            String::new(),
-            (),
-            Arc::new(RwLock::new(HashMap::new())),
-            None,
-        )
+        Self::new(String::new(), (), Arc::new(RwLock::new(HashMap::new())), None)
     }
 
     pub(crate) fn set_editor_context_snapshot(
@@ -113,9 +108,7 @@ impl ContextManager {
         ide_context_config: Option<&IdeContextConfig>,
     ) -> IdeContextConfig {
         self.with_session_ide_context_override(
-            ide_context_config
-                .cloned()
-                .unwrap_or_else(|| self.ide_context_config.clone()),
+            ide_context_config.cloned().unwrap_or_else(|| self.ide_context_config.clone()),
         )
     }
 
@@ -323,9 +316,7 @@ impl ContextManager {
             .iter()
             .find(|path| path.starts_with(workspace))
             .and_then(|path| {
-                path.parent()
-                    .filter(|p| p.starts_with(workspace))
-                    .map(Path::to_path_buf)
+                path.parent().filter(|p| p.starts_with(workspace)).map(Path::to_path_buf)
             })
             .or_else(|| Some(workspace.clone()))
     }

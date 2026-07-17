@@ -63,9 +63,8 @@ pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedAp
     let was_base64 = source.starts_with("base64:");
     let cap = effective_max_payload_bytes();
     let text = if was_base64 {
-        let decoded = BASE64
-            .decode(&source[7..])
-            .with_context(|| "Failed to decode base64 patch")?;
+        let decoded =
+            BASE64.decode(&source[7..]).with_context(|| "Failed to decode base64 patch")?;
         enforce_decoded_size_limit(decoded.len(), source.len(), was_base64, cap)?;
         String::from_utf8(decoded).with_context(|| "Decoded patch is not valid UTF-8")?
     } else {
@@ -73,11 +72,7 @@ pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedAp
         source.to_string()
     };
 
-    Ok(Some(DecodedApplyPatchInput {
-        text,
-        source_bytes: source.len(),
-        was_base64,
-    }))
+    Ok(Some(DecodedApplyPatchInput { text, source_bytes: source.len(), was_base64 }))
 }
 
 /// Extract filesystem paths affected by a mutating tool call.
@@ -279,14 +274,8 @@ mod tests {
             PathBuf::from("src/old.rs"),
         ];
 
-        assert_eq!(
-            mutation_target_paths("apply_patch", &json!(patch)),
-            expected
-        );
-        assert_eq!(
-            mutation_target_paths("apply_patch", &json!({"input": patch})),
-            expected
-        );
+        assert_eq!(mutation_target_paths("apply_patch", &json!(patch)), expected);
+        assert_eq!(mutation_target_paths("apply_patch", &json!({"input": patch})), expected);
         assert_eq!(
             mutation_target_paths(
                 "apply_patch",

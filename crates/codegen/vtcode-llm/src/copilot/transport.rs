@@ -86,11 +86,7 @@ impl StdioTransport {
 
         spawn_writer(write_rx, stdin);
         spawn_stderr_logger(stderr);
-        spawn_reader(
-            stdout,
-            Arc::clone(&pending),
-            Arc::clone(&notification_handler),
-        );
+        spawn_reader(stdout, Arc::clone(&pending), Arc::clone(&notification_handler));
 
         Self {
             write_tx,
@@ -229,10 +225,7 @@ impl StdioTransport {
 impl fmt::Debug for StdioTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StdioTransport")
-            .field(
-                "request_counter",
-                &self.request_counter.load(Ordering::Relaxed),
-            )
+            .field("request_counter", &self.request_counter.load(Ordering::Relaxed))
             .field("rpc_timeout", &self.rpc_timeout)
             .finish_non_exhaustive()
     }
@@ -317,10 +310,8 @@ fn spawn_reader(
 
             // Clone the handler Arc out of the lock so the lock is released
             // before the handler runs (prevents re-entrancy / call-site latency).
-            if let Some(handler) = notification_handler
-                .lock()
-                .ok()
-                .and_then(|g| g.as_ref().cloned())
+            if let Some(handler) =
+                notification_handler.lock().ok().and_then(|g| g.as_ref().cloned())
                 && let Err(e) = handler(message)
             {
                 tracing::warn!("stdio transport: notification handler error: {e}");
@@ -344,14 +335,8 @@ fn response_id(message: &Value) -> Option<i64> {
 
 fn extract_rpc_result(message: &Value) -> AcpResult<Value> {
     if let Some(error) = message.get("error") {
-        let code = error
-            .get("code")
-            .and_then(Value::as_i64)
-            .unwrap_or_default();
-        let detail = error
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown error");
+        let code = error.get("code").and_then(Value::as_i64).unwrap_or_default();
+        let detail = error.get("message").and_then(Value::as_str).unwrap_or("unknown error");
         Err(AcpError::RemoteError {
             agent_id: "stdio".into(),
             message: format!("rpc error {code}: {detail}"),
@@ -446,10 +431,7 @@ mod tests {
         let payload: Value = serde_json::from_str(&raw).unwrap();
         assert_eq!(payload["method"], "session/cancel");
         assert_eq!(payload["params"]["sessionId"], "s1");
-        assert!(
-            payload.get("id").is_none(),
-            "notifications must not have id"
-        );
+        assert!(payload.get("id").is_none(), "notifications must not have id");
     }
 
     #[test]
@@ -457,9 +439,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(WRITE_CHANNEL_CAPACITY);
         let transport = StdioTransport::new_for_testing(tx, Duration::from_secs(5));
 
-        transport
-            .respond(42, serde_json::json!({ "ok": true }))
-            .unwrap();
+        transport.respond(42, serde_json::json!({ "ok": true })).unwrap();
 
         let raw = rx.try_recv().unwrap();
         let payload: Value = serde_json::from_str(&raw).unwrap();
@@ -473,9 +453,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(WRITE_CHANNEL_CAPACITY);
         let transport = StdioTransport::new_for_testing(tx, Duration::from_secs(5));
 
-        transport
-            .respond_error(9, -32601, "method not found")
-            .unwrap();
+        transport.respond_error(9, -32601, "method not found").unwrap();
 
         let raw = rx.try_recv().unwrap();
         let payload: Value = serde_json::from_str(&raw).unwrap();

@@ -172,10 +172,7 @@ pub fn diff_display_line_number_width(lines: &[DiffDisplayLine]) -> usize {
 pub fn format_numbered_unified_diff(diff_content: &str) -> Vec<String> {
     let display_lines = display_lines_from_unified_diff(diff_content);
     let width = diff_display_line_number_width(&display_lines);
-    display_lines
-        .into_iter()
-        .map(|line| line.numbered_text(width))
-        .collect()
+    display_lines.into_iter().map(|line| line.numbered_text(width)).collect()
 }
 
 fn display_line_from_diff_line(line: &crate::diff::DiffLine) -> DiffDisplayLine {

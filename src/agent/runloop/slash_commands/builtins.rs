@@ -89,13 +89,9 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                     }
                     "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
                     "model" | "model.main" | "model.lightweight" => {
-                        Ok(SlashCommandOutcome::ShowSettingsAtPath {
-                            path: args.to_string(),
-                        })
+                        Ok(SlashCommandOutcome::ShowSettingsAtPath { path: args.to_string() })
                     }
-                    _ => Ok(SlashCommandOutcome::ShowSettingsAtPath {
-                        path: args.to_string(),
-                    }),
+                    _ => Ok(SlashCommandOutcome::ShowSettingsAtPath { path: args.to_string() }),
                 }
             }
         }
@@ -221,11 +217,9 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             }
         },
         "update" => match parse_update_args(args) {
-            Ok((check_only, install, force)) => Ok(SlashCommandOutcome::Update {
-                check_only,
-                install,
-                force,
-            }),
+            Ok((check_only, install, force)) => {
+                Ok(SlashCommandOutcome::Update { check_only, install, force })
+            }
             Err(message) => {
                 renderer.line(MessageStyle::Error, &message)?;
                 Ok(SlashCommandOutcome::Handled)
@@ -239,9 +233,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             if trimmed.is_empty() {
                 Ok(SlashCommandOutcome::StartModePalette)
             } else {
-                Ok(SlashCommandOutcome::SelectPrimaryAgent {
-                    name: trimmed.to_string(),
-                })
+                Ok(SlashCommandOutcome::SelectPrimaryAgent { name: trimmed.to_string() })
             }
         }
         "effort" => match parse_effort_args(args) {
@@ -329,10 +321,8 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
                     Ok(SlashCommandOutcome::Handled)
                 }
                 Err(error) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Skills command error: {error}"),
-                    )?;
+                    renderer
+                        .line(MessageStyle::Error, &format!("Skills command error: {error}"))?;
                     Ok(SlashCommandOutcome::Handled)
                 }
             }
@@ -345,9 +335,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
             }
         },
         "agent" => match args.trim() {
-            "" => Ok(SlashCommandOutcome::ManageAgents {
-                action: AgentManagerAction::Threads,
-            }),
+            "" => Ok(SlashCommandOutcome::ManageAgents { action: AgentManagerAction::Threads }),
             args => match parse_agents_command(args) {
                 Ok(action) => Ok(SlashCommandOutcome::ManageAgents { action }),
                 Err(message) => {
@@ -482,10 +470,8 @@ pub(in crate::agent::runloop::slash_commands) fn parse_subprocesses_command(
             let id = parts.next().ok_or("Usage: /subprocesses cancel <id>")?;
             Ok(SubprocessManagerAction::Cancel { id: id.to_string() })
         }
-        _ => Err(
-            "Usage: /subprocesses [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]"
-                .to_string(),
-        ),
+        _ => Err("Usage: /subprocesses [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]"
+            .to_string()),
     }
 }
 

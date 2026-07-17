@@ -54,10 +54,8 @@ fn previous_word_boundary(content: &str, cursor: usize) -> usize {
     }
 
     let prefix = &content[..cursor];
-    let Some((first_non_ws_idx, ch)) = prefix
-        .char_indices()
-        .rev()
-        .find(|&(_, ch)| !ch.is_whitespace())
+    let Some((first_non_ws_idx, ch)) =
+        prefix.char_indices().rev().find(|&(_, ch)| !ch.is_whitespace())
     else {
         return 0;
     };
@@ -173,10 +171,7 @@ impl Session {
     /// agent receives the exact content instead of dropping line breaks after
     /// hitting the interactive input's visual limit.
     pub fn insert_paste_text(&mut self, text: &str) {
-        let sanitized: String = text
-            .chars()
-            .filter(|&ch| ch != '\r' && ch != '\u{7f}')
-            .collect();
+        let sanitized: String = text.chars().filter(|&ch| ch != '\r' && ch != '\u{7f}').collect();
 
         if sanitized.is_empty() {
             return;
@@ -190,8 +185,7 @@ impl Session {
         let line_count = sanitized.split('\n').count();
         self.input_manager.insert_text(&sanitized);
         if line_count >= ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD {
-            self.input_manager
-                .set_compact_paste_range(paste_start..paste_end);
+            self.input_manager.set_compact_paste_range(paste_start..paste_end);
         }
         self.refresh_input_edit_state();
     }
@@ -215,8 +209,7 @@ impl Session {
         };
 
         self.input_manager.set_content(merged);
-        self.input_manager
-            .set_cursor(self.input_manager.content().len());
+        self.input_manager.set_cursor(self.input_manager.content().len());
         self.suggested_prompt_state.active = true;
         self.input_compact_mode = self.input_compact_placeholder().is_some();
         self.mark_dirty();
@@ -234,9 +227,7 @@ impl Session {
             newline_count = newline_count.saturating_sub(content[range].matches('\n').count());
         }
 
-        ui::INLINE_INPUT_MAX_LINES
-            .saturating_sub(1)
-            .saturating_sub(newline_count)
+        ui::INLINE_INPUT_MAX_LINES.saturating_sub(1).saturating_sub(newline_count)
     }
 
     /// Check if a newline can be inserted
@@ -358,8 +349,7 @@ impl Session {
         };
 
         if delete_len > 0 {
-            self.input_manager
-                .replace_range(cursor, cursor + delete_len, "");
+            self.input_manager.replace_range(cursor, cursor + delete_len, "");
             self.refresh_input_edit_state();
         }
     }
@@ -414,8 +404,7 @@ impl Session {
     }
 
     pub(crate) fn select_to_end(&mut self) {
-        self.input_manager
-            .set_cursor_with_selection(self.input_manager.content().len());
+        self.input_manager.set_cursor_with_selection(self.input_manager.content().len());
     }
 
     /// Remember submitted input in history

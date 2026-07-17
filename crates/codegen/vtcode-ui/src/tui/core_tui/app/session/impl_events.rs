@@ -139,8 +139,7 @@ impl Session {
 
         let styles = modal_render_styles(self);
         let content_width =
-            area.width
-                .saturating_sub(inline_list::selection_padding_width() as u16) as usize;
+            area.width.saturating_sub(inline_list::selection_padding_width() as u16) as usize;
         let relative_row = usize::from(row.saturating_sub(area.y));
 
         if let Some(wizard) = self.wizard_overlay() {
@@ -434,14 +433,11 @@ impl Session {
             if let Some(local_index) = self.panel_row_index(&layout, column, row)
                 && !self.history_picker_state.matches.is_empty()
             {
-                let actual_index = self
-                    .history_picker_state
-                    .scroll_offset()
-                    .saturating_add(local_index);
+                let actual_index =
+                    self.history_picker_state.scroll_offset().saturating_add(local_index);
                 if self.history_picker_state.selected_index() == Some(actual_index) {
                     let was_active = self.history_picker_visible();
-                    self.history_picker_state
-                        .accept(&mut self.core.input_manager);
+                    self.history_picker_state.accept(&mut self.core.input_manager);
                     self.finish_history_picker_interaction(was_active);
                     self.mark_dirty();
                 } else if self.history_picker_state.select_index(actual_index) {
@@ -456,10 +452,8 @@ impl Session {
                 return true;
             };
             if let Some(local_index) = self.panel_row_index(&layout, column, row) {
-                let actual_index = self
-                    .local_agents_state
-                    .scroll_offset()
-                    .saturating_add(local_index);
+                let actual_index =
+                    self.local_agents_state.scroll_offset().saturating_add(local_index);
                 if self.local_agents_state.select_index(actual_index) {
                     self.mark_dirty();
                 }
@@ -472,10 +466,7 @@ impl Session {
                 return true;
             };
             if let Some(local_index) = self.panel_row_index(&layout, column, row) {
-                let actual_index = self
-                    .slash_palette
-                    .scroll_offset()
-                    .saturating_add(local_index);
+                let actual_index = self.slash_palette.scroll_offset().saturating_add(local_index);
                 if self.slash_palette.selected_index() == Some(actual_index) {
                     slash::apply_selected_slash_suggestion(self);
                 } else {
@@ -559,14 +550,11 @@ impl Session {
                                     && mouse_event.column >= area.x
                                     && mouse_event.column < area.x.saturating_add(area.width)
                             });
-                            if self
-                                .core
-                                .queue_link_click_action(self.modal_link_click_action(
-                                    mouse_event.column,
-                                    mouse_event.row,
-                                    mouse_event.modifiers,
-                                ))
-                            {
+                            if self.core.queue_link_click_action(self.modal_link_click_action(
+                                mouse_event.column,
+                                mouse_event.row,
+                                mouse_event.modifiers,
+                            )) {
                                 self.core.mouse_selection.clear_click_history();
                                 return;
                             }
@@ -716,12 +704,11 @@ impl Session {
                             ),
                         );
                         let modal_link_action =
-                            self.core
-                                .pending_link_click_action(self.modal_link_click_action(
-                                    mouse_event.column,
-                                    mouse_event.row,
-                                    mouse_event.modifiers,
-                                ));
+                            self.core.pending_link_click_action(self.modal_link_click_action(
+                                mouse_event.column,
+                                mouse_event.row,
+                                mouse_event.modifiers,
+                            ));
                         match self.core.mouse_drag_target {
                             MouseDragTarget::Input => {
                                 if let Some(cursor) = self.cursor_index_for_input_point(
@@ -783,10 +770,7 @@ impl Session {
     }
 
     pub(crate) fn handle_transcript_click(&mut self, mouse_event: MouseEvent) -> bool {
-        if !matches!(
-            mouse_event.kind,
-            MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
+        if !matches!(mouse_event.kind, MouseEventKind::Down(crossterm::event::MouseButton::Left)) {
             return false;
         }
 
@@ -835,10 +819,7 @@ impl Session {
     }
 
     pub(crate) fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {
-        if !matches!(
-            mouse_event.kind,
-            MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
+        if !matches!(mouse_event.kind, MouseEventKind::Down(crossterm::event::MouseButton::Left)) {
             return false;
         }
 

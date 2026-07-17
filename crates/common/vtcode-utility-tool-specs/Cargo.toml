@@ -1,8 +1,8 @@
 [package]
 name = "vtcode-utility-tool-specs"
 version.workspace = true
-edition.workspace = true
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Passive JSON schemas for VT Code utility, file, scheduling, and collaboration tool surfaces"
 license.workspace = true

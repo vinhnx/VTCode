@@ -143,10 +143,7 @@ pub struct OpenAIHostedShellNetworkPolicy {
 
 impl OpenAIHostedShellNetworkPolicy {
     pub const fn is_allowlist(&self) -> bool {
-        matches!(
-            self.policy_type,
-            OpenAIHostedShellNetworkPolicyType::Allowlist
-        )
+        matches!(self.policy_type, OpenAIHostedShellNetworkPolicyType::Allowlist)
     }
 
     pub fn first_invalid_message(&self) -> Option<String> {
@@ -160,10 +157,8 @@ impl OpenAIHostedShellNetworkPolicy {
                 }
             }
             OpenAIHostedShellNetworkPolicyType::Allowlist => {
-                if let Some(index) = self
-                    .allowed_domains
-                    .iter()
-                    .position(|value| value.trim().is_empty())
+                if let Some(index) =
+                    self.allowed_domains.iter().position(|value| value.trim().is_empty())
                 {
                     return Some(format!(
                         "`provider.openai.hosted_shell.network_policy.allowed_domains[{index}]` must not be empty when set."
@@ -315,10 +310,7 @@ pub struct OpenAIHostedShellConfig {
 
 impl OpenAIHostedShellConfig {
     pub fn container_id_ref(&self) -> Option<&str> {
-        self.container_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
+        self.container_id.as_deref().map(str::trim).filter(|value| !value.is_empty())
     }
 
     pub const fn uses_container_reference(&self) -> bool {
@@ -685,10 +677,7 @@ mod tests {
         assert_eq!(config.responses_store, None);
         assert!(config.responses_include.is_empty());
         assert_eq!(config.service_tier, None);
-        assert_eq!(
-            config.manual_compaction,
-            OpenAIManualCompactionConfig::default()
-        );
+        assert_eq!(config.manual_compaction, OpenAIManualCompactionConfig::default());
         assert_eq!(config.hosted_shell, OpenAIHostedShellConfig::default());
         assert!(config.tool_search.enabled);
         assert!(config.tool_search.defer_by_default);
@@ -716,10 +705,7 @@ mod tests {
         assert_eq!(parsed.responses_store, None);
         assert!(parsed.responses_include.is_empty());
         assert_eq!(parsed.service_tier, None);
-        assert_eq!(
-            parsed.manual_compaction,
-            OpenAIManualCompactionConfig::default()
-        );
+        assert_eq!(parsed.manual_compaction, OpenAIManualCompactionConfig::default());
         assert_eq!(parsed.hosted_shell, OpenAIHostedShellConfig::default());
         assert_eq!(parsed.tool_search, super::OpenAIToolSearchConfig::default());
     }
@@ -742,10 +728,7 @@ responses_include = ["reasoning.encrypted_content", "output_text.annotations"]
             ]
         );
         assert_eq!(parsed.service_tier, None);
-        assert_eq!(
-            parsed.manual_compaction,
-            OpenAIManualCompactionConfig::default()
-        );
+        assert_eq!(parsed.manual_compaction, OpenAIManualCompactionConfig::default());
         assert_eq!(parsed.hosted_shell, OpenAIHostedShellConfig::default());
     }
 
@@ -796,10 +779,7 @@ skill_id = "skill_123"
         .expect("config should parse");
 
         assert!(parsed.hosted_shell.enabled);
-        assert_eq!(
-            parsed.hosted_shell.environment,
-            OpenAIHostedShellEnvironment::ContainerAuto
-        );
+        assert_eq!(parsed.hosted_shell.environment, OpenAIHostedShellEnvironment::ContainerAuto);
         assert_eq!(parsed.hosted_shell.file_ids, vec!["file_123".to_string()]);
         assert_eq!(
             parsed.hosted_shell.skills,
@@ -937,9 +917,8 @@ always_available_tools = ["code_search", "custom_tool"]
             network_policy: OpenAIHostedShellNetworkPolicy::default(),
         };
 
-        let message = config
-            .first_invalid_skill_message()
-            .expect("invalid mount should be reported");
+        let message =
+            config.first_invalid_skill_message().expect("invalid mount should be reported");
 
         assert!(message.contains("provider.openai.hosted_shell.skills[0].skill_id"));
         assert!(!config.has_valid_skill_mounts());
@@ -953,10 +932,7 @@ always_available_tools = ["code_search", "custom_tool"]
             environment: OpenAIHostedShellEnvironment::ContainerReference,
             container_id: Some("cntr_123".to_string()),
             file_ids: Vec::new(),
-            skills: vec![OpenAIHostedSkill::Inline {
-                bundle_b64: "   ".to_string(),
-                sha256: None,
-            }],
+            skills: vec![OpenAIHostedSkill::Inline { bundle_b64: "   ".to_string(), sha256: None }],
             network_policy: OpenAIHostedShellNetworkPolicy::default(),
         };
 

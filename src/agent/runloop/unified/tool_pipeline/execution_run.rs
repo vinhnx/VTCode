@@ -41,10 +41,7 @@ fn resolve_harness_item_identity(tool_item_id: &str) -> (ToolInvocationId, Strin
         Ok(invocation_id) => (invocation_id, tool_item_id.to_string()),
         Err(_) => {
             let invocation_id = invocation_id_from_call_id(tool_item_id);
-            (
-                invocation_id,
-                format!("{tool_item_id}:{}", invocation_id.short()),
-            )
+            (invocation_id, format!("{tool_item_id}:{}", invocation_id.short()))
         }
     }
 }
@@ -83,21 +80,17 @@ pub(crate) async fn run_tool_call(
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
     let requested_name = call.tool_name().unwrap_or(call.call_type.as_str());
     if call.function.is_none() {
-        return Ok(ToolPipelineOutcome::from_status(
-            ToolExecutionStatus::Failure {
-                error: structured_failure_from_message("tool", "Tool call missing function"),
-            },
-        ));
+        return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+            error: structured_failure_from_message("tool", "Tool call missing function"),
+        }));
     }
 
     let args_val = match call.execution_arguments() {
         Ok(args) => args,
         Err(err) => {
-            return Ok(ToolPipelineOutcome::from_status(
-                ToolExecutionStatus::Failure {
-                    error: structured_failure("tool", &anyhow!(err)),
-                },
-            ));
+            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+                error: structured_failure("tool", &anyhow!(err)),
+            }));
         }
     };
 
@@ -141,33 +134,26 @@ pub(crate) async fn run_tool_call_with_args(
 
     if !prevalidated {
         if let Some(exhaustion) = ctx.harness_state.tool_budget_exhaustion() {
-            return Ok(ToolPipelineOutcome::from_status(
-                ToolExecutionStatus::Failure {
-                    error: structured_failure_from_message(
-                        requested_name,
-                        exhaustion.policy_violation_message(),
-                    ),
-                },
-            ));
+            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+                error: structured_failure_from_message(
+                    requested_name,
+                    exhaustion.policy_violation_message(),
+                ),
+            }));
         }
 
-        match ctx
-            .tool_registry
-            .admit_public_tool_call(requested_name, args_val)
-        {
+        match ctx.tool_registry.admit_public_tool_call(requested_name, args_val) {
             Ok(prepared) => {
                 canonical_name = prepared.canonical_name;
                 effective_args = prepared.effective_args;
             }
             Err(err) => {
-                return Ok(ToolPipelineOutcome::from_status(
-                    ToolExecutionStatus::Failure {
-                        error: structured_failure(
-                            requested_name,
-                            &anyhow!("Tool argument validation failed: {err}"),
-                        ),
-                    },
-                ));
+                return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+                    error: structured_failure(
+                        requested_name,
+                        &anyhow!("Tool argument validation failed: {err}"),
+                    ),
+                }));
             }
         }
     } else if let Some(tool) = ctx.tool_registry.get_tool(requested_name) {
@@ -176,9 +162,7 @@ pub(crate) async fn run_tool_call_with_args(
     let name = canonical_name.as_str();
 
     let harness_emitter = ctx.harness_emitter;
-    let streamed_harness_item_id = ctx
-        .harness_state
-        .take_streamed_tool_call_item_id(tool_call_id);
+    let streamed_harness_item_id = ctx.harness_state.take_streamed_tool_call_item_id(tool_call_id);
     let mut tool_started_emitted = streamed_harness_item_id.is_some();
     let harness_item_id = streamed_harness_item_id.unwrap_or(fallback_harness_item_id);
     if !tool_started_emitted && let Some(emitter) = harness_emitter {
@@ -242,11 +226,7 @@ pub(crate) async fn run_tool_call_with_args(
             Ok(Some(updated_args)) => effective_args = updated_args,
             Ok(None) => {}
             Err(permission_failure) => {
-                return Ok(finish_with_status(
-                    permission_failure,
-                    false,
-                    &effective_args,
-                ));
+                return Ok(finish_with_status(permission_failure, false, &effective_args));
             }
         }
 
@@ -279,9 +259,7 @@ pub(crate) async fn run_tool_call_with_args(
                 modified_files: vec![],
                 command_success: true,
             },
-            Err(error) => ToolExecutionStatus::Failure {
-                error: structured_failure(name, &error),
-            },
+            Err(error) => ToolExecutionStatus::Failure { error: structured_failure(name, &error) },
         };
         return Ok(finish_with_status(status, true, &effective_args));
     }
@@ -522,9 +500,7 @@ async fn check_tool_permission(
         Ok(ToolPermissionFlow::Interrupted | ToolPermissionFlow::Exit) => {
             Err(ToolExecutionStatus::Cancelled)
         }
-        Err(error) => Err(ToolExecutionStatus::Failure {
-            error: structured_failure(name, &error),
-        }),
+        Err(error) => Err(ToolExecutionStatus::Failure { error: structured_failure(name, &error) }),
     }
 }
 
@@ -657,9 +633,8 @@ async fn apply_post_execution_side_effects(
 }
 
 fn cache_invalidation_paths(workspace_root: &Path, changed_paths: &[String]) -> Vec<String> {
-    let workspace_root = workspace_root
-        .canonicalize()
-        .unwrap_or_else(|_| workspace_root.to_path_buf());
+    let workspace_root =
+        workspace_root.canonicalize().unwrap_or_else(|_| workspace_root.to_path_buf());
     changed_paths
         .iter()
         .map(Path::new)
@@ -696,12 +671,7 @@ mod tests {
 
         assert_eq!(
             paths,
-            vec![
-                changed
-                    .canonicalize()
-                    .expect("canonical source")
-                    .to_string_lossy()
-            ]
+            vec![changed.canonicalize().expect("canonical source").to_string_lossy()]
         );
     }
 

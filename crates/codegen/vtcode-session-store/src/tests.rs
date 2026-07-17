@@ -13,9 +13,7 @@ use crate::{open, retention::apply_retention, sessions_root};
 fn sample_turn() -> Vec<ThreadEvent> {
     vec![
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
-        ThreadEvent::TurnCompleted(TurnCompletedEvent {
-            usage: Usage::default(),
-        }),
+        ThreadEvent::TurnCompleted(TurnCompletedEvent { usage: Usage::default() }),
     ]
 }
 
@@ -107,9 +105,7 @@ fn retention_removes_oldest_sessions() {
             log.append(e).expect("append");
         }
         log.complete().expect("complete");
-        let mpath = sessions_root(dir.path())
-            .join(format!("sess-{i}"))
-            .join("manifest.json");
+        let mpath = sessions_root(dir.path()).join(format!("sess-{i}")).join("manifest.json");
         let mut m: crate::SessionManifest =
             serde_json::from_str(&fs::read_to_string(&mpath).expect("read manifest"))
                 .expect("parse");
@@ -126,10 +122,7 @@ fn retention_removes_oldest_sessions() {
     // Total: 3 removed, 2 recent remain.
     let removed = apply_retention(
         dir.path(),
-        crate::retention::RetentionPolicy {
-            max_sessions: 4,
-            max_age_days: 30,
-        },
+        crate::retention::RetentionPolicy { max_sessions: 4, max_age_days: 30 },
     )
     .expect("retain");
     assert_eq!(removed, 3);
@@ -148,9 +141,7 @@ fn retention_evicts_old_sessions_even_when_under_count_cap() {
         }
         log.complete().expect("complete");
         if i == 0 {
-            let mpath = sessions_root(dir.path())
-                .join("sess-0")
-                .join("manifest.json");
+            let mpath = sessions_root(dir.path()).join("sess-0").join("manifest.json");
             let mut m: crate::SessionManifest =
                 serde_json::from_str(&fs::read_to_string(&mpath).expect("read manifest"))
                     .expect("parse");
@@ -164,10 +155,7 @@ fn retention_evicts_old_sessions_even_when_under_count_cap() {
     // max_age_days=30: age-based eviction should still remove sess-0.
     let removed = apply_retention(
         dir.path(),
-        crate::retention::RetentionPolicy {
-            max_sessions: 10,
-            max_age_days: 30,
-        },
+        crate::retention::RetentionPolicy { max_sessions: 10, max_age_days: 30 },
     )
     .expect("retain");
     assert_eq!(removed, 1);

@@ -61,10 +61,7 @@ pub async fn handle_skills_validate(skill_path: &Path, strict: bool) -> Result<(
     if report.is_valid {
         Ok(())
     } else {
-        Err(anyhow!(
-            "Skill validation failed with {} errors",
-            report.stats.error_count
-        ))
+        Err(anyhow!("Skill validation failed with {} errors", report.stats.error_count))
     }
 }
 

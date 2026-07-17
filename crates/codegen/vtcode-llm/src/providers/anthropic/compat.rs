@@ -254,10 +254,7 @@ struct ConvertedAnthropicBlocks {
 pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LLMRequest {
     let (tool_choice, parallel_tool_config) =
         parse_anthropic_tool_choice(request.tool_choice.as_ref());
-    let effort = request
-        .output_config
-        .as_ref()
-        .and_then(|config| config.effort.clone());
+    let effort = request.output_config.as_ref().and_then(|config| config.effort.clone());
     let output_format = request.output_config.as_ref().and_then(|config| {
         config.format.as_ref().and_then(|format| match format {
             AnthropicOutputFormat::JsonSchema { schema } => Some(schema.clone()),
@@ -388,9 +385,7 @@ pub fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> LL
                     tool.allowed_callers = allowed_callers;
                     tool
                 }
-                AnthropicTool::Native {
-                    tool_type, options, ..
-                } => {
+                AnthropicTool::Native { tool_type, options, .. } => {
                     if tool_type.starts_with("web_search_") {
                         ToolDefinition {
                             tool_type,
@@ -505,10 +500,7 @@ pub fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMess
                         .get("signature")
                         .and_then(|value| value.as_str())
                         .map(ToOwned::to_owned);
-                    content_blocks.push(AnthropicContentBlock::Thinking {
-                        thinking,
-                        signature,
-                    });
+                    content_blocks.push(AnthropicContentBlock::Thinking { thinking, signature });
                     preserved_reasoning = true;
                 }
                 Some("redacted_thinking") => {
@@ -529,10 +521,8 @@ pub fn convert_llm_to_anthropic_response(response: LLMResponse) -> AnthropicMess
         && let Some(reasoning) = response.reasoning.as_ref()
         && !reasoning.trim().is_empty()
     {
-        content_blocks.push(AnthropicContentBlock::Thinking {
-            thinking: reasoning.clone(),
-            signature: None,
-        });
+        content_blocks
+            .push(AnthropicContentBlock::Thinking { thinking: reasoning.clone(), signature: None });
     }
 
     if let Some(content) = response.content.as_ref()
@@ -658,15 +648,12 @@ fn convert_anthropic_blocks(blocks: &[AnthropicContentBlock]) -> ConvertedAnthro
     for block in blocks {
         match block {
             AnthropicContentBlock::Text { text, .. } => {
-                converted
-                    .content_parts
-                    .push(ContentPart::text(text.clone()));
+                converted.content_parts.push(ContentPart::text(text.clone()));
             }
             AnthropicContentBlock::Image { source } => {
-                converted.content_parts.push(ContentPart::image(
-                    source.data.clone(),
-                    source.media_type.clone(),
-                ));
+                converted
+                    .content_parts
+                    .push(ContentPart::image(source.data.clone(), source.media_type.clone()));
             }
             AnthropicContentBlock::ToolUse { id, name, input }
             | AnthropicContentBlock::ServerToolUse { id, name, input } => {
@@ -676,18 +663,10 @@ fn convert_anthropic_blocks(blocks: &[AnthropicContentBlock]) -> ConvertedAnthro
                     input.to_string(),
                 ));
             }
-            AnthropicContentBlock::ToolResult {
-                tool_use_id,
-                content,
-                ..
-            } => converted.emitted_messages.push(Message::tool_response(
-                tool_use_id.clone(),
-                anthropic_content_text(content),
-            )),
-            AnthropicContentBlock::Thinking {
-                thinking,
-                signature,
-            } => {
+            AnthropicContentBlock::ToolResult { tool_use_id, content, .. } => converted
+                .emitted_messages
+                .push(Message::tool_response(tool_use_id.clone(), anthropic_content_text(content))),
+            AnthropicContentBlock::Thinking { thinking, signature } => {
                 converted.reasoning_chunks.push(thinking.clone());
                 let mut detail = json!({
                     "type": "thinking",
@@ -707,33 +686,15 @@ fn convert_anthropic_blocks(blocks: &[AnthropicContentBlock]) -> ConvertedAnthro
                 }));
             }
             AnthropicContentBlock::ContainerUpload { file_id } => {
-                converted
-                    .content_parts
-                    .push(ContentPart::file_from_id(file_id.clone()));
+                converted.content_parts.push(ContentPart::file_from_id(file_id.clone()));
             }
-            AnthropicContentBlock::CodeExecutionToolResult {
-                tool_use_id,
-                content,
-            }
-            | AnthropicContentBlock::BashCodeExecutionToolResult {
-                tool_use_id,
-                content,
-            }
-            | AnthropicContentBlock::TextEditorCodeExecutionToolResult {
-                tool_use_id,
-                content,
-            }
-            | AnthropicContentBlock::WebSearchToolResult {
-                tool_use_id,
-                content,
-            }
-            | AnthropicContentBlock::AdvisorToolResult {
-                tool_use_id,
-                content,
-            } => converted.emitted_messages.push(Message::tool_response(
-                tool_use_id.clone(),
-                serialize_value(content),
-            )),
+            AnthropicContentBlock::CodeExecutionToolResult { tool_use_id, content }
+            | AnthropicContentBlock::BashCodeExecutionToolResult { tool_use_id, content }
+            | AnthropicContentBlock::TextEditorCodeExecutionToolResult { tool_use_id, content }
+            | AnthropicContentBlock::WebSearchToolResult { tool_use_id, content }
+            | AnthropicContentBlock::AdvisorToolResult { tool_use_id, content } => converted
+                .emitted_messages
+                .push(Message::tool_response(tool_use_id.clone(), serialize_value(content))),
             // Unknown content block types are silently skipped.
             AnthropicContentBlock::Unknown => {}
         }
@@ -775,40 +736,15 @@ fn anthropic_block_text(block: &AnthropicContentBlock) -> String {
         | AnthropicContentBlock::ServerToolUse { name, input, .. } => {
             format!("[Tool call: {name} with args: {input}]")
         }
-        AnthropicContentBlock::ToolResult {
-            tool_use_id,
-            content,
-            ..
-        } => format!(
-            "[Tool result {}: {}]",
-            tool_use_id,
-            anthropic_content_text(content)
-        ),
-        AnthropicContentBlock::CodeExecutionToolResult {
-            tool_use_id,
-            content,
+        AnthropicContentBlock::ToolResult { tool_use_id, content, .. } => {
+            format!("[Tool result {}: {}]", tool_use_id, anthropic_content_text(content))
         }
-        | AnthropicContentBlock::BashCodeExecutionToolResult {
-            tool_use_id,
-            content,
-        }
-        | AnthropicContentBlock::TextEditorCodeExecutionToolResult {
-            tool_use_id,
-            content,
-        }
-        | AnthropicContentBlock::WebSearchToolResult {
-            tool_use_id,
-            content,
-        }
-        | AnthropicContentBlock::AdvisorToolResult {
-            tool_use_id,
-            content,
-        } => {
-            format!(
-                "[Tool result {}: {}]",
-                tool_use_id,
-                serialize_value(content)
-            )
+        AnthropicContentBlock::CodeExecutionToolResult { tool_use_id, content }
+        | AnthropicContentBlock::BashCodeExecutionToolResult { tool_use_id, content }
+        | AnthropicContentBlock::TextEditorCodeExecutionToolResult { tool_use_id, content }
+        | AnthropicContentBlock::WebSearchToolResult { tool_use_id, content }
+        | AnthropicContentBlock::AdvisorToolResult { tool_use_id, content } => {
+            format!("[Tool result {}: {}]", tool_use_id, serialize_value(content))
         }
         AnthropicContentBlock::Unknown => "[Unknown Content Block]".to_string(),
     }

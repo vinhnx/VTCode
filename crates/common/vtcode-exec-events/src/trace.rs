@@ -71,6 +71,7 @@ pub struct TraceRecord {
     pub id: uuid::Uuid,
 
     /// RFC 3339 timestamp when trace was recorded.
+    #[cfg_attr(feature = "schema-export", schemars(with = "String"))]
     pub timestamp: DateTime<Utc>,
 
     /// Version control system information for this trace.
@@ -117,9 +118,7 @@ impl TraceRecord {
 
     /// Check if the trace has any attributed ranges.
     pub fn has_attributions(&self) -> bool {
-        self.files
-            .iter()
-            .any(|f| f.conversations.iter().any(|c| !c.ranges.is_empty()))
+        self.files.iter().any(|f| f.conversations.iter().any(|c| !c.ranges.is_empty()))
     }
 }
 
@@ -148,18 +147,12 @@ pub struct VcsInfo {
 impl VcsInfo {
     /// Create VCS info for a git repository.
     pub fn git(revision: impl Into<String>) -> Self {
-        Self {
-            vcs_type: VcsType::Git,
-            revision: revision.into(),
-        }
+        Self { vcs_type: VcsType::Git, revision: revision.into() }
     }
 
     /// Create VCS info for a Jujutsu repository.
     pub fn jj(change_id: impl Into<String>) -> Self {
-        Self {
-            vcs_type: VcsType::Jj,
-            revision: change_id.into(),
-        }
+        Self { vcs_type: VcsType::Jj, revision: change_id.into() }
     }
 }
 
@@ -205,10 +198,7 @@ impl ToolInfo {
 
     /// Create custom tool info.
     pub fn new(name: impl Into<String>, version: Option<String>) -> Self {
-        Self {
-            name: name.into(),
-            version,
-        }
+        Self { name: name.into(), version }
     }
 }
 
@@ -230,10 +220,7 @@ pub struct TraceFile {
 impl TraceFile {
     /// Create a new trace file entry.
     pub fn new(path: impl Into<String>) -> Self {
-        Self {
-            path: path.into(),
-            conversations: Vec::new(),
-        }
+        Self { path: path.into(), conversations: Vec::new() }
     }
 
     /// Add a conversation to the file.
@@ -803,12 +790,7 @@ mod tests {
         let range_with_hash = range.with_content_hash("hello world");
         assert!(range_with_hash.content_hash.is_some());
         // Default is MurmurHash3 per Agent Trace spec
-        assert!(
-            range_with_hash
-                .content_hash
-                .unwrap()
-                .starts_with("murmur3:")
-        );
+        assert!(range_with_hash.content_hash.unwrap().starts_with("murmur3:"));
     }
 
     #[test]
@@ -837,10 +819,7 @@ mod tests {
 
     #[test]
     fn test_normalize_model_id() {
-        assert_eq!(
-            normalize_model_id("claude-3-opus", "anthropic"),
-            "anthropic/claude-3-opus"
-        );
+        assert_eq!(normalize_model_id("claude-3-opus", "anthropic"), "anthropic/claude-3-opus");
         assert_eq!(
             normalize_model_id("anthropic/claude-3-opus", "anthropic"),
             "anthropic/claude-3-opus"

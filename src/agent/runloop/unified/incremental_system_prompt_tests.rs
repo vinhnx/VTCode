@@ -37,10 +37,7 @@ async fn test_incremental_prompt_caching() {
 
 #[tokio::test]
 async fn test_base_prompt_hash_is_stable() {
-    assert_eq!(
-        hash_base_system_prompt("Test"),
-        hash_base_system_prompt("Test")
-    );
+    assert_eq!(hash_base_system_prompt("Test"), hash_base_system_prompt("Test"));
 }
 
 #[tokio::test]
@@ -68,13 +65,7 @@ async fn test_instruction_appendix_uses_explicit_directory() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            "Stable base prompt",
-            1,
-            context.hash(),
-            &context,
-            Some(&config),
-        )
+        .get_system_prompt("Stable base prompt", 1, context.hash(), &context, Some(&config))
         .await;
 
     assert!(prompt.contains("be brief"));
@@ -119,19 +110,10 @@ async fn test_prompt_omits_runtime_context_sections() {
 #[tokio::test]
 async fn test_planning_workflow_notice_appended() {
     let prompt_builder = IncrementalSystemPrompt::new();
-    let context = SystemPromptContext {
-        planning_active: true,
-        ..test_context()
-    };
+    let context = SystemPromptContext { planning_active: true, ..test_context() };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            "You are a helpful assistant.",
-            1,
-            context.hash(),
-            &context,
-            None,
-        )
+        .get_system_prompt("You are a helpful assistant.", 1, context.hash(), &context, None)
         .await;
 
     assert!(prompt.contains(vtcode_core::prompts::system::PLANNING_WORKFLOW_READ_ONLY_HEADER));
@@ -155,13 +137,7 @@ async fn test_planning_workflow_uses_noninteractive_notice_when_request_user_inp
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            "You are a helpful assistant.",
-            1,
-            context.hash(),
-            &context,
-            None,
-        )
+        .get_system_prompt("You are a helpful assistant.", 1, context.hash(), &context, None)
         .await;
 
     assert!(prompt.contains(
@@ -182,13 +158,7 @@ async fn test_full_auto_is_constrained_in_planning_workflow() {
     };
 
     let prompt = prompt_builder
-        .get_system_prompt(
-            "You are a helpful assistant.",
-            1,
-            context.hash(),
-            &context,
-            None,
-        )
+        .get_system_prompt("You are a helpful assistant.", 1, context.hash(), &context, None)
         .await;
 
     assert!(prompt.contains(
@@ -202,22 +172,13 @@ async fn test_mode_changes_invalidate_cached_prompt() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let base_prompt = "Base prompt";
     let base_context = test_context();
-    let full_auto_context = SystemPromptContext {
-        full_auto: true,
-        ..test_context()
-    };
+    let full_auto_context = SystemPromptContext { full_auto: true, ..test_context() };
 
     let base = prompt_builder
         .get_system_prompt(base_prompt, 1, base_context.hash(), &base_context, None)
         .await;
     let full_auto = prompt_builder
-        .get_system_prompt(
-            base_prompt,
-            1,
-            full_auto_context.hash(),
-            &full_auto_context,
-            None,
-        )
+        .get_system_prompt(base_prompt, 1, full_auto_context.hash(), &full_auto_context, None)
         .await;
 
     assert_ne!(base, full_auto);

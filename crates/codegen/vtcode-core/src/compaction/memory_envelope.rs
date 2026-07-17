@@ -142,12 +142,8 @@ fn merge_touched_files(
     prior_envelope: Option<&SessionMemoryEnvelope>,
     touched_files: &[String],
 ) -> Vec<String> {
-    let prior = prior_envelope
-        .map(|e| e.touched_files.as_slice())
-        .unwrap_or(&[]);
-    merge_dedup_push(prior, touched_files.iter().cloned(), usize::MAX, |s| {
-        s.clone()
-    })
+    let prior = prior_envelope.map(|e| e.touched_files.as_slice()).unwrap_or(&[]);
+    merge_dedup_push(prior, touched_files.iter().cloned(), usize::MAX, |s| s.clone())
 }
 
 fn merge_recent_strings(prior: &[String], updates: &[String], limit: usize) -> Vec<String> {
@@ -161,9 +157,7 @@ fn merge_recent_strings(prior: &[String], updates: &[String], limit: usize) -> V
         .map(|v| normalize_whitespace(v))
         .filter(|v| !v.is_empty())
         .collect();
-    merge_dedup_push(&prior_normalized, updates_normalized, limit, |s| {
-        s.to_ascii_lowercase()
-    })
+    merge_dedup_push(&prior_normalized, updates_normalized, limit, |s| s.to_ascii_lowercase())
 }
 
 fn extract_constraints_from_summary(text: Option<&str>) -> Vec<String> {
@@ -200,10 +194,8 @@ pub fn derive_continuity_summary(
         })
         .find_map(|message| {
             let trimmed = normalize_whitespace(message.content.as_text().as_ref());
-            (!trimmed.is_empty()).then_some((
-                message.role.as_generic_str(),
-                truncate_for_fact(&trimmed, 140),
-            ))
+            (!trimmed.is_empty())
+                .then_some((message.role.as_generic_str(), truncate_for_fact(&trimmed, 140)))
         });
 
     match (objective, latest) {
@@ -279,10 +271,8 @@ pub fn build_session_memory_envelope(
         pe.map(|e| e.constraints.as_slice()).unwrap_or(&[]),
         &extract_constraints_from_summary(spec_summary.as_deref()),
     );
-    let constraints = merge(
-        &constraints,
-        &extract_constraints_from_summary(evaluation_summary.as_deref()),
-    );
+    let constraints =
+        merge(&constraints, &extract_constraints_from_summary(evaluation_summary.as_deref()));
     let update = envelope_update.cloned().unwrap_or_default();
 
     SessionMemoryEnvelope {
@@ -290,8 +280,7 @@ pub fn build_session_memory_envelope(
         schema_version: Some(SESSION_MEMORY_ENVELOPE_SCHEMA_VERSION),
         summary,
         objective: update.objective.or_else(|| {
-            pe.and_then(|e| e.objective.clone())
-                .or_else(|| task_snapshot.objective.clone())
+            pe.and_then(|e| e.objective.clone()).or_else(|| task_snapshot.objective.clone())
         }),
         task_summary: pe
             .and_then(|e| e.task_summary.clone())
@@ -306,11 +295,7 @@ pub fn build_session_memory_envelope(
         grounded_facts: merge_grounded_facts(pe, original_history, &update.grounded_facts),
         touched_files: merge_touched_files(
             pe,
-            &touched_files
-                .iter()
-                .cloned()
-                .chain(update.touched_files)
-                .collect::<Vec<_>>(),
+            &touched_files.iter().cloned().chain(update.touched_files).collect::<Vec<_>>(),
         ),
         open_questions: merge(
             pe.map(|e| e.open_questions.as_slice()).unwrap_or(&[]),
@@ -363,13 +348,7 @@ pub fn persist_memory_envelope(
             let mut hm = HistoryFileManager::new(workspace_root, session_id);
             let hm2 = messages_to_history_messages(original_history, 0);
             let hr = hm
-                .write_history_sync(
-                    &hm2,
-                    original_history.len(),
-                    "compaction",
-                    touched_files,
-                    &[],
-                )
+                .write_history_sync(&hm2, original_history.len(), "compaction", touched_files, &[])
                 .context("write compaction history artifact")?;
             Some(hr.file_path)
         } else {
@@ -409,11 +388,7 @@ pub fn should_persist_memory_envelope(vt_cfg: Option<&VTCodeConfig>) -> bool {
 
 fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     let mut sections = Vec::new();
-    sections.push(format!(
-        "{}\nSummary:\n{}",
-        MEMORY_ENVELOPE_HEADER,
-        envelope.summary.trim()
-    ));
+    sections.push(format!("{}\nSummary:\n{}", MEMORY_ENVELOPE_HEADER, envelope.summary.trim()));
 
     fn maybe_section(prefix: &str, content: Option<&str>) -> Option<String> {
         content
@@ -438,10 +413,8 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     if let Some(s) = maybe_section("Evaluation Summary", envelope.evaluation_summary.as_deref()) {
         sections.push(s);
     }
-    if let Some(s) = maybe_section(
-        "Verification Status",
-        envelope.verification_summary.as_deref(),
-    ) {
+    if let Some(s) = maybe_section("Verification Status", envelope.verification_summary.as_deref())
+    {
         sections.push(s);
     }
     if let Some(s) = list_section("Constraints", &envelope.constraints) {
@@ -468,10 +441,7 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
     if let Some(s) = list_section("Delegation Notes", &envelope.delegation_notes) {
         sections.push(s);
     }
-    if let Some(s) = maybe_section(
-        "History Artifact",
-        envelope.history_artifact_path.as_deref(),
-    ) {
+    if let Some(s) = maybe_section("History Artifact", envelope.history_artifact_path.as_deref()) {
         sections.push(s);
     }
 
@@ -480,19 +450,13 @@ fn memory_envelope_message(envelope: &SessionMemoryEnvelope) -> Message {
 
 fn is_compaction_summary_message(message: &Message) -> bool {
     message.role == MessageRole::System
-        && message
-            .content
-            .as_text()
-            .starts_with("Previous conversation summary:\n")
+        && message.content.as_text().starts_with("Previous conversation summary:\n")
 }
 
 pub fn strip_existing_memory_envelope(history: &mut Vec<Message>) {
     history.retain(|message| {
         !(message.role == MessageRole::System
-            && message
-                .content
-                .as_text()
-                .starts_with(MEMORY_ENVELOPE_HEADER))
+            && message.content.as_text().starts_with(MEMORY_ENVELOPE_HEADER))
     });
 }
 
@@ -649,11 +613,7 @@ fn collect_structured_verify_commands(content: &str) -> Vec<String> {
 }
 
 fn render_bullet_list(items: &[String]) -> String {
-    items
-        .iter()
-        .map(|item| format!("- {item}"))
-        .collect::<Vec<_>>()
-        .join("\n")
+    items.iter().map(|item| format!("- {item}")).collect::<Vec<_>>().join("\n")
 }
 
 fn looks_like_verification_line(line: &str) -> bool {
@@ -701,10 +661,10 @@ pub fn default_memory_envelope_path_for_session(
     workspace_root: &Path,
     session_id: &str,
 ) -> PathBuf {
-    workspace_root.join(".vtcode").join("history").join(format!(
-        "{}{MEMORY_ENVELOPE_SUFFIX}",
-        sanitize_session_id(session_id)
-    ))
+    workspace_root
+        .join(".vtcode")
+        .join("history")
+        .join(format!("{}{MEMORY_ENVELOPE_SUFFIX}", sanitize_session_id(session_id)))
 }
 
 fn memory_envelope_paths_for_session(workspace_root: &Path, session_id: &str) -> Vec<PathBuf> {
@@ -820,9 +780,7 @@ pub fn has_latest_memory_envelope(workspace_root: &Path, session_id: &str) -> bo
 // ---------------------------------------------------------------------------
 
 pub fn configured_retained_user_messages(vt_cfg: Option<&VTCodeConfig>) -> usize {
-    vt_cfg
-        .map(|cfg| cfg.context.dynamic.retained_user_messages)
-        .unwrap_or(4)
+    vt_cfg.map(|cfg| cfg.context.dynamic.retained_user_messages).unwrap_or(4)
 }
 
 pub fn local_compaction_config(
@@ -903,10 +861,7 @@ pub fn build_zero_cost_summarized_fork_history(
     );
 
     let mut compacted = Vec::with_capacity(retained_users.len().saturating_add(1));
-    compacted.push(Message::system(format!(
-        "Previous conversation summary:\n{}",
-        summary.trim()
-    )));
+    compacted.push(Message::system(format!("Previous conversation summary:\n{}", summary.trim())));
     compacted.extend(retained_users);
     compacted
 }
@@ -978,14 +933,8 @@ fn build_file_read_dedup_key(payload: &Value) -> Option<FileReadDedupKey> {
     let obj = payload.as_object()?;
     if obj.get("items").is_some()
         || obj.get("error").is_some()
-        || obj
-            .get("spool_chunked")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        || obj
-            .get("has_more")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
+        || obj.get("spool_chunked").and_then(Value::as_bool).unwrap_or(false)
+        || obj.get("has_more").and_then(Value::as_bool).unwrap_or(false)
     {
         return None;
     }
@@ -1008,10 +957,7 @@ fn build_file_read_dedup_key(payload: &Value) -> Option<FileReadDedupKey> {
 fn build_file_read_placeholder_content(payload: &Value, key: &FileReadDedupKey) -> String {
     let mut p = serde_json::Map::new();
     p.insert("deduped_read".into(), Value::Bool(true));
-    p.insert(
-        "note".into(),
-        Value::String(DEDUPED_FILE_READ_NOTE.to_string()),
-    );
+    p.insert("note".into(), Value::String(DEDUPED_FILE_READ_NOTE.to_string()));
 
     fn maybe_str(p: &mut serde_json::Map<String, Value>, payload: &Value, key: &str) {
         if let Some(s) = payload
@@ -1056,10 +1002,7 @@ fn file_read_dedup_candidate(
             })
         })?;
 
-    if !matches!(
-        kind,
-        FileReadToolKind::ReadFile | FileReadToolKind::UnifiedFileRead
-    ) {
+    if !matches!(kind, FileReadToolKind::ReadFile | FileReadToolKind::UnifiedFileRead) {
         return None;
     }
 
@@ -1108,11 +1051,7 @@ pub fn resolve_compaction_threshold(
 ) -> Option<u64> {
     let configured_threshold = configured_threshold.filter(|threshold| *threshold > 0);
     let derived_threshold = if context_size > 0 {
-        Some(
-            ((context_size as f64) * DEFAULT_COMPACTION_TRIGGER_RATIO)
-                .round()
-                .max(0.0) as u64,
-        )
+        Some(((context_size as f64) * DEFAULT_COMPACTION_TRIGGER_RATIO).round().max(0.0) as u64)
     } else {
         None
     };

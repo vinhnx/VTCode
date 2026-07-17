@@ -87,8 +87,5 @@ fn tool_names_from_definitions(tools: Option<&Vec<ToolDefinition>>) -> Vec<Strin
         return Vec::new();
     };
 
-    tools
-        .iter()
-        .map(|tool| tool.function_name().to_string())
-        .collect()
+    tools.iter().map(|tool| tool.function_name().to_string()).collect()
 }

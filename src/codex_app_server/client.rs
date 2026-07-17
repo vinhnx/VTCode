@@ -64,11 +64,7 @@ impl CodexAppServerClient {
             if err.kind() == std::io::ErrorKind::NotFound {
                 codex_cli_unavailable_error()
             } else {
-                anyhow!(
-                    "failed to launch Codex app-server via '{}': {}",
-                    sidecar_cfg.command,
-                    err
-                )
+                anyhow!("failed to launch Codex app-server via '{}': {}", sidecar_cfg.command, err)
             }
         })?;
 
@@ -90,9 +86,7 @@ impl CodexAppServerClient {
             stdout,
             stderr,
             Duration::from_secs(DEFAULT_RPC_TIMEOUT_SECS),
-            StdioTransportOptions {
-                include_jsonrpc_version: false,
-            },
+            StdioTransportOptions { include_jsonrpc_version: false },
         ));
         let refresh_handler = Arc::new(Mutex::new(None));
         let (event_tx, _) = broadcast::channel(256);
@@ -100,11 +94,7 @@ impl CodexAppServerClient {
 
         initialize_connection(&transport, &sidecar_cfg).await?;
 
-        let client = Self {
-            transport,
-            events: event_tx,
-            refresh_handler,
-        };
+        let client = Self { transport, events: event_tx, refresh_handler };
         client.set_refresh_handler(None);
         Ok(client)
     }
@@ -134,10 +124,7 @@ impl CodexAppServerClient {
     pub(crate) fn account_login_chatgpt_device_code(
         &self,
     ) -> impl Future<Output = Result<CodexLoginAccountResponse>> + '_ {
-        self.request(
-            "account/login/start",
-            json!({ "type": "chatgptDeviceCode" }),
-        )
+        self.request("account/login/start", json!({ "type": "chatgptDeviceCode" }))
     }
 
     pub(crate) fn account_logout(&self) -> impl Future<Output = Result<()>> + '_ {
@@ -228,9 +215,7 @@ impl CodexAppServerClient {
     }
 
     pub(crate) fn respond_to_server_request(&self, id: Value, result: Value) -> Result<()> {
-        self.transport
-            .respond_value(id, result)
-            .map_err(|err| anyhow!(err.to_string()))
+        self.transport.respond_value(id, result).map_err(|err| anyhow!(err.to_string()))
     }
 
     fn request<'a, T>(
@@ -313,11 +298,7 @@ pub(crate) async fn launch_app_server_proxy(
             if err.kind() == std::io::ErrorKind::NotFound {
                 codex_cli_unavailable_error()
             } else {
-                anyhow!(
-                    "failed to launch Codex app-server via '{}': {}",
-                    sidecar_cfg.command,
-                    err
-                )
+                anyhow!("failed to launch Codex app-server via '{}': {}", sidecar_cfg.command, err)
             }
         })?;
 
@@ -351,11 +332,7 @@ fn install_event_handler(
                 });
             }
 
-            let _ = event_tx.send(ServerEvent {
-                method: method.to_string(),
-                params,
-                id,
-            });
+            let _ = event_tx.send(ServerEvent { method: method.to_string(), params, id });
         }
 
         Ok(())
@@ -401,10 +378,7 @@ async fn handle_refresh_request(
     id: Value,
     params: Value,
 ) {
-    let refresh_handler = refresh_handler
-        .lock()
-        .ok()
-        .and_then(|handler| handler.clone());
+    let refresh_handler = refresh_handler.lock().ok().and_then(|handler| handler.clone());
     let Some(refresh_handler) = refresh_handler else {
         let _ = transport.respond_error_value(
             id,
@@ -448,9 +422,7 @@ async fn handle_refresh_request(
 }
 
 fn sidecar_config(vt_cfg: Option<&VTCodeConfig>) -> AgentCodexAppServerConfig {
-    vt_cfg
-        .map(|cfg| cfg.agent.codex_app_server.clone())
-        .unwrap_or_default()
+    vt_cfg.map(|cfg| cfg.agent.codex_app_server.clone()).unwrap_or_default()
 }
 
 pub(crate) fn ensure_codex_sidecar_available(vt_cfg: Option<&VTCodeConfig>) -> Result<()> {
@@ -464,11 +436,7 @@ pub(crate) fn codex_sidecar_requirement_note() -> &'static str {
 
 #[cold]
 fn codex_cli_unavailable_error() -> anyhow::Error {
-    anyhow!(
-        "{} {}",
-        CODEX_SIDECAR_UNAVAILABLE_PREFIX,
-        codex_sidecar_requirement_note()
-    )
+    anyhow!("{} {}", CODEX_SIDECAR_UNAVAILABLE_PREFIX, codex_sidecar_requirement_note())
 }
 
 fn ensure_codex_sidecar_command_available(command: &str) -> Result<()> {
@@ -584,13 +552,7 @@ fn validate_listen_target(listen: &str) -> Result<&str> {
 }
 
 fn is_server_overloaded_error(err: &AcpError) -> bool {
-    matches!(
-        err,
-        AcpError::RemoteError {
-            code: Some(SERVER_OVERLOADED_ERROR_CODE),
-            ..
-        }
-    )
+    matches!(err, AcpError::RemoteError { code: Some(SERVER_OVERLOADED_ERROR_CODE), .. })
 }
 
 fn idempotent_retry_delay(attempt: usize) -> Duration {
@@ -679,10 +641,7 @@ impl CodexTurnRequest {
             .filter(|instructions| !instructions.is_empty())
             && let Some(object) = request.as_object_mut()
         {
-            object.insert(
-                "instructions".to_string(),
-                Value::String(instructions.to_string()),
-            );
+            object.insert("instructions".to_string(), Value::String(instructions.to_string()));
         }
         request
     }
@@ -968,10 +927,7 @@ mod tests {
             reasoning_effort: Some("medium".to_string()),
         };
 
-        assert_eq!(
-            thread.thread_start_params(false)["approvalsReviewer"],
-            json!("user")
-        );
+        assert_eq!(thread.thread_start_params(false)["approvalsReviewer"], json!("user"));
         assert_eq!(turn.as_json()["approvalsReviewer"], json!("user"));
     }
 

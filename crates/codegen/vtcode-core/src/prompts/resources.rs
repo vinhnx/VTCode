@@ -77,10 +77,7 @@ struct CachedPromptTemplates {
 
 impl CachedPromptTemplates {
     fn is_expired(&self) -> bool {
-        self.timestamp
-            .elapsed()
-            .unwrap_or(PROMPT_RESOURCE_CACHE_TTL)
-            > PROMPT_RESOURCE_CACHE_TTL
+        self.timestamp.elapsed().unwrap_or(PROMPT_RESOURCE_CACHE_TTL) > PROMPT_RESOURCE_CACHE_TTL
     }
 }
 
@@ -92,10 +89,7 @@ struct CachedSystemPromptLayers {
 
 impl CachedSystemPromptLayers {
     fn is_expired(&self) -> bool {
-        self.timestamp
-            .elapsed()
-            .unwrap_or(PROMPT_RESOURCE_CACHE_TTL)
-            > PROMPT_RESOURCE_CACHE_TTL
+        self.timestamp.elapsed().unwrap_or(PROMPT_RESOURCE_CACHE_TTL) > PROMPT_RESOURCE_CACHE_TTL
     }
 }
 
@@ -332,10 +326,7 @@ impl<'a> PromptResourceOptions<'a> {
         #[cfg(not(test))]
         let home_dir = dirs::home_dir();
 
-        Self {
-            workspace_root,
-            home_dir,
-        }
+        Self { workspace_root, home_dir }
     }
 }
 
@@ -361,10 +352,8 @@ async fn resolve_system_prompt_layers_uncached(
         .home_dir
         .as_ref()
         .map(|home| home.join(PROMPTS_DIR).join(SYSTEM_PROMPT_FILENAME));
-    let workspace_system_path = options
-        .workspace_root
-        .join(PROMPTS_DIR)
-        .join(SYSTEM_PROMPT_FILENAME);
+    let workspace_system_path =
+        options.workspace_root.join(PROMPTS_DIR).join(SYSTEM_PROMPT_FILENAME);
 
     if let Some(path) = user_system_path.as_ref() {
         layers.override_body = read_optional_markdown(path).await;
@@ -383,10 +372,8 @@ async fn resolve_system_prompt_layers_uncached(
         layers.append_bodies.push(contents);
     }
 
-    let workspace_append = options
-        .workspace_root
-        .join(PROMPTS_DIR)
-        .join(APPEND_SYSTEM_PROMPT_FILENAME);
+    let workspace_append =
+        options.workspace_root.join(PROMPTS_DIR).join(APPEND_SYSTEM_PROMPT_FILENAME);
     if let Some(contents) = read_optional_markdown(&workspace_append).await {
         layers.append_bodies.push(contents);
     }
@@ -418,12 +405,8 @@ async fn discover_prompt_templates_uncached(
     }
 
     let workspace_templates = options.workspace_root.join(PROMPTS_DIR).join(TEMPLATES_DIR);
-    merge_prompt_templates(
-        &mut discovered,
-        &workspace_templates,
-        PromptResourceScope::Workspace,
-    )
-    .await;
+    merge_prompt_templates(&mut discovered, &workspace_templates, PromptResourceScope::Workspace)
+        .await;
 
     discovered.into_values().collect()
 }
@@ -462,11 +445,7 @@ async fn merge_prompt_templates(
             }
             Ok(None) => break,
             Err(err) => {
-                warn!(
-                    "failed to read prompt templates directory {}: {}",
-                    directory.display(),
-                    err
-                );
+                warn!("failed to read prompt templates directory {}: {}", directory.display(), err);
                 break;
             }
         }
@@ -624,26 +603,17 @@ mod tests {
         let home = tempfile::TempDir::new().expect("home");
         let workspace_prompts = workspace.path().join(PROMPTS_DIR);
         std::fs::create_dir_all(&workspace_prompts).expect("workspace prompts");
-        std::fs::write(
-            workspace_prompts.join(SYSTEM_PROMPT_FILENAME),
-            "workspace system override",
-        )
-        .expect("write workspace system");
+        std::fs::write(workspace_prompts.join(SYSTEM_PROMPT_FILENAME), "workspace system override")
+            .expect("write workspace system");
 
         let first = layers_with_roots(workspace.path(), Some(home.path())).await;
-        assert_eq!(
-            first.override_body.as_deref(),
-            Some("workspace system override")
-        );
+        assert_eq!(first.override_body.as_deref(), Some("workspace system override"));
 
         std::fs::remove_file(workspace_prompts.join(SYSTEM_PROMPT_FILENAME))
             .expect("remove workspace system");
 
         let second = layers_with_roots(workspace.path(), Some(home.path())).await;
-        assert_eq!(
-            second.override_body.as_deref(),
-            Some("workspace system override")
-        );
+        assert_eq!(second.override_body.as_deref(), Some("workspace system override"));
 
         clear_prompt_resource_caches();
 
@@ -660,11 +630,8 @@ mod tests {
         let home = tempfile::TempDir::new().expect("home");
         let workspace_templates = workspace.path().join(PROMPTS_DIR).join(TEMPLATES_DIR);
         std::fs::create_dir_all(&workspace_templates).expect("workspace templates");
-        std::fs::write(
-            workspace_templates.join("cache-test.md"),
-            "# Cache test\n\nBody",
-        )
-        .expect("write workspace template");
+        std::fs::write(workspace_templates.join("cache-test.md"), "# Cache test\n\nBody")
+            .expect("write workspace template");
 
         let first = discover_with_roots(workspace.path(), Some(home.path())).await;
         assert!(first.iter().any(|template| template.name == "cache-test"));
@@ -701,42 +668,24 @@ mod tests {
         std::fs::create_dir_all(&user_prompts).expect("user prompts");
         std::fs::create_dir_all(&workspace_prompts).expect("workspace prompts");
 
-        std::fs::write(
-            user_prompts.join(SYSTEM_PROMPT_FILENAME),
-            "user system override",
-        )
-        .expect("write user system");
-        std::fs::write(
-            workspace_prompts.join(SYSTEM_PROMPT_FILENAME),
-            "workspace system override",
-        )
-        .expect("write workspace system");
-        std::fs::write(
-            user_prompts.join(APPEND_SYSTEM_PROMPT_FILENAME),
-            "user append",
-        )
-        .expect("write user append");
-        std::fs::write(
-            workspace_prompts.join(APPEND_SYSTEM_PROMPT_FILENAME),
-            "workspace append",
-        )
-        .expect("write workspace append");
+        std::fs::write(user_prompts.join(SYSTEM_PROMPT_FILENAME), "user system override")
+            .expect("write user system");
+        std::fs::write(workspace_prompts.join(SYSTEM_PROMPT_FILENAME), "workspace system override")
+            .expect("write workspace system");
+        std::fs::write(user_prompts.join(APPEND_SYSTEM_PROMPT_FILENAME), "user append")
+            .expect("write user append");
+        std::fs::write(workspace_prompts.join(APPEND_SYSTEM_PROMPT_FILENAME), "workspace append")
+            .expect("write workspace append");
 
         let layers = layers_with_roots(workspace.path(), Some(home.path())).await;
-        assert_eq!(
-            layers.override_body.as_deref(),
-            Some("workspace system override")
-        );
+        assert_eq!(layers.override_body.as_deref(), Some("workspace system override"));
         assert_eq!(
             layers.append_bodies,
             vec!["user append".to_string(), "workspace append".to_string()]
         );
 
         let composed = apply_system_prompt_layers("fallback base", &layers);
-        assert_eq!(
-            composed,
-            "workspace system override\n\nuser append\n\nworkspace append"
-        );
+        assert_eq!(composed, "workspace system override\n\nuser append\n\nworkspace append");
     }
 
     #[tokio::test]
@@ -767,16 +716,10 @@ mod tests {
         let templates = discover_with_roots(workspace.path(), Some(home.path())).await;
         assert_eq!(templates.len(), 2);
         assert_eq!(templates[0].name, "audit");
-        assert_eq!(
-            templates[0].description,
-            "First non-empty line becomes description."
-        );
+        assert_eq!(templates[0].description, "First non-empty line becomes description.");
         assert_eq!(templates[1].name, "review");
         assert_eq!(templates[1].description, "Workspace review");
-        assert_eq!(
-            templates[1].body,
-            "# Workspace review\n\nReview workspace $1"
-        );
+        assert_eq!(templates[1].body, "# Workspace review\n\nReview workspace $1");
     }
 
     #[tokio::test]
@@ -790,11 +733,8 @@ mod tests {
 
         std::fs::write(user_templates.join("review.md"), "User review body")
             .expect("user template");
-        std::fs::write(
-            workspace_templates.join("review.md"),
-            "Workspace review body",
-        )
-        .expect("workspace template");
+        std::fs::write(workspace_templates.join("review.md"), "Workspace review body")
+            .expect("workspace template");
 
         let template = find_with_roots(workspace.path(), Some(home.path()), "review")
             .await

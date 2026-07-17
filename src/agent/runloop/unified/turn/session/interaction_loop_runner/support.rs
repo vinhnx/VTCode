@@ -98,9 +98,8 @@ pub(super) fn extract_recent_follow_up_hint(history: &[uni::Message]) -> Option<
             continue;
         };
 
-        if let Some(next_continue) = obj
-            .get("next_continue_args")
-            .and_then(PtyContinuationArgs::from_value)
+        if let Some(next_continue) =
+            obj.get("next_continue_args").and_then(PtyContinuationArgs::from_value)
         {
             return Some((
                 tool_names::WRITE_STDIN.to_string(),
@@ -111,9 +110,8 @@ pub(super) fn extract_recent_follow_up_hint(history: &[uni::Message]) -> Option<
             ));
         }
 
-        if let Some(next_read) = obj
-            .get("next_read_args")
-            .and_then(ReadChunkContinuationArgs::from_value)
+        if let Some(next_read) =
+            obj.get("next_read_args").and_then(ReadChunkContinuationArgs::from_value)
         {
             return Some((
                 tool_names::UNIFIED_FILE.to_string(),
@@ -194,8 +192,7 @@ async fn open_transcript_review_in_editor(
 
     match result {
         Ok(_) => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Transcript review opened in editor.")?;
+            ctx.renderer.line(MessageStyle::Info, "Transcript review opened in editor.")?;
         }
         Err(err) => {
             ctx.renderer.line(
@@ -246,15 +243,9 @@ async fn launch_input_editor_with_draft(
                 format!("failed to read edited content from {}", path.display())
             })?;
             ctx.handle.set_input(content);
-            (
-                MessageStyle::Info,
-                "Editor closed. Input updated with edited content.".to_owned(),
-            )
+            (MessageStyle::Info, "Editor closed. Input updated with edited content.".to_owned())
         }
-        Err(err) => (
-            MessageStyle::Error,
-            format!("Failed to launch editor: {err}"),
-        ),
+        Err(err) => (MessageStyle::Error, format!("Failed to launch editor: {err}")),
     };
 
     if let Err(err) = fs::remove_file(&path) {
@@ -506,8 +497,7 @@ pub(super) async fn build_user_message_content(
     let text = input.text.as_str();
     let allow_structured_non_image_file_inputs = supports_native_openai_file_inputs(
         &ctx.config.provider,
-        ctx.provider_client
-            .supports_responses_compaction(&ctx.config.model),
+        ctx.provider_client.supports_responses_compaction(&ctx.config.model),
     );
     let processed_content = match vtcode_core::utils::at_pattern::parse_at_patterns_with_options(
         text,
@@ -592,10 +582,7 @@ pub(super) fn submitted_images_are_unsupported(
     workspace: &Path,
 ) -> bool {
     !model_supports_vision
-        && (input
-            .attachments
-            .iter()
-            .any(vtcode_ui::tui::app::ContentPart::is_image)
+        && (input.attachments.iter().any(vtcode_ui::tui::app::ContentPart::is_image)
             || vtcode_core::utils::at_pattern::input_may_parse_image_parts(&input.text, workspace))
 }
 
@@ -609,9 +596,7 @@ pub(super) fn selected_model_supports_image_input(
     };
 
     if let Some(input_modalities) = model_id_input_modalities_for_provider(provider, model) {
-        return input_modalities
-            .iter()
-            .any(|modality| modality.eq_ignore_ascii_case("image"));
+        return input_modalities.iter().any(|modality| modality.eq_ignore_ascii_case("image"));
     }
 
     let Some(resolved) = ModelResolver::resolve(Some(provider.as_ref()), model, &[], None) else {
@@ -622,9 +607,7 @@ pub(super) fn selected_model_supports_image_input(
         return provider_supports_vision;
     }
 
-    input_modalities
-        .iter()
-        .any(|modality| modality.eq_ignore_ascii_case("image"))
+    input_modalities.iter().any(|modality| modality.eq_ignore_ascii_case("image"))
 }
 
 fn parse_image_capability_provider(provider_key: &str) -> Option<Provider> {
@@ -800,10 +783,9 @@ pub(super) fn refresh_live_ide_context_update(
     };
 
     match bridge.refresh() {
-        Ok((snapshot, refresh_state)) => LiveIdeContextUpdate {
-            snapshot,
-            changed: refresh_state.changed,
-        },
+        Ok((snapshot, refresh_state)) => {
+            LiveIdeContextUpdate { snapshot, changed: refresh_state.changed }
+        }
         Err(err) => {
             tracing::warn!(
                 error = %err,
@@ -862,33 +844,19 @@ async fn try_resume_archived_session(
     loading_message: &str,
     success_message: &str,
 ) -> Result<Option<InteractionOutcome>> {
-    renderer.line(
-        MessageStyle::Info,
-        &format!("{loading_message}: {session_id}"),
-    )?;
+    renderer.line(MessageStyle::Info, &format!("{loading_message}: {session_id}"))?;
 
     match crate::agent::agents::load_resume_session(session_id, intent).await {
         Ok(Some(resume)) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("{success_message}: {session_id}"),
-            )?;
-            Ok(Some(InteractionOutcome::Resume {
-                resume_session: Box::new(resume),
-            }))
+            renderer.line(MessageStyle::Info, &format!("{success_message}: {session_id}"))?;
+            Ok(Some(InteractionOutcome::Resume { resume_session: Box::new(resume) }))
         }
         Ok(None) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Session not found: {session_id}"),
-            )?;
+            renderer.line(MessageStyle::Error, &format!("Session not found: {session_id}"))?;
             Ok(None)
         }
         Err(err) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to load session: {err}"),
-            )?;
+            renderer.line(MessageStyle::Error, &format!("Failed to load session: {err}"))?;
             Ok(None)
         }
     }
@@ -967,17 +935,11 @@ pub(super) async fn resolve_inline_loop_action(
                 InlineLoopActionResolution::ContinueLoop
             }
         }
-        InlineLoopAction::ForkSession {
-            session_id,
-            summarize,
-        } => {
+        InlineLoopAction::ForkSession { session_id, summarize } => {
             if let Some(outcome) = try_resume_archived_session(
                 ctx.renderer,
                 &session_id,
-                ArchivedSessionIntent::ForkNewArchive {
-                    custom_suffix: None,
-                    summarize,
-                },
+                ArchivedSessionIntent::ForkNewArchive { custom_suffix: None, summarize },
                 "Loading session for fork",
                 "Restarting from fork source",
             )
@@ -1009,8 +971,7 @@ async fn handle_cycle_primary_agent(
     match next_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
         Some(name) => handle_select_primary_agent(ctx, state, Some(name)).await,
         None => {
-            ctx.renderer
-                .line(MessageStyle::Error, "No primary agents are available.")?;
+            ctx.renderer.line(MessageStyle::Error, "No primary agents are available.")?;
             Ok(())
         }
     }
@@ -1026,8 +987,7 @@ async fn handle_cycle_primary_agent_previous(
     match previous_primary_agent_name(ctx.active_primary_agent.active(), &specs) {
         Some(name) => handle_select_primary_agent(ctx, state, Some(name)).await,
         None => {
-            ctx.renderer
-                .line(MessageStyle::Error, "No primary agents are available.")?;
+            ctx.renderer.line(MessageStyle::Error, "No primary agents are available.")?;
             Ok(())
         }
     }
@@ -1081,10 +1041,7 @@ pub(crate) async fn handle_select_primary_agent(
             sync_primary_agent_hook_runtime(ctx).await?;
             // Apply per-agent tool policy overrides before refreshing the tool snapshot
             for (tool_name, policy) in &policy_overrides {
-                if let Err(err) = ctx
-                    .tool_registry
-                    .set_tool_policy(tool_name, policy.clone())
-                    .await
+                if let Err(err) = ctx.tool_registry.set_tool_policy(tool_name, policy.clone()).await
                 {
                     tracing::warn!(
                         "Failed to apply tool policy override for '{}' on agent switch: {}",
@@ -1124,10 +1081,8 @@ pub(crate) async fn handle_select_primary_agent(
         Err(vtcode_core::primary_agent::PrimaryAgentResolutionError::UnknownAgent {
             requested,
         }) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Unknown primary agent '{requested}'."),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Unknown primary agent '{requested}'."))?;
         }
     }
 
@@ -1192,8 +1147,7 @@ async fn sync_primary_agent_mcp_runtime(
         &deferred_tool_policy,
     )
     .await;
-    ctx.tool_catalog
-        .mark_pending_refresh("primary_agent_mcp_reconfigure");
+    ctx.tool_catalog.mark_pending_refresh("primary_agent_mcp_reconfigure");
 
     if restarted_mcp_runtime {
         tracing::debug!("Restarted active MCP runtime after primary agent switch");
@@ -1208,10 +1162,8 @@ async fn load_primary_agent_specs_or_report(
     match load_primary_agent_specs(ctx).await {
         Ok(specs) => Ok(Some(specs)),
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to discover primary agents: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to discover primary agents: {err}"))?;
             Ok(None)
         }
     }
@@ -1236,25 +1188,13 @@ async fn load_primary_agent_specs(
         &vtcode_config::SubagentDiscoveryInput::new(ctx.config.workspace.clone()),
     )
     .with_context(|| {
-        format!(
-            "Failed to discover primary agents in {}",
-            ctx.config.workspace.display()
-        )
+        format!("Failed to discover primary agents in {}", ctx.config.workspace.display())
     })?;
-    Ok(discovered
-        .effective
-        .into_iter()
-        .filter(|spec| spec.is_primary())
-        .collect())
+    Ok(discovered.effective.into_iter().filter(|spec| spec.is_primary()).collect())
 }
 
 fn set_primary_agent_display(ctx: &mut InteractionLoopContext<'_>, name: String) {
-    let color = ctx
-        .active_primary_agent
-        .active()
-        .color
-        .clone()
-        .filter(|c| !c.trim().is_empty());
+    let color = ctx.active_primary_agent.active().color.clone().filter(|c| !c.trim().is_empty());
     ctx.header_context.primary_agent = Some(name.clone());
     ctx.header_context.primary_agent_color = color.clone();
     ctx.handle.set_primary_agent(Some(name), color);
@@ -1270,12 +1210,10 @@ fn next_primary_agent_name(
         return None;
     }
 
-    Some(
-        match names.iter().position(|name| name == &active.identity.name) {
-            Some(index) if index + 1 < names.len() => names[index + 1].clone(),
-            Some(_) | None => names[0].clone(),
-        },
-    )
+    Some(match names.iter().position(|name| name == &active.identity.name) {
+        Some(index) if index + 1 < names.len() => names[index + 1].clone(),
+        Some(_) | None => names[0].clone(),
+    })
 }
 
 fn previous_primary_agent_name(
@@ -1288,12 +1226,10 @@ fn previous_primary_agent_name(
         return None;
     }
 
-    Some(
-        match names.iter().position(|name| name == &active.identity.name) {
-            Some(0) | None => names[names.len() - 1].clone(),
-            Some(index) => names[index - 1].clone(),
-        },
-    )
+    Some(match names.iter().position(|name| name == &active.identity.name) {
+        Some(0) | None => names[names.len() - 1].clone(),
+        Some(index) => names[index - 1].clone(),
+    })
 }
 
 fn primary_agent_names(specs: &[vtcode_config::SubagentSpec]) -> Vec<String> {
@@ -1361,10 +1297,7 @@ mod tests {
         let specs = vec![test_subagent_spec("beta"), test_subagent_spec("alpha")];
         let active = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[1]);
 
-        assert_eq!(
-            next_primary_agent_name(&active, &specs),
-            Some("beta".to_string())
-        );
+        assert_eq!(next_primary_agent_name(&active, &specs), Some("beta".to_string()));
     }
 
     #[test]
@@ -1372,10 +1305,7 @@ mod tests {
         let specs = vec![test_subagent_spec("build"), test_subagent_spec("duck")];
         let active = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[1]);
 
-        assert_eq!(
-            next_primary_agent_name(&active, &specs),
-            Some("build".to_string())
-        );
+        assert_eq!(next_primary_agent_name(&active, &specs), Some("build".to_string()));
     }
 
     #[test]
@@ -1412,10 +1342,7 @@ mod tests {
         ];
         let active = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[0]);
 
-        assert_eq!(
-            previous_primary_agent_name(&active, &specs),
-            Some("plan".to_string())
-        );
+        assert_eq!(previous_primary_agent_name(&active, &specs), Some("plan".to_string()));
     }
 
     #[test]
@@ -1443,21 +1370,13 @@ mod tests {
         let build = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[0]);
         let plan = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(&specs[1]);
 
-        assert_eq!(
-            next_primary_agent_name(&build, &specs),
-            Some("plan".to_string())
-        );
-        assert_eq!(
-            next_primary_agent_name(&plan, &specs),
-            Some("auto".to_string())
-        );
+        assert_eq!(next_primary_agent_name(&build, &specs), Some("plan".to_string()));
+        assert_eq!(next_primary_agent_name(&plan, &specs), Some("auto".to_string()));
         assert!(agent_needs_trust(&specs, "auto"));
     }
 
     fn default_active_primary_agent() -> vtcode_core::primary_agent::ActivePrimaryAgent {
-        vtcode_core::primary_agent::ActivePrimaryAgentState::default()
-            .active()
-            .clone()
+        vtcode_core::primary_agent::ActivePrimaryAgentState::default().active().clone()
     }
 
     fn test_subagent_spec(name: &str) -> SubagentSpec {
@@ -1515,13 +1434,7 @@ mod tests {
         ];
 
         let hint = extract_recent_follow_up_hint(&history);
-        assert_eq!(
-            hint,
-            Some((
-                "task_tracker".to_string(),
-                serde_json::json!({"action":"list"})
-            ))
-        );
+        assert_eq!(hint, Some(("task_tracker".to_string(), serde_json::json!({"action":"list"}))));
     }
 
     #[test]
@@ -1571,13 +1484,7 @@ mod tests {
             ),
         ];
         let hint = extract_recent_follow_up_hint(&history);
-        assert_eq!(
-            hint,
-            Some((
-                "task_tracker".to_string(),
-                serde_json::json!({"action":"list"})
-            ))
-        );
+        assert_eq!(hint, Some(("task_tracker".to_string(), serde_json::json!({"action":"list"}))));
     }
 
     #[test]
@@ -1614,13 +1521,7 @@ mod tests {
         ];
 
         let hint = extract_recent_follow_up_hint(&history);
-        assert_eq!(
-            hint,
-            Some((
-                "task_tracker".to_string(),
-                serde_json::json!({"action":"list"})
-            ))
-        );
+        assert_eq!(hint, Some(("task_tracker".to_string(), serde_json::json!({"action":"list"}))));
     }
 
     #[test]
@@ -1638,13 +1539,7 @@ mod tests {
         )];
 
         let hint = extract_recent_follow_up_hint(&history);
-        assert_eq!(
-            hint,
-            Some((
-                "task_tracker".to_string(),
-                serde_json::json!({"action":"list"})
-            ))
-        );
+        assert_eq!(hint, Some(("task_tracker".to_string(), serde_json::json!({"action":"list"}))));
     }
 
     #[test]
@@ -1809,10 +1704,7 @@ mod tests {
 
         append_submitted_attachments(&mut content, &[]);
 
-        assert_eq!(
-            content,
-            uni::MessageContent::text("plain prompt".to_string())
-        );
+        assert_eq!(content, uni::MessageContent::text("plain prompt".to_string()));
     }
 
     #[tokio::test]
@@ -1936,18 +1828,8 @@ mod tests {
                 assert!(matches!(parts[2], uni::ContentPart::Image { .. }));
                 assert!(matches!(parts[3], uni::ContentPart::Text { .. }));
                 assert!(matches!(parts[4], uni::ContentPart::Text { .. }));
-                assert!(
-                    parts[3]
-                        .as_text()
-                        .unwrap_or("")
-                        .contains("[file_reference_metadata]")
-                );
-                assert!(
-                    parts[4]
-                        .as_text()
-                        .unwrap_or("")
-                        .contains("[agent_reference_metadata]")
-                );
+                assert!(parts[3].as_text().unwrap_or("").contains("[file_reference_metadata]"));
+                assert!(parts[4].as_text().unwrap_or("").contains("[agent_reference_metadata]"));
             }
             uni::MessageContent::Text(_) => panic!("expected parts"),
         }
@@ -1961,21 +1843,10 @@ mod tests {
             vec![UiContentPart::image("pasted-image", "image/png")],
         );
 
-        assert!(submitted_images_are_unsupported(
-            &input,
-            false,
-            temp_dir.path()
-        ));
-        assert!(!submitted_images_are_unsupported(
-            &input,
-            true,
-            temp_dir.path()
-        ));
+        assert!(submitted_images_are_unsupported(&input, false, temp_dir.path()));
+        assert!(!submitted_images_are_unsupported(&input, true, temp_dir.path()));
         assert_eq!(input.text, "please inspect this");
-        assert_eq!(
-            input.attachments,
-            vec![UiContentPart::image("pasted-image", "image/png")]
-        );
+        assert_eq!(input.attachments, vec![UiContentPart::image("pasted-image", "image/png")]);
     }
 
     #[test]
@@ -1983,75 +1854,41 @@ mod tests {
         let temp_dir = TempDir::new().expect("temp dir");
         let input = SubmittedInput::from("look data:image/png;base64,parsedimage".to_string());
 
-        assert!(submitted_images_are_unsupported(
-            &input,
-            false,
-            temp_dir.path()
-        ));
-        assert!(!submitted_images_are_unsupported(
-            &input,
-            true,
-            temp_dir.path()
-        ));
+        assert!(submitted_images_are_unsupported(&input, false, temp_dir.path()));
+        assert!(!submitted_images_are_unsupported(&input, true, temp_dir.path()));
         assert_eq!(input.text, "look data:image/png;base64,parsedimage");
         assert!(input.attachments.is_empty());
     }
 
     #[test]
     fn selected_model_image_support_uses_image_modality_metadata() {
-        assert!(selected_model_supports_image_input(
-            "openai", "gpt-5.4", false
-        ));
+        assert!(selected_model_supports_image_input("openai", "gpt-5.4", false));
     }
 
     #[test]
     fn selected_model_image_support_uses_alias_modality_metadata() {
-        assert!(selected_model_supports_image_input(
-            "openai",
-            "gpt-5.5-2026-04-23",
-            false
-        ));
+        assert!(selected_model_supports_image_input("openai", "gpt-5.5-2026-04-23", false));
     }
 
     #[test]
     fn selected_model_image_support_accepts_chatgpt_provider_label() {
-        assert!(selected_model_supports_image_input(
-            "OpenAI (ChatGPT)",
-            "gpt-5.5",
-            false
-        ));
+        assert!(selected_model_supports_image_input("OpenAI (ChatGPT)", "gpt-5.5", false));
     }
 
     #[test]
     fn selected_model_image_support_accepts_display_model_label() {
-        assert!(selected_model_supports_image_input(
-            "OpenAI (ChatGPT)",
-            "GPT-5.5 (128K)",
-            false
-        ));
+        assert!(selected_model_supports_image_input("OpenAI (ChatGPT)", "GPT-5.5 (128K)", false));
     }
 
     #[test]
     fn selected_model_image_support_rejects_text_only_metadata() {
-        assert!(!selected_model_supports_image_input(
-            "openai",
-            "gpt-oss-20b",
-            true
-        ));
+        assert!(!selected_model_supports_image_input("openai", "gpt-oss-20b", true));
     }
 
     #[test]
     fn selected_model_image_support_falls_back_without_metadata() {
-        assert!(selected_model_supports_image_input(
-            "openai",
-            "custom-vision-model",
-            true
-        ));
-        assert!(!selected_model_supports_image_input(
-            "custom-provider",
-            "gpt-5.4",
-            false
-        ));
+        assert!(selected_model_supports_image_input("openai", "custom-vision-model", true));
+        assert!(!selected_model_supports_image_input("custom-provider", "gpt-5.4", false));
     }
 
     #[test]
@@ -2061,11 +1898,7 @@ mod tests {
         fs::write(&image_path, tiny_png_bytes()).expect("write image");
         let input = SubmittedInput::from("look @sample.png".to_string());
 
-        assert!(submitted_images_are_unsupported(
-            &input,
-            false,
-            temp_dir.path()
-        ));
+        assert!(submitted_images_are_unsupported(&input, false, temp_dir.path()));
         assert!(input.attachments.is_empty());
     }
 
@@ -2076,11 +1909,7 @@ mod tests {
         fs::write(&image_path, tiny_png_bytes()).expect("write image");
         let input = SubmittedInput::from(format!("look {}", image_path.display()));
 
-        assert!(submitted_images_are_unsupported(
-            &input,
-            false,
-            temp_dir.path()
-        ));
+        assert!(submitted_images_are_unsupported(&input, false, temp_dir.path()));
         assert!(input.attachments.is_empty());
     }
 
@@ -2090,11 +1919,7 @@ mod tests {
         let input =
             SubmittedInput::from("look @https://example.com/sample.png?cache=1".to_string());
 
-        assert!(submitted_images_are_unsupported(
-            &input,
-            false,
-            temp_dir.path()
-        ));
+        assert!(submitted_images_are_unsupported(&input, false, temp_dir.path()));
         assert!(input.attachments.is_empty());
     }
 
@@ -2108,11 +1933,7 @@ mod tests {
 
         assert_eq!(input.text, "please inspect this");
         assert_eq!(input.attachments, vec![image]);
-        assert!(submitted_images_are_unsupported(
-            &input,
-            false,
-            temp_dir.path()
-        ));
+        assert!(submitted_images_are_unsupported(&input, false, temp_dir.path()));
     }
 
     fn tiny_png_bytes() -> &'static [u8] {
@@ -2152,12 +1973,8 @@ mod tests {
         let temp_dir = TempDir::new().expect("temp dir");
         let workspace = temp_dir.path();
         fs::create_dir_all(workspace.join(".vtcode")).expect("create ide context dir");
-        let context_manager = ContextManager::new(
-            "sys".into(),
-            (),
-            Arc::new(RwLock::new(HashMap::new())),
-            None,
-        );
+        let context_manager =
+            ContextManager::new("sys".into(), (), Arc::new(RwLock::new(HashMap::new())), None);
 
         let snapshot_path = workspace.join(".vtcode/ide-context.json");
         let mut bridge = Some(IdeContextBridge::new(workspace));

@@ -17,10 +17,7 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
         return Ok(Some(SkillCommandAction::Interactive));
     }
 
-    if matches!(
-        rest,
-        "manager" | "--manager" | "interactive" | "--interactive"
-    ) {
+    if matches!(rest, "manager" | "--manager" | "interactive" | "--interactive") {
         return Ok(Some(SkillCommandAction::Interactive));
     }
 
@@ -36,9 +33,7 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
     match parts[0] {
         "search" | "--search" | "-s" => {
             if let Some(query) = parts.get(1) {
-                Ok(Some(SkillCommandAction::List {
-                    query: Some(query.to_string()),
-                }))
+                Ok(Some(SkillCommandAction::List { query: Some(query.to_string()) }))
             } else {
                 Err(anyhow::anyhow!("search: query string required"))
             }
@@ -58,46 +53,35 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
                     }
                 }
 
-                Ok(Some(SkillCommandAction::Create {
-                    name: name_str,
-                    path,
-                }))
+                Ok(Some(SkillCommandAction::Create { name: name_str, path }))
             } else {
                 Err(anyhow::anyhow!("create: skill name required"))
             }
         }
         "validate" | "--validate" => {
             if let Some(name) = parts.get(1) {
-                Ok(Some(SkillCommandAction::Validate {
-                    name: name.to_string(),
-                }))
+                Ok(Some(SkillCommandAction::Validate { name: name.to_string() }))
             } else {
                 Err(anyhow::anyhow!("validate: skill name required"))
             }
         }
         "package" | "--package" => {
             if let Some(name) = parts.get(1) {
-                Ok(Some(SkillCommandAction::Package {
-                    name: name.to_string(),
-                }))
+                Ok(Some(SkillCommandAction::Package { name: name.to_string() }))
             } else {
                 Err(anyhow::anyhow!("package: skill name required"))
             }
         }
         "load" | "--load" => {
             if let Some(name) = parts.get(1) {
-                Ok(Some(SkillCommandAction::Load {
-                    name: name.to_string(),
-                }))
+                Ok(Some(SkillCommandAction::Load { name: name.to_string() }))
             } else {
                 Err(anyhow::anyhow!("load: skill name required"))
             }
         }
         "unload" | "--unload" => {
             if let Some(name) = parts.get(1) {
-                Ok(Some(SkillCommandAction::Unload {
-                    name: name.to_string(),
-                }))
+                Ok(Some(SkillCommandAction::Unload { name: name.to_string() }))
             } else {
                 Err(anyhow::anyhow!("unload: skill name required"))
             }
@@ -107,10 +91,7 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
                 let use_parts: Vec<&str> = rest_str.splitn(2, ' ').collect();
                 if let Some(name) = use_parts.first() {
                     let input = use_parts.get(1).map(|s| s.to_string()).unwrap_or_default();
-                    Ok(Some(SkillCommandAction::Use {
-                        name: name.to_string(),
-                        input,
-                    }))
+                    Ok(Some(SkillCommandAction::Use { name: name.to_string(), input }))
                 } else {
                     Err(anyhow::anyhow!("use: skill name required"))
                 }
@@ -120,9 +101,7 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
         }
         "info" | "--info" | "show" | "--show" => {
             if let Some(name) = parts.get(1) {
-                Ok(Some(SkillCommandAction::Info {
-                    name: name.to_string(),
-                }))
+                Ok(Some(SkillCommandAction::Info { name: name.to_string() }))
             } else {
                 Err(anyhow::anyhow!("info: skill name required"))
             }
@@ -141,10 +120,7 @@ mod tests {
     #[test]
     fn test_parse_skills_list() {
         let result = parse_skill_command("/skills --list").unwrap();
-        assert!(matches!(
-            result,
-            Some(SkillCommandAction::List { query: None })
-        ));
+        assert!(matches!(result, Some(SkillCommandAction::List { query: None })));
     }
 
     #[test]

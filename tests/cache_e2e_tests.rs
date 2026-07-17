@@ -102,9 +102,7 @@ mod e2e_tests {
 
         // Cache hit
         let test_data = Value::String("cached content".to_string());
-        cache
-            .put_file("test_key".to_string(), test_data.clone())
-            .await;
+        cache.put_file("test_key".to_string(), test_data.clone()).await;
 
         let hit_result = cache.get_file("test_key").await;
         assert!(hit_result.is_some());
@@ -121,15 +119,9 @@ mod e2e_tests {
         let cache = FileCache::new(2); // Very small capacity for testing
 
         // Fill cache
-        cache
-            .put_file("key1".to_string(), Value::String("data1".to_string()))
-            .await;
-        cache
-            .put_file("key2".to_string(), Value::String("data2".to_string()))
-            .await;
-        cache
-            .put_file("key3".to_string(), Value::String("data3".to_string()))
-            .await; // Should evict
+        cache.put_file("key1".to_string(), Value::String("data1".to_string())).await;
+        cache.put_file("key2".to_string(), Value::String("data2".to_string())).await;
+        cache.put_file("key3".to_string(), Value::String("data3".to_string())).await; // Should evict
 
         // Check capacity
         let (file_capacity, _dir_capacity) = cache.capacity();
@@ -159,10 +151,7 @@ mod e2e_tests {
         let list_args = json!({ "path": "subdir" });
 
         let result1 = registry
-            .execute_tool_ref(
-                vtcode_core::config::constants::tools::LIST_FILES,
-                &list_args,
-            )
+            .execute_tool_ref(vtcode_core::config::constants::tools::LIST_FILES, &list_args)
             .await;
         assert!(result1.is_ok(), "First list should succeed");
 
@@ -177,11 +166,7 @@ mod e2e_tests {
         // reused_result_note); the underlying directory contents must still match.
         let cached1 = result1.unwrap();
         let cached2 = result2.unwrap();
-        assert_eq!(
-            cached1.get("items"),
-            cached2.get("items"),
-            "cached directory items must match"
-        );
+        assert_eq!(cached1.get("items"), cached2.get("items"), "cached directory items must match");
         assert_eq!(cached1.get("total"), cached2.get("total"));
         assert_eq!(
             cached2.get("reused_recent_result"),
@@ -257,9 +242,7 @@ mod e2e_tests {
         // Verify file content
         let mut attempts = 0;
         let final_content = loop {
-            let content = tokio::fs::read_to_string(&test_file)
-                .await
-                .expect("File should exist");
+            let content = tokio::fs::read_to_string(&test_file).await.expect("File should exist");
             if content == "Hello World" || attempts >= 25 {
                 break content;
             }

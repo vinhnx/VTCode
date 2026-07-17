@@ -29,9 +29,7 @@ impl Default for ToolOrchestrator {
 
 impl ToolOrchestrator {
     pub fn new() -> Self {
-        Self {
-            sandbox: SandboxManager::new(),
-        }
+        Self { sandbox: SandboxManager::new() }
     }
 
     /// Run a tool with the orchestrator managing sandbox and retries (from Codex)
@@ -121,9 +119,9 @@ impl ToolOrchestrator {
 
                 // Under `Never` or `OnRequest`, do not retry without sandbox
                 if !tool.wants_no_sandbox_approval(approval_policy) {
-                    return Err(ToolError::SandboxDenied(build_denial_reason_from_output(
-                        Some(&output),
-                    )));
+                    return Err(ToolError::SandboxDenied(build_denial_reason_from_output(Some(
+                        &output,
+                    ))));
                 }
 
                 // Ask for approval before retrying without sandbox
@@ -291,10 +289,7 @@ mod tests {
 
     impl FirstAttemptProbeRuntime {
         fn new(preference: SandboxablePreference) -> Self {
-            Self {
-                first_sandbox: None,
-                preference,
-            }
+            Self { first_sandbox: None, preference }
         }
     }
 
@@ -358,14 +353,8 @@ mod tests {
 
     #[test]
     fn test_build_denial_reason_empty() {
-        assert_eq!(
-            build_denial_reason_from_output(None),
-            "Sandbox denied execution"
-        );
-        assert_eq!(
-            build_denial_reason_from_output(Some("")),
-            "Sandbox denied execution"
-        );
+        assert_eq!(build_denial_reason_from_output(None), "Sandbox denied execution");
+        assert_eq!(build_denial_reason_from_output(Some("")), "Sandbox denied execution");
     }
 
     #[test]
@@ -399,13 +388,7 @@ mod tests {
         let mut orchestrator = ToolOrchestrator::new();
 
         let out = orchestrator
-            .run(
-                &mut runtime,
-                &(),
-                &tool_ctx,
-                turn.as_ref(),
-                AskForApproval::OnFailure,
-            )
+            .run(&mut runtime, &(), &tool_ctx, turn.as_ref(), AskForApproval::OnFailure)
             .await
             .expect("expected escalated retry to succeed");
 
@@ -423,13 +406,7 @@ mod tests {
         let mut orchestrator = ToolOrchestrator::new();
 
         let err = orchestrator
-            .run(
-                &mut runtime,
-                &(),
-                &tool_ctx,
-                turn.as_ref(),
-                AskForApproval::OnFailure,
-            )
+            .run(&mut runtime, &(), &tool_ctx, turn.as_ref(), AskForApproval::OnFailure)
             .await
             .expect_err("expected sandbox denial without retry");
 
@@ -453,13 +430,7 @@ mod tests {
         let mut orchestrator = ToolOrchestrator::new();
 
         orchestrator
-            .run(
-                &mut runtime,
-                &(),
-                &tool_ctx,
-                turn.as_ref(),
-                AskForApproval::Never,
-            )
+            .run(&mut runtime, &(), &tool_ctx, turn.as_ref(), AskForApproval::Never)
             .await
             .expect("expected run to succeed");
 

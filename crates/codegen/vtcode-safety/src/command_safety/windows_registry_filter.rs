@@ -457,9 +457,7 @@ mod tests {
     fn test_is_dangerous_registry_access() {
         let dangerous =
             "Set-ItemProperty -Path HKLM:\\System\\CurrentControlSet\\Services\\* -Value *";
-        assert!(RegistryAccessFilter::is_dangerous_registry_access(
-            dangerous
-        ));
+        assert!(RegistryAccessFilter::is_dangerous_registry_access(dangerous));
 
         let safe = "Get-Item -Path HKCU:\\Software";
         assert!(!RegistryAccessFilter::is_dangerous_registry_access(safe));

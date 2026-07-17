@@ -17,9 +17,7 @@ fn default_output_style() -> String {
 
 impl Default for OutputStyleConfig {
     fn default() -> Self {
-        Self {
-            active_style: default_output_style(),
-        }
+        Self { active_style: default_output_style() }
     }
 }
 
@@ -51,9 +49,7 @@ impl Default for OutputStyleManager {
 
 impl OutputStyleManager {
     pub fn new() -> Self {
-        Self {
-            styles: HashMap::new(),
-        }
+        Self { styles: HashMap::new() }
     }
 
     pub fn load_from_directory<P: AsRef<Path>>(dir: P) -> Result<Self> {
@@ -71,9 +67,7 @@ impl OutputStyleManager {
             if path.extension().and_then(|s| s.to_str()) == Some("md")
                 && let Ok(output_style) = Self::load_from_file(&path)
             {
-                manager
-                    .styles
-                    .insert(output_style.config.name.clone(), output_style);
+                manager.styles.insert(output_style.config.name.clone(), output_style);
             }
         }
 
@@ -101,10 +95,7 @@ impl OutputStyleManager {
                 ""
             };
 
-            Ok(OutputStyle {
-                config,
-                content: actual_content.to_string(),
-            })
+            Ok(OutputStyle { config, content: actual_content.to_string() })
         } else {
             // No frontmatter, create default config
             Ok(OutputStyle {
@@ -126,14 +117,7 @@ impl OutputStyleManager {
         self.styles
             .iter()
             .map(|(name, style)| {
-                (
-                    name.as_str(),
-                    style
-                        .config
-                        .description
-                        .as_deref()
-                        .unwrap_or("No description"),
-                )
+                (name.as_str(), style.config.description.as_deref().unwrap_or("No description"))
             })
             .collect()
     }
@@ -173,10 +157,7 @@ This is a test output style."#;
 
         let style = OutputStyleManager::parse_output_style(content).unwrap();
         assert_eq!(style.config.name, "Test Style");
-        assert_eq!(
-            style.config.description,
-            Some("A test output style".to_string())
-        );
+        assert_eq!(style.config.description, Some("A test output style".to_string()));
         assert!(!style.config.keep_coding_instructions);
         assert!(style.content.contains("This is a test output style"));
     }

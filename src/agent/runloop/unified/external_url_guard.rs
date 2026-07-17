@@ -25,12 +25,7 @@ impl<'a> ExternalUrlGuardContext<'a> {
         ctrl_c_state: &'a Arc<CtrlCState>,
         ctrl_c_notify: &'a Arc<Notify>,
     ) -> Self {
-        Self {
-            handle,
-            session,
-            ctrl_c_state,
-            ctrl_c_notify,
-        }
+        Self { handle, session, ctrl_c_state, ctrl_c_notify }
     }
 }
 
@@ -134,10 +129,7 @@ mod tests {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let handle = InlineHandle::new_for_tests(command_tx);
-        let session = InlineSession {
-            handle: handle.clone(),
-            events: event_rx,
-        };
+        let session = InlineSession { handle: handle.clone(), events: event_rx };
 
         (handle, command_rx, event_tx, session)
     }

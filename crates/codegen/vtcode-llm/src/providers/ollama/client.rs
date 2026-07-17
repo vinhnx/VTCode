@@ -49,11 +49,7 @@ impl OllamaClient {
         if resp.status().is_success() {
             Ok(())
         } else {
-            tracing::warn!(
-                "Failed to probe server at {}: HTTP {}",
-                self.host_root,
-                resp.status()
-            );
+            tracing::warn!("Failed to probe server at {}: HTTP {}", self.host_root, resp.status());
             Err(io::Error::other(OLLAMA_CONNECTION_ERROR))
         }
     }
@@ -61,12 +57,7 @@ impl OllamaClient {
     /// Fetch the list of model names available on the server.
     pub async fn fetch_models(&self) -> io::Result<Vec<String>> {
         let tags_url = format!("{}/api/tags", self.host_root.trim_end_matches('/'));
-        let resp = self
-            .client
-            .get(tags_url)
-            .send()
-            .await
-            .map_err(io::Error::other)?;
+        let resp = self.client.get(tags_url).send().await.map_err(io::Error::other)?;
 
         if !resp.status().is_success() {
             return Ok(Vec::new());
@@ -96,12 +87,7 @@ impl OllamaClient {
     /// Adapted from OpenAI Codex's codex-ollama/src/client.rs
     pub async fn fetch_version(&self) -> io::Result<Option<Version>> {
         let version_url = format!("{}/api/version", self.host_root.trim_end_matches('/'));
-        let resp = self
-            .client
-            .get(version_url)
-            .send()
-            .await
-            .map_err(io::Error::other)?;
+        let resp = self.client.get(version_url).send().await.map_err(io::Error::other)?;
 
         if !resp.status().is_success() {
             return Ok(None);
@@ -137,10 +123,7 @@ impl OllamaClient {
             .map_err(io::Error::other)?;
 
         if !resp.status().is_success() {
-            return Err(io::Error::other(format!(
-                "failed to start pull: HTTP {}",
-                resp.status()
-            )));
+            return Err(io::Error::other(format!("failed to start pull: HTTP {}", resp.status())));
         }
 
         let mut stream = resp.bytes_stream();
@@ -186,9 +169,7 @@ impl OllamaClient {
         model: &str,
         reporter: &mut (dyn OllamaPullProgressReporter + Send),
     ) -> io::Result<()> {
-        reporter.on_event(&OllamaPullEvent::Status(format!(
-            "Pulling model {model}..."
-        )))?;
+        reporter.on_event(&OllamaPullEvent::Status(format!("Pulling model {model}...")))?;
         let mut stream = self.pull_model_stream(model).await?;
 
         while let Some(event) = stream.next().await {

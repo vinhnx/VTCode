@@ -197,11 +197,7 @@ impl AcpMessage {
             message_type: MessageType::Error,
             sender,
             recipient,
-            content: MessageContent::Error(ErrorPayload {
-                code,
-                message,
-                details: None,
-            }),
+            content: MessageContent::Error(ErrorPayload { code, message, details: None }),
             timestamp: chrono::Utc::now().to_rfc3339(),
             correlation_id: Some(correlation_id),
         }

@@ -30,10 +30,7 @@ async fn run_command_uses_pty_backend() -> Result<()> {
         || response.get("process_id").is_some()
         || response.get("pty_enabled").is_some()
         || response.get("mode").is_some();
-    assert!(
-        has_pty_indicators,
-        "Response should have PTY-related fields. Response: {response:?}"
-    );
+    assert!(has_pty_indicators, "Response should have PTY-related fields. Response: {response:?}");
 
     let output = response["output"].as_str().unwrap_or_default();
     let stdout = response["stdout"].as_str().unwrap_or_default();
@@ -64,10 +61,7 @@ async fn exec_pty_cmd_resolves_and_runs_in_registry() -> Result<()> {
         )
         .await?;
 
-    assert_eq!(
-        response["success"], true,
-        "exec_pty_cmd must execute; response was {response:?}"
-    );
+    assert_eq!(response["success"], true, "exec_pty_cmd must execute; response was {response:?}");
     let output = response["output"].as_str().unwrap_or_default();
     let stdout = response["stdout"].as_str().unwrap_or_default();
     let combined_output = format!("{output} {stdout}");

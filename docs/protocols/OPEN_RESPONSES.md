@@ -22,7 +22,7 @@ Open Responses is an open-source specification for building **multi-provider, in
 
 ## Implementation Details
 
-The Open Responses implementation is located in `vtcode-core/src/open_responses/` (for production) and `vtcode-core/src/llm/providers/openresponses/` (for consumption). It provides:
+The Open Responses implementation is located in `crates/codegen/vtcode-core/src/open_responses/` (for production) and `crates/codegen/vtcode-core/src/llm/providers/openresponses/` (for consumption). It provides:
 
 - **Unified Item Types**: State machine-based items with defined lifecycle states
 - **Semantic Streaming Events**: Meaningful events (not raw token deltas) for predictable streaming

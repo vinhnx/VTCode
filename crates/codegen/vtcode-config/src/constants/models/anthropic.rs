@@ -77,25 +77,17 @@ pub fn validate_advisor_pair(executor: &str, advisor: &str) -> Result<(), String
 
     // Self-advising models can only advise themselves.
     if advisor_base == CLAUDE_FABLE_5 && executor_base != CLAUDE_FABLE_5 {
-        return Err(format!(
-            "advisor model {advisor} may only advise {CLAUDE_FABLE_5}"
-        ));
+        return Err(format!("advisor model {advisor} may only advise {CLAUDE_FABLE_5}"));
     }
     if advisor_base == CLAUDE_MYTHOS_5 && executor_base != CLAUDE_MYTHOS_5 {
-        return Err(format!(
-            "advisor model {advisor} may only advise {CLAUDE_MYTHOS_5}"
-        ));
+        return Err(format!("advisor model {advisor} may only advise {CLAUDE_MYTHOS_5}"));
     }
 
     let Some(executor_tier) = advisor_tier(executor_base) else {
-        return Err(format!(
-            "executor model {executor} is not a supported advisor executor"
-        ));
+        return Err(format!("executor model {executor} is not a supported advisor executor"));
     };
     let Some(chosen_advisor_tier) = advisor_tier(advisor_base) else {
-        return Err(format!(
-            "advisor model {advisor} is not a supported advisor model"
-        ));
+        return Err(format!("advisor model {advisor} is not a supported advisor model"));
     };
 
     if chosen_advisor_tier < advisor_tier(ADVISOR_MIN_MODEL).unwrap_or(2) {

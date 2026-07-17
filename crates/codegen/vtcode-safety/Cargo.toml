@@ -1,8 +1,8 @@
 [package]
 name = "vtcode-safety"
 version.workspace = true
-edition.workspace = true
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Command safety detection, execution policies, and sandboxing for VT Code"
 license.workspace = true
@@ -32,7 +32,7 @@ toml = { workspace = true }
 tree-sitter = "0.26"
 tree-sitter-bash = "0.25"
 tracing = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.11" }
+vtcode-commons = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

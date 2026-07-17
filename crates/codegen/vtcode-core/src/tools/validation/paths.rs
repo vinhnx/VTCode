@@ -17,7 +17,7 @@ pub fn validate_non_root_listing_path(path: Option<&str>) -> Result<()> {
     let normalized = raw.trim_start_matches("./").trim_start_matches('/');
     if normalized.is_empty() && raw != "." && raw != "./" {
         return Err(anyhow!(
-            "Error: directory-listing path is empty. Please specify a subdirectory like 'src/', 'vtcode-core/src/', or 'tests/'."
+            "Error: directory-listing path is empty. Please specify a subdirectory like 'src/', 'crates/codegen/vtcode-core/src/', or 'tests/'."
         ));
     }
 

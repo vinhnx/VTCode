@@ -65,9 +65,9 @@ fn control_g_launches_editor_from_plan_confirmation_modal() {
 
     assert!(matches!(
         result,
-        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
-            OverlaySubmission::Hotkey(OverlayHotkeyAction::LaunchEditor)
-        )))
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Hotkey(
+            OverlayHotkeyAction::LaunchEditor
+        ))))
     ));
     assert!(session.modal_state().is_none());
 }
@@ -82,26 +82,18 @@ fn plan_confirmation_modal_matches_four_way_gate_copy() {
     );
     show_plan_confirmation_overlay(&mut session, plan);
 
-    let modal = session
-        .modal_state()
-        .expect("plan confirmation modal should be present");
+    let modal = session.modal_state().expect("plan confirmation modal should be present");
     assert_eq!(modal.title, "Ready to code?");
     assert_eq!(
         modal.lines.first().map(String::as_str),
         Some("A plan is ready to execute. Would you like to proceed?")
     );
 
-    let list = modal
-        .list
-        .as_ref()
-        .expect("plan confirmation should include list options");
+    let list = modal.list.as_ref().expect("plan confirmation should include list options");
     assert_eq!(list.items.len(), 3);
 
     assert_eq!(list.items[0].title, "Yes, auto-accept edits");
-    assert_eq!(
-        list.items[0].subtitle.as_deref(),
-        Some("Execute with auto-approval.")
-    );
+    assert_eq!(list.items[0].subtitle.as_deref(), Some("Execute with auto-approval."));
     assert_eq!(list.items[0].badge.as_deref(), Some("Recommended"));
 
     assert_eq!(list.items[1].title, "Yes, manually approve edits");
@@ -196,9 +188,7 @@ fn info_warning_error_blocks_render_distinct_fieldset_fills() {
         );
         // The content itself is preserved.
         assert!(
-            rendered
-                .iter()
-                .any(|line| line.contains("Theme switched to Ciapre")),
+            rendered.iter().any(|line| line.contains("Theme switched to Ciapre")),
             "{label} block content should be preserved, got: {rendered:?}"
         );
     }
@@ -207,28 +197,20 @@ fn info_warning_error_blocks_render_distinct_fieldset_fills() {
 #[test]
 fn active_file_operation_indicator_renders_spinner_frame() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.push_line(
-        InlineMessageKind::Info,
-        vec![make_segment("❋ Editing vtcode.toml...")],
-    );
+    session.push_line(InlineMessageKind::Info, vec![make_segment("❋ Editing vtcode.toml...")]);
     session.handle_command(InlineCommand::SetInputStatus {
         left: Some("Running tool: edit_file".to_string()),
         right: None,
     });
     let rendered = rendered_transcript_widget_lines(&mut session, VIEW_WIDTH, VIEW_ROWS);
-    let expected = format!(
-        "{} Editing vtcode.toml...",
-        pulse_spinner_frame_for_phase(0.0)
-    );
+    let expected = format!("{} Editing vtcode.toml...", pulse_spinner_frame_for_phase(0.0));
 
     assert!(
         rendered.iter().any(|line| line.contains(&expected)),
         "active file operation indicator should show a spinner frame"
     );
     assert!(
-        !rendered
-            .iter()
-            .any(|line| line.contains("❋ Editing vtcode.toml...")),
+        !rendered.iter().any(|line| line.contains("❋ Editing vtcode.toml...")),
         "spinner should replace the static file operation marker while active"
     );
 }
@@ -236,10 +218,7 @@ fn active_file_operation_indicator_renders_spinner_frame() {
 #[test]
 fn non_file_tool_status_keeps_static_file_operation_indicator() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.push_line(
-        InlineMessageKind::Info,
-        vec![make_segment("❋ Editing vtcode.toml...")],
-    );
+    session.push_line(InlineMessageKind::Info, vec![make_segment("❋ Editing vtcode.toml...")]);
     session.handle_command(InlineCommand::SetInputStatus {
         left: Some("Running tool: code_search".to_string()),
         right: None,
@@ -248,9 +227,7 @@ fn non_file_tool_status_keeps_static_file_operation_indicator() {
     let rendered = rendered_transcript_widget_lines(&mut session, VIEW_WIDTH, VIEW_ROWS);
 
     assert!(
-        rendered
-            .iter()
-            .any(|line| line.contains("❋ Editing vtcode.toml...")),
+        rendered.iter().any(|line| line.contains("❋ Editing vtcode.toml...")),
         "non-file tool activity should not animate stale file operation indicators"
     );
 }
@@ -306,11 +283,7 @@ fn tool_detail_renders_with_border_and_body_style() {
         }],
     );
 
-    let index = session
-        .lines
-        .len()
-        .checked_sub(1)
-        .expect("tool detail line should exist");
+    let index = session.lines.len().checked_sub(1).expect("tool detail line should exist");
     let spans = session.render_message_spans(index);
 
     assert_eq!(spans.len(), 1);
@@ -331,11 +304,7 @@ fn top_level_task_tree_tail_line_is_dimmed_in_tool_blocks() {
         }],
     );
 
-    let index = session
-        .lines
-        .len()
-        .checked_sub(1)
-        .expect("tool detail line should exist");
+    let index = session.lines.len().checked_sub(1).expect("tool detail line should exist");
     let transcript_lines = session.reflow_message_lines(index, 100, false);
     let task_span = transcript_lines
         .iter()
@@ -362,12 +331,7 @@ fn tool_block_with_cjk_prefix_does_not_overflow_viewport() {
     let index = session.lines.len() - 1;
     let transcript = session.reflow_message_lines(index, VIEW_WIDTH, false);
     for line in &transcript {
-        let width: usize = line
-            .line
-            .spans
-            .iter()
-            .map(|span| span.content.width())
-            .sum();
+        let width: usize = line.line.spans.iter().map(|span| span.content.width()).sum();
         assert!(
             width <= VIEW_WIDTH as usize,
             "tool block line with CJK prefix overflowed viewport: {width} > {VIEW_WIDTH}"
@@ -388,12 +352,7 @@ fn error_block_with_cjk_label_reserves_correct_content_width() {
     let index = session.lines.len() - 1;
     let transcript = session.reflow_message_lines(index, VIEW_WIDTH, false);
     for line in &transcript {
-        let width: usize = line
-            .line
-            .spans
-            .iter()
-            .map(|span| span.content.width())
-            .sum();
+        let width: usize = line.line.spans.iter().map(|span| span.content.width()).sum();
         assert!(
             width <= VIEW_WIDTH as usize,
             "error block line with CJK label overflowed viewport: {width} > {VIEW_WIDTH}"

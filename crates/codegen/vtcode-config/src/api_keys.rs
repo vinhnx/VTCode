@@ -400,9 +400,6 @@ mod tests {
 
     #[test]
     fn resolve_api_key_env_preserves_explicit_override() {
-        assert_eq!(
-            resolve_api_key_env("openai", "CUSTOM_OPENAI_KEY"),
-            "CUSTOM_OPENAI_KEY"
-        );
+        assert_eq!(resolve_api_key_env("openai", "CUSTOM_OPENAI_KEY"), "CUSTOM_OPENAI_KEY");
     }
 }

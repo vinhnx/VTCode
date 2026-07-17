@@ -27,10 +27,8 @@ pub(crate) fn prompt_provider(renderer: &mut AnsiRenderer, default: Provider) ->
     match select_provider_with_ratatui(&providers, default) {
         Ok(provider) => Ok(provider),
         Err(error) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Falling back to manual input ({error})."),
-            )?;
+            renderer
+                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_provider_text(renderer, &providers, default)
         }
     }
@@ -49,10 +47,7 @@ fn prompt_provider_text(
     default: Provider,
 ) -> Result<Provider> {
     for (index, provider) in providers.iter().enumerate() {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  {}) {}", index + 1, provider.label()),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("  {}) {}", index + 1, provider.label()))?;
     }
 
     let default_label = default.to_string();
@@ -85,10 +80,7 @@ fn prompt_provider_text(
 fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Result<Provider> {
     let entries = provider_entries(providers);
 
-    let default_index = providers
-        .iter()
-        .position(|provider| *provider == default)
-        .unwrap_or(0);
+    let default_index = providers.iter().position(|provider| *provider == default).unwrap_or(0);
 
     let instructions = format!(
         "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",

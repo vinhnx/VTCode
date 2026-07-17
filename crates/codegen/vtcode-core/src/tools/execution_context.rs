@@ -214,17 +214,13 @@ impl ToolExecutionContext {
         }
 
         // Pattern 2: Low quality loop
-        let recent_same_tool: Vec<_> = recent_records
-            .iter()
-            .filter(|r| r.tool_name == new_record.tool_name)
-            .collect();
+        let recent_same_tool: Vec<_> =
+            recent_records.iter().filter(|r| r.tool_name == new_record.tool_name).collect();
 
         if recent_same_tool.len() > 3 {
-            let avg_quality = recent_same_tool
-                .iter()
-                .map(|r| r.result.metadata.quality_score())
-                .sum::<f32>()
-                / recent_same_tool.len() as f32;
+            let avg_quality =
+                recent_same_tool.iter().map(|r| r.result.metadata.quality_score()).sum::<f32>()
+                    / recent_same_tool.len() as f32;
 
             if avg_quality < 0.4 {
                 self.patterns.push(ToolPattern::LowQualityLoop {
@@ -243,9 +239,7 @@ pub fn are_args_equivalent(a: &Value, b: &Value) -> bool {
         (Value::Object(a_map), Value::Object(b_map)) => {
             // Exact match of all keys and values
             a_map.len() == b_map.len()
-                && a_map
-                    .iter()
-                    .all(|(k, v)| b_map.get(k).is_some_and(|bv| bv == v))
+                && a_map.iter().all(|(k, v)| b_map.get(k).is_some_and(|bv| bv == v))
         }
         (Value::Array(a_arr), Value::Array(b_arr)) => {
             a_arr.len() == b_arr.len() && a_arr.iter().zip(b_arr.iter()).all(|(av, bv)| av == bv)

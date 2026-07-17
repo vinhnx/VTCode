@@ -112,19 +112,9 @@ fn generate_placeholder_openrouter_constants() -> Result<String> {
             Some(id) => id.to_string(),
             None => continue,
         };
-        let is_reasoning = model
-            .get("reasoning")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let tool_call = model
-            .get("tool_call")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-        let vendor = vtcode
-            .get("vendor")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown")
-            .to_string();
+        let is_reasoning = model.get("reasoning").and_then(|v| v.as_bool()).unwrap_or(false);
+        let tool_call = model.get("tool_call").and_then(|v| v.as_bool()).unwrap_or(true);
+        let vendor = vtcode.get("vendor").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
 
         if model_id == default_model_id {
             default_const_name = Some(const_name.clone());
@@ -133,9 +123,7 @@ fn generate_placeholder_openrouter_constants() -> Result<String> {
         entries.push((const_name, model_id, is_reasoning, tool_call, vendor));
     }
 
-    let default_const = default_const_name
-        .as_deref()
-        .unwrap_or("XIAOMI_MIMO_V2_5_PRO");
+    let default_const = default_const_name.as_deref().unwrap_or("XIAOMI_MIMO_V2_5_PRO");
 
     let mut output = String::new();
     output.push_str("// Auto-generated placeholder for docs.rs build\n");
@@ -146,9 +134,7 @@ fn generate_placeholder_openrouter_constants() -> Result<String> {
     }
 
     // DEFAULT_MODEL
-    output.push_str(&format!(
-        "pub const DEFAULT_MODEL: &str = {default_const};\n"
-    ));
+    output.push_str(&format!("pub const DEFAULT_MODEL: &str = {default_const};\n"));
 
     // SUPPORTED_MODELS
     output.push_str("pub const SUPPORTED_MODELS: &[&str] = &[");
@@ -178,10 +164,7 @@ fn generate_placeholder_openrouter_constants() -> Result<String> {
     // Vendor modules
     let mut vendor_map: IndexMap<String, Vec<&str>> = IndexMap::new();
     for (const_name, _, _, _, vendor) in &entries {
-        vendor_map
-            .entry(vendor.clone())
-            .or_default()
-            .push(const_name);
+        vendor_map.entry(vendor.clone()).or_default().push(const_name);
     }
 
     output.push_str("pub mod vendor {\n");
@@ -211,10 +194,7 @@ fn generate_artifacts() -> Result<()> {
     // Debug: count entries and check for deprecated models
     for entry in &entries {
         if entry.id.contains("claude-sonnet-4.5") || entry.id.contains("deepseek-chat-v3.1") {
-            println!(
-                "cargo:warning=DEPRECATED MODEL STILL IN BUILD DATA: {}",
-                entry.id
-            );
+            println!("cargo:warning=DEPRECATED MODEL STILL IN BUILD DATA: {}", entry.id);
         }
     }
 
@@ -451,11 +431,7 @@ fn load_model_capability_entries(manifest_dir: &Path) -> Result<Vec<CapabilityEn
         }
     }
 
-    entries.sort_by(|left, right| {
-        left.provider
-            .cmp(&right.provider)
-            .then(left.id.cmp(&right.id))
-    });
+    entries.sort_by(|left, right| left.provider.cmp(&right.provider).then(left.id.cmp(&right.id)));
 
     Ok(entries)
 }

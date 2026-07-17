@@ -190,10 +190,7 @@ pub fn filter_by_extension(matches: Vec<FileMatch>, extensions: &[&str]) -> Vec<
 /// * `path_pattern` - Glob pattern to match against paths
 pub fn filter_by_pattern(matches: Vec<FileMatch>, path_pattern: &str) -> Vec<FileMatch> {
     if let Ok(pattern) = glob::Pattern::new(path_pattern) {
-        matches
-            .into_iter()
-            .filter(|m| pattern.matches(&m.path))
-            .collect()
+        matches.into_iter().filter(|m| pattern.matches(&m.path)).collect()
     } else {
         matches
     }
@@ -221,12 +218,7 @@ mod tests {
             .expect("bounded path search");
 
         assert!(outcome.paths.contains(&PathBuf::from("WidgetLocal.rs")));
-        assert!(
-            outcome
-                .paths
-                .iter()
-                .all(|path| !path.ends_with("WidgetOutside.rs"))
-        );
+        assert!(outcome.paths.iter().all(|path| !path.ends_with("WidgetOutside.rs")));
     }
 
     #[test]

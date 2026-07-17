@@ -258,17 +258,11 @@ impl WorktreeReconciler {
         let reasoning = verdict.reasoning;
 
         if !approved {
-            return Ok(ReconcileResult {
-                approved: false,
-                merged: false,
-                issues,
-                reasoning,
-            });
+            return Ok(ReconcileResult { approved: false, merged: false, issues, reasoning });
         }
 
         // 5. Merge.
-        self.git_merge(&branch)
-            .context("Failed to merge approved branch")?;
+        self.git_merge(&branch).context("Failed to merge approved branch")?;
 
         // 6. Cleanup: delete branch and remove worktree.
         if let Err(e) = self.git_branch_delete(&branch) {
@@ -279,12 +273,7 @@ impl WorktreeReconciler {
             tracing::warn!(error = %e, worktree = %worktree_name, "Failed to remove worktree after merge");
         }
 
-        Ok(ReconcileResult {
-            approved: true,
-            merged: true,
-            issues,
-            reasoning,
-        })
+        Ok(ReconcileResult { approved: true, merged: true, issues, reasoning })
     }
 }
 

@@ -40,10 +40,7 @@ pub async fn handle_analyze_command(
     // Step 1: Get high-level directory structure
     println!("{}", style("1. Getting workspace structure...").dim());
     let root_files = registry
-        .execute_tool(
-            tools::LIST_FILES,
-            json!({"mode": "list", "path": ".", "per_page": 50}),
-        )
+        .execute_tool(tools::LIST_FILES, json!({"mode": "list", "path": ".", "per_page": 50}))
         .await;
 
     match root_files {
@@ -98,10 +95,7 @@ pub async fn handle_analyze_command(
 
     for config_file in config_files {
         let read_result = registry
-            .execute_tool(
-                tools::READ_FILE,
-                json!({"path": config_file, "max_bytes": 2000}),
-            )
+            .execute_tool(tools::READ_FILE, json!({"path": config_file, "max_bytes": 2000}))
             .await;
         if let Ok(result) = read_result {
             println!(
@@ -136,11 +130,7 @@ pub async fn handle_analyze_command(
                 if let Some(path) = file_obj.get("path")
                     && path.as_str().unwrap_or("") == dir
                 {
-                    println!(
-                        "   {} Found source directory: {}",
-                        style("Found").green(),
-                        dir
-                    );
+                    println!("   {} Found source directory: {}", style("Found").green(), dir);
                     break;
                 }
             }
@@ -155,10 +145,7 @@ pub async fn handle_analyze_command(
     }
 
     println!("{}", style("Workspace analysis complete!").green().bold());
-    println!(
-        "{}",
-        style("You can now ask me specific questions about the codebase.").dim()
-    );
+    println!("{}", style("You can now ask me specific questions about the codebase.").dim());
 
     Ok(())
 }

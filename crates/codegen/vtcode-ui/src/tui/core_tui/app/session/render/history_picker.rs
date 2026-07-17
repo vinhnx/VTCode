@@ -24,8 +24,7 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
                 InlineListRow::single(
                     Line::from(Span::styled(
                         "No history matches".to_owned(),
-                        self.base_style
-                            .add_modifier(Modifier::DIM | Modifier::ITALIC),
+                        self.base_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
                     )),
                     self.base_style.add_modifier(Modifier::DIM),
                 ),
@@ -113,13 +112,7 @@ pub(crate) fn history_picker_panel_layout(session: &Session) -> Option<ListPanel
     let list_rows = if session.history_picker_state.matches.is_empty() {
         1_u16
     } else {
-        rows_to_u16(
-            session
-                .history_picker_state
-                .matches
-                .len()
-                .min(ui::INLINE_LIST_MAX_ROWS),
-        )
+        rows_to_u16(session.history_picker_state.matches.len().min(ui::INLINE_LIST_MAX_ROWS))
     };
 
     Some(ListPanelLayout::new(fixed_rows, list_rows))

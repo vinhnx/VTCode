@@ -53,11 +53,7 @@ async fn handle_session_palette_command(
     };
 
     if renderer.supports_inline_ui() {
-        return Ok(SlashCommandOutcome::StartSessionPalette {
-            mode,
-            limit,
-            show_all,
-        });
+        return Ok(SlashCommandOutcome::StartSessionPalette { mode, limit, show_all });
     }
 
     let scope = if show_all {
@@ -81,11 +77,8 @@ async fn handle_session_palette_command(
                         renderer.line(MessageStyle::Info, "")?;
                     }
 
-                    let ended_local = listing
-                        .snapshot
-                        .ended_at
-                        .with_timezone(&Local)
-                        .format("%Y-%m-%d %H:%M");
+                    let ended_local =
+                        listing.snapshot.ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
                     let duration = listing
                         .snapshot
                         .ended_at
@@ -124,10 +117,8 @@ async fn handle_session_palette_command(
             }
         }
         Err(err) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to load session archives: {err}"),
-            )?;
+            renderer
+                .line(MessageStyle::Error, &format!("Failed to load session archives: {err}"))?;
         }
     }
     Ok(SlashCommandOutcome::Handled)
@@ -228,10 +219,7 @@ pub(super) fn handle_plan_command(
 ) -> Result<SlashCommandOutcome> {
     let trimmed = args.trim();
     if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("toggle") {
-        return Ok(SlashCommandOutcome::TogglePlanningWorkflow {
-            enable: None,
-            prompt: None,
-        });
+        return Ok(SlashCommandOutcome::TogglePlanningWorkflow { enable: None, prompt: None });
     }
 
     let mut parts = trimmed.splitn(2, char::is_whitespace);
@@ -264,10 +252,7 @@ pub(super) fn handle_plan_command(
                 renderer.line(MessageStyle::Info, "  /plan off - Finish planning")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
-            Ok(SlashCommandOutcome::TogglePlanningWorkflow {
-                enable: Some(false),
-                prompt: None,
-            })
+            Ok(SlashCommandOutcome::TogglePlanningWorkflow { enable: Some(false), prompt: None })
         }
         _ => Ok(SlashCommandOutcome::TogglePlanningWorkflow {
             enable: Some(true),
@@ -401,9 +386,7 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            SlashCommandOutcome::StartOAuthProviderPicker {
-                action: OAuthProviderAction::Login
-            }
+            SlashCommandOutcome::StartOAuthProviderPicker { action: OAuthProviderAction::Login }
         ));
     }
 
@@ -417,9 +400,7 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            SlashCommandOutcome::StartOAuthProviderPicker {
-                action: OAuthProviderAction::Logout
-            }
+            SlashCommandOutcome::StartOAuthProviderPicker { action: OAuthProviderAction::Logout }
         ));
     }
 
@@ -434,9 +415,7 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            SlashCommandOutcome::StartOAuthProviderPicker {
-                action: OAuthProviderAction::Refresh
-            }
+            SlashCommandOutcome::StartOAuthProviderPicker { action: OAuthProviderAction::Refresh }
         ));
     }
 

@@ -55,7 +55,7 @@ VT Code implements a defense-in-depth security model for command execution to pr
 
 ### Layer 1: Command Allowlist
 
-**Location**: `vtcode-core/src/execpolicy/mod.rs`
+**Location**: `crates/codegen/vtcode-core/src/execpolicy/mod.rs`
 
 Only explicitly allowed commands can execute:
 - `ls` - List directory contents
@@ -93,7 +93,7 @@ All file paths are validated:
 
 ### Layer 4: Dangerous Command Blocking
 
-**Location**: `vtcode-core/src/tools/bash_tool.rs`
+**Location**: `crates/codegen/vtcode-core/src/tools/bash_tool.rs`
 
 Additional blocking for:
 - Destructive commands: `rm`, `rmdir`, `dd`, `shred`
@@ -107,7 +107,7 @@ VT Code supports automation through its internal scheduler instead of raw shell 
 
 ### Layer 5: Sandbox Integration
 
-**Location**: `vtcode-core/src/sandbox/`
+**Location**: `crates/codegen/vtcode-core/src/sandbox/`
 
 Network commands require Anthropic sandbox runtime:
 - Filesystem isolation within workspace

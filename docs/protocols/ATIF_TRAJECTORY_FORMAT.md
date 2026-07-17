@@ -97,7 +97,7 @@ Lifecycle events (`TurnStarted`, `ItemStarted`, `ItemUpdated`, `PlanDelta`) are 
 
 ## Implementation
 
-The ATIF implementation lives in `vtcode-exec-events/src/atif.rs` with:
+The ATIF implementation lives in `crates/common/vtcode-exec-events/src/atif.rs` with:
 
 - **Schema types**: `Trajectory`, `AtifAgent`, `Step`, `AtifToolCall`, `Observation`, `ObservationResult`, `StepMetrics`, `FinalMetrics`
 - **`AtifTrajectoryBuilder`**: Stateful collector that converts live `ThreadEvent` streams into ATIF trajectories. Implements `EventEmitter` for direct integration with the event pipeline.

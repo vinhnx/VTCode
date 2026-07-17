@@ -18,14 +18,14 @@ fn fallback_from_error_extracts_command_session_poll() {
 
 #[test]
 fn fallback_from_error_extracts_read_file_for_patch_context_mismatch() {
-    let error = "Tool 'apply_patch' execution failed: failed to locate expected lines in 'vtcode-exec-events/src/trace.rs': context mismatch";
+    let error = "Tool 'apply_patch' execution failed: failed to locate expected lines in 'crates/common/vtcode-exec-events/src/trace.rs': context mismatch";
     let fallback = fallback_from_error(tool_names::APPLY_PATCH, error, None);
     assert_eq!(
         fallback,
         Some((
             tool_names::READ_FILE.to_string(),
             serde_json::json!({
-                "path": "vtcode-exec-events/src/trace.rs",
+                "path": "crates/common/vtcode-exec-events/src/trace.rs",
                 "offset": 1,
                 "limit": 120
             }),
@@ -39,10 +39,7 @@ fn fallback_from_error_uses_task_tracker_list_for_update_argument_errors() {
     let fallback = fallback_from_error(tool_names::TASK_TRACKER, error, None);
     assert_eq!(
         fallback,
-        Some((
-            tool_names::TASK_TRACKER.to_string(),
-            serde_json::json!({"action": "list"}),
-        ))
+        Some((tool_names::TASK_TRACKER.to_string(), serde_json::json!({"action": "list"}),))
     );
 }
 
@@ -84,18 +81,9 @@ fn build_error_content_includes_fallback_args() {
         payload.get("fallback_tool").and_then(|v| v.as_str()),
         Some(tool_names::READ_PTY_SESSION)
     );
-    assert_eq!(
-        payload.get("fallback_tool_args"),
-        Some(&serde_json::json!({"session_id":"run-1"}))
-    );
-    assert_eq!(
-        payload.get("error_class").and_then(|v| v.as_str()),
-        Some("execution_failure")
-    );
-    assert_eq!(
-        payload.get("is_recoverable").and_then(|v| v.as_bool()),
-        Some(true)
-    );
+    assert_eq!(payload.get("fallback_tool_args"), Some(&serde_json::json!({"session_id":"run-1"})));
+    assert_eq!(payload.get("error_class").and_then(|v| v.as_str()), Some("execution_failure"));
+    assert_eq!(payload.get("is_recoverable").and_then(|v| v.as_bool()), Some(true));
 }
 
 #[test]
@@ -103,14 +91,8 @@ fn build_error_content_truncates_large_errors() {
     let large_error = format!("Tool failed: {}", "x".repeat(700));
     let payload = build_error_content(large_error, None, None, "execution");
 
-    assert_eq!(
-        payload.get("error_truncated").and_then(|v| v.as_bool()),
-        Some(true)
-    );
-    let rendered = payload
-        .get("error")
-        .and_then(|v| v.as_str())
-        .expect("error field");
+    assert_eq!(payload.get("error_truncated").and_then(|v| v.as_bool()), Some(true));
+    let rendered = payload.get("error").and_then(|v| v.as_str()).expect("error field");
     assert!(rendered.contains("[truncated]"));
 }
 
@@ -123,14 +105,8 @@ fn build_error_content_marks_policy_denials_non_recoverable() {
         "execution",
     );
 
-    assert_eq!(
-        payload.get("error_class").and_then(|v| v.as_str()),
-        Some("policy_blocked")
-    );
-    assert_eq!(
-        payload.get("is_recoverable").and_then(|v| v.as_bool()),
-        Some(false)
-    );
+    assert_eq!(payload.get("error_class").and_then(|v| v.as_str()), Some("policy_blocked"));
+    assert_eq!(payload.get("is_recoverable").and_then(|v| v.as_bool()), Some(false));
     assert!(payload.get("next_action").is_none());
 }
 
@@ -144,18 +120,8 @@ fn build_error_content_compacts_large_fallback_args() {
     );
 
     assert!(payload.get("fallback_tool_args").is_none());
-    assert_eq!(
-        payload
-            .get("fallback_tool_args_truncated")
-            .and_then(|v| v.as_bool()),
-        Some(true)
-    );
-    assert!(
-        payload
-            .get("fallback_tool_args_preview")
-            .and_then(|v| v.as_str())
-            .is_some()
-    );
+    assert_eq!(payload.get("fallback_tool_args_truncated").and_then(|v| v.as_bool()), Some(true));
+    assert!(payload.get("fallback_tool_args_preview").and_then(|v| v.as_str()).is_some());
     assert_eq!(
         payload.get("next_action").and_then(|v| v.as_str()),
         Some("Try an alternative tool or narrower scope.")
@@ -171,18 +137,12 @@ fn build_error_content_keeps_structured_fallback_fields_only() {
         "execution",
     );
 
-    assert_eq!(
-        payload.get("fallback_tool"),
-        Some(&serde_json::json!(tool_names::CODE_SEARCH))
-    );
+    assert_eq!(payload.get("fallback_tool"), Some(&serde_json::json!(tool_names::CODE_SEARCH)));
     assert_eq!(
         payload.get("fallback_tool_args"),
         Some(&serde_json::json!({"query":"Widget","path":"."}))
     );
-    assert_eq!(
-        payload.get("is_recoverable").and_then(|v| v.as_bool()),
-        Some(true)
-    );
+    assert_eq!(payload.get("is_recoverable").and_then(|v| v.as_bool()), Some(true));
     assert_eq!(
         payload.get("next_action").and_then(|v| v.as_str()),
         Some("Try an alternative tool or narrower scope.")
@@ -206,18 +166,8 @@ fn build_structured_error_content_preserves_retry_and_partial_state_fields() {
 
     let payload = build_structured_error_content(&error, None, None, "execution");
 
-    assert_eq!(
-        payload
-            .get("partial_state_possible")
-            .and_then(|value| value.as_bool()),
-        Some(true)
-    );
-    assert_eq!(
-        payload
-            .get("retry_delay_ms")
-            .and_then(|value| value.as_u64()),
-        Some(750)
-    );
+    assert_eq!(payload.get("partial_state_possible").and_then(|value| value.as_bool()), Some(true));
+    assert_eq!(payload.get("retry_delay_ms").and_then(|value| value.as_u64()), Some(750));
     assert_eq!(
         payload.get("next_action").and_then(|value| value.as_str()),
         Some("Retry with smaller scope.")
@@ -324,18 +274,12 @@ fn maybe_inline_spooled_removes_redundant_fields() {
     assert!(parsed.get("truncated").is_none());
     assert!(parsed.get("auto_recovered").is_none());
     assert!(parsed.get("query_truncated").is_none());
-    assert_eq!(
-        parsed.get("stderr_preview"),
-        Some(&serde_json::json!("warn"))
-    );
+    assert_eq!(parsed.get("stderr_preview"), Some(&serde_json::json!("warn")));
     assert!(parsed.get("stdout").is_none());
     assert!(parsed.get("next_poll_args").is_none());
     assert!(parsed.get("preferred_next_action").is_none());
     assert!(parsed.get("session_id").is_none());
-    assert_eq!(
-        parsed.get("next_continue_args"),
-        Some(&serde_json::json!({"s":"run-1"}))
-    );
+    assert_eq!(parsed.get("next_continue_args"), Some(&serde_json::json!({"s":"run-1"})));
 }
 
 #[test]
@@ -365,9 +309,7 @@ fn maybe_inline_spooled_compacts_next_read_duplicates() {
     assert!(parsed.get("spool_path").is_none());
     assert_eq!(
         parsed.get("path"),
-        Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/command_session_1.txt"
-        ))
+        Some(&serde_json::json!(".vtcode/context/tool_outputs/command_session_1.txt"))
     );
     assert_eq!(
         parsed.get("next_read_args"),
@@ -430,9 +372,7 @@ fn maybe_inline_spooled_keeps_loop_recovery_fields() {
     assert!(parsed.get("loop_detected").is_none());
     assert_eq!(
         parsed.get("spool_path"),
-        Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/command_session_loop.txt"
-        ))
+        Some(&serde_json::json!(".vtcode/context/tool_outputs/command_session_loop.txt"))
     );
     assert_eq!(
         parsed.get("next_read_args"),
@@ -444,16 +384,11 @@ fn maybe_inline_spooled_keeps_loop_recovery_fields() {
     );
     // Loop-recovery metadata fields are kept so the model understands why
     // its tool call was intercepted and can act on the guidance.
-    assert_eq!(
-        parsed.get("reused_spooled_output"),
-        Some(&serde_json::json!(true))
-    );
+    assert_eq!(parsed.get("reused_spooled_output"), Some(&serde_json::json!(true)));
     assert_eq!(parsed.get("spool_ref_only"), Some(&serde_json::json!(true)));
     assert_eq!(
         parsed.get("loop_detected_note"),
-        Some(&serde_json::json!(
-            "Read the spool file instead of re-running this call."
-        ))
+        Some(&serde_json::json!("Read the spool file instead of re-running this call."))
     );
     assert_eq!(parsed.get("repeat_count"), Some(&serde_json::json!(4)));
     assert!(parsed.get("limit").is_none());
@@ -482,18 +417,10 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_exec_output() {
     assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(0)));
     assert_eq!(
         parsed.get("spool_path"),
-        Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/command_session_1.txt"
-        ))
+        Some(&serde_json::json!(".vtcode/context/tool_outputs/command_session_1.txt"))
     );
-    assert_eq!(
-        parsed.get("stderr_preview"),
-        Some(&serde_json::json!("warning text"))
-    );
-    assert_eq!(
-        parsed.get("result_ref_only"),
-        Some(&serde_json::json!(true))
-    );
+    assert_eq!(parsed.get("stderr_preview"), Some(&serde_json::json!("warning text")));
+    assert_eq!(parsed.get("result_ref_only"), Some(&serde_json::json!(true)));
 }
 
 #[test]
@@ -514,14 +441,9 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_code_search_output() {
     assert!(parsed.get("results").is_none());
     assert_eq!(
         parsed.get("spool_path"),
-        Some(&serde_json::json!(
-            ".vtcode/context/tool_outputs/code_search_1.txt"
-        ))
+        Some(&serde_json::json!(".vtcode/context/tool_outputs/code_search_1.txt"))
     );
-    assert_eq!(
-        parsed.get("result_ref_only"),
-        Some(&serde_json::json!(true))
-    );
+    assert_eq!(parsed.get("result_ref_only"), Some(&serde_json::json!(true)));
     assert!(
         serialized.len() < 1_000,
         "spooled search payload should stay compact, got {} bytes",
@@ -533,18 +455,14 @@ fn maybe_inline_spooled_uses_reference_only_for_spooled_code_search_output() {
 async fn maybe_inline_spooled_with_preview_includes_tail_excerpt_from_spool_file() {
     let workspace = tempdir().expect("tempdir");
     let spool_dir = workspace.path().join(".vtcode/context/tool_outputs");
-    tokio::fs::create_dir_all(&spool_dir)
-        .await
-        .expect("create spool dir");
+    tokio::fs::create_dir_all(&spool_dir).await.expect("create spool dir");
     let spool_relative = ".vtcode/context/tool_outputs/command_session_test.txt";
     let spool_absolute = workspace.path().join(spool_relative);
     let mut content = String::new();
     for idx in 0..40 {
         content.push_str(&format!("./crate/file_{idx}.rs\n"));
     }
-    tokio::fs::write(&spool_absolute, &content)
-        .await
-        .expect("write spool");
+    tokio::fs::write(&spool_absolute, &content).await.expect("write spool");
 
     let serialized = maybe_inline_spooled_with_preview(
         workspace.path(),
@@ -564,10 +482,7 @@ async fn maybe_inline_spooled_with_preview_includes_tail_excerpt_from_spool_file
         serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("output").is_none(), "output should be stripped");
     assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(0)));
-    assert_eq!(
-        parsed.get("result_ref_only"),
-        Some(&serde_json::json!(true))
-    );
+    assert_eq!(parsed.get("result_ref_only"), Some(&serde_json::json!(true)));
     let preview = parsed
         .get("tail_preview")
         .and_then(serde_json::Value::as_str)
@@ -596,10 +511,7 @@ async fn maybe_inline_spooled_with_preview_skips_preview_when_spool_missing() {
     let parsed: serde_json::Value =
         serde_json::from_str(&serialized).expect("serialized JSON payload");
     assert!(parsed.get("tail_preview").is_none());
-    assert_eq!(
-        parsed.get("result_ref_only"),
-        Some(&serde_json::json!(true))
-    );
+    assert_eq!(parsed.get("result_ref_only"), Some(&serde_json::json!(true)));
 }
 
 #[test]
@@ -652,10 +564,7 @@ fn maybe_inline_spooled_keeps_exec_recovery_guidance() {
 
     let parsed: serde_json::Value =
         serde_json::from_str(&serialized).expect("serialized JSON payload");
-    assert_eq!(
-        parsed.get("output"),
-        Some(&serde_json::json!("bash: pip: command not found"))
-    );
+    assert_eq!(parsed.get("output"), Some(&serde_json::json!("bash: pip: command not found")));
     assert_eq!(parsed.get("exit_code"), Some(&serde_json::json!(127)));
     assert_eq!(
         parsed.get("critical_note"),
@@ -692,10 +601,7 @@ fn maybe_inline_spooled_keeps_recoverable_failure_next_action() {
         parsed.get("next_action"),
         Some(&serde_json::json!("Retry with fallback_tool_args."))
     );
-    assert_eq!(
-        parsed.get("fallback_tool"),
-        Some(&serde_json::json!(tool_names::CODE_SEARCH))
-    );
+    assert_eq!(parsed.get("fallback_tool"), Some(&serde_json::json!(tool_names::CODE_SEARCH)));
 }
 
 #[test]
@@ -712,14 +618,8 @@ fn maybe_inline_spooled_keeps_code_search_refinement_guidance() {
 
     let parsed: serde_json::Value =
         serde_json::from_str(&serialized).expect("serialized JSON payload");
-    assert_eq!(
-        parsed.get("next_action"),
-        Some(&serde_json::json!("Retry with narrower filters."))
-    );
-    assert_eq!(
-        parsed.get("hint"),
-        Some(&serde_json::json!("Try narrowing the path."))
-    );
+    assert_eq!(parsed.get("next_action"), Some(&serde_json::json!("Retry with narrower filters.")));
+    assert_eq!(parsed.get("hint"), Some(&serde_json::json!("Try narrowing the path.")));
 }
 
 #[test]
@@ -762,10 +662,7 @@ async fn tool_output_summary_input_uses_spool_file_tail_for_exec_output() {
     let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
     std::fs::create_dir_all(&spool_dir).unwrap();
     let spool_path = spool_dir.join("command_session_1.txt");
-    let spool_content = (1..=150)
-        .map(|idx| format!("line-{idx}"))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let spool_content = (1..=150).map(|idx| format!("line-{idx}")).collect::<Vec<_>>().join("\n");
     std::fs::write(&spool_path, spool_content).unwrap();
 
     let output = serde_json::json!({
@@ -798,10 +695,8 @@ async fn tool_output_summary_input_uses_spool_file_excerpt_for_large_reads() {
     let spool_dir = temp.path().join(".vtcode/context/tool_outputs");
     std::fs::create_dir_all(&spool_dir).unwrap();
     let spool_path = spool_dir.join("read_1.txt");
-    let spool_content = (1..=200)
-        .map(|idx| format!("read-line-{idx}"))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let spool_content =
+        (1..=200).map(|idx| format!("read-line-{idx}")).collect::<Vec<_>>().join("\n");
     std::fs::write(&spool_path, spool_content).unwrap();
 
     let output = serde_json::json!({
@@ -884,19 +779,13 @@ fn blocked_or_denied_failure_detects_guardable_errors() {
     assert!(is_blocked_or_denied_failure(
         "Policy violation: exceeded max tool calls per turn (32)"
     ));
-    assert!(is_blocked_or_denied_failure(
-        "Safety validation failed: command pattern denied"
-    ));
+    assert!(is_blocked_or_denied_failure("Safety validation failed: command pattern denied"));
 }
 
 #[test]
 fn blocked_or_denied_failure_ignores_runtime_execution_failures() {
-    assert!(!is_blocked_or_denied_failure(
-        "command exited with status 1"
-    ));
-    assert!(!is_blocked_or_denied_failure(
-        "stream request timed out after 30000ms"
-    ));
+    assert!(!is_blocked_or_denied_failure("command exited with status 1"));
+    assert!(!is_blocked_or_denied_failure("stream request timed out after 30000ms"));
 }
 
 #[test]
@@ -914,15 +803,9 @@ fn parse_subagent_summary_markdown_reads_fixed_contract() {
             "`read_file` duplicates are deduped locally",
         ]
     );
-    assert_eq!(
-        parsed.touched_files,
-        vec!["src/agent/runloop/unified/turn/compaction.rs"]
-    );
+    assert_eq!(parsed.touched_files, vec!["src/agent/runloop/unified/turn/compaction.rs"]);
     assert_eq!(parsed.verification, vec!["Run cargo check"]);
-    assert_eq!(
-        parsed.open_questions,
-        vec!["Should batch reads be deduped too?"]
-    );
+    assert_eq!(parsed.open_questions, vec!["Should batch reads be deduped too?"]);
 }
 
 #[test]
@@ -967,10 +850,7 @@ fn build_subagent_memory_update_aggregates_structured_child_results() {
         update.touched_files,
         vec!["src/agent/runloop/unified/turn/compaction.rs".to_string()]
     );
-    assert_eq!(
-        update.verification_todo,
-        vec!["Run cargo check".to_string()]
-    );
+    assert_eq!(update.verification_todo, vec!["Run cargo check".to_string()]);
     assert_eq!(
         update.delegation_notes,
         vec!["reviewer: Investigated compaction flow | Confirmed contract".to_string()]
@@ -989,10 +869,7 @@ fn build_subagent_memory_update_falls_back_to_raw_summary() {
 
     assert!(update.grounded_facts.is_empty());
     assert!(update.touched_files.is_empty());
-    assert_eq!(
-        update.delegation_notes,
-        vec!["worker: plain child summary".to_string()]
-    );
+    assert_eq!(update.delegation_notes, vec!["worker: plain child summary".to_string()]);
 }
 
 #[test]

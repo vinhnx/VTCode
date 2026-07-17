@@ -81,11 +81,7 @@ pub fn create_client_with_timeout(timeout: Duration) -> Client {
 
 /// Create an HTTP client with custom connect and request timeouts
 pub fn create_client_with_timeouts(connect_timeout: Duration, request_timeout: Duration) -> Client {
-    build_client(|builder| {
-        builder
-            .timeout(request_timeout)
-            .connect_timeout(connect_timeout)
-    })
+    build_client(|builder| builder.timeout(request_timeout).connect_timeout(connect_timeout))
 }
 
 /// Create an HTTP client with a specific user agent

@@ -58,9 +58,7 @@ fn vtcode_config_circuit_breaker_to_core(
     _agent_config: &CoreAgentConfig,
 ) -> vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
     let default_cfg = vtcode_config::core::agent::CircuitBreakerConfig::default();
-    let cfg = vt_cfg
-        .map(|c| &c.agent.circuit_breaker)
-        .unwrap_or(&default_cfg);
+    let cfg = vt_cfg.map(|c| &c.agent.circuit_breaker).unwrap_or(&default_cfg);
 
     if !cfg.enabled {
         return vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
@@ -134,15 +132,11 @@ pub(crate) async fn initialize_session(
             warn!("Failed to apply notification configuration: {}", err);
         }
     } else if let Err(err) = init_global_notification_manager() {
-        tracing::debug!(
-            "Notification manager already initialized or unavailable: {}",
-            err
-        );
+        tracing::debug!("Notification manager already initialized or unavailable: {}", err);
     }
 
-    let tool_documentation_mode = vt_cfg
-        .map(|cfg| cfg.agent.tool_documentation_mode)
-        .unwrap_or_default();
+    let tool_documentation_mode =
+        vt_cfg.map(|cfg| cfg.agent.tool_documentation_mode).unwrap_or_default();
     let async_mcp_manager = create_async_mcp_manager(vt_cfg, None);
     let mcp_error = determine_mcp_bootstrap_error(async_mcp_manager.as_ref()).await;
 
@@ -310,12 +304,8 @@ pub(crate) async fn initialize_session(
                 session_tools_config,
             )
             .await;
-        full_auto_allowlist = Some(
-            tool_registry
-                .current_full_auto_allowlist()
-                .await
-                .unwrap_or_default(),
-        );
+        full_auto_allowlist =
+            Some(tool_registry.current_full_auto_allowlist().await.unwrap_or_default());
     }
 
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
@@ -354,10 +344,7 @@ pub(crate) async fn initialize_session(
             &vtcode_config::SubagentDiscoveryInput::new(config.workspace.clone()),
         )
         .with_context(|| {
-            format!(
-                "Failed to discover primary agents in {}",
-                config.workspace.display()
-            )
+            format!("Failed to discover primary agents in {}", config.workspace.display())
         })?;
         active_primary_agent_from_specs_for_mode(
             &discovered.effective,
@@ -380,11 +367,8 @@ pub(crate) async fn initialize_session(
         .map(|home| PathBuf::from(home).join(".vtcode").join("cache"))
         .unwrap_or_else(|| PathBuf::from(".vtcode/cache"));
     let approval_recorder = Arc::new(ApprovalRecorder::new(cache_dir));
-    let permissions_state = Arc::new(RwLock::new(
-        vt_cfg
-            .map(|cfg| cfg.permissions.clone())
-            .unwrap_or_default(),
-    ));
+    let permissions_state =
+        Arc::new(RwLock::new(vt_cfg.map(|cfg| cfg.permissions.clone()).unwrap_or_default()));
     if let Some(cfg) = vt_cfg
         && cfg.context.dynamic.enabled
         && let Err(err) = vtcode_core::context::initialize_dynamic_context(
@@ -396,12 +380,11 @@ pub(crate) async fn initialize_session(
         warn!("Failed to initialize dynamic context directories: {}", err);
     }
 
-    let circuit_breaker = Arc::new(
-        vtcode_core::tools::circuit_breaker::CircuitBreaker::with_metrics(
+    let circuit_breaker =
+        Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::with_metrics(
             vtcode_config_circuit_breaker_to_core(vt_cfg, config),
             tool_registry.metrics_collector(),
-        ),
-    );
+        ));
     tool_registry.set_shared_circuit_breaker(circuit_breaker.clone());
     let shared_safety_gateway = tool_registry.safety_gateway();
 
@@ -432,12 +415,8 @@ pub(crate) async fn initialize_session(
             autonomous_executor: {
                 let executor = vtcode_core::tools::autonomous_executor::AutonomousExecutor::new();
                 if let Some(cfg) = vt_cfg {
-                    let loop_limits: HashMap<_, _> = cfg
-                        .tools
-                        .loop_thresholds
-                        .iter()
-                        .map(|(k, v)| (k.clone(), *v))
-                        .collect();
+                    let loop_limits: HashMap<_, _> =
+                        cfg.tools.loop_thresholds.iter().map(|(k, v)| (k.clone(), *v)).collect();
                     executor.configure_loop_limits(&loop_limits);
                 }
                 Arc::new(executor)
@@ -537,10 +516,7 @@ fn create_async_mcp_manager(
         .map(|agent| primary_agent_mcp_config(cfg, agent))
         .unwrap_or_else(|| cfg.mcp.clone());
 
-    info!(
-        "Setting up async MCP client with {} providers",
-        mcp_config.providers.len()
-    );
+    info!("Setting up async MCP client with {} providers", mcp_config.providers.len());
     let approval_policy = approval_policy_from_human_in_the_loop(cfg.security.human_in_the_loop);
     let manager = AsyncMcpManager::new(
         mcp_config,
@@ -703,10 +679,7 @@ async fn maybe_attach_mcp_client(
     };
     let status = manager.get_status().await;
     if let McpInitStatus::Ready { client } = &status {
-        *tool_registry = tool_registry
-            .clone()
-            .with_mcp_client(Arc::clone(client))
-            .await;
+        *tool_registry = tool_registry.clone().with_mcp_client(Arc::clone(client)).await;
         if let Err(err) = tool_registry.refresh_mcp_tools().await {
             warn!("Failed to refresh MCP tools: {}", err);
         }
@@ -723,9 +696,7 @@ async fn apply_workspace_trust_prompt_policy(
         auto_permission_review_active,
         workspace_trust_level,
     );
-    tool_registry
-        .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
-        .await;
+    tool_registry.set_enforce_safe_mode_prompts(enforce_safe_mode_prompts).await;
 }
 
 #[cfg(test)]
@@ -774,16 +745,8 @@ mod tests {
             ))
             .await;
 
-        assert!(
-            advanced_tools
-                .iter()
-                .any(|tool| tool.function_name() == tools::CODE_SEARCH)
-        );
-        assert!(
-            default_tools
-                .iter()
-                .all(|tool| tool.function_name() != tools::CODE_SEARCH)
-        );
+        assert!(advanced_tools.iter().any(|tool| tool.function_name() == tools::CODE_SEARCH));
+        assert!(default_tools.iter().all(|tool| tool.function_name() != tools::CODE_SEARCH));
     }
 
     #[tokio::test]
@@ -814,11 +777,7 @@ mod tests {
         // non-gated tool; planning keeps read-only tools) — see
         // `FeatureSet::tool_enabled_for_mode`.
         assert!(inactive_names.iter().any(|name| name == tools::CODE_SEARCH));
-        assert!(
-            !inactive_names
-                .iter()
-                .any(|name| name == tools::REQUEST_USER_INPUT)
-        );
+        assert!(!inactive_names.iter().any(|name| name == tools::REQUEST_USER_INPUT));
 
         registry.enable_planning();
         let active = tool_catalog
@@ -826,11 +785,7 @@ mod tests {
             .await;
         let active_names = active.active_tool_names.as_ref();
         assert!(active_names.iter().any(|name| name == tools::CODE_SEARCH));
-        assert!(
-            active_names
-                .iter()
-                .any(|name| name == tools::REQUEST_USER_INPUT)
-        );
+        assert!(active_names.iter().any(|name| name == tools::REQUEST_USER_INPUT));
     }
 
     #[tokio::test]

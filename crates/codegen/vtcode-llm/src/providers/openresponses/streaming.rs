@@ -195,8 +195,7 @@ pub fn parse_sse_event(line: &str) -> Option<StreamEvent> {
 /// Extract the event type from an SSE event line.
 pub fn extract_event_type(line: &str) -> Option<String> {
     let line = line.trim();
-    line.strip_prefix("event: ")
-        .map(|event_type| event_type.to_string())
+    line.strip_prefix("event: ").map(|event_type| event_type.to_string())
 }
 
 /// Accumulator for building responses from streaming events.
@@ -245,14 +244,9 @@ impl StreamAccumulator {
                 if let StreamEventData::Response(data) = &event.data
                     && let Some(response) = &data.response
                 {
-                    self.response_id = response
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
-                    self.model = response
-                        .get("model")
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
+                    self.response_id =
+                        response.get("id").and_then(|v| v.as_str()).map(String::from);
+                    self.model = response.get("model").and_then(|v| v.as_str()).map(String::from);
                 }
             }
             "response.output_text.delta" => {

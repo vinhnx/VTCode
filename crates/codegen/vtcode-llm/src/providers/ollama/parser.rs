@@ -20,20 +20,12 @@ pub fn pull_events_from_value(value: &JsonValue) -> Vec<OllamaPullEvent> {
         }
     }
 
-    let digest = value
-        .get("digest")
-        .and_then(|d| d.as_str())
-        .unwrap_or("")
-        .to_string();
+    let digest = value.get("digest").and_then(|d| d.as_str()).unwrap_or("").to_string();
     let total = value.get("total").and_then(JsonValue::as_u64);
     let completed = value.get("completed").and_then(JsonValue::as_u64);
 
     if total.is_some() || completed.is_some() {
-        events.push(OllamaPullEvent::ChunkProgress {
-            digest,
-            total,
-            completed,
-        });
+        events.push(OllamaPullEvent::ChunkProgress { digest, total, completed });
     }
 
     events
@@ -72,11 +64,7 @@ mod tests {
         let events = pull_events_from_value(&v);
         assert_eq!(events.len(), 1);
         match &events[0] {
-            OllamaPullEvent::ChunkProgress {
-                digest,
-                total,
-                completed,
-            } => {
+            OllamaPullEvent::ChunkProgress { digest, total, completed } => {
                 assert_eq!(digest, "sha256:abc");
                 assert_eq!(*total, Some(100));
                 assert_eq!(*completed, None);
@@ -88,11 +76,7 @@ mod tests {
         let events2 = pull_events_from_value(&v2);
         assert_eq!(events2.len(), 1);
         match &events2[0] {
-            OllamaPullEvent::ChunkProgress {
-                digest,
-                total,
-                completed,
-            } => {
+            OllamaPullEvent::ChunkProgress { digest, total, completed } => {
                 assert_eq!(digest, "sha256:def");
                 assert_eq!(*total, None);
                 assert_eq!(*completed, Some(42));

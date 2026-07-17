@@ -32,9 +32,7 @@ pub async fn read_image_from_url(url: &str) -> Result<ImageData> {
 
     let content_length = response.content_length().unwrap_or(0);
     if content_length > 20 * 1024 * 1024 {
-        return Err(anyhow::anyhow!(
-            "Image from URL too large: {content_length} bytes (max 20MB)"
-        ));
+        return Err(anyhow::anyhow!("Image from URL too large: {content_length} bytes (max 20MB)"));
     }
 
     let mime_type = response

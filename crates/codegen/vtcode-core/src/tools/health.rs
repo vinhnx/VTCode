@@ -85,10 +85,7 @@ impl ToolHealthTracker {
         }
 
         // Update sliding window
-        tool_stats.recent_history.push_back(ExecutionResult {
-            success,
-            latency_ms,
-        });
+        tool_stats.recent_history.push_back(ExecutionResult { success, latency_ms });
 
         if tool_stats.recent_history.len() > self.window_size
             && let Some(removed) = tool_stats.recent_history.pop_front()
@@ -111,10 +108,7 @@ impl ToolHealthTracker {
             if stats.consecutive_failures >= self.failure_threshold {
                 return (
                     false,
-                    Some(format!(
-                        "{} consecutive failures",
-                        stats.consecutive_failures
-                    )),
+                    Some(format!("{} consecutive failures", stats.consecutive_failures)),
                 );
             }
 
@@ -126,10 +120,7 @@ impl ToolHealthTracker {
                 if failure_rate > 0.6 {
                     return (
                         false,
-                        Some(format!(
-                            "High recent failure rate: {:.1}%",
-                            failure_rate * 100.0
-                        )),
+                        Some(format!("High recent failure rate: {:.1}%", failure_rate * 100.0)),
                     );
                 }
             }
@@ -163,11 +154,7 @@ impl ToolHealthTracker {
     }
     /// Get snapshot of all tool stats
     pub fn get_all_tool_stats(&self) -> Vec<(CompactStr, ToolStats)> {
-        self.stats
-            .read()
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+        self.stats.read().iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 }
 

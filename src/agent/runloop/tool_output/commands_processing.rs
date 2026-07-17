@@ -45,10 +45,7 @@ fn normalized_command_name(tokens: &[String]) -> Option<String> {
 fn command_is_multicol_listing(tokens: &[String]) -> bool {
     normalized_command_name(tokens)
         .map(|name| {
-            matches!(
-                name.as_str(),
-                "ls" | "dir" | "vdir" | "gls" | "colorls" | "exa" | "eza"
-            )
+            matches!(name.as_str(), "ls" | "dir" | "vdir" | "gls" | "colorls" | "exa" | "eza")
         })
         .unwrap_or(false)
 }
@@ -113,9 +110,7 @@ pub(super) fn preprocess_terminal_stdout<'a>(
         }
     };
 
-    let should_strip_numbers = tokens
-        .map(command_can_emit_rust_diagnostics)
-        .unwrap_or(false)
+    let should_strip_numbers = tokens.map(command_can_emit_rust_diagnostics).unwrap_or(false)
         && looks_like_rust_diagnostic(normalized.as_ref());
 
     if should_strip_numbers {
@@ -195,10 +190,8 @@ fn strip_rust_diagnostic_columns_from_str(input: &str) -> Option<String> {
     let mut changed = false;
 
     for chunk in input.split_inclusive('\n') {
-        let (line, had_newline) = chunk
-            .strip_suffix('\n')
-            .map(|line| (line, true))
-            .unwrap_or((chunk, false));
+        let (line, had_newline) =
+            chunk.strip_suffix('\n').map(|line| (line, true)).unwrap_or((chunk, false));
 
         if let Some(prefix_end) = rust_diagnostic_prefix_end(line) {
             changed = true;
@@ -329,20 +322,14 @@ warning: something
  7 |     println!(\"hi\");
    |     ^^^^^^^^^^^^^^^
 ";
-        assert!(
-            looks_like_rust_diagnostic(sample),
-            "should detect diagnostic structure"
-        );
+        assert!(looks_like_rust_diagnostic(sample), "should detect diagnostic structure");
     }
 
     #[test]
     fn rust_prefix_end_handles_pointer_lines() {
         let line = "   |         ^ expected struct `Foo`, found enum `Bar`";
         let idx = rust_diagnostic_prefix_end(line).expect("prefix");
-        assert_eq!(
-            &line[idx..],
-            "        ^ expected struct `Foo`, found enum `Bar`"
-        );
+        assert_eq!(&line[idx..], "        ^ expected struct `Foo`, found enum `Bar`");
     }
 
     #[test]

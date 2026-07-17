@@ -51,20 +51,16 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
         temperature: Some(0.4),
         tool_choice: Some(ToolChoice::Specific(SpecificToolChoice {
             tool_type: "function".to_string(),
-            function: SpecificFunctionChoice {
-                name: tools::LIST_FILES.to_string(),
-            },
+            function: SpecificFunctionChoice { name: tools::LIST_FILES.to_string() },
         })),
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
-    let system_instruction = gemini_request
-        .system_instruction
-        .expect("system instruction should be present");
+    let system_instruction =
+        gemini_request.system_instruction.expect("system instruction should be present");
     assert!(matches!(
         system_instruction.parts.as_slice(),
         [Part::Text {
@@ -85,9 +81,7 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
         .parts
         .iter()
         .find_map(|part| match part {
-            Part::FunctionResponse {
-                function_response, ..
-            } => Some(function_response),
+            Part::FunctionResponse { function_response, .. } => Some(function_response),
             _ => None,
         })
         .expect("tool response part should exist");
@@ -108,20 +102,13 @@ fn convert_to_gemini_request_hoists_history_system_directives_into_system_instru
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
-    let system_instruction = gemini_request
-        .system_instruction
-        .expect("system instruction should be present");
+    let system_instruction =
+        gemini_request.system_instruction.expect("system instruction should be present");
     let text = match system_instruction.parts.as_slice() {
-        [
-            Part::Text {
-                text,
-                thought_signature: _,
-            },
-        ] => text,
+        [Part::Text { text, thought_signature: _ }] => text,
         parts => panic!("expected single text system instruction part, got {parts:?}"),
     };
 
@@ -145,20 +132,14 @@ fn convert_to_gemini_request_promotes_history_system_directives_without_base_sys
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
     let system_instruction = gemini_request
         .system_instruction
         .expect("history directives should promote a system instruction");
     let text = match system_instruction.parts.as_slice() {
-        [
-            Part::Text {
-                text,
-                thought_signature: _,
-            },
-        ] => text,
+        [Part::Text { text, thought_signature: _ }] => text,
         parts => panic!("expected single text system instruction part, got {parts:?}"),
     };
 
@@ -202,19 +183,10 @@ fn convert_from_gemini_response_extracts_tool_calls() {
     .expect("conversion should succeed");
 
     assert_eq!(llm_response.content.as_deref(), Some("Here you go"));
-    let calls = llm_response
-        .tool_calls
-        .expect("tool call should be present");
+    let calls = llm_response.tool_calls.expect("tool call should be present");
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].function.as_ref().unwrap().name, tools::LIST_FILES);
-    assert!(
-        calls[0]
-            .function
-            .as_ref()
-            .unwrap()
-            .arguments
-            .contains("path")
-    );
+    assert!(calls[0].function.as_ref().unwrap().arguments.contains("path"));
     assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
 }
 
@@ -230,25 +202,13 @@ fn convert_to_gemini_request_keeps_apply_patch_as_function_tool() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
     let tools = gemini_request.tools.expect("tools should be present");
     assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].function_declarations.as_ref().expect("function declarations").len(), 1);
     assert_eq!(
-        tools[0]
-            .function_declarations
-            .as_ref()
-            .expect("function declarations")
-            .len(),
-        1
-    );
-    assert_eq!(
-        tools[0]
-            .function_declarations
-            .as_ref()
-            .expect("function declarations")[0]
-            .name,
+        tools[0].function_declarations.as_ref().expect("function declarations")[0].name,
         "apply_patch"
     );
 }
@@ -294,10 +254,7 @@ fn convert_to_interaction_request_serializes_built_in_and_function_tools() {
     assert!(tools.iter().any(|tool| {
         tool.tool_type == "function" && tool.name.as_deref() == Some("get_weather")
     }));
-    assert_eq!(
-        interaction_request.tool_choice.expect("tool choice").mode,
-        "validated"
-    );
+    assert_eq!(interaction_request.tool_choice.expect("tool choice").mode, "validated");
 }
 
 #[test]
@@ -380,21 +337,11 @@ fn convert_to_interaction_request_uses_function_result_for_chained_turns() {
         .convert_to_interaction_request(&request)
         .expect("interaction request should build");
 
-    assert_eq!(
-        interaction_request.previous_interaction_id.as_deref(),
-        Some("interaction_123")
-    );
+    assert_eq!(interaction_request.previous_interaction_id.as_deref(), Some("interaction_123"));
 
     match interaction_request.input {
         InteractionInput::Content(content) => match content.as_slice() {
-            [
-                InteractionContent::FunctionResult {
-                    call_id,
-                    name,
-                    result,
-                    ..
-                },
-            ] => {
+            [InteractionContent::FunctionResult { call_id, name, result, .. }] => {
                 assert_eq!(call_id, "call_weather_1");
                 assert_eq!(name.as_deref(), Some("get_weather"));
                 assert_eq!(
@@ -525,10 +472,7 @@ fn convert_from_interaction_response_extracts_request_id_and_tool_calls() {
     assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
     let tool_calls = llm_response.tool_calls.expect("tool call should exist");
     assert_eq!(tool_calls.len(), 1);
-    assert_eq!(
-        tool_calls[0].function.as_ref().expect("function").name,
-        "get_weather"
-    );
+    assert_eq!(tool_calls[0].function.as_ref().expect("function").name, "get_weather");
     assert_eq!(tool_calls[0].thought_signature.as_deref(), Some("sig_123"));
 }
 
@@ -569,16 +513,10 @@ fn convert_from_interaction_response_prefers_thought_summaries() {
     )
     .expect("interaction response should parse");
 
-    assert_eq!(
-        llm_response.reasoning.as_deref(),
-        Some("Checked the available evidence.")
-    );
+    assert_eq!(llm_response.reasoning.as_deref(), Some("Checked the available evidence."));
     assert_eq!(llm_response.content.as_deref(), Some("Final answer."));
     assert_eq!(llm_response.request_id.as_deref(), Some("interaction_789"));
-    assert_eq!(
-        llm_response.reasoning_details.as_ref().map(Vec::len),
-        Some(1)
-    );
+    assert_eq!(llm_response.reasoning_details.as_ref().map(Vec::len), Some(1));
 }
 
 #[test]
@@ -731,30 +669,15 @@ fn interaction_stream_payload_reconstructs_text_reasoning_and_tool_calls() {
     )
     .expect("finalized interaction stream should parse");
 
-    assert_eq!(
-        llm_response.request_id.as_deref(),
-        Some("interaction_stream_1")
-    );
+    assert_eq!(llm_response.request_id.as_deref(), Some("interaction_stream_1"));
     assert_eq!(llm_response.content.as_deref(), Some("Looking it up."));
-    assert_eq!(
-        llm_response.reasoning.as_deref(),
-        Some("Looked up the city first.")
-    );
+    assert_eq!(llm_response.reasoning.as_deref(), Some("Looked up the city first."));
     assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
-    assert_eq!(
-        llm_response.usage.as_ref().map(|u| u.total_tokens),
-        Some(20)
-    );
+    assert_eq!(llm_response.usage.as_ref().map(|u| u.total_tokens), Some(20));
     let tool_calls = llm_response.tool_calls.expect("tool call should exist");
     assert_eq!(tool_calls.len(), 1);
-    assert_eq!(
-        tool_calls[0].function.as_ref().expect("function").name,
-        "get_weather"
-    );
-    assert_eq!(
-        tool_calls[0].thought_signature.as_deref(),
-        Some("tool_sig_stream")
-    );
+    assert_eq!(tool_calls[0].function.as_ref().expect("function").name, "get_weather");
+    assert_eq!(tool_calls[0].thought_signature.as_deref(), Some("tool_sig_stream"));
 }
 
 #[test]
@@ -768,9 +691,7 @@ fn validate_request_rejects_store_false_with_previous_interaction_id() {
         ..Default::default()
     };
 
-    let error = provider
-        .validate_request(&request)
-        .expect_err("request should be rejected");
+    let error = provider.validate_request(&request).expect_err("request should be rejected");
     assert!(error.to_string().contains("cannot set store=false"));
 }
 
@@ -791,9 +712,7 @@ fn sanitize_function_parameters_removes_additional_properties() {
     });
 
     let sanitized = sanitize_function_parameters(parameters);
-    let root = sanitized
-        .as_object()
-        .expect("root parameters should remain an object");
+    let root = sanitized.as_object().expect("root parameters should remain an object");
     assert!(!root.contains_key("additionalProperties"));
 
     let nested = root
@@ -831,14 +750,8 @@ fn sanitize_function_parameters_removes_exclusive_min_max() {
         .expect("max_length property should exist");
 
     // These unsupported fields should be removed
-    assert!(
-        !props.contains_key("exclusiveMaximum"),
-        "exclusiveMaximum should be removed"
-    );
-    assert!(
-        !props.contains_key("exclusiveMinimum"),
-        "exclusiveMinimum should be removed"
-    );
+    assert!(!props.contains_key("exclusiveMaximum"), "exclusiveMaximum should be removed");
+    assert!(!props.contains_key("exclusiveMinimum"), "exclusiveMinimum should be removed");
     assert!(!props.contains_key("minimum"), "minimum should be removed");
     assert!(!props.contains_key("maximum"), "maximum should be removed");
 
@@ -876,9 +789,8 @@ fn sanitize_function_parameters_preserves_real_details_property() {
     });
 
     let sanitized = sanitize_function_parameters(parameters);
-    let properties = sanitized["properties"]
-        .as_object()
-        .expect("properties should remain an object");
+    let properties =
+        sanitized["properties"].as_object().expect("properties should remain an object");
 
     assert!(properties.contains_key("description"));
     assert!(properties.contains_key("details"));
@@ -888,32 +800,20 @@ fn sanitize_function_parameters_preserves_real_details_property() {
 #[test]
 fn apply_stream_delta_handles_replayed_chunks() {
     let mut acc = String::new();
-    assert_eq!(
-        GeminiProvider::apply_stream_delta(&mut acc, "Hello"),
-        Some("Hello".to_string())
-    );
+    assert_eq!(GeminiProvider::apply_stream_delta(&mut acc, "Hello"), Some("Hello".to_string()));
     assert_eq!(
         GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
         Some(" world".to_string())
     );
-    assert_eq!(
-        GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
-        None
-    );
+    assert_eq!(GeminiProvider::apply_stream_delta(&mut acc, "Hello world"), None);
     assert_eq!(acc, "Hello world");
 }
 
 #[test]
 fn apply_stream_delta_handles_incremental_chunks() {
     let mut acc = String::new();
-    assert_eq!(
-        GeminiProvider::apply_stream_delta(&mut acc, "Hello"),
-        Some("Hello".to_string())
-    );
-    assert_eq!(
-        GeminiProvider::apply_stream_delta(&mut acc, " there"),
-        Some(" there".to_string())
-    );
+    assert_eq!(GeminiProvider::apply_stream_delta(&mut acc, "Hello"), Some("Hello".to_string()));
+    assert_eq!(GeminiProvider::apply_stream_delta(&mut acc, " there"), Some(" there".to_string()));
     assert_eq!(acc, "Hello there");
 }
 
@@ -943,14 +843,12 @@ fn convert_to_gemini_request_includes_reasoning_config() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
     // Check that thinkingConfig is present in generationConfig and has the correct value for High effort
-    let generation_config = gemini_request
-        .generation_config
-        .expect("generation_config should be present");
+    let generation_config =
+        gemini_request.generation_config.expect("generation_config should be present");
     let thinking_config = generation_config
         .thinking_config
         .as_ref()
@@ -977,10 +875,7 @@ fn convert_to_gemini_request_includes_reasoning_config() {
         .thinking_config
         .as_ref()
         .expect("thinking_config should be present");
-    assert_eq!(
-        thinking_config_low.thinking_level.as_deref().unwrap(),
-        "low"
-    );
+    assert_eq!(thinking_config_low.thinking_level.as_deref().unwrap(), "low");
 
     // Test that None effort results in low reasoning_config for Gemini (none is treated as low)
     let request_none = LLMRequest {
@@ -1002,10 +897,7 @@ fn convert_to_gemini_request_includes_reasoning_config() {
         .thinking_config
         .as_ref()
         .expect("thinking_config should be present");
-    assert_eq!(
-        thinking_config_none.thinking_level.as_deref().unwrap(),
-        "low"
-    );
+    assert_eq!(thinking_config_none.thinking_level.as_deref().unwrap(), "low");
 }
 
 #[test]
@@ -1023,13 +915,11 @@ fn gemini31_pro_reasoning_mapping() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
-    let generation_config = gemini_request
-        .generation_config
-        .expect("generation_config should be present");
+    let generation_config =
+        gemini_request.generation_config.expect("generation_config should be present");
     let thinking_config = generation_config
         .thinking_config
         .as_ref()
@@ -1110,23 +1000,19 @@ fn thought_signature_roundtrip_in_request() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
     // Find the FunctionCall part with thought signature
     let assistant_content = &gemini_request.contents[1];
     let has_signature = assistant_content.parts.iter().any(|part| match part {
-        Part::FunctionCall {
-            thought_signature, ..
-        } => thought_signature.as_ref() == Some(&test_signature),
+        Part::FunctionCall { thought_signature, .. } => {
+            thought_signature.as_ref() == Some(&test_signature)
+        }
         _ => false,
     });
 
-    assert!(
-        has_signature,
-        "thought signature should be preserved in request"
-    );
+    assert!(has_signature, "thought signature should be preserved in request");
 }
 
 #[test]
@@ -1175,10 +1061,7 @@ fn parallel_function_calls_single_signature() {
         Some(test_signature),
         "first call should have signature"
     );
-    assert_eq!(
-        tool_calls[1].thought_signature, None,
-        "second call should not have signature"
-    );
+    assert_eq!(tool_calls[1].thought_signature, None, "second call should not have signature");
 }
 
 #[test]
@@ -1253,17 +1136,11 @@ fn gemini3_flash_extended_thinking_levels() {
     use vtcode_config::constants::models;
 
     // Test that Gemini 3 Flash supports extended thinking levels
-    assert!(GeminiProvider::supports_extended_thinking(
-        models::google::GEMINI_3_FLASH_PREVIEW
-    ));
+    assert!(GeminiProvider::supports_extended_thinking(models::google::GEMINI_3_FLASH_PREVIEW));
 
     // But Gemini 3 Pro does not
-    assert!(!GeminiProvider::supports_extended_thinking(
-        models::google::GEMINI_3_1_PRO_PREVIEW
-    ));
-    assert!(!GeminiProvider::supports_extended_thinking(
-        models::google::GEMINI_3_1_PRO_PREVIEW
-    ));
+    assert!(!GeminiProvider::supports_extended_thinking(models::google::GEMINI_3_1_PRO_PREVIEW));
+    assert!(!GeminiProvider::supports_extended_thinking(models::google::GEMINI_3_1_PRO_PREVIEW));
 
     // Get supported levels for each model
     let flash_levels =
@@ -1281,18 +1158,12 @@ fn gemini3_flash_extended_thinking_levels() {
 
 #[test]
 fn gemini_3_pro_temperature_warning_predicate_excludes_flash_models() {
-    assert!(GeminiProvider::is_gemini_3_pro_model(
-        models::google::GEMINI_3_1_PRO_PREVIEW
-    ));
+    assert!(GeminiProvider::is_gemini_3_pro_model(models::google::GEMINI_3_1_PRO_PREVIEW));
     assert!(GeminiProvider::is_gemini_3_pro_model(
         models::google::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS
     ));
-    assert!(!GeminiProvider::is_gemini_3_pro_model(
-        models::google::GEMINI_3_FLASH_PREVIEW
-    ));
-    assert!(!GeminiProvider::is_gemini_3_pro_model(
-        models::google::GEMINI_3_1_FLASH_LITE_PREVIEW
-    ));
+    assert!(!GeminiProvider::is_gemini_3_pro_model(models::google::GEMINI_3_FLASH_PREVIEW));
+    assert!(!GeminiProvider::is_gemini_3_pro_model(models::google::GEMINI_3_1_FLASH_LITE_PREVIEW));
 }
 
 #[test]
@@ -1310,13 +1181,11 @@ fn gemini3_flash_minimal_thinking_mapping() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
-    let generation_config = gemini_request
-        .generation_config
-        .expect("generation_config should be present");
+    let generation_config =
+        gemini_request.generation_config.expect("generation_config should be present");
     let thinking_config = generation_config
         .thinking_config
         .as_ref()
@@ -1343,13 +1212,11 @@ fn gemini3_flash_medium_thinking_mapping() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
-    let generation_config = gemini_request
-        .generation_config
-        .expect("generation_config should be present");
+    let generation_config =
+        gemini_request.generation_config.expect("generation_config should be present");
     let thinking_config = generation_config
         .thinking_config
         .as_ref()
@@ -1376,13 +1243,11 @@ fn gemini3_pro_medium_thinking_fallback() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
-    let generation_config = gemini_request
-        .generation_config
-        .expect("generation_config should be present");
+    let generation_config =
+        gemini_request.generation_config.expect("generation_config should be present");
     let thinking_config = generation_config
         .thinking_config
         .as_ref()
@@ -1411,23 +1276,17 @@ fn convert_to_gemini_request_includes_advanced_parameters() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
-    let config = gemini_request
-        .generation_config
-        .expect("generation_config should be present");
+    let config = gemini_request.generation_config.expect("generation_config should be present");
 
     assert_eq!(config.top_p, Some(0.9));
     assert_eq!(config.top_k, Some(40));
     assert_eq!(config.presence_penalty, Some(0.6));
     assert_eq!(config.frequency_penalty, Some(0.5));
     assert_eq!(
-        config
-            .stop_sequences
-            .as_ref()
-            .and_then(|s| s.first().cloned()),
+        config.stop_sequences.as_ref().and_then(|s| s.first().cloned()),
         Some("STOP".to_string())
     );
 }
@@ -1445,18 +1304,12 @@ fn convert_to_gemini_request_includes_json_mode() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
-    let config = gemini_request
-        .generation_config
-        .expect("generation_config should be present");
+    let config = gemini_request.generation_config.expect("generation_config should be present");
 
-    assert_eq!(
-        config.response_mime_type.as_deref(),
-        Some("application/json")
-    );
+    assert_eq!(config.response_mime_type.as_deref(), Some("application/json"));
 }
 
 #[test]
@@ -1482,9 +1335,8 @@ fn convert_to_gemini_request_combines_google_search_with_function_tools() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
     let tools = gemini_request.tools.expect("tools should be present");
     assert!(
@@ -1493,24 +1345,17 @@ fn convert_to_gemini_request_combines_google_search_with_function_tools() {
     );
     assert!(
         tools.iter().any(|tool| {
-            tool.function_declarations
-                .as_ref()
-                .is_some_and(|declarations| {
-                    declarations.iter().any(|decl| decl.name == "get_weather")
-                })
+            tool.function_declarations.as_ref().is_some_and(|declarations| {
+                declarations.iter().any(|decl| decl.name == "get_weather")
+            })
         }),
         "function declarations should be preserved alongside built-in tools"
     );
 
-    let tool_config = gemini_request
-        .tool_config
-        .expect("tool config should be present");
+    let tool_config = gemini_request.tool_config.expect("tool config should be present");
     assert_eq!(tool_config.include_server_side_tool_invocations, Some(true));
     assert_eq!(
-        tool_config
-            .function_calling_config
-            .as_ref()
-            .map(|config| config.mode.as_str()),
+        tool_config.function_calling_config.as_ref().map(|config| config.mode.as_str()),
         Some("VALIDATED")
     );
 }
@@ -1573,10 +1418,7 @@ fn convert_from_gemini_response_preserves_server_side_tool_parts() {
         "get_weather"
     );
 
-    let preserved = llm_response
-        .reasoning_details
-        .as_ref()
-        .expect("raw parts should be preserved");
+    let preserved = llm_response.reasoning_details.as_ref().expect("raw parts should be preserved");
     assert_eq!(preserved.len(), 1);
     assert!(
         preserved[0].starts_with("__vtcode_gemini_parts__:"),
@@ -1655,15 +1497,11 @@ fn convert_to_gemini_request_replays_preserved_raw_parts() {
         ..Default::default()
     };
 
-    let gemini_request = provider
-        .convert_to_gemini_request(&request)
-        .expect("conversion should succeed");
+    let gemini_request =
+        provider.convert_to_gemini_request(&request).expect("conversion should succeed");
 
     assert_eq!(gemini_request.contents.len(), 3);
-    assert_eq!(
-        gemini_request.contents[1].parts.len(),
-        preserved_parts.len()
-    );
+    assert_eq!(gemini_request.contents[1].parts.len(), preserved_parts.len());
     assert!(matches!(
         &gemini_request.contents[1].parts[0],
         Part::ToolCall {
@@ -1718,10 +1556,7 @@ mod caching_tests {
 
     #[test]
     fn test_gemini_explicit_mode_config() {
-        let mut config = PromptCachingConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let mut config = PromptCachingConfig { enabled: true, ..Default::default() };
         config.providers.gemini.enabled = true;
         config.providers.gemini.mode = GeminiPromptCacheMode::Explicit;
         config.providers.gemini.explicit_ttl_seconds = Some(1200);
@@ -1748,15 +1583,9 @@ mod caching_tests {
         // Verify the request conversion produces correct structure with explicit TTL
         let gemini_req = res.expect("request conversion");
 
-        assert!(
-            !gemini_req.contents.is_empty(),
-            "Contents should not be empty"
-        );
+        assert!(!gemini_req.contents.is_empty(), "Contents should not be empty");
         // Verify system instruction is set with TTL
-        assert!(
-            gemini_req.system_instruction.is_some(),
-            "System instruction should be set"
-        );
+        assert!(gemini_req.system_instruction.is_some(), "System instruction should be set");
         // Verify TTL is included in system instruction when explicitly configured
         if let Some(ttl_seconds) = config.providers.gemini.explicit_ttl_seconds {
             let system_str =
@@ -1779,10 +1608,7 @@ fn part_json_deserialization_function_call_with_thought_signature() {
     let part: Part = serde_json::from_value(json_camel)
         .expect("should deserialize function call with camelCase thoughtSignature");
     match &part {
-        Part::FunctionCall {
-            function_call,
-            thought_signature,
-        } => {
+        Part::FunctionCall { function_call, thought_signature } => {
             assert_eq!(function_call.name, "test_func");
             assert_eq!(
                 thought_signature.as_deref(),
@@ -1800,10 +1626,7 @@ fn part_json_deserialization_function_call_with_thought_signature() {
     let part2: Part = serde_json::from_value(json_no_sig)
         .expect("should deserialize function call without signature");
     match &part2 {
-        Part::FunctionCall {
-            function_call,
-            thought_signature,
-        } => {
+        Part::FunctionCall { function_call, thought_signature } => {
             assert_eq!(function_call.name, "test_func");
             assert_eq!(thought_signature, &None, "missing signature should be None");
         }
@@ -1835,10 +1658,7 @@ fn part_json_deserialization_function_call_with_thought_signature() {
         serde_json::from_value(candidate_json).expect("should deserialize streaming candidate");
     assert_eq!(candidate.content.parts.len(), 1);
     match &candidate.content.parts[0] {
-        Part::FunctionCall {
-            function_call,
-            thought_signature,
-        } => {
+        Part::FunctionCall { function_call, thought_signature } => {
             assert_eq!(function_call.name, "exec_command");
             assert_eq!(
                 thought_signature.as_deref(),

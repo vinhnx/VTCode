@@ -76,10 +76,7 @@ impl ExecutionMetrics {
             self.memory_peak_mb = memory_mb;
         }
 
-        *self
-            .language_distribution
-            .entry(language.clone())
-            .or_insert(0) += 1;
+        *self.language_distribution.entry(language.clone()).or_insert(0) += 1;
 
         let record = ExecutionRecord {
             language,

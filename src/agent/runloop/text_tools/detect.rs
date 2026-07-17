@@ -85,12 +85,7 @@ pub(crate) fn strip_textual_tool_call_regions(text: &str) -> String {
     // re-allocating a full copy inside each collector — this runs on every LLM
     // response, so the redundant allocations add up.
     let lowered = text.to_ascii_lowercase();
-    collect_enclosed_regions(
-        text,
-        "<minimax:tool_call>",
-        "</minimax:tool_call>",
-        &mut regions,
-    );
+    collect_enclosed_regions(text, "<minimax:tool_call>", "</minimax:tool_call>", &mut regions);
     collect_pseudo_marker_regions(&lowered, "<tool_call>", "</tool_call", &mut regions);
     // Strip <function=name>...</function> and <parameter=name>...</parameter>
     // blocks that models emit as pseudo-tool-call markup when tools are
@@ -489,10 +484,7 @@ fn detect_direct_function_alias(text: &str) -> ParseResult {
                 let raw_args = &text[args_start..end_pos];
                 if let Some(args) = parse_textual_arguments(raw_args) {
                     // Return raw name/args; canonicalization happens in detect_textual_tool_call
-                    return ParseResult::Success(ParsedToolCall {
-                        name: alias.to_string(),
-                        args,
-                    });
+                    return ParseResult::Success(ParsedToolCall { name: alias.to_string(), args });
                 }
 
                 search_start = end;

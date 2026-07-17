@@ -127,12 +127,7 @@ impl CodeSearchRequest {
 
         Ok(NormalisedCodeSearchRequest {
             query: CompactStr::from(query),
-            filters: CodeSearchFilters {
-                path,
-                file_types,
-                result_types,
-                max_results,
-            },
+            filters: CodeSearchFilters { path, file_types, result_types, max_results },
         })
     }
 }
@@ -214,13 +209,10 @@ fn canonicalize_existing_prefix(path: &Path) -> PathBuf {
 
     loop {
         if let Ok(canonical) = std::fs::canonicalize(existing_prefix) {
-            return missing_components
-                .iter()
-                .rev()
-                .fold(canonical, |mut resolved, component| {
-                    resolved.push(component);
-                    resolved
-                });
+            return missing_components.iter().rev().fold(canonical, |mut resolved, component| {
+                resolved.push(component);
+                resolved
+            });
         }
         let Some(component) = existing_prefix.file_name() else {
             return normalised;
@@ -351,25 +343,17 @@ fn has_complete_supported_inventory(
         {
             return false;
         }
-        inventories
-            .get(path)
-            .map_or(stream_complete, |inventory| inventory.complete)
+        inventories.get(path).map_or(stream_complete, |inventory| inventory.complete)
     })
 }
 
 fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearchScope> {
     let requested_path = Path::new(requested);
-    if requested_path
-        .components()
-        .any(|component| component == Component::ParentDir)
-    {
+    if requested_path.components().any(|component| component == Component::ParentDir) {
         bail!("code_search path must not contain '..' traversal");
     }
     let workspace_root = std::fs::canonicalize(workspace_root).with_context(|| {
-        format!(
-            "failed to canonicalise workspace root {}",
-            workspace_root.display()
-        )
+        format!("failed to canonicalise workspace root {}", workspace_root.display())
     })?;
     let candidate = if requested_path.is_absolute() {
         requested_path.to_path_buf()
@@ -391,10 +375,7 @@ fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearc
 
     let requested_is_file = requested_path.is_file();
     let walk_root = if requested_is_file {
-        requested_path
-            .parent()
-            .unwrap_or(&workspace_root)
-            .to_path_buf()
+        requested_path.parent().unwrap_or(&workspace_root).to_path_buf()
     } else {
         requested_path.clone()
     };
@@ -410,18 +391,11 @@ fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearc
     let mut requested_available = requested_path == workspace_root;
     let mut allowed_files = HashSet::new();
     for entry in builder.build().filter_map(std::result::Result::ok) {
-        if entry
-            .file_type()
-            .is_some_and(|file_type| file_type.is_symlink())
-        {
+        if entry.file_type().is_some_and(|file_type| file_type.is_symlink()) {
             continue;
         }
         let path = entry.path();
-        if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(is_sensitive_file)
-        {
+        if path.file_name().and_then(|name| name.to_str()).is_some_and(is_sensitive_file) {
             continue;
         }
         let Ok(canonical) = std::fs::canonicalize(path) else {
@@ -433,10 +407,7 @@ fn resolve_scope(workspace_root: &Path, requested: &str) -> Result<ResolvedSearc
         if canonical == requested_path {
             requested_available = true;
         }
-        if entry
-            .file_type()
-            .is_some_and(|file_type| file_type.is_file())
-        {
+        if entry.file_type().is_some_and(|file_type| file_type.is_file()) {
             allowed_files.insert(canonical);
         }
     }
@@ -504,10 +475,7 @@ fn byte_position(source: &str, offset: usize) -> (usize, usize) {
     let bounded = offset.min(source.len());
     let before = &source[..bounded];
     let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let column = before
-        .rsplit_once('\n')
-        .map_or(before.len(), |(_, tail)| tail.len())
-        + 1;
+    let column = before.rsplit_once('\n').map_or(before.len(), |(_, tail)| tail.len()) + 1;
     (line, column)
 }
 
@@ -537,34 +505,18 @@ fn deduplicate_and_order(mut candidates: Vec<RankedCandidate>) -> Vec<CodeSearch
             }
         }
     }
-    let mut ordered = source_locations
-        .into_values()
-        .chain(path_only)
-        .collect::<Vec<_>>();
+    let mut ordered = source_locations.into_values().chain(path_only).collect::<Vec<_>>();
     ordered.sort_by(|left, right| {
         left.result
             .result_type
             .precedence()
             .cmp(&right.result.result_type.precedence())
             .then_with(|| left.result.path.cmp(&right.result.path))
-            .then_with(|| {
-                left.result
-                    .line
-                    .unwrap_or(0)
-                    .cmp(&right.result.line.unwrap_or(0))
-            })
-            .then_with(|| {
-                left.result
-                    .column
-                    .unwrap_or(0)
-                    .cmp(&right.result.column.unwrap_or(0))
-            })
+            .then_with(|| left.result.line.unwrap_or(0).cmp(&right.result.line.unwrap_or(0)))
+            .then_with(|| left.result.column.unwrap_or(0).cmp(&right.result.column.unwrap_or(0)))
             .then_with(|| left.backend_ordinal.cmp(&right.backend_ordinal))
     });
-    ordered
-        .into_iter()
-        .map(|candidate| candidate.result)
-        .collect()
+    ordered.into_iter().map(|candidate| candidate.result).collect()
 }
 
 fn unavailable_hint(unavailable: &[CodeSearchResultType]) -> Option<CompactStr> {
@@ -581,9 +533,7 @@ fn unavailable_hint(unavailable: &[CodeSearchResultType]) -> Option<CompactStr> 
         })
         .collect::<Vec<_>>()
         .join(", ");
-    Some(CompactStr::from(format!(
-        "Some requested result categories were unavailable: {names}."
-    )))
+    Some(CompactStr::from(format!("Some requested result categories were unavailable: {names}.")))
 }
 
 fn append_path_candidates(
@@ -625,34 +575,18 @@ pub(crate) async fn execute(
     request.filters.path = response_path(&scope);
     let languages = requested_languages(&request.filters);
     let candidate_cap = backend_candidate_cap(request.filters.max_results);
-    let definition_enabled = request
-        .filters
-        .result_types
-        .contains(&CodeSearchResultType::Definition);
-    let usage_enabled = request
-        .filters
-        .result_types
-        .contains(&CodeSearchResultType::Usage);
-    let text_enabled = request
-        .filters
-        .result_types
-        .contains(&CodeSearchResultType::Text);
-    let path_enabled = request
-        .filters
-        .result_types
-        .contains(&CodeSearchResultType::Path);
+    let definition_enabled =
+        request.filters.result_types.contains(&CodeSearchResultType::Definition);
+    let usage_enabled = request.filters.result_types.contains(&CodeSearchResultType::Usage);
+    let text_enabled = request.filters.result_types.contains(&CodeSearchResultType::Text);
+    let path_enabled = request.filters.result_types.contains(&CodeSearchResultType::Path);
 
     let usage_support = usage_scope_support(&scope, &languages);
     let usage_backend_needed = usage_enabled && usage_support.has_supported_files;
     let literal_outcome = if text_enabled || usage_backend_needed {
-        search_literal_bounded(
-            &request.query,
-            &scope.requested_path,
-            &languages,
-            candidate_cap,
-        )
-        .await
-        .map(Some)
+        search_literal_bounded(&request.query, &scope.requested_path, &languages, candidate_cap)
+            .await
+            .map(Some)
     } else {
         Ok(None)
     };
@@ -676,10 +610,7 @@ pub(crate) async fn execute(
                 .unwrap_or_else(|| CompactStr::from("."));
             let matches = relative.to_lowercase().contains(&query.to_lowercase());
             Ok(Some(BoundedPathSearch {
-                paths: matches
-                    .then(|| scope.requested_path.clone())
-                    .into_iter()
-                    .collect(),
+                paths: matches.then(|| scope.requested_path.clone()).into_iter().collect(),
                 truncated: false,
             }))
         } else {
@@ -784,10 +715,7 @@ pub(crate) async fn execute(
         Ok(Some(outcome)) => {
             truncated |= outcome.truncated;
             let base = if scope.requested_is_file {
-                scope
-                    .requested_path
-                    .parent()
-                    .unwrap_or(&scope.workspace_root)
+                scope.requested_path.parent().unwrap_or(&scope.workspace_root)
             } else {
                 &scope.requested_path
             };
@@ -799,11 +727,7 @@ pub(crate) async fn execute(
 
     unavailable.sort_by_key(|kind| kind.precedence());
     unavailable.dedup();
-    let successful_count = request
-        .filters
-        .result_types
-        .len()
-        .saturating_sub(unavailable.len());
+    let successful_count = request.filters.result_types.len().saturating_sub(unavailable.len());
     if successful_count == 0 {
         bail!("all requested code_search result categories are unavailable");
     }
@@ -822,14 +746,10 @@ pub(crate) async fn execute(
     let usage_limited = usage_enabled
         && (usage_support.has_unsupported_files || usage_support.requested_unsupported_file_types);
     if usage_limited {
-        hints.push(CompactStr::from(
-            "Usage results are unavailable for some requested file types.",
-        ));
+        hints
+            .push(CompactStr::from("Usage results are unavailable for some requested file types."));
     }
-    if results
-        .iter()
-        .any(|result| result.result_type == CodeSearchResultType::Usage)
-    {
+    if results.iter().any(|result| result.result_type == CodeSearchResultType::Usage) {
         hints.push(CompactStr::from(
             "Usage results are syntactic same-spelling identifiers and may refer to different symbols.",
         ));
@@ -933,10 +853,7 @@ fn classify_literal_candidates(
             continue;
         };
         let language = AstGrepLanguage::from_path(&canonical);
-        let range = SourceByteRange {
-            start: literal.byte_start,
-            end: literal.byte_end,
-        };
+        let range = SourceByteRange { start: literal.byte_start, end: literal.byte_end };
         let inventory = inventories.get(&canonical);
         let is_definition =
             inventory.is_some_and(|inventory| inventory.exact_name_ranges.contains(&range));
@@ -952,9 +869,7 @@ fn classify_literal_candidates(
                 .or_insert_with(|| std::fs::read_to_string(&canonical).unwrap_or_default());
             language
                 .and_then(|language| {
-                    parse_source(language, source)
-                        .ok()
-                        .map(|tree| (language, tree))
+                    parse_source(language, source).ok().map(|tree| (language, tree))
                 })
                 .is_some_and(|(language, tree)| is_exact_usage_identifier(&tree, language, range))
         } else {
@@ -1140,11 +1055,7 @@ mod tests {
                 .expect("fake executable permissions");
         }
 
-        CodeSearchFixture {
-            workspace,
-            fake_outline,
-            fake_outline_path,
-        }
+        CodeSearchFixture { workspace, fake_outline, fake_outline_path }
     }
 
     #[test]
@@ -1257,10 +1168,7 @@ mod tests {
         };
         let inventories = HashMap::from([(
             canonical_source,
-            DeclarationInventory {
-                complete: false,
-                exact_name_ranges: Vec::new(),
-            },
+            DeclarationInventory { complete: false, exact_name_ranges: Vec::new() },
         )]);
 
         assert!(!has_complete_supported_inventory(
@@ -1282,9 +1190,7 @@ mod tests {
             json!({"query": "Widget", "max_results": 0}),
             json!({"query": "Widget", "max_results": 101}),
         ] {
-            let error = request(invalid)
-                .normalise()
-                .expect_err("invalid value must fail");
+            let error = request(invalid).normalise().expect_err("invalid value must fail");
             assert!(error.to_string().contains("code_search"));
         }
     }
@@ -1327,10 +1233,7 @@ mod tests {
                 .insert(field.to_string(), json!(true));
             let error = serde_json::from_value::<CodeSearchRequest>(payload)
                 .expect_err("former field must fail deserialisation");
-            assert!(
-                error.to_string().contains("unknown field"),
-                "{field}: {error}"
-            );
+            assert!(error.to_string().contains("unknown field"), "{field}: {error}");
         }
     }
 
@@ -1399,10 +1302,7 @@ mod tests {
             serde_json::to_value(&first).expect("first response"),
             serde_json::to_value(&second).expect("second response")
         );
-        assert_eq!(
-            first.results[0].result_type,
-            CodeSearchResultType::Definition
-        );
+        assert_eq!(first.results[0].result_type, CodeSearchResultType::Definition);
         assert!(
             first
                 .results
@@ -1419,10 +1319,7 @@ mod tests {
         );
         assert!(first.results.iter().any(|result| {
             result.result_type == CodeSearchResultType::Text
-                && result
-                    .snippet
-                    .as_deref()
-                    .is_some_and(|line| line.contains("WidgetExtra"))
+                && result.snippet.as_deref().is_some_and(|line| line.contains("WidgetExtra"))
         }));
         assert!(first.results.iter().any(|result| {
             result.result_type == CodeSearchResultType::Text && result.line == Some(9)
@@ -1470,9 +1367,7 @@ mod tests {
             .await
             .expect("result subset");
             assert!(response.results.iter().all(|result| {
-                serde_json::to_value(result.result_type)
-                    .expect("result type")
-                    .as_str()
+                serde_json::to_value(result.result_type).expect("result type").as_str()
                     == Some(result_type)
             }));
         }
@@ -1491,12 +1386,7 @@ mod tests {
         assert!(unfiltered.results.iter().any(|result| {
             result.result_type == CodeSearchResultType::Text && result.path == "src/widget.sh"
         }));
-        assert!(
-            unfiltered
-                .hints
-                .iter()
-                .any(|hint| hint.contains("file types"))
-        );
+        assert!(unfiltered.hints.iter().any(|hint| hint.contains("file types")));
     }
 
     #[tokio::test]
@@ -1553,10 +1443,7 @@ mod tests {
         assert!(truncated.truncated);
         assert!(truncated.hints[0].contains("Narrow path"));
         assert!(truncated.results.iter().all(|result| {
-            result
-                .snippet
-                .as_ref()
-                .is_none_or(|snippet| snippet.len() <= SNIPPET_BYTE_CAP)
+            result.snippet.as_ref().is_none_or(|snippet| snippet.len() <= SNIPPET_BYTE_CAP)
         }));
 
         let long_snippet = execute(
@@ -1569,10 +1456,7 @@ mod tests {
         )
         .await
         .expect("long snippet search");
-        let snippet = long_snippet.results[0]
-            .snippet
-            .as_ref()
-            .expect("source snippet");
+        let snippet = long_snippet.results[0].snippet.as_ref().expect("source snippet");
         assert!(snippet.len() <= SNIPPET_BYTE_CAP);
         assert!(snippet.len() > 230);
         assert!(std::str::from_utf8(snippet.as_bytes()).is_ok());
@@ -1610,12 +1494,7 @@ mod tests {
 
         assert_eq!(response.returned, 1);
         assert_eq!(response.results[0].path, "src/widget.rs");
-        assert!(
-            response
-                .results
-                .iter()
-                .all(|result| result.path == "src/widget.rs")
-        );
+        assert!(response.results.iter().all(|result| result.path == "src/widget.rs"));
     }
 
     #[tokio::test]
@@ -1657,10 +1536,7 @@ mod tests {
         .expect("Bash definition search");
 
         assert_eq!(response.returned, 1);
-        assert_eq!(
-            response.results[0].result_type,
-            CodeSearchResultType::Definition
-        );
+        assert_eq!(response.results[0].result_type, CodeSearchResultType::Definition);
         assert_eq!(response.results[0].name.as_deref(), Some("Widget"));
     }
 
@@ -1706,10 +1582,7 @@ mod tests {
         }))
         .normalise()
         .expect("aliases normalise");
-        assert_eq!(
-            request.filters.file_types,
-            ["c", "javascript", "md", "proto", "dockerfile"]
-        );
+        assert_eq!(request.filters.file_types, ["c", "javascript", "md", "proto", "dockerfile"]);
         for (path, language) in [
             ("include/widget.h", AstGrepLanguage::C),
             ("web/widget.jsx", AstGrepLanguage::JavaScript),
@@ -1729,11 +1602,8 @@ mod tests {
         let fixture = code_search_fixture();
         let outside = TempDir::new().expect("outside directory");
         fs::write(outside.path().join("Widget.rs"), "fn Widget() {}\n").expect("outside source");
-        symlink(
-            outside.path().join("Widget.rs"),
-            fixture.workspace.path().join("escape.rs"),
-        )
-        .expect("escape symlink");
+        symlink(outside.path().join("Widget.rs"), fixture.workspace.path().join("escape.rs"))
+            .expect("escape symlink");
         assert!(
             execute(
                 fixture.workspace.path(),
@@ -1803,10 +1673,7 @@ mod tests {
         let mut inventories = HashMap::new();
         inventories.insert(
             canonical,
-            DeclarationInventory {
-                complete: false,
-                exact_name_ranges: Vec::new(),
-            },
+            DeclarationInventory { complete: false, exact_name_ranges: Vec::new() },
         );
         let mut candidates = Vec::new();
         classify_literal_candidates(
@@ -1887,10 +1754,7 @@ mod tests {
         assert_eq!(candidates[0].result.line, Some(1));
         assert_eq!(candidates[0].result.column, Some(4));
         let inventory = inventories.get(&canonical).expect("inventory");
-        assert!(
-            !inventory.complete,
-            "any failed exact range suppresses usage"
-        );
+        assert!(!inventory.complete, "any failed exact range suppresses usage");
         assert_eq!(inventory.exact_name_ranges.len(), 1);
 
         let mut mixed = candidates;

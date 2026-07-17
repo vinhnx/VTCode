@@ -293,25 +293,16 @@ impl NetworkAllowlist {
     pub fn category_summary(&self) -> String {
         let mut parts = Vec::new();
         if !self.ai_providers.cloud.is_empty() {
-            parts.push(format!(
-                "ai_providers.cloud: {}",
-                self.ai_providers.cloud.len()
-            ));
+            parts.push(format!("ai_providers.cloud: {}", self.ai_providers.cloud.len()));
         }
         if !self.ai_providers.local.is_empty() {
-            parts.push(format!(
-                "ai_providers.local: {}",
-                self.ai_providers.local.len()
-            ));
+            parts.push(format!("ai_providers.local: {}", self.ai_providers.local.len()));
         }
         if !self.search.web.is_empty() {
             parts.push(format!("search.web: {}", self.search.web.len()));
         }
         if !self.search.specialized.is_empty() {
-            parts.push(format!(
-                "search.specialized: {}",
-                self.search.specialized.len()
-            ));
+            parts.push(format!("search.specialized: {}", self.search.specialized.len()));
         }
         if !self.web_crawl.is_empty() {
             parts.push(format!("web_crawl: {}", self.web_crawl.len()));
@@ -320,10 +311,7 @@ impl NetworkAllowlist {
             parts.push(format!("mcp_servers: {}", self.mcp_servers.len()));
         }
         if !self.package_registries.is_empty() {
-            parts.push(format!(
-                "package_registries: {}",
-                self.package_registries.len()
-            ));
+            parts.push(format!("package_registries: {}", self.package_registries.len()));
         }
         if !self.code_hosting.is_empty() {
             parts.push(format!("code_hosting: {}", self.code_hosting.len()));
@@ -350,11 +338,7 @@ mod tests {
         let list = NetworkAllowlist::load_default();
         // The shipped TOML has 103 entries; verify the broad shape
         // before checking individual hosts.
-        assert!(
-            list.entry_count() > 50,
-            "expected many entries, got {}",
-            list.entry_count()
-        );
+        assert!(list.entry_count() > 50, "expected many entries, got {}", list.entry_count());
         assert!(list.entry_count() <= 200, "allowlist grew unexpectedly");
     }
 
@@ -373,10 +357,7 @@ mod tests {
             "api.tavily.com",
             "api.anthropic.com",
         ] {
-            assert!(
-                domains.contains(host),
-                "default allowlist should include {host}; missing"
-            );
+            assert!(domains.contains(host), "default allowlist should include {host}; missing");
         }
     }
 
@@ -395,11 +376,8 @@ mod tests {
     #[test]
     fn load_default_flags_unverified_entries() {
         let list = NetworkAllowlist::load_default();
-        let unverified: Vec<&str> = list
-            .unverified_entries()
-            .iter()
-            .filter_map(|e| e.name.as_deref())
-            .collect();
+        let unverified: Vec<&str> =
+            list.unverified_entries().iter().filter_map(|e| e.name.as_deref()).collect();
         assert!(
             unverified.iter().any(|n| n.contains("MiMo")),
             "expected MiMo to be flagged verify=true; got {unverified:?}"

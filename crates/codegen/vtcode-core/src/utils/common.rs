@@ -17,10 +17,7 @@ pub use vtcode_commons::utils::{
 /// The environment variable, if set, is expected to be a comma-separated list of values.
 pub fn merge_env_patterns(base: &[String], env_var: &str) -> Vec<String> {
     let extra_val = std::env::var(env_var).ok();
-    let extra_count = extra_val
-        .as_ref()
-        .map(|s| s.split(',').count())
-        .unwrap_or(0);
+    let extra_count = extra_val.as_ref().map(|s| s.split(',').count()).unwrap_or(0);
 
     let mut combined = Vec::with_capacity(base.len() + extra_count);
 
@@ -87,19 +84,11 @@ pub fn summarize_workspace_languages(root: &Path) -> Option<String> {
 
 /// Detect the dominant workspace languages using file extension heuristics.
 pub fn detect_workspace_languages(root: &Path) -> Vec<String> {
-    let mut counts = collect_workspace_language_counts(root)
-        .into_iter()
-        .collect::<Vec<_>>();
+    let mut counts = collect_workspace_language_counts(root).into_iter().collect::<Vec<_>>();
     counts.sort_by(|(left_lang, left_count), (right_lang, right_count)| {
-        right_count
-            .cmp(left_count)
-            .then_with(|| left_lang.cmp(right_lang))
+        right_count.cmp(left_count).then_with(|| left_lang.cmp(right_lang))
     });
-    counts
-        .into_iter()
-        .map(|(language, _)| language)
-        .take(5)
-        .collect()
+    counts.into_iter().map(|(language, _)| language).take(5).collect()
 }
 
 pub fn display_language_from_path(path: &Path) -> Option<&'static str> {
@@ -188,10 +177,7 @@ mod tests {
         fs::write(workspace.path().join("web/app.ts"), "const app = 1;\n").expect("write ts");
 
         let languages = detect_workspace_languages(workspace.path());
-        assert_eq!(
-            languages,
-            vec!["Rust".to_string(), "TypeScript".to_string()]
-        );
+        assert_eq!(languages, vec!["Rust".to_string(), "TypeScript".to_string()]);
     }
 
     #[test]
@@ -207,18 +193,9 @@ mod tests {
 
     #[test]
     fn display_language_helpers_cover_paths_and_editor_language_ids() {
-        assert_eq!(
-            display_language_from_path(Path::new("src/lib.rs")),
-            Some("Rust")
-        );
-        assert_eq!(
-            display_language_from_editor_language_id("typescriptreact"),
-            Some("TypeScript")
-        );
-        assert_eq!(
-            display_language_from_editor_language_id("shellscript"),
-            Some("Bash")
-        );
+        assert_eq!(display_language_from_path(Path::new("src/lib.rs")), Some("Rust"));
+        assert_eq!(display_language_from_editor_language_id("typescriptreact"), Some("TypeScript"));
+        assert_eq!(display_language_from_editor_language_id("shellscript"), Some("Bash"));
         assert_eq!(display_language_from_editor_language_id("unknown"), None);
     }
 }

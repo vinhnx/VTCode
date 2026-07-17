@@ -23,21 +23,14 @@ pub struct EvolinkSpec;
 /// The curated `ModelId` catalog namespaces entries as `evolink/<model>`, so
 /// strip that prefix before sending the request upstream.
 fn normalize(model: &str) -> &str {
-    model
-        .trim()
-        .strip_prefix("evolink/")
-        .unwrap_or(model.trim())
+    model.trim().strip_prefix("evolink/").unwrap_or(model.trim())
 }
 
 fn evolink_reasoning(message: &Value, choice: &Value) -> Option<String> {
     message
         .get("reasoning")
         .and_then(extract_reasoning_trace)
-        .or_else(|| {
-            message
-                .get("reasoning_content")
-                .and_then(extract_reasoning_trace)
-        })
+        .or_else(|| message.get("reasoning_content").and_then(extract_reasoning_trace))
         .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
 }
 
@@ -94,10 +87,7 @@ impl OpenAiCompatSpec for EvolinkSpec {
         if let Some(effort) = request.reasoning_effort
             && let Some(mapped) = reasoning_effort_value(effort)
         {
-            payload.insert(
-                "reasoning_effort".to_owned(),
-                Value::String(mapped.to_string()),
-            );
+            payload.insert("reasoning_effort".to_owned(), Value::String(mapped.to_string()));
         }
         Ok(())
     }
@@ -113,9 +103,7 @@ impl EvolinkProvider {
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self {
-            core: OpenAiCompatCore::direct(api_key, model),
-        }
+        Self { core: OpenAiCompatCore::direct(api_key, model) }
     }
 
     pub fn new_with_client(
@@ -211,22 +199,19 @@ impl EvolinkProvider {
         response_json: Value,
         model: String,
     ) -> Result<LLMResponse, LLMError> {
-        let content = response_json
-            .get("content")
-            .and_then(|c| c.as_array())
-            .map(|blocks| {
-                blocks
-                    .iter()
-                    .filter_map(|block| {
-                        if block.get("type").and_then(|t| t.as_str()) == Some("text") {
-                            block.get("text").and_then(|t| t.as_str()).map(String::from)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("")
-            });
+        let content = response_json.get("content").and_then(|c| c.as_array()).map(|blocks| {
+            blocks
+                .iter()
+                .filter_map(|block| {
+                    if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                        block.get("text").and_then(|t| t.as_str()).map(String::from)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("")
+        });
 
         let usage = response_json.get("usage").map(|u| {
             let prompt_tokens = u.get("input_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as u32;
@@ -265,10 +250,7 @@ impl EvolinkProvider {
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
-            request_id: response_json
-                .get("id")
-                .and_then(|id| id.as_str())
-                .map(String::from),
+            request_id: response_json.get("id").and_then(|id| id.as_str()).map(String::from),
             organization_id: None,
             compaction: None,
         })
@@ -383,9 +365,7 @@ impl LLMProvider for EvolinkProvider {
             let response = self.generate_anthropic(request, model).await?;
             let (tx, rx) =
                 tokio::sync::mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
-            let _ = tx.send(Ok(LLMStreamEvent::Completed {
-                response: Box::new(response),
-            }));
+            let _ = tx.send(Ok(LLMStreamEvent::Completed { response: Box::new(response) }));
             let stream = async_stream::try_stream! {
                 let mut receiver = rx;
                 while let Some(event) = receiver.recv().await {
@@ -454,21 +434,13 @@ mod tests {
             ..Default::default()
         };
         provider.core.prepare(&mut request);
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
 
         assert_eq!(
             payload.get("model").and_then(|value| value.as_str()),
             Some(models::evolink::DEEPSEEK_V4_PRO)
         );
-        assert_eq!(
-            payload
-                .get("reasoning_effort")
-                .and_then(|value| value.as_str()),
-            Some("high")
-        );
+        assert_eq!(payload.get("reasoning_effort").and_then(|value| value.as_str()), Some("high"));
         assert!(payload.get("temperature").is_none());
     }
 
@@ -488,10 +460,7 @@ mod tests {
             ..Default::default()
         };
         provider.core.prepare(&mut request);
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
 
         assert_eq!(
             payload.get("model").and_then(|value| value.as_str()),

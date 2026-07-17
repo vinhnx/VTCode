@@ -115,10 +115,7 @@ mod tests {
     /// Verify the next_version chain via the TestState trait implementation.
     #[test]
     fn next_version_chain() {
-        assert_eq!(
-            TestState::next_version(SchemaVersion::V0),
-            Some(SchemaVersion::V1)
-        );
+        assert_eq!(TestState::next_version(SchemaVersion::V0), Some(SchemaVersion::V1));
         assert_eq!(TestState::next_version(SchemaVersion::V1), None);
     }
 
@@ -139,10 +136,7 @@ mod tests {
             match (from, to) {
                 (SchemaVersion::V0, SchemaVersion::V1) => {
                     // v0 -> v1: set the explicit version, default new fields
-                    Ok(Self {
-                        version: SchemaVersion::V1,
-                        ..self
-                    })
+                    Ok(Self { version: SchemaVersion::V1, ..self })
                 }
                 _ => anyhow::bail!("unsupported migration: {from:?} -> {to:?}"),
             }
@@ -151,10 +145,7 @@ mod tests {
 
     #[test]
     fn test_migrate_v0_to_v1() {
-        let state = TestState {
-            version: SchemaVersion::V0,
-            value: 42,
-        };
+        let state = TestState { version: SchemaVersion::V0, value: 42 };
         let migrated = state.migrate(SchemaVersion::V1).unwrap();
         assert_eq!(migrated.version, SchemaVersion::V1);
         assert_eq!(migrated.value, 42);
@@ -162,10 +153,7 @@ mod tests {
 
     #[test]
     fn test_migrate_at_target_is_noop() {
-        let state = TestState {
-            version: SchemaVersion::V1,
-            value: 99,
-        };
+        let state = TestState { version: SchemaVersion::V1, value: 99 };
         let migrated = state.migrate(SchemaVersion::V1).unwrap();
         assert_eq!(migrated.version, SchemaVersion::V1);
         assert_eq!(migrated.value, 99);
@@ -173,10 +161,7 @@ mod tests {
 
     #[test]
     fn test_migrate_above_current_is_noop() {
-        let state = TestState {
-            version: SchemaVersion::V0,
-            value: 7,
-        };
+        let state = TestState { version: SchemaVersion::V0, value: 7 };
         // Migrate to V0 (which is <= V0) — should be a no-op
         let migrated = state.migrate(SchemaVersion::V0).unwrap();
         assert_eq!(migrated.version, SchemaVersion::V0);

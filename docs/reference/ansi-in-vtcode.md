@@ -6,7 +6,7 @@ VT Code extensively uses ANSI escape sequences for terminal control, PTY output 
 
 ## Key Modules
 
-### 1. ANSI Parser (`vtcode-commons/src/ansi.rs`)
+### 1. ANSI Parser (`crates/common/vtcode-commons/src/ansi.rs`)
 
 **Purpose**: Strip ANSI escape sequences from text
 
@@ -17,9 +17,9 @@ pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8>
 
 **Used in**:
 
--   PTY output cleaning (`vtcode-core/src/tools/pty.rs:208`)
--   Tool output formatting (`vtcode-core/src/tools/registry/executors.rs`)
--   TUI session rendering (`vtcode-ui/src/tui/core_tui/session/text_utils.rs`)
+-   PTY output cleaning (`crates/codegen/vtcode-core/src/tools/pty.rs:208`)
+-   Tool output formatting (`crates/codegen/vtcode-core/src/tools/registry/executors.rs`)
+-   TUI session rendering (`crates/codegen/vtcode-ui/src/tui/core_tui/session/text_utils.rs`)
 
 **Patterns Handled**:
 
@@ -34,23 +34,23 @@ pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8>
     `strip_ansi()` operates on decoded text (`ESC`-prefixed control forms),
     while `strip_ansi_bytes()` handles raw 8-bit C1 control bytes.
 
-`vtcode-core/src/utils/ansi_parser.rs` and `vtcode-ui/src/tui/utils/ansi_parser.rs` both re-export this shared implementation.
+`crates/codegen/vtcode-core/src/utils/ansi_parser.rs` and `crates/codegen/vtcode-ui/src/tui/utils/ansi_parser.rs` both re-export this shared implementation.
 
-### 2. Shared ANSI Sequences (`vtcode-commons/src/ansi_codes.rs`)
+### 2. Shared ANSI Sequences (`crates/common/vtcode-commons/src/ansi_codes.rs`)
 
 **Purpose**: Centralize reusable ANSI constants, cursor helpers, OSC builders, redraw helpers, and terminal notification helpers.
 
 **Used in**:
 
 -   Exit summary rendering (`src/agent/runloop/unified/postamble.rs`)
--   Terminal palette probing (`vtcode-core/src/utils/terminal_color_probe.rs`)
--   Tool risk coloring (`vtcode-core/src/tools/registry/risk_scorer.rs`)
--   Syntax highlight reset emission (`vtcode-ui/src/tui/ui/syntax_highlight.rs`)
--   HITL notifications (`vtcode-core/src/notifications/mod.rs`, `src/agent/runloop/mcp_elicitation.rs`)
+-   Terminal palette probing (`crates/codegen/vtcode-core/src/utils/terminal_color_probe.rs`)
+-   Tool risk coloring (`crates/codegen/vtcode-core/src/tools/registry/risk_scorer.rs`)
+-   Syntax highlight reset emission (`crates/codegen/vtcode-ui/src/tui/ui/syntax_highlight.rs`)
+-   HITL notifications (`crates/codegen/vtcode-core/src/notifications/mod.rs`, `src/agent/runloop/mcp_elicitation.rs`)
 
-`vtcode-core/src/utils/ansi_codes.rs` re-exports this shared implementation so downstream crates use one canonical source of escape sequences.
+`crates/codegen/vtcode-core/src/utils/ansi_codes.rs` re-exports this shared implementation so downstream crates use one canonical source of escape sequences.
 
-### 3. ANSI Style Utilities (`vtcode-core/src/utils/anstyle_utils.rs`)
+### 3. ANSI Style Utilities (`crates/codegen/vtcode-core/src/utils/anstyle_utils.rs`)
 
 **Purpose**: Convert ANSI styles to Ratatui styles for TUI rendering
 
@@ -68,7 +68,7 @@ pub fn ansi_style_to_ratatui_style(style: AnsiStyle) -> Style
 -   256 colors (8-bit)
 -   RGB/Truecolor (24-bit)
 
-### 4. ANSI Renderer (`vtcode-core/src/utils/ansi.rs`)
+### 4. ANSI Renderer (`crates/codegen/vtcode-core/src/utils/ansi.rs`)
 
 **Purpose**: Render styled text to terminal
 
@@ -147,7 +147,7 @@ VT Code strips ANSI control sequences but preserves line-control characters like
 
 ### Implementation
 
-**Location**: `vtcode-core/src/tools/pty.rs`
+**Location**: `crates/codegen/vtcode-core/src/tools/pty.rs`
 
 ```rust
 // Line 208: Clean PTY output for token counting
@@ -260,7 +260,7 @@ renderer.render("Error", MessageStyle::Error);
 
 ### ANSI Parser Tests
 
-**Location**: `vtcode-core/src/utils/ansi_parser.rs`
+**Location**: `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`
 
 ```rust
 #[test]
@@ -282,7 +282,7 @@ fn test_strip_ansi_multiple() {
 
 ### Style Conversion Tests
 
-**Location**: `vtcode-core/src/utils/anstyle_utils.rs`
+**Location**: `crates/codegen/vtcode-core/src/utils/anstyle_utils.rs`
 
 ```rust
 #[test]
@@ -438,11 +438,11 @@ The ANSI stripper correctly handles three-byte ESC sequences per the xterm ctlse
 For complete ANSI sequence reference, see:
 
 -   [XFree86 XTerm Control Sequences](https://www.xfree86.org/current/ctlseqs.html) — Canonical xterm spec
--   `vtcode-commons/src/ansi_codes.rs` — Constants for all supported sequences
--   `vtcode-core/src/utils/ansi_codes.rs` — Backward-compatible re-export used by runtime callers
--   `vtcode-commons/src/ansi.rs` — ECMA-48 parser and stripper
--   `vtcode-core/src/utils/anstyle_utils.rs` — Style conversion
--   `vtcode-core/src/utils/ansi.rs` — Rendering utilities
+-   `crates/common/vtcode-commons/src/ansi_codes.rs` — Constants for all supported sequences
+-   `crates/codegen/vtcode-core/src/utils/ansi_codes.rs` — Backward-compatible re-export used by runtime callers
+-   `crates/common/vtcode-commons/src/ansi.rs` — ECMA-48 parser and stripper
+-   `crates/codegen/vtcode-core/src/utils/anstyle_utils.rs` — Style conversion
+-   `crates/codegen/vtcode-core/src/utils/ansi.rs` — Rendering utilities
 
 ## Future Enhancements
 

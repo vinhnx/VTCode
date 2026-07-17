@@ -163,11 +163,7 @@ impl AgentBehaviorAnalyzer {
         if recommendations.is_empty() {
             let mut by_usage: Vec<_> = self.tool_stats.usage_frequency.iter().collect();
             by_usage.sort_by(|a, b| b.1.cmp(a.1));
-            recommendations = by_usage
-                .iter()
-                .take(limit)
-                .map(|pair| pair.0.clone())
-                .collect();
+            recommendations = by_usage.iter().take(limit).map(|pair| pair.0.clone()).collect();
         }
 
         recommendations
@@ -175,12 +171,7 @@ impl AgentBehaviorAnalyzer {
 
     /// Recommend skills based on effectiveness
     pub fn recommend_skills(&self, limit: usize) -> Vec<String> {
-        self.skill_stats
-            .most_effective_skills
-            .iter()
-            .take(limit)
-            .cloned()
-            .collect()
+        self.skill_stats.most_effective_skills.iter().take(limit).cloned().collect()
     }
 
     /// Warn about tools with high failure rates
@@ -204,28 +195,19 @@ impl AgentBehaviorAnalyzer {
 
     /// Record tool usage
     pub fn record_tool_usage(&mut self, tool_name: &str) {
-        *self
-            .tool_stats
-            .usage_frequency
-            .entry(tool_name.into())
-            .or_insert(0) += 1;
+        *self.tool_stats.usage_frequency.entry(tool_name.into()).or_insert(0) += 1;
     }
 
     /// Record skill reuse
     pub fn record_skill_reuse(&mut self, skill_name: &str) {
-        if let Some(pos) = self
-            .skill_stats
-            .most_effective_skills
-            .iter()
-            .position(|s| s == skill_name)
+        if let Some(pos) =
+            self.skill_stats.most_effective_skills.iter().position(|s| s == skill_name)
         {
             // Move to front
             let skill = self.skill_stats.most_effective_skills.remove(pos);
             self.skill_stats.most_effective_skills.insert(0, skill);
         } else {
-            self.skill_stats
-                .most_effective_skills
-                .insert(0, skill_name.into());
+            self.skill_stats.most_effective_skills.insert(0, skill_name.into());
         }
         self.skill_stats.reused_skills += 1;
     }
@@ -233,17 +215,12 @@ impl AgentBehaviorAnalyzer {
     /// Record tool failure
     pub fn record_tool_failure(&mut self, tool_name: &str, error_msg: &str) {
         // Add to common errors
-        if let Some(pos) = self
-            .failure_patterns
-            .common_errors
-            .iter()
-            .position(|(msg, _)| msg == error_msg)
+        if let Some(pos) =
+            self.failure_patterns.common_errors.iter().position(|(msg, _)| msg == error_msg)
         {
             self.failure_patterns.common_errors[pos].1 += 1;
         } else {
-            self.failure_patterns
-                .common_errors
-                .push((error_msg.into(), 1));
+            self.failure_patterns.common_errors.push((error_msg.into(), 1));
         }
 
         // Update high failure tools - find count
@@ -256,17 +233,12 @@ impl AgentBehaviorAnalyzer {
             .unwrap_or(1);
         let failure_rate = count as f64 / (count + 1) as f64; // Approximation
 
-        if let Some(pos) = self
-            .failure_patterns
-            .high_failure_tools
-            .iter()
-            .position(|t| t.0 == tool_name)
+        if let Some(pos) =
+            self.failure_patterns.high_failure_tools.iter().position(|t| t.0 == tool_name)
         {
             self.failure_patterns.high_failure_tools[pos].1 = failure_rate;
         } else {
-            self.failure_patterns
-                .high_failure_tools
-                .push((tool_name.into(), failure_rate));
+            self.failure_patterns.high_failure_tools.push((tool_name.into(), failure_rate));
         }
 
         debug!(
@@ -296,11 +268,7 @@ impl AgentBehaviorAnalyzer {
             .iter()
             .find(|p| p.error_type == error_type)
             .map(|p| {
-                format!(
-                    "{} (success rate: {:.1}%)",
-                    p.recovery_action,
-                    p.success_rate * 100.0
-                )
+                format!("{} (success rate: {:.1}%)", p.recovery_action, p.success_rate * 100.0)
             })
     }
 
@@ -309,14 +277,10 @@ impl AgentBehaviorAnalyzer {
         let mut metrics = HashMap::new();
 
         // Skill metrics
-        metrics.insert(
-            "total_skills".to_string(),
-            serde_json::json!(self.skill_stats.total_skills),
-        );
-        metrics.insert(
-            "reused_skills".to_string(),
-            serde_json::json!(self.skill_stats.reused_skills),
-        );
+        metrics
+            .insert("total_skills".to_string(), serde_json::json!(self.skill_stats.total_skills));
+        metrics
+            .insert("reused_skills".to_string(), serde_json::json!(self.skill_stats.reused_skills));
 
         // Tool metrics
         metrics.insert(
@@ -345,11 +309,8 @@ impl AgentBehaviorAnalyzer {
         // Tool usage frequency
         let mut tool_usage: Vec<_> = self.tool_stats.usage_frequency.iter().collect();
         tool_usage.sort_by(|a, b| b.1.cmp(a.1));
-        let top_tools: HashMap<String, u64> = tool_usage
-            .into_iter()
-            .take(10)
-            .map(|(k, v)| (k.clone(), *v))
-            .collect();
+        let top_tools: HashMap<String, u64> =
+            tool_usage.into_iter().take(10).map(|(k, v)| (k.clone(), *v)).collect();
         metrics.insert("top_tools".to_string(), serde_json::json!(top_tools));
 
         metrics
@@ -456,14 +417,12 @@ impl AgentBehaviorAnalyzer {
             pattern.success_rate = initial_success_rate;
         } else {
             // Add new pattern
-            self.failure_patterns
-                .recovery_patterns
-                .push(RecoveryPattern {
-                    error_type,
-                    recovery_action,
-                    success_rate: initial_success_rate,
-                    attempts: 0,
-                });
+            self.failure_patterns.recovery_patterns.push(RecoveryPattern {
+                error_type,
+                recovery_action,
+                success_rate: initial_success_rate,
+                attempts: 0,
+            });
         }
     }
 
@@ -485,11 +444,7 @@ impl AgentBehaviorAnalyzer {
             "Tool discovery success rate: {:.1}%",
             self.tool_stats.discovery_success_rate * 100.0
         );
-        let _ = writeln!(
-            output,
-            "Total tools used: {}",
-            self.tool_stats.usage_frequency.len()
-        );
+        let _ = writeln!(output, "Total tools used: {}", self.tool_stats.usage_frequency.len());
 
         if !self.failure_patterns.high_failure_tools.is_empty() {
             output.push_str("\n## High-Risk Tools\n");
@@ -533,12 +488,7 @@ mod tests {
         analyzer.record_skill_reuse("transform_skill");
 
         assert_eq!(analyzer.skill_stats.reused_skills, 3);
-        assert!(
-            analyzer
-                .skill_stats
-                .most_effective_skills
-                .contains(&"filter_skill".to_owned())
-        );
+        assert!(analyzer.skill_stats.most_effective_skills.contains(&"filter_skill".to_owned()));
     }
 
     #[test]
@@ -571,10 +521,7 @@ mod tests {
             .failure_patterns
             .high_failure_tools
             .push(("risky_tool".to_owned(), 0.8));
-        analyzer
-            .failure_patterns
-            .high_failure_tools
-            .push(("safe_tool".to_owned(), 0.1));
+        analyzer.failure_patterns.high_failure_tools.push(("safe_tool".to_owned(), 0.1));
 
         let risky = analyzer.identify_risky_tools(0.5);
         assert_eq!(risky.len(), 1);
@@ -584,15 +531,12 @@ mod tests {
     #[test]
     fn test_recovery_pattern_lookup() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer
-            .failure_patterns
-            .recovery_patterns
-            .push(RecoveryPattern {
-                error_type: "timeout".to_owned(),
-                recovery_action: "retry with increased timeout".to_owned(),
-                success_rate: 0.85,
-                attempts: 20,
-            });
+        analyzer.failure_patterns.recovery_patterns.push(RecoveryPattern {
+            error_type: "timeout".to_owned(),
+            recovery_action: "retry with increased timeout".to_owned(),
+            success_rate: 0.85,
+            attempts: 20,
+        });
 
         let recovery = analyzer.get_recovery_strategy("timeout");
         assert!(recovery.is_some());
@@ -618,15 +562,12 @@ mod tests {
     #[test]
     fn test_get_recovery_action() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer
-            .failure_patterns
-            .recovery_patterns
-            .push(RecoveryPattern {
-                error_type: "network_error".to_owned(),
-                recovery_action: "retry with exponential backoff".to_owned(),
-                success_rate: 0.9,
-                attempts: 15,
-            });
+        analyzer.failure_patterns.recovery_patterns.push(RecoveryPattern {
+            error_type: "network_error".to_owned(),
+            recovery_action: "retry with exponential backoff".to_owned(),
+            success_rate: 0.9,
+            attempts: 15,
+        });
 
         let action = analyzer.get_recovery_action("network_error");
         assert!(action.is_some());
@@ -645,24 +586,18 @@ mod tests {
         let metrics = analyzer.export_metrics();
         assert_eq!(metrics.get("total_skills").unwrap(), &serde_json::json!(10));
         assert_eq!(metrics.get("reused_skills").unwrap(), &serde_json::json!(5));
-        assert_eq!(
-            metrics.get("total_tools_used").unwrap(),
-            &serde_json::json!(1)
-        );
+        assert_eq!(metrics.get("total_tools_used").unwrap(), &serde_json::json!(1));
     }
 
     #[test]
     fn test_apply_recovery_pattern() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer
-            .failure_patterns
-            .recovery_patterns
-            .push(RecoveryPattern {
-                error_type: "timeout".to_owned(),
-                recovery_action: "retry with increased timeout".to_owned(),
-                success_rate: 0.85,
-                attempts: 20,
-            });
+        analyzer.failure_patterns.recovery_patterns.push(RecoveryPattern {
+            error_type: "timeout".to_owned(),
+            recovery_action: "retry with increased timeout".to_owned(),
+            success_rate: 0.85,
+            attempts: 20,
+        });
 
         let applied = analyzer.apply_recovery_pattern("timeout");
         assert!(applied.is_some());
@@ -680,15 +615,12 @@ mod tests {
     #[test]
     fn test_record_recovery_outcome_success() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer
-            .failure_patterns
-            .recovery_patterns
-            .push(RecoveryPattern {
-                error_type: "network_error".to_owned(),
-                recovery_action: "retry".to_owned(),
-                success_rate: 0.5,
-                attempts: 10,
-            });
+        analyzer.failure_patterns.recovery_patterns.push(RecoveryPattern {
+            error_type: "network_error".to_owned(),
+            recovery_action: "retry".to_owned(),
+            success_rate: 0.5,
+            attempts: 10,
+        });
 
         analyzer.record_recovery_outcome("network_error", true);
 
@@ -701,15 +633,12 @@ mod tests {
     #[test]
     fn test_record_recovery_outcome_failure() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer
-            .failure_patterns
-            .recovery_patterns
-            .push(RecoveryPattern {
-                error_type: "parse_error".to_owned(),
-                recovery_action: "simplify input".to_owned(),
-                success_rate: 0.8,
-                attempts: 5,
-            });
+        analyzer.failure_patterns.recovery_patterns.push(RecoveryPattern {
+            error_type: "parse_error".to_owned(),
+            recovery_action: "simplify input".to_owned(),
+            success_rate: 0.8,
+            attempts: 5,
+        });
 
         analyzer.record_recovery_outcome("parse_error", false);
 
@@ -740,15 +669,12 @@ mod tests {
     #[test]
     fn test_add_recovery_pattern_update_existing() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer
-            .failure_patterns
-            .recovery_patterns
-            .push(RecoveryPattern {
-                error_type: "existing_error".to_owned(),
-                recovery_action: "old action".to_owned(),
-                success_rate: 0.5,
-                attempts: 10,
-            });
+        analyzer.failure_patterns.recovery_patterns.push(RecoveryPattern {
+            error_type: "existing_error".to_owned(),
+            recovery_action: "old action".to_owned(),
+            success_rate: 0.5,
+            attempts: 10,
+        });
 
         analyzer.add_recovery_pattern(
             "existing_error".to_owned(),
@@ -772,10 +698,7 @@ mod tests {
         analyzer.add_recovery_pattern("error2".to_owned(), "action2".to_owned(), 0.9);
 
         let metrics = analyzer.export_metrics();
-        assert_eq!(
-            metrics.get("recovery_patterns_count").unwrap(),
-            &serde_json::json!(2)
-        );
+        assert_eq!(metrics.get("recovery_patterns_count").unwrap(), &serde_json::json!(2));
     }
 
     #[test]

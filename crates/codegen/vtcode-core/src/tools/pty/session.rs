@@ -361,10 +361,5 @@ impl PtySessionHandle {
 
 fn filter_command_echo(text: String, state: &mut CommandEchoState) -> (String, bool) {
     let (consumed, done) = state.consume_chunk(&text);
-    (
-        text.get(consumed..)
-            .map(|tail| tail.to_owned())
-            .unwrap_or_default(),
-        done,
-    )
+    (text.get(consumed..).map(|tail| tail.to_owned()).unwrap_or_default(), done)
 }

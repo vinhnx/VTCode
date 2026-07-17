@@ -29,10 +29,7 @@ pub(super) fn row_col_to_byte_offset(lines: &[String], row: usize, char_col: usi
     let mut offset = 0usize;
     for (i, line) in lines.iter().enumerate() {
         if i == row {
-            let byte_col = line
-                .char_indices()
-                .nth(char_col)
-                .map_or(line.len(), |(idx, _)| idx);
+            let byte_col = line.char_indices().nth(char_col).map_or(line.len(), |(idx, _)| idx);
             return offset + byte_col;
         }
         offset += line.len() + 1; // +1 for '\n'
@@ -43,9 +40,7 @@ pub(super) fn row_col_to_byte_offset(lines: &[String], row: usize, char_col: usi
 
 /// Convert a character column index within a single line to a byte offset.
 pub(super) fn char_col_to_byte_offset(line: &str, char_col: usize) -> usize {
-    line.char_indices()
-        .nth(char_col)
-        .map_or(line.len(), |(idx, _)| idx)
+    line.char_indices().nth(char_col).map_or(line.len(), |(idx, _)| idx)
 }
 
 #[cfg(test)]

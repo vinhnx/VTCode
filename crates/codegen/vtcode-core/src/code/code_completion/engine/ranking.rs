@@ -8,10 +8,7 @@ pub struct SuggestionRanker {
 
 impl SuggestionRanker {
     pub fn new() -> Self {
-        Self {
-            confidence_threshold: 0.3,
-            max_suggestions: 10,
-        }
+        Self { confidence_threshold: 0.3, max_suggestions: 10 }
     }
 
     /// Rank and filter suggestions based on confidence and relevance
@@ -26,9 +23,7 @@ impl SuggestionRanker {
         suggestions.sort_by(|a, b| {
             let score_a = a.confidence * 0.7 + a.acceptance_rate * 0.3;
             let score_b = b.confidence * 0.7 + b.acceptance_rate * 0.3;
-            score_b
-                .partial_cmp(&score_a)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Limit to max suggestions

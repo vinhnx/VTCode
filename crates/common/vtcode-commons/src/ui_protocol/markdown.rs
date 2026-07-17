@@ -22,9 +22,7 @@ pub struct MarkdownLine {
 
 impl MarkdownLine {
     pub fn is_empty(&self) -> bool {
-        self.segments
-            .iter()
-            .all(|segment| segment.text.trim().is_empty())
+        self.segments.iter().all(|segment| segment.text.trim().is_empty())
     }
 }
 

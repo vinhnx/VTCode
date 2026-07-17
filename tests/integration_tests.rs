@@ -91,14 +91,8 @@ apply_patch = "allow"
             .await
             .unwrap();
 
-        assert_eq!(
-            registry.get_tool_policy(tools::EXEC_COMMAND).await,
-            RuntimeToolPolicy::Allow
-        );
-        assert_eq!(
-            registry.get_tool_policy(tools::APPLY_PATCH).await,
-            RuntimeToolPolicy::Allow
-        );
+        assert_eq!(registry.get_tool_policy(tools::EXEC_COMMAND).await, RuntimeToolPolicy::Allow);
+        assert_eq!(registry.get_tool_policy(tools::APPLY_PATCH).await, RuntimeToolPolicy::Allow);
     }
 
     #[tokio::test]

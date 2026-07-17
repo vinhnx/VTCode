@@ -52,10 +52,7 @@ fn finalize_outcome_turn_limit() {
 
     state.finalize_outcome(6);
 
-    assert!(matches!(
-        state.outcome,
-        TaskOutcome::TurnLimitReached { .. }
-    ));
+    assert!(matches!(state.outcome, TaskOutcome::TurnLimitReached { .. }));
 }
 
 #[test]

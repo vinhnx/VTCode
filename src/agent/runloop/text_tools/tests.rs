@@ -13,16 +13,12 @@ fn pseudo_markers_detect_bare_tool_call_tag() {
 
 #[test]
 fn pseudo_markers_detect_function_eq_without_tool_call_wrapper() {
-    assert!(contains_pseudo_tool_call_markers(
-        "<function=write_file>content</function>"
-    ));
+    assert!(contains_pseudo_tool_call_markers("<function=write_file>content</function>"));
 }
 
 #[test]
 fn pseudo_markers_detect_parameter_eq() {
-    assert!(contains_pseudo_tool_call_markers(
-        "<parameter=patch>some diff</parameter>"
-    ));
+    assert!(contains_pseudo_tool_call_markers("<parameter=patch>some diff</parameter>"));
 }
 
 #[test]
@@ -34,9 +30,7 @@ fn pseudo_markers_detect_invoke_name() {
 
 #[test]
 fn pseudo_markers_detect_minimax_tool_call() {
-    assert!(contains_pseudo_tool_call_markers(
-        "<minimax:tool_call>...</minimax:tool_call>"
-    ));
+    assert!(contains_pseudo_tool_call_markers("<minimax:tool_call>...</minimax:tool_call>"));
 }
 
 #[test]
@@ -46,9 +40,7 @@ fn pseudo_markers_detect_closing_tool_call_tag_alone() {
 
 #[test]
 fn pseudo_markers_is_case_insensitive() {
-    assert!(contains_pseudo_tool_call_markers(
-        "<TOOL_CALL>...</TOOL_CALL>"
-    ));
+    assert!(contains_pseudo_tool_call_markers("<TOOL_CALL>...</TOOL_CALL>"));
     assert!(contains_pseudo_tool_call_markers("<Function=foo>"));
 }
 
@@ -62,9 +54,7 @@ fn pseudo_markers_returns_false_for_clean_prose() {
 #[test]
 fn pseudo_markers_returns_false_for_ordinary_xml_attributes() {
     // A plain XML attribute like `name="foo"` should not trigger the check.
-    assert!(!contains_pseudo_tool_call_markers(
-        r#"<config name="foo" value="bar"/>"#
-    ));
+    assert!(!contains_pseudo_tool_call_markers(r#"<config name="foo" value="bar"/>"#));
 }
 
 // ── strip_textual_tool_call_regions — function= / parameter= coverage ─────────
@@ -75,14 +65,8 @@ fn strip_regions_removes_bare_function_eq_block() {
                 <function=apply_patch>--- a/f\n+++ b/f\n@@ -1 +1 @@\n-old\n+new</function>\n\
                 Ask me if you want me to actually run this.";
     let stripped = strip_textual_tool_call_regions(text);
-    assert!(
-        !stripped.contains("<function="),
-        "function= block should be stripped"
-    );
-    assert!(
-        stripped.contains("Here is what I would do"),
-        "surrounding prose should be preserved"
-    );
+    assert!(!stripped.contains("<function="), "function= block should be stripped");
+    assert!(stripped.contains("Here is what I would do"), "surrounding prose should be preserved");
 }
 
 #[test]
@@ -102,14 +86,8 @@ fn strip_regions_parameterised_close_tags_do_not_eat_trailing_prose() {
                 <function=apply_patch>diff content</function=apply_patch>\n\
                 Prose after.";
     let stripped = strip_textual_tool_call_regions(bare);
-    assert!(
-        !stripped.contains("<function="),
-        "function= block should be stripped"
-    );
-    assert!(
-        stripped.contains("Prose before."),
-        "leading prose must survive"
-    );
+    assert!(!stripped.contains("<function="), "function= block should be stripped");
+    assert!(stripped.contains("Prose before."), "leading prose must survive");
     assert!(
         stripped.contains("Prose after."),
         "trailing prose must survive bare parameterised close tag"
@@ -125,14 +103,8 @@ fn strip_regions_parameterised_close_tags_do_not_eat_trailing_prose() {
                    </tool_call>\n\
                    Prose after.";
     let stripped2 = strip_textual_tool_call_regions(wrapped);
-    assert!(
-        !stripped2.contains("<function=apply_patch>"),
-        "function= content must be stripped"
-    );
-    assert!(
-        stripped2.contains("Prose before."),
-        "leading prose must survive"
-    );
+    assert!(!stripped2.contains("<function=apply_patch>"), "function= content must be stripped");
+    assert!(stripped2.contains("Prose before."), "leading prose must survive");
     assert!(
         stripped2.contains("Prose after."),
         "trailing prose must not be eaten by merged regions"
@@ -144,14 +116,8 @@ fn strip_regions_removes_function_eq_block_with_parameterised_close() {
     // `</function=name>` close tag (without a tool_call wrapper) must be consumed.
     let text = "<function=write_file>hello world</function=write_file>";
     let stripped = strip_textual_tool_call_regions(text);
-    assert!(
-        !stripped.contains("<function="),
-        "function= block should be fully stripped"
-    );
-    assert!(
-        !stripped.contains("</function="),
-        "parameterised close tag must be consumed"
-    );
+    assert!(!stripped.contains("<function="), "function= block should be fully stripped");
+    assert!(!stripped.contains("</function="), "parameterised close tag must be consumed");
 }
 
 #[test]
@@ -167,10 +133,7 @@ fn test_detect_textual_tool_call_supports_json_payload() {
     let message = "print(default_api.write_file({\"path\": \"notes.md\", \"content\": \"hi\"}))";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, "write_file");
-    assert_eq!(
-        args,
-        serde_json::json!({ "path": "notes.md", "content": "hi" })
-    );
+    assert_eq!(args, serde_json::json!({ "path": "notes.md", "content": "hi" }));
 }
 
 #[test]
@@ -339,7 +302,7 @@ fn test_detect_tagged_tool_call_parses_minimax_xml_invocation() {
 <minimax:tool_call>
 <invoke name="read_file">
 <parameter name="action">read</parameter>
-<parameter name="path">vtcode-core/src/core/agent/runtime/mod.rs</parameter>
+<parameter name="path">crates/codegen/vtcode-core/src/core/agent/runtime/mod.rs</parameter>
 <parameter name="offset">1</parameter>
 <parameter name="limit">400</parameter>
 </invoke>
@@ -351,7 +314,7 @@ fn test_detect_tagged_tool_call_parses_minimax_xml_invocation() {
         args,
         serde_json::json!({
             "action": "read",
-            "path": "vtcode-core/src/core/agent/runtime/mod.rs",
+            "path": "crates/codegen/vtcode-core/src/core/agent/runtime/mod.rs",
             "offset": 1,
             "limit": 400
         })
@@ -601,10 +564,7 @@ mode: overwrite
 "#;
     let (name, args) = detect_textual_tool_call(message).expect("should parse");
     assert_eq!(name, tools::WRITE_FILE);
-    assert_eq!(
-        args["path"],
-        serde_json::json!("/Users/example/workspace/hellovinhnx.md")
-    );
+    assert_eq!(args["path"], serde_json::json!("/Users/example/workspace/hellovinhnx.md"));
     assert_eq!(args["mode"], serde_json::json!("overwrite"));
     assert_eq!(
         args["content"],
@@ -620,15 +580,9 @@ fn test_extract_code_fence_blocks_collects_languages() {
     let blocks = extract_code_fence_blocks(message);
     assert_eq!(blocks.len(), 2);
     assert_eq!(blocks[0].language.as_deref(), Some("bash"));
-    assert_eq!(
-        blocks[0].lines,
-        vec!["TZ=Asia/Tokyo date +\"%Y-%m-%d %H:%M:%S %Z\""]
-    );
+    assert_eq!(blocks[0].lines, vec!["TZ=Asia/Tokyo date +\"%Y-%m-%d %H:%M:%S %Z\""]);
     assert_eq!(blocks[1].language.as_deref(), Some("rust"));
-    assert_eq!(
-        blocks[1].lines,
-        vec!["run_pty_cmd {", "    command: \"ls -a\"", "}"]
-    );
+    assert_eq!(blocks[1].lines, vec!["run_pty_cmd {", "    command: \"ls -a\"", "}"]);
 }
 
 #[test]
@@ -752,10 +706,7 @@ fn test_convert_harmony_args_rejects_non_string_command_array_entries() {
     let parsed = serde_json::json!({ "cmd": ["ls", 1] });
     let result = parse_channel::convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err(),
-        "command array must contain only strings"
-    );
+    assert_eq!(result.unwrap_err(), "command array must contain only strings");
 }
 
 #[test]
@@ -833,10 +784,7 @@ fn test_parse_harmony_channel_rejects_empty_command() {
     let message =
         "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"\"}<|call|>";
     let result = parse_channel::parse_channel_tool_call(message);
-    assert!(
-        result.is_none(),
-        "Should reject Harmony format with empty command"
-    );
+    assert!(result.is_none(), "Should reject Harmony format with empty command");
 }
 
 #[test]
@@ -845,10 +793,7 @@ fn test_parse_harmony_channel_rejects_empty_array() {
     let message =
         "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[]}<|call|>";
     let result = parse_channel::parse_channel_tool_call(message);
-    assert!(
-        result.is_none(),
-        "Should reject Harmony format with empty array"
-    );
+    assert!(result.is_none(), "Should reject Harmony format with empty array");
 }
 
 #[test]
@@ -857,10 +802,7 @@ fn test_parse_harmony_channel_rejects_whitespace_command() {
     let message =
         "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"   \"}<|call|>";
     let result = parse_channel::parse_channel_tool_call(message);
-    assert!(
-        result.is_none(),
-        "Should reject Harmony format with whitespace-only command"
-    );
+    assert!(result.is_none(), "Should reject Harmony format with whitespace-only command");
 }
 
 // ==================== Tests for malformed XML handling (GLM models) ====================
@@ -886,10 +828,7 @@ fn test_parse_tagged_tool_call_extracts_json_after_name() {
     assert!(result.is_some(), "Should parse JSON after tool name");
     let (name, args) = result.unwrap();
     assert_eq!(name, "read_file");
-    assert_eq!(
-        args.get("path").and_then(|v| v.as_str()),
-        Some("/tmp/test.txt")
-    );
+    assert_eq!(args.get("path").and_then(|v| v.as_str()), Some("/tmp/test.txt"));
 }
 
 #[test]
@@ -897,16 +836,10 @@ fn test_parse_tagged_tool_call_extracts_json_with_space() {
     // When JSON appears after tool name with space
     let message = r#"<tool_call>read_file {"path": "/tmp/test.txt"}</tool_call>"#;
     let result = parse_tagged::parse_tagged_tool_call(message);
-    assert!(
-        result.is_some(),
-        "Should parse JSON with space after tool name"
-    );
+    assert!(result.is_some(), "Should parse JSON with space after tool name");
     let (name, args) = result.unwrap();
     assert_eq!(name, "read_file");
-    assert_eq!(
-        args.get("path").and_then(|v| v.as_str()),
-        Some("/tmp/test.txt")
-    );
+    assert_eq!(args.get("path").and_then(|v| v.as_str()), Some("/tmp/test.txt"));
 }
 
 #[test]
@@ -922,12 +855,7 @@ fn test_parse_tagged_tool_call_handles_nested_json() {
     assert_eq!(args.get("action"), Some(&serde_json::json!("run")));
     assert_eq!(args.get("tty"), Some(&serde_json::json!(true)));
     assert!(args.get("command").and_then(|v| v.as_array()).is_some());
-    assert_eq!(
-        args.get("command")
-            .and_then(|v| v.get(0))
-            .and_then(|v| v.as_str()),
-        Some("echo")
-    );
+    assert_eq!(args.get("command").and_then(|v| v.get(0)).and_then(|v| v.as_str()), Some("echo"));
     assert!(args.get("env").and_then(|v| v.as_object()).is_some());
 }
 

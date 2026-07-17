@@ -121,7 +121,7 @@ includes:
 
 Every session should begin by gathering orientation context from external artifacts. This follows the long-running harness pattern: the agent reads the progress ledger, harness artifacts, loop memory, and git log to understand the current state before acting.
 
-The orient phase produces an `OrientationContext` (see `vtcode-core/src/core/agent/bootstrap.rs`) that includes:
+The orient phase produces an `OrientationContext` (see `crates/codegen/vtcode-core/src/core/agent/bootstrap.rs`) that includes:
 
 - Progress ledger summary (goal, completion ratio, confidence, stall status)
 - Harness artifact summaries (spec, contract, sprint contract, evaluation, outcome verification)
@@ -133,7 +133,7 @@ This context is injected as a `[Orientation Context]` section in the system prom
 
 ## Handoff Protocol
 
-When one agent hands off to another, it produces a `HandoffRequest` (see `vtcode-core/src/core/agent/handoff.rs`) that includes:
+When one agent hands off to another, it produces a `HandoffRequest` (see `crates/codegen/vtcode-core/src/core/agent/handoff.rs`) that includes:
 
 - **State summary**: what was accomplished, what remains
 - **Boundary status**: explicit list of features/deliverables with Done/InProgress/NotStarted/Blocked status
@@ -188,7 +188,7 @@ When a reset triggers:
 
 All durable artifacts persist across a reset:
 
-- Progress ledger (`vtcode-session-store/src/progress.rs`)
+- Progress ledger (`crates/codegen/vtcode-session-store/src/progress.rs`)
 - Harness artifacts (spec, contract, feature list, evaluation, sprint contract)
 - Loop memory (notes, decisions)
 - Git log and working tree state
@@ -202,8 +202,8 @@ The subagent layer now supports loop-engineering primitives:
 
 - **Worktree isolation**: set `isolation = "worktree"` on an agent spec to run the child in a git worktree under `.vtcode/worktrees/`. The child's file mutations stay in its own working tree until explicitly merged.
 - **Propose/verify separation**: `SubagentController::verify_proposed_change()` spawns a read-only verifier sub-agent that re-reads affected files and approves or rejects the change. The verifier has no shared context with the proposer.
-- **Loop run state**: `vtcode-core/src/loop_state.rs` persists step index, cumulative cost, and status to `.vtcode/state/loop-<id>.json` so a scheduler can resume across invocations.
-- **Loop memory**: `vtcode-core/src/loop_memory.rs` provides an append-only store for agent notes and decisions in `.vtcode/state/notes.md` and `decisions.md`.
+- **Loop run state**: `crates/codegen/vtcode-core/src/loop_state.rs` persists step index, cumulative cost, and status to `.vtcode/state/loop-<id>.json` so a scheduler can resume across invocations.
+- **Loop memory**: `crates/codegen/vtcode-core/src/loop_memory.rs` provides an append-only store for agent notes and decisions in `.vtcode/state/notes.md` and `decisions.md`.
 - **Cost guardrails**: `CostBudget` in `loop_state.rs` tracks token/cost/step limits and reports `BudgetStatus` (Ok/TokenLimitReached/CostLimitReached/StepLimitReached).
 
 See [Loop Engineering](../loop-engineering.md) for the full design.

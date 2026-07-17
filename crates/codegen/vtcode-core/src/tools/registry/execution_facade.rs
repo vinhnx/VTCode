@@ -140,9 +140,7 @@ thread_local! {
 }
 
 fn lock_reentrancy_stacks() -> std::sync::MutexGuard<'static, HashMap<TokioTaskId, Vec<String>>> {
-    TOOL_REENTRANCY_STACKS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    TOOL_REENTRANCY_STACKS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 #[derive(Debug)]
@@ -167,10 +165,8 @@ impl ToolReentrancyGuard {
             let mut stacks = lock_reentrancy_stacks();
             let stack = stacks.entry(task_id).or_default();
             let stack_depth = stack.len();
-            let tool_reentry_count = stack
-                .iter()
-                .filter(|active_tool| active_tool.as_str() == tool_name)
-                .count();
+            let tool_reentry_count =
+                stack.iter().filter(|active_tool| active_tool.as_str() == tool_name).count();
 
             if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT
                 || tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT
@@ -180,26 +176,18 @@ impl ToolReentrancyGuard {
                 } else {
                     stack.join(" -> ")
                 };
-                return Err(ReentrancyViolation {
-                    stack_depth,
-                    tool_reentry_count,
-                    stack_trace,
-                });
+                return Err(ReentrancyViolation { stack_depth, tool_reentry_count, stack_trace });
             }
 
             stack.push(tool_name.to_string());
-            return Ok(Self {
-                context: Some(ReentrancyContext::Task(task_id)),
-            });
+            return Ok(Self { context: Some(ReentrancyContext::Task(task_id)) });
         }
 
         let violation = THREAD_REENTRANCY_STACK.with(|stack_cell| {
             let mut stack = stack_cell.borrow_mut();
             let stack_depth = stack.len();
-            let tool_reentry_count = stack
-                .iter()
-                .filter(|active_tool| active_tool.as_str() == tool_name)
-                .count();
+            let tool_reentry_count =
+                stack.iter().filter(|active_tool| active_tool.as_str() == tool_name).count();
 
             if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT
                 || tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT
@@ -209,11 +197,7 @@ impl ToolReentrancyGuard {
                 } else {
                     stack.join(" -> ")
                 };
-                Some(ReentrancyViolation {
-                    stack_depth,
-                    tool_reentry_count,
-                    stack_trace,
-                })
+                Some(ReentrancyViolation { stack_depth, tool_reentry_count, stack_trace })
             } else {
                 stack.push(tool_name.to_string());
                 None
@@ -224,9 +208,7 @@ impl ToolReentrancyGuard {
             return Err(violation);
         }
 
-        Ok(Self {
-            context: Some(ReentrancyContext::Thread),
-        })
+        Ok(Self { context: Some(ReentrancyContext::Thread) })
     }
 }
 
@@ -265,14 +247,8 @@ impl ToolRegistry {
         timeout_ms: u64,
         circuit_breaker: bool,
     ) {
-        if let Some(obj) = payload
-            .get_mut("error")
-            .and_then(|value| value.as_object_mut())
-        {
-            obj.insert(
-                "timeout_category".into(),
-                Value::String(timeout_category.to_string()),
-            );
+        if let Some(obj) = payload.get_mut("error").and_then(|value| value.as_object_mut()) {
+            obj.insert("timeout_category".into(), Value::String(timeout_category.to_string()));
             obj.insert("timeout_ms".into(), Value::from(timeout_ms));
             obj.insert("circuit_breaker".into(), Value::Bool(circuit_breaker));
         }
@@ -484,11 +460,8 @@ impl ToolRegistry {
                         Some("tool_registry"),
                     );
                     let lower_message = base.message.to_ascii_lowercase();
-                    let lower_original = base
-                        .original_error
-                        .as_deref()
-                        .unwrap_or_default()
-                        .to_ascii_lowercase();
+                    let lower_original =
+                        base.original_error.as_deref().unwrap_or_default().to_ascii_lowercase();
                     if lower_message.contains("circuit breaker")
                         || lower_original.contains("circuit breaker")
                     {
@@ -554,9 +527,7 @@ impl ToolRegistry {
     ) -> Option<ToolExecutionError> {
         let structured =
             retry_policy.apply_to_tool_execution_error(decorated, *attempt_index, Some(tool_name));
-        let retry_delay = structured
-            .retry_after()
-            .or_else(|| structured.retry_delay());
+        let retry_delay = structured.retry_after().or_else(|| structured.retry_delay());
         if structured.retryable
             && *attempt_index + 1 < max_attempts
             && let Some(delay) = retry_delay
@@ -627,10 +598,7 @@ impl ToolRegistry {
                 continue;
             }
 
-            if requested_candidates
-                .iter()
-                .any(|candidate| fuzzy_match(candidate, tool))
-            {
+            if requested_candidates.iter().any(|candidate| fuzzy_match(candidate, tool)) {
                 similar_tools.push(tool.clone());
             }
         }
@@ -678,8 +646,7 @@ impl ToolRegistry {
 
     /// Execute a model-originated tool call through the public routing assembly.
     pub async fn execute_public_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
-        self.execute_public_tool_ref_internal(name, args, false)
-            .await
+        self.execute_public_tool_ref_internal(name, args, false).await
     }
 
     /// Reference-taking version of execute_tool to avoid cloning by callers
@@ -822,9 +789,7 @@ impl ToolRegistry {
 
         // PERFORMANCE OPTIMIZATION: Auto-tune memory pool based on usage patterns
         if self.optimization_config.memory_pool.enabled {
-            let recommendation = self
-                .memory_pool
-                .auto_tune(&self.optimization_config.memory_pool);
+            let recommendation = self.memory_pool.auto_tune(&self.optimization_config.memory_pool);
 
             // Log recommendation if significant changes are suggested
             if !matches!(
@@ -850,11 +815,7 @@ impl ToolRegistry {
         }
 
         // PERFORMANCE OPTIMIZATION: Check hot cache for tool lookup if optimizations enabled
-        let cached_tool = if self
-            .optimization_config
-            .tool_registry
-            .use_optimized_registry
-        {
+        let cached_tool = if self.optimization_config.tool_registry.use_optimized_registry {
             let cache = self.hot_tool_cache.read();
             cache.peek(name).cloned()
         } else {
@@ -881,16 +842,11 @@ impl ToolRegistry {
 
         // PERFORMANCE OPTIMIZATION: Update hot cache with resolved tool if optimizations enabled
         if let Some(tool_arc) = cached_tool.as_ref()
-            && self
-                .optimization_config
-                .tool_registry
-                .use_optimized_registry
+            && self.optimization_config.tool_registry.use_optimized_registry
             && tool_name != name
         {
             // Cache the canonical name too for faster future lookups
-            self.hot_tool_cache
-                .write()
-                .put(tool_name.clone(), tool_arc.clone());
+            self.hot_tool_cache.write().put(tool_name.clone(), tool_arc.clone());
         }
 
         let parameter_schema = self
@@ -916,21 +872,20 @@ impl ToolRegistry {
                               adaptive_timeout_ms: Option<u64>,
                               effective_timeout_ms: Option<u64>,
                               circuit_breaker: bool| {
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name,
-                    requested_name.clone(),
-                    is_mcp_tool,
-                    mcp_provider,
-                    args,
-                    error_msg,
-                    context_snapshot.clone(),
-                    timeout_category,
-                    base_timeout_ms,
-                    adaptive_timeout_ms,
-                    effective_timeout_ms,
-                    circuit_breaker,
-                ));
+            self.execution_history.add_record(ToolExecutionRecord::failure(
+                tool_name,
+                requested_name.clone(),
+                is_mcp_tool,
+                mcp_provider,
+                args,
+                error_msg,
+                context_snapshot.clone(),
+                timeout_category,
+                base_timeout_ms,
+                adaptive_timeout_ms,
+                effective_timeout_ms,
+                circuit_breaker,
+            ));
         };
 
         let _reentrancy_guard = match ToolReentrancyGuard::enter(&tool_name) {
@@ -1123,9 +1078,7 @@ impl ToolRegistry {
         let timeout_category_label = Some(timeout_category.label().to_string());
 
         if let Some(rate_limit) = self.execution_history.rate_limit_per_minute() {
-            let calls_last_minute = self
-                .execution_history
-                .calls_in_window(Duration::from_secs(60));
+            let calls_last_minute = self.execution_history.calls_in_window(Duration::from_secs(60));
             if calls_last_minute >= rate_limit {
                 warn!(
                     tool = %tool_name_owned,
@@ -1137,9 +1090,8 @@ impl ToolRegistry {
             }
         }
 
-        let skip_loop_detection = self
-            .should_skip_loop_detection_for_exec_continuation(&tool_name, args)
-            .await;
+        let skip_loop_detection =
+            self.should_skip_loop_detection_for_exec_continuation(&tool_name, args).await;
         if skip_loop_detection {
             trace!(
                 tool = %tool_name,
@@ -1191,21 +1143,20 @@ impl ToolRegistry {
                 // (added when the original call ran) carries the true MCP
                 // metadata; the synthetic record exists only to make
                 // `detect_loop` see this call in the rolling window.
-                self.execution_history
-                    .add_record(ToolExecutionRecord::success(
-                        tool_name.clone(),
-                        requested_name.clone(),
-                        false,
-                        None,
-                        args_for_recording.clone(),
-                        reused_value.clone(),
-                        context_snapshot.clone(),
-                        timeout_category_label.clone(),
-                        base_timeout_ms,
-                        adaptive_timeout_ms,
-                        None,
-                        false,
-                    ));
+                self.execution_history.add_record(ToolExecutionRecord::success(
+                    tool_name.clone(),
+                    requested_name.clone(),
+                    false,
+                    None,
+                    args_for_recording.clone(),
+                    reused_value.clone(),
+                    context_snapshot.clone(),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
+                ));
                 trace!(
                     tool = %tool_name,
                     "Fast-reusing recent successful read-only result"
@@ -1358,22 +1309,14 @@ impl ToolRegistry {
             .context("tool denied by full-auto allowlist"));
         }
 
-        let skip_policy_prompt = self
-            .policy_gateway
-            .lock()
-            .await
-            .take_preapproved(&tool_name);
+        let skip_policy_prompt = self.policy_gateway.lock().await.take_preapproved(&tool_name);
 
         let decision = if skip_policy_prompt {
             ToolExecutionDecision::Allowed
         } else {
             // In TUI mode, permission should have been collected via ensure_tool_permission().
             // If not preapproved, check policy as fallback.
-            self.policy_gateway
-                .lock()
-                .await
-                .should_execute_tool(&tool_name)
-                .await?
+            self.policy_gateway.lock().await.should_execute_tool(&tool_name).await?
         };
 
         if !decision.is_allowed() {
@@ -1406,11 +1349,7 @@ impl ToolRegistry {
             return Err(anyhow!("{error_msg}").context("tool denied by policy"));
         }
 
-        let args = match self
-            .policy_gateway
-            .lock()
-            .await
-            .apply_policy_constraints(&tool_name, args)
+        let args = match self.policy_gateway.lock().await.apply_policy_constraints(&tool_name, args)
         {
             Ok(processed_args) => processed_args,
             Err(err) => {
@@ -1670,11 +1609,9 @@ impl ToolRegistry {
                     let _execution_guard = self.memory_pool.get_value();
                     let _string_guard = self.memory_pool.get_string();
                     let _vec_guard = self.memory_pool.get_vec();
-                    self.execute_command_session_internal(exec_args, exec_settlement_mode)
-                        .await
+                    self.execute_command_session_internal(exec_args, exec_settlement_mode).await
                 } else {
-                    self.execute_command_session_internal(exec_args, exec_settlement_mode)
-                        .await
+                    self.execute_command_session_internal(exec_args, exec_settlement_mode).await
                 }
             } else if exec_settlement_mode.settle_noninteractive()
                 && tool_name == tools::WRITE_STDIN
@@ -1722,19 +1659,13 @@ impl ToolRegistry {
                     }
                     ToolHandler::TraitObject(tool) => {
                         // PERFORMANCE OPTIMIZATION: Use cached tool if available and optimizations enabled
-                        if self
-                            .optimization_config
-                            .tool_registry
-                            .use_optimized_registry
-                        {
+                        if self.optimization_config.tool_registry.use_optimized_registry {
                             if let Some(cached_tool) = cached_tool.as_ref() {
                                 // Use cached tool instance to avoid registry lookup overhead
                                 cached_tool.execute(args).await
                             } else {
                                 // Cache the tool for future use
-                                self.hot_tool_cache
-                                    .write()
-                                    .put(tool_name.clone(), tool.clone());
+                                self.hot_tool_cache.write().put(tool_name.clone(), tool.clone());
                                 tool.execute(args).await
                             }
                         } else {
@@ -1861,8 +1792,7 @@ impl ToolRegistry {
                         );
                     }
                     if is_mcp_tool {
-                        self.mcp_circuit_breaker
-                            .record_failure_category(ErrorCategory::Timeout);
+                        self.mcp_circuit_breaker.record_failure_category(ErrorCategory::Timeout);
                     }
                     record_failure(
                         tool_name_owned,
@@ -1917,9 +1847,8 @@ impl ToolRegistry {
                 }
                 self.record_tool_latency(timeout_category, execution_started_at.elapsed());
                 // Dynamic context discovery: spool large outputs to files
-                let processed_value = self
-                    .process_tool_output(&tool_name_owned, value, is_mcp_tool)
-                    .await;
+                let processed_value =
+                    self.process_tool_output(&tool_name_owned, value, is_mcp_tool).await;
                 let mut normalized_value = normalize_tool_output(processed_value);
                 if tool_name_owned == tools::CODE_SEARCH
                     && let Some(output) = normalized_value.as_object_mut()
@@ -1941,37 +1870,35 @@ impl ToolRegistry {
                 }
 
                 if let Some(error_msg) = structured_error {
-                    self.execution_history
-                        .add_record(ToolExecutionRecord::failure(
-                            tool_name_owned,
-                            requested_name,
-                            is_mcp_tool,
-                            mcp_provider,
-                            args_for_recording,
-                            error_msg,
-                            context_snapshot.clone(),
-                            timeout_category_label.clone(),
-                            base_timeout_ms,
-                            adaptive_timeout_ms,
-                            effective_timeout_ms,
-                            false,
-                        ));
+                    self.execution_history.add_record(ToolExecutionRecord::failure(
+                        tool_name_owned,
+                        requested_name,
+                        is_mcp_tool,
+                        mcp_provider,
+                        args_for_recording,
+                        error_msg,
+                        context_snapshot.clone(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        effective_timeout_ms,
+                        false,
+                    ));
                 } else {
-                    self.execution_history
-                        .add_record(ToolExecutionRecord::success(
-                            tool_name_owned,
-                            requested_name,
-                            is_mcp_tool,
-                            mcp_provider,
-                            args_for_recording,
-                            normalized_value.clone(),
-                            context_snapshot.clone(),
-                            timeout_category_label.clone(),
-                            base_timeout_ms,
-                            adaptive_timeout_ms,
-                            effective_timeout_ms,
-                            false,
-                        ));
+                    self.execution_history.add_record(ToolExecutionRecord::success(
+                        tool_name_owned,
+                        requested_name,
+                        is_mcp_tool,
+                        mcp_provider,
+                        args_for_recording,
+                        normalized_value.clone(),
+                        context_snapshot.clone(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        effective_timeout_ms,
+                        false,
+                    ));
                 }
 
                 Ok(normalized_value)
@@ -1991,8 +1918,7 @@ impl ToolRegistry {
                     breaker.record_failure_category_for_tool(&tool_name_owned, error_category);
                 }
                 if is_mcp_tool {
-                    self.mcp_circuit_breaker
-                        .record_failure_category(error_category);
+                    self.mcp_circuit_breaker.record_failure_category(error_category);
                 }
 
                 let tripped = if error_category.should_trip_circuit_breaker() {

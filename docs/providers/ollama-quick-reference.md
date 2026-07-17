@@ -121,10 +121,10 @@ cargo test --lib ollama
 
 ## Files Location
 
-- `vtcode-core/src/llm/providers/ollama/client.rs`
-- `vtcode-core/src/llm/providers/ollama/pull.rs`
-- `vtcode-core/src/llm/providers/ollama/parser.rs`
-- `vtcode-core/src/llm/providers/ollama/url.rs`
+- `crates/codegen/vtcode-core/src/llm/providers/ollama/client.rs`
+- `crates/codegen/vtcode-core/src/llm/providers/ollama/pull.rs`
+- `crates/codegen/vtcode-core/src/llm/providers/ollama/parser.rs`
+- `crates/codegen/vtcode-core/src/llm/providers/ollama/url.rs`
 
 ## Source
 

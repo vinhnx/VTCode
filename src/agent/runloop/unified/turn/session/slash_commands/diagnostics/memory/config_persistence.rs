@@ -24,9 +24,7 @@ where
         .context("Failed to load VT Code configuration")?;
     let workspace_config_path = preferred_workspace_config_path(&manager, &ctx.config.workspace);
     let mut root = load_toml_value(&workspace_config_path)?;
-    let root_table = root
-        .as_table_mut()
-        .context("Workspace config root is not a TOML table")?;
+    let root_table = root.as_table_mut().context("Workspace config root is not a TOML table")?;
     update(root_table)?;
     save_toml_value(&workspace_config_path, &root)?;
     refresh_runtime_config_from_manager(
@@ -65,9 +63,7 @@ pub(super) async fn persist_user_directory_override(
 pub(super) fn write_user_directory_override(path: &Path, value: Option<String>) -> Result<()> {
     let mut root = load_toml_value(path)?;
 
-    let root_table = root
-        .as_table_mut()
-        .context("User config root is not a TOML table")?;
+    let root_table = root.as_table_mut().context("User config root is not a TOML table")?;
     match value {
         Some(value) if !value.trim().is_empty() => {
             let agent_table = ensure_child_table(root_table, "agent");
@@ -151,10 +147,7 @@ pub(super) fn set_workspace_instruction_import_depth(
     let agent_table = ensure_child_table(root_table, "agent");
     agent_table.insert(
         "instruction_import_max_depth".to_string(),
-        TomlValue::Integer(usize_to_toml_integer(
-            value,
-            "instruction_import_max_depth",
-        )?),
+        TomlValue::Integer(usize_to_toml_integer(value, "instruction_import_max_depth")?),
     );
     Ok(())
 }
@@ -204,10 +197,7 @@ pub(super) fn preferred_user_config_path(manager: &ConfigManager) -> Option<Path
         })
         .or_else(|| {
             let defaults = current_config_defaults();
-            defaults
-                .home_config_paths(manager.config_file_name())
-                .into_iter()
-                .next()
+            defaults.home_config_paths(manager.config_file_name()).into_iter().next()
         })
         .or_else(|| dirs::home_dir().map(|home| home.join(manager.config_file_name())))
 }
@@ -265,19 +255,11 @@ mod tests {
         save_toml_value(&path, &root).expect("save config");
 
         let saved = load_toml_value(&path).expect("reload config");
-        let agent = saved
-            .get("agent")
-            .and_then(TomlValue::as_table)
-            .expect("agent table");
-        assert_eq!(
-            agent.get("theme").and_then(TomlValue::as_str),
-            Some("ciapre")
-        );
+        let agent = saved.get("agent").and_then(TomlValue::as_table).expect("agent table");
+        assert_eq!(agent.get("theme").and_then(TomlValue::as_str), Some("ciapre"));
         assert!(agent.get("provider").is_none());
         assert_eq!(
-            agent
-                .get("instruction_import_max_depth")
-                .and_then(TomlValue::as_integer),
+            agent.get("instruction_import_max_depth").and_then(TomlValue::as_integer),
             Some(7)
         );
         assert_eq!(
@@ -292,40 +274,16 @@ mod tests {
             .get("persistent_memory")
             .and_then(TomlValue::as_table)
             .expect("persistent memory table");
-        assert_eq!(
-            memory.get("enabled").and_then(TomlValue::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            memory.get("auto_write").and_then(TomlValue::as_bool),
-            Some(false)
-        );
-        assert_eq!(
-            memory
-                .get("startup_line_limit")
-                .and_then(TomlValue::as_integer),
-            Some(111)
-        );
-        assert_eq!(
-            memory
-                .get("startup_byte_limit")
-                .and_then(TomlValue::as_integer),
-            Some(222)
-        );
+        assert_eq!(memory.get("enabled").and_then(TomlValue::as_bool), Some(false));
+        assert_eq!(memory.get("auto_write").and_then(TomlValue::as_bool), Some(false));
+        assert_eq!(memory.get("startup_line_limit").and_then(TomlValue::as_integer), Some(111));
+        assert_eq!(memory.get("startup_byte_limit").and_then(TomlValue::as_integer), Some(222));
 
         let small_model = agent
             .get("small_model")
             .and_then(TomlValue::as_table)
             .expect("small model table");
-        assert_eq!(
-            small_model.get("model").and_then(TomlValue::as_str),
-            Some("gpt-5-mini")
-        );
-        assert_eq!(
-            small_model
-                .get("use_for_memory")
-                .and_then(TomlValue::as_bool),
-            Some(false)
-        );
+        assert_eq!(small_model.get("model").and_then(TomlValue::as_str), Some("gpt-5-mini"));
+        assert_eq!(small_model.get("use_for_memory").and_then(TomlValue::as_bool), Some(false));
     }
 }

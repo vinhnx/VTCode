@@ -402,14 +402,8 @@ mod tests {
         cache.invalidate_for_path("/workspace/src/main.rs");
 
         assert!(cache.get(&key1).is_none(), "Key1 should be removed");
-        assert!(
-            cache.get(&key2).is_some(),
-            "Key2 should still exist (different file)"
-        );
-        assert!(
-            cache.get(&key3).is_some(),
-            "Key3 should still exist (different tool)"
-        );
+        assert!(cache.get(&key2).is_some(), "Key2 should still exist (different file)");
+        assert!(cache.get(&key3).is_some(), "Key3 should still exist (different tool)");
         assert_eq!(cache.stats().current_size, 2);
     }
 
@@ -465,10 +459,7 @@ mod tests {
         // The remaining 4 files' caches should still be valid
         for i in 1..5 {
             let key = ToolCacheKey::new("tool", "params", &format!("/file_{i}"));
-            assert!(
-                cache.get(&key).is_some(),
-                "Cache for /file_{i} should still be valid"
-            );
+            assert!(cache.get(&key).is_some(), "Cache for /file_{i} should still be valid");
         }
 
         let stats_after = cache.stats();

@@ -10,7 +10,7 @@ Based on the article "Rust Prevents Data Races, Not Race Conditions" by Matthias
 
 ### 1. Fixed McpCircuitBreaker TOCTOU Race Conditions (MEDIUM)
 
-**File**: `vtcode-core/src/tools/registry/circuit_breaker.rs`
+**File**: `crates/codegen/vtcode-core/src/tools/registry/circuit_breaker.rs`
 
 **Problem**: The `allow_request` method exhibited the classic TOCTOU (Time-of-Check-Time-of-Use) bug where multiple threads could simultaneously observe the same state and attempt conflicting transitions.
 
@@ -46,7 +46,7 @@ pub fn allow_request(&self) -> bool {
 
 ### 2. Fixed Disk I/O Under Mutex Lock (MEDIUM)
 
-**File**: `vtcode-core/src/tools/registry/circuit_breaker.rs`
+**File**: `crates/codegen/vtcode-core/src/tools/registry/circuit_breaker.rs`
 
 **Problem**: The `persist` method performed disk I/O while the mutex was held, blocking other threads.
 
@@ -61,7 +61,7 @@ pub fn allow_request(&self) -> bool {
 
 ### 3. Added Safety Documentation to RelaxedAtomic (LOW)
 
-**File**: `vtcode-commons/src/thread_safety.rs`
+**File**: `crates/common/vtcode-commons/src/thread_safety.rs`
 
 **Problem**: Documentation was incomplete about race condition risks.
 
@@ -74,7 +74,7 @@ pub fn allow_request(&self) -> bool {
 
 ### 4. Fixed Incorrect fetch_add Documentation (LOW)
 
-**File**: `vtcode-commons/src/thread_safety.rs`
+**File**: `crates/common/vtcode-commons/src/thread_safety.rs`
 
 **Problem**: Documentation was contradictory about atomic ordering behavior.
 
@@ -85,9 +85,9 @@ pub fn allow_request(&self) -> bool {
 ### 5. Fixed DRY Violation in Metric Helpers (LOW)
 
 **Files**:
-- `vtcode-core/src/metrics/mod.rs`
-- `vtcode-core/src/tools/registry/circuit_breaker.rs`
-- `vtcode-core/src/tools/resilience/circuit_breaker.rs`
+- `crates/codegen/vtcode-core/src/metrics/mod.rs`
+- `crates/codegen/vtcode-core/src/tools/registry/circuit_breaker.rs`
+- `crates/codegen/vtcode-core/src/tools/resilience/circuit_breaker.rs`
 
 **Problem**: Both circuit breaker implementations contained identical private helper methods for recording metrics.
 
@@ -98,8 +98,8 @@ pub fn allow_request(&self) -> bool {
 ### 6. Fixed Flaky Timing-Dependent Tests (LOW)
 
 **Files**:
-- `vtcode-core/src/tools/registry/circuit_breaker.rs`
-- `vtcode-core/src/tools/resilience/circuit_breaker.rs`
+- `crates/codegen/vtcode-core/src/tools/registry/circuit_breaker.rs`
+- `crates/codegen/vtcode-core/src/tools/resilience/circuit_breaker.rs`
 
 **Problem**: Tests used `thread::sleep(Duration::from_millis(60))` to wait for a 50ms backoff, which could fail on loaded CI machines.
 
@@ -110,8 +110,8 @@ pub fn allow_request(&self) -> bool {
 ### 7. Added Comprehensive Concurrency Tests
 
 **Files**:
-- `vtcode-core/src/tools/registry/circuit_breaker.rs`
-- `vtcode-core/src/tools/resilience/circuit_breaker.rs`
+- `crates/codegen/vtcode-core/src/tools/registry/circuit_breaker.rs`
+- `crates/codegen/vtcode-core/src/tools/resilience/circuit_breaker.rs`
 
 **New Tests**:
 - `concurrent_requests_do_not_cause_inconsistent_state` - Verifies concurrent threads see consistent state
@@ -190,7 +190,7 @@ All tests pass:
 
 ### Fixed JustificationManager I/O Under Lock (HIGH)
 
-**File**: `vtcode-core/src/tools/registry/justification.rs`
+**File**: `crates/codegen/vtcode-core/src/tools/registry/justification.rs`
 
 **Problem**: `persist_patterns` held the mutex while performing filesystem I/O, blocking other threads.
 
@@ -198,7 +198,7 @@ All tests pass:
 
 ### Fixed LrMap Silent Data Loss (MEDIUM)
 
-**File**: `vtcode-commons/src/lr_map.rs`
+**File**: `crates/common/vtcode-commons/src/lr_map.rs`
 
 **Problem**: `insert` and `clear` silently dropped writes when the mutex was poisoned.
 
@@ -207,8 +207,8 @@ All tests pass:
 ### Documented Trade-offs for Global Mutexes (LOW)
 
 **Files**:
-- `vtcode-core/src/utils/error_log_collector.rs`
-- `vtcode-core/src/tools/registry/execution_facade.rs`
+- `crates/codegen/vtcode-core/src/utils/error_log_collector.rs`
+- `crates/codegen/vtcode-core/src/tools/registry/execution_facade.rs`
 
 **Problem**: Global mutexes could cause contention under high concurrency.
 
@@ -220,7 +220,7 @@ All tests pass:
 
 ### Fixed Operator Precedence Bug in diff_renderer.rs (HIGH)
 
-**File**: `vtcode-core/src/ui/diff_renderer.rs`
+**File**: `crates/codegen/vtcode-core/src/ui/diff_renderer.rs`
 
 **Problem**: Operator precedence bug caused ANSI color codes to be inserted even when colors were disabled, producing garbage characters in non-color terminal output.
 
@@ -242,7 +242,7 @@ if check.total_additions > 0 || check.total_deletions > 0 {
 
 ### Improved ProviderBuilder.build() Documentation (MEDIUM)
 
-**File**: `vtcode-core/src/llm/provider_builder.rs`
+**File**: `crates/codegen/vtcode-core/src/llm/provider_builder.rs`
 
 **Problem**: `build()` method panicked without clear documentation about when to use `try_build()` vs `build()`.
 
@@ -253,7 +253,7 @@ if check.total_additions > 0 || check.total_deletions > 0 {
 
 ### Fixed Silent Error Swallowing in persistent_memory.rs (MEDIUM)
 
-**File**: `vtcode-core/src/persistent_memory.rs`
+**File**: `crates/codegen/vtcode-core/src/persistent_memory.rs`
 
 **Problem**: Three locations silently ignored results of important operations:
 - `consolidate_memory_files` results were dropped
@@ -265,7 +265,7 @@ if check.total_additions > 0 || check.total_deletions > 0 {
 
 ### Fixed Integer Overflow in Cache Size Estimation (LOW)
 
-**File**: `vtcode-core/src/cache/mod.rs`
+**File**: `crates/codegen/vtcode-core/src/cache/mod.rs`
 
 **Problem**: Recursive `estimate_json_size` function used `.sum()` which could overflow silently for large JSON structures.
 
@@ -277,7 +277,7 @@ if check.total_additions > 0 || check.total_deletions > 0 {
 
 ### Fixed Mutex Poison Panic in search_runtime.rs (MEDIUM)
 
-**File**: `vtcode-core/src/tools/search_runtime.rs`
+**File**: `crates/codegen/vtcode-core/src/tools/search_runtime.rs`
 
 **Problem**: Two `expect()` calls on `std::sync::Mutex::lock()` would cause cascading panics if any thread panicked while holding the global cache mutex.
 
@@ -285,7 +285,7 @@ if check.total_additions > 0 || check.total_deletions > 0 {
 
 ### Fixed RwLock Poison Panic in cached_executor.rs (MEDIUM)
 
-**File**: `vtcode-core/src/tools/cached_executor.rs`
+**File**: `crates/codegen/vtcode-core/src/tools/cached_executor.rs`
 
 **Problem**: Five `expect("pattern detector lock poisoned")` calls on `std::sync::RwLock` would cause cascading panics if any thread panicked while holding the pattern detector lock.
 

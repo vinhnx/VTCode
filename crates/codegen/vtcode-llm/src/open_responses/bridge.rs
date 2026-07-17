@@ -134,8 +134,7 @@ impl ResponseBuilder {
                 if self.response.status.is_terminal() {
                     return;
                 }
-                self.response
-                    .fail(OpenResponseError::model_error(&evt.message));
+                self.response.fail(OpenResponseError::model_error(&evt.message));
                 emitter.response_failed(self.response.clone());
             }
 
@@ -193,8 +192,7 @@ impl ResponseBuilder {
                 if self.response.status.is_terminal() {
                     return;
                 }
-                self.response
-                    .fail(OpenResponseError::server_error(&evt.message));
+                self.response.fail(OpenResponseError::server_error(&evt.message));
                 emitter.response_failed(self.response.clone());
             }
 
@@ -850,10 +848,7 @@ impl ResponseBuilder {
 
     fn append_reasoning_delta(&mut self, item_id: &str, output_index: usize, delta: &str) {
         if let Some(OutputItem::Reasoning(reasoning)) = self.response.output.get_mut(output_index) {
-            reasoning
-                .content
-                .get_or_insert_with(String::new)
-                .push_str(delta);
+            reasoning.content.get_or_insert_with(String::new).push_str(delta);
         }
 
         if let Some(state) = self.active_items.get_mut(item_id) {
@@ -887,20 +882,14 @@ impl ResponseBuilder {
             self.response.model = response.model.clone();
         }
 
-        let message_text = response
-            .content
-            .clone()
-            .or_else(|| self.current_message_text());
+        let message_text = response.content.clone().or_else(|| self.current_message_text());
         if let Some(text) = message_text
             && !text.is_empty()
         {
             self.complete_normalized_message_item(&text, emitter);
         }
 
-        let reasoning_text = response
-            .reasoning
-            .clone()
-            .or_else(|| self.current_reasoning_text());
+        let reasoning_text = response.reasoning.clone().or_else(|| self.current_reasoning_text());
         if let Some(text) = reasoning_text
             && !text.is_empty()
         {
@@ -935,8 +924,7 @@ impl ResponseBuilder {
                 });
             }
             FinishReason::ContentFilter => {
-                self.response
-                    .incomplete(crate::open_responses::IncompleteReason::ContentFilter);
+                self.response.incomplete(crate::open_responses::IncompleteReason::ContentFilter);
                 emitter.emit(ResponseStreamEvent::ResponseIncomplete {
                     response: self.response.clone(),
                 });
@@ -1160,8 +1148,7 @@ impl ResponseBuilder {
     fn allocate_output_index(&mut self, item_id: &str) -> usize {
         let output_index = self.next_output_index;
         self.next_output_index += 1;
-        self.item_id_to_index
-            .insert(item_id.to_string(), output_index);
+        self.item_id_to_index.insert(item_id.to_string(), output_index);
         output_index
     }
 }
@@ -1192,14 +1179,12 @@ impl<E: StreamEventEmitter> DualEventEmitter<E> {
 
     /// Processes a VT Code event and emits corresponding Open Responses events.
     pub fn process(&mut self, event: &ThreadEvent) {
-        self.builder
-            .process_event(event, &mut self.open_responses_emitter);
+        self.builder.process_event(event, &mut self.open_responses_emitter);
     }
 
     /// Processes a normalized provider stream event and emits corresponding Open Responses events.
     pub fn process_normalized(&mut self, event: &NormalizedStreamEvent) {
-        self.builder
-            .process_normalized_event(event, &mut self.open_responses_emitter);
+        self.builder.process_normalized_event(event, &mut self.open_responses_emitter);
     }
 
     /// Returns a reference to the current response.
@@ -1237,9 +1222,7 @@ mod tests {
 
         // Thread started
         builder.process_event(
-            &ThreadEvent::ThreadStarted(ThreadStartedEvent {
-                thread_id: "thread_1".to_string(),
-            }),
+            &ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread_1".to_string() }),
             &mut emitter,
         );
 
@@ -1262,11 +1245,7 @@ mod tests {
         assert!(builder.response().usage.is_some());
 
         let events = emitter.into_events();
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, ResponseStreamEvent::ResponseCreated { .. }))
-        );
+        assert!(events.iter().any(|e| matches!(e, ResponseStreamEvent::ResponseCreated { .. })));
         assert!(
             events
                 .iter()
@@ -1299,41 +1278,20 @@ mod tests {
             }),
         };
         builder.process_event(
-            &ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                item: completed_item,
-            }),
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed_item }),
             &mut emitter,
         );
 
         assert_eq!(builder.response().output.len(), 1);
-        assert!(matches!(
-            &builder.response().output[0],
-            OutputItem::Message(_)
-        ));
+        assert!(matches!(&builder.response().output[0], OutputItem::Message(_)));
 
         let events = emitter.into_events();
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. }))
-        );
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, ResponseStreamEvent::OutputItemDone { .. }))
-        );
+        assert!(events.iter().any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. })));
+        assert!(events.iter().any(|e| matches!(e, ResponseStreamEvent::OutputItemDone { .. })));
         // Verify ContentPartAdded is emitted
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, ResponseStreamEvent::ContentPartAdded { .. }))
-        );
+        assert!(events.iter().any(|e| matches!(e, ResponseStreamEvent::ContentPartAdded { .. })));
         // Verify OutputTextDone is emitted
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, ResponseStreamEvent::OutputTextDone { .. }))
-        );
+        assert!(events.iter().any(|e| matches!(e, ResponseStreamEvent::OutputTextDone { .. })));
     }
 
     #[test]
@@ -1348,10 +1306,8 @@ mod tests {
                 text: "Atomic message".to_string(),
             }),
         };
-        builder.process_event(
-            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
-            &mut emitter,
-        );
+        builder
+            .process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
         let events = emitter.into_events();
         // Must emit Added before Done for atomic completions
@@ -1364,10 +1320,7 @@ mod tests {
 
         assert!(added_pos.is_some(), "OutputItemAdded should be emitted");
         assert!(done_pos.is_some(), "OutputItemDone should be emitted");
-        assert!(
-            added_pos.unwrap() < done_pos.unwrap(),
-            "Added must come before Done"
-        );
+        assert!(added_pos.unwrap() < done_pos.unwrap(), "Added must come before Done");
     }
 
     #[test]
@@ -1389,11 +1342,7 @@ mod tests {
 
         let events = emitter.into_events();
         // Should have implicitly started
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. }))
-        );
+        assert!(events.iter().any(|e| matches!(e, ResponseStreamEvent::OutputItemAdded { .. })));
     }
 
     #[test]
@@ -1427,11 +1376,7 @@ mod tests {
 
         // Should not panic and should emit delta
         let events = emitter.into_events();
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, ResponseStreamEvent::OutputTextDelta { .. }))
-        );
+        assert!(events.iter().any(|e| matches!(e, ResponseStreamEvent::OutputTextDelta { .. })));
     }
 
     #[test]
@@ -1471,10 +1416,7 @@ mod tests {
                 ResponseStreamEvent::OutputTextDelta { delta, .. } if delta == "Completely different"
             )
         });
-        assert!(
-            delta_event.is_some(),
-            "Should emit full text as delta for non-append updates"
-        );
+        assert!(delta_event.is_some(), "Should emit full text as delta for non-append updates");
     }
 
     #[test]
@@ -1484,14 +1426,10 @@ mod tests {
 
         let item = ThreadItem {
             id: "plan_1".to_string(),
-            details: ThreadItemDetails::Plan(PlanItem {
-                text: "- Step 1\n- Step 2".to_string(),
-            }),
+            details: ThreadItemDetails::Plan(PlanItem { text: "- Step 1\n- Step 2".to_string() }),
         };
-        builder.process_event(
-            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
-            &mut emitter,
-        );
+        builder
+            .process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
         assert_eq!(builder.response().output.len(), 1);
         match &builder.response().output[0] {
@@ -1526,10 +1464,8 @@ mod tests {
             }),
         };
 
-        builder.process_event(
-            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
-            &mut emitter,
-        );
+        builder
+            .process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
         match &builder.response().output[0] {
             OutputItem::FunctionCall(call) => {
@@ -1564,10 +1500,7 @@ mod tests {
             }),
         };
 
-        builder.process_event(
-            &ThreadEvent::ItemStarted(ItemStartedEvent { item }),
-            &mut emitter,
-        );
+        builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item }), &mut emitter);
 
         match &builder.response().output[0] {
             OutputItem::FunctionCall(call) => {
@@ -1600,10 +1533,8 @@ mod tests {
             }),
         };
 
-        builder.process_event(
-            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
-            &mut emitter,
-        );
+        builder
+            .process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item }), &mut emitter);
 
         match &builder.response().output[0] {
             OutputItem::FunctionCall(call) => {
@@ -1680,10 +1611,7 @@ mod tests {
         let events = emitter.into_events();
         assert!(events.iter().any(|event| matches!(
             event,
-            ResponseStreamEvent::OutputItemAdded {
-                item: OutputItem::FunctionCallOutput(_),
-                ..
-            }
+            ResponseStreamEvent::OutputItemAdded { item: OutputItem::FunctionCallOutput(_), .. }
         )));
         assert!(events.iter().any(|event| matches!(
             event,
@@ -1750,10 +1678,7 @@ mod tests {
 
         match &builder.response().output[0] {
             OutputItem::FunctionCallOutput(output) => {
-                assert_eq!(
-                    output.output,
-                    "Output saved to .vtcode/context/tool_outputs/run-1.txt"
-                );
+                assert_eq!(output.output, "Output saved to .vtcode/context/tool_outputs/run-1.txt");
             }
             other => panic!("expected function call output, got {other:?}"),
         }
@@ -1861,9 +1786,7 @@ mod tests {
         let mut emitter = VecStreamEmitter::new();
 
         builder.process_event(
-            &ThreadEvent::ThreadStarted(ThreadStartedEvent {
-                thread_id: "thread_1".to_string(),
-            }),
+            &ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread_1".to_string() }),
             &mut emitter,
         );
         builder.process_event(
@@ -1874,9 +1797,7 @@ mod tests {
             &mut emitter,
         );
         builder.process_event(
-            &ThreadEvent::TurnCompleted(TurnCompletedEvent {
-                usage: Usage::default(),
-            }),
+            &ThreadEvent::TurnCompleted(TurnCompletedEvent { usage: Usage::default() }),
             &mut emitter,
         );
 
@@ -1900,12 +1821,8 @@ mod tests {
         let mut emitter = VecStreamEmitter::new();
 
         for event in [
-            NormalizedStreamEvent::TextDelta {
-                delta: "Hello ".to_string(),
-            },
-            NormalizedStreamEvent::ReasoningDelta {
-                delta: "Thinking".to_string(),
-            },
+            NormalizedStreamEvent::TextDelta { delta: "Hello ".to_string() },
+            NormalizedStreamEvent::ReasoningDelta { delta: "Thinking".to_string() },
             NormalizedStreamEvent::ToolCallStart {
                 call_id: "call_1".to_string(),
                 name: Some("code_search".to_string()),
@@ -1949,14 +1866,7 @@ mod tests {
         }
 
         assert_eq!(builder.response().status, ResponseStatus::Completed);
-        assert_eq!(
-            builder
-                .response()
-                .usage
-                .as_ref()
-                .map(|usage| usage.total_tokens),
-            Some(14)
-        );
+        assert_eq!(builder.response().usage.as_ref().map(|usage| usage.total_tokens), Some(14));
         assert_eq!(builder.response().output.len(), 3);
 
         let events = emitter.into_events();

@@ -84,10 +84,7 @@ pub fn validate_identifier(id: &str, field_name: &str) -> Result<()> {
     if id.is_empty() {
         bail!("{field_name} cannot be empty");
     }
-    if !id
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
-    {
+    if !id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
         bail!("{field_name} must be alphanumeric (can include _ or -)");
     }
     Ok(())

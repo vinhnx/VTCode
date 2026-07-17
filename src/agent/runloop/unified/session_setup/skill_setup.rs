@@ -62,18 +62,16 @@ pub(crate) async fn register_skill_tools(
         Some(tool_catalog_change_notifier(tool_catalog)),
     )
     .with_tool_profile(vt_cfg.map(|cfg| cfg.tools.profile).unwrap_or_default())
-    .with_fork_executor(Arc::new(
-        vtcode_core::skills::executor::ChildAgentSkillExecutor::new(
-            Arc::new(tool_registry.clone()),
-            vtcode_core::skills::executor::ForkSkillRuntimeConfig {
-                workspace: config.workspace.clone(),
-                model: config.model.clone(),
-                api_key: config.api_key.clone(),
-                openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
-                vt_cfg: vt_cfg.cloned(),
-            },
-        ),
-    ))
+    .with_fork_executor(Arc::new(vtcode_core::skills::executor::ChildAgentSkillExecutor::new(
+        Arc::new(tool_registry.clone()),
+        vtcode_core::skills::executor::ForkSkillRuntimeConfig {
+            workspace: config.workspace.clone(),
+            model: config.model.clone(),
+            api_key: config.api_key.clone(),
+            openai_chatgpt_auth: config.openai_chatgpt_auth.clone(),
+            vt_cfg: vt_cfg.cloned(),
+        },
+    )))
     .with_deferred_tool_policy(deferred_tool_policy.clone());
     let runtime = runtime.with_anthropic_native_memory_enabled(anthropic_native_memory_enabled);
 

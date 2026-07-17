@@ -180,9 +180,7 @@ impl ExecEventRecorder {
     }
 
     pub fn turn_completed(&mut self) {
-        self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
-            usage: Usage::default(),
-        }));
+        self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent { usage: Usage::default() }));
         self.finish_turn();
     }
 
@@ -226,16 +224,14 @@ impl ExecEventRecorder {
         compacted_message_count: usize,
         history_artifact_path: Option<&str>,
     ) {
-        self.record(ThreadEvent::ThreadCompactBoundary(
-            ThreadCompactBoundaryEvent {
-                thread_id: self.thread_id.clone(),
-                trigger,
-                mode,
-                original_message_count,
-                compacted_message_count,
-                history_artifact_path: history_artifact_path.map(str::to_string),
-            },
-        ));
+        self.record(ThreadEvent::ThreadCompactBoundary(ThreadCompactBoundaryEvent {
+            thread_id: self.thread_id.clone(),
+            trigger,
+            mode,
+            original_message_count,
+            compacted_message_count,
+            history_artifact_path: history_artifact_path.map(str::to_string),
+        }));
     }
 
     fn finish_turn(&mut self) {
@@ -339,10 +335,7 @@ impl ExecEventRecorder {
     }
 
     pub fn tool_output_started(&mut self, call_item_id: &str, tool_call_id: Option<&str>) {
-        self.record(tool_output_started_event(
-            call_item_id.to_string(),
-            tool_call_id,
-        ));
+        self.record(tool_output_started_event(call_item_id.to_string(), tool_call_id));
     }
 
     pub fn tool_output_updated(
@@ -351,11 +344,7 @@ impl ExecEventRecorder {
         tool_call_id: Option<&str>,
         output: &str,
     ) {
-        self.record(tool_output_updated_event(
-            call_item_id.to_string(),
-            tool_call_id,
-            output,
-        ));
+        self.record(tool_output_updated_event(call_item_id.to_string(), tool_call_id, output));
     }
 
     pub fn tool_output_finished(
@@ -393,10 +382,7 @@ impl ExecEventRecorder {
             tool_call_id,
             crate::exec::events::ToolCallStatus::Failed,
         ));
-        self.record(tool_output_started_event(
-            call_item_id.clone(),
-            tool_call_id,
-        ));
+        self.record(tool_output_started_event(call_item_id.clone(), tool_call_id));
         self.record(tool_output_completed_event(
             call_item_id,
             tool_call_id,
@@ -406,10 +392,7 @@ impl ExecEventRecorder {
             detail,
         ));
         let error_item_id = self.next_item_id();
-        self.record(error_item_completed_event(
-            error_item_id,
-            detail.to_string(),
-        ));
+        self.record(error_item_completed_event(error_item_id, detail.to_string()));
     }
 
     pub fn command_started(&mut self, command: &str) -> ActiveCommandHandle {
@@ -425,10 +408,7 @@ impl ExecEventRecorder {
             })),
         };
         self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
-        ActiveCommandHandle {
-            id,
-            command: command.to_string(),
-        }
+        ActiveCommandHandle { id, command: command.to_string() }
     }
 
     pub fn command_finished(
@@ -469,9 +449,7 @@ impl ExecEventRecorder {
     pub fn warning(&mut self, message: &str) {
         let item = ThreadItem {
             id: self.next_item_id(),
-            details: ThreadItemDetails::Error(ErrorItem {
-                message: message.to_string(),
-            }),
+            details: ThreadItemDetails::Error(ErrorItem { message: message.to_string() }),
         };
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
@@ -577,11 +555,7 @@ mod tests {
         assert!(recorder.agent_message_stream_update("partial"));
         recorder.agent_message_stream_complete();
         let events = recorder.into_events();
-        assert!(
-            events
-                .iter()
-                .any(|event| matches!(event, ThreadEvent::ItemCompleted(_)))
-        );
+        assert!(events.iter().any(|event| matches!(event, ThreadEvent::ItemCompleted(_))));
     }
 
     #[test]
@@ -627,10 +601,7 @@ mod tests {
 
         assert_eq!(tool_outputs.len(), 1);
         assert_eq!(tool_outputs[0].tool_call_id.as_deref(), Some("call_1"));
-        assert_eq!(
-            tool_outputs[0].status,
-            crate::exec::events::ToolCallStatus::Failed
-        );
+        assert_eq!(tool_outputs[0].status, crate::exec::events::ToolCallStatus::Failed);
         assert_eq!(tool_outputs[0].output, "Tool permission denied");
     }
 
@@ -647,25 +618,18 @@ mod tests {
         let records = handle.replay_recent();
         let submission_ids: std::collections::BTreeSet<String> = records
             .iter()
-            .filter_map(|record| {
-                record
-                    .submission_id
-                    .as_ref()
-                    .map(|id| id.as_str().to_string())
-            })
+            .filter_map(|record| record.submission_id.as_ref().map(|id| id.as_str().to_string()))
             .collect();
 
         assert_eq!(submission_ids.len(), 1);
+        assert!(records.iter().any(|record| matches!(record.event, ThreadEvent::TurnStarted(_))
+            && record.submission_id.is_some()));
         assert!(
             records
                 .iter()
-                .any(|record| matches!(record.event, ThreadEvent::TurnStarted(_))
+                .any(|record| matches!(record.event, ThreadEvent::TurnCompleted(_))
                     && record.submission_id.is_some())
         );
-        assert!(records.iter().any(
-            |record| matches!(record.event, ThreadEvent::TurnCompleted(_))
-                && record.submission_id.is_some()
-        ));
     }
 
     #[test]

@@ -30,10 +30,7 @@ mod tests {
         // for full example with mocked dependencies.
 
         // Step 1: Create execution config
-        let config = ExecutionConfig {
-            timeout_secs: 5,
-            ..Default::default()
-        };
+        let config = ExecutionConfig { timeout_secs: 5, ..Default::default() };
 
         // Verify config is created properly
         assert_eq!(config.timeout_secs, 5);
@@ -77,10 +74,7 @@ result = {"count": len(filtered), "items": filtered}
         let temp_dir = tempfile::TempDir::new().unwrap();
 
         // Step 1: Execution config for testing
-        let config = ExecutionConfig {
-            timeout_secs: 5,
-            ..Default::default()
-        };
+        let config = ExecutionConfig { timeout_secs: 5, ..Default::default() };
 
         // Verify config is valid
         assert_eq!(config.timeout_secs, 5);
@@ -164,10 +158,7 @@ result = {"test": double_value(21)}
         // Instead of returning all 1000 items to the model,
         // the code processes locally and returns only aggregated results
 
-        let config = ExecutionConfig {
-            timeout_secs: 5,
-            ..Default::default()
-        };
+        let config = ExecutionConfig { timeout_secs: 5, ..Default::default() };
 
         // In real usage with actual executor setup:
         // let executor = CodeExecutor::new(language, client, workspace);
@@ -210,10 +201,7 @@ result = stats
         // Agents can write code with try/except blocks to handle errors
         // without repeated model calls
 
-        let config = ExecutionConfig {
-            timeout_secs: 5,
-            ..Default::default()
-        };
+        let config = ExecutionConfig { timeout_secs: 5, ..Default::default() };
 
         // In real usage:
         // let executor = CodeExecutor::new(language, client, workspace);
@@ -290,10 +278,7 @@ try:
         // Demonstrates simple data transformation pattern
         // Transform data locally and return only the needed results
 
-        let config = ExecutionConfig {
-            timeout_secs: 5,
-            ..Default::default()
-        };
+        let config = ExecutionConfig { timeout_secs: 5, ..Default::default() };
 
         // In real usage:
         // let executor = CodeExecutor::new(language, client, workspace);
@@ -315,10 +300,7 @@ result = {"original_count": len(data), "transformed": transformed}
     fn test_javascript_execution() {
         // Demonstrates JavaScript code execution support
 
-        let config = ExecutionConfig {
-            timeout_secs: 5,
-            ..Default::default()
-        };
+        let config = ExecutionConfig { timeout_secs: 5, ..Default::default() };
 
         // In real usage:
         // let executor = CodeExecutor::new(Language::JavaScript, client, workspace);

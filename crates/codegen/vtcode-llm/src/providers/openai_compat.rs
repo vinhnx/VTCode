@@ -140,10 +140,7 @@ pub(crate) trait OpenAiCompatSpec: Sized + Send + Sync + 'static {
         payload: &mut Map<String, Value>,
     ) {
         if let Some(choice) = &request.tool_choice {
-            payload.insert(
-                "tool_choice".to_owned(),
-                choice.to_provider_format(Self::KEY),
-            );
+            payload.insert("tool_choice".to_owned(), choice.to_provider_format(Self::KEY));
         }
     }
 
@@ -322,10 +319,8 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
             S::SUPPRESS_SAMPLING_WHEN_REASONING && S::reasoning_enabled(self, request);
         if !suppress_sampling {
             if let Some(temperature) = request.temperature {
-                payload.insert(
-                    "temperature".to_owned(),
-                    Value::Number(S::float_number(temperature)?),
-                );
+                payload
+                    .insert("temperature".to_owned(), Value::Number(S::float_number(temperature)?));
             }
             if S::INCLUDE_TOP_P
                 && let Some(top_p) = request.top_p
@@ -347,10 +342,8 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         if let Some(tools) = &request.tools {
             let key = Arc::as_ptr(tools) as usize;
             let serialized_tools = {
-                let mut cache = self
-                    .tools_cache
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let mut cache =
+                    self.tools_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
                 match cache.get(&key) {
                     Some((arc, serialized)) if Arc::ptr_eq(arc, tools) => Arc::clone(serialized),
                     _ => {
@@ -363,10 +356,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
                 }
             };
             if !serialized_tools.is_empty() {
-                payload.insert(
-                    "tools".to_owned(),
-                    Value::Array(serialized_tools.as_ref().clone()),
-                );
+                payload.insert("tools".to_owned(), Value::Array(serialized_tools.as_ref().clone()));
             }
         }
 
@@ -431,10 +421,7 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
     }
 
     pub(crate) fn supported_models(&self) -> Vec<String> {
-        S::listed_models(self)
-            .iter()
-            .map(|model| model.to_string())
-            .collect()
+        S::listed_models(self).iter().map(|model| model.to_string()).collect()
     }
 
     pub(crate) fn validate(&self, request: &LLMRequest) -> Result<(), LLMError> {

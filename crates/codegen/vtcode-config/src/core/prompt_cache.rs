@@ -420,9 +420,7 @@ pub struct MoonshotPromptCacheSettings {
 
 impl Default for MoonshotPromptCacheSettings {
     fn default() -> Self {
-        Self {
-            enabled: default_moonshot_enabled(),
-        }
+        Self { enabled: default_moonshot_enabled() }
     }
 }
 
@@ -457,9 +455,7 @@ pub struct ZaiPromptCacheSettings {
 
 impl Default for ZaiPromptCacheSettings {
     fn default() -> Self {
-        Self {
-            enabled: default_zai_enabled(),
-        }
+        Self { enabled: default_zai_enabled() }
     }
 }
 
@@ -551,10 +547,7 @@ fn resolve_path(input: &str, workspace_root: Option<&Path>) -> PathBuf {
         return resolve_default_cache_dir();
     }
 
-    if let Some(stripped) = trimmed
-        .strip_prefix("~/")
-        .or_else(|| trimmed.strip_prefix("~\\"))
-    {
+    if let Some(stripped) = trimmed.strip_prefix("~/").or_else(|| trimmed.strip_prefix("~\\")) {
         if let Some(home) = dirs::home_dir() {
             return home.join(stripped);
         }
@@ -610,14 +603,8 @@ mod tests {
             prompt_cache::DEFAULT_CACHE_FRIENDLY_PROMPT_SHAPING
         );
         assert!(cfg.providers.openai.enabled);
-        assert_eq!(
-            cfg.providers.openai.min_prefix_tokens,
-            prompt_cache::OPENAI_MIN_PREFIX_TOKENS
-        );
-        assert_eq!(
-            cfg.providers.openai.prompt_cache_key_mode,
-            OpenAIPromptCacheKeyMode::Session
-        );
+        assert_eq!(cfg.providers.openai.min_prefix_tokens, prompt_cache::OPENAI_MIN_PREFIX_TOKENS);
+        assert_eq!(cfg.providers.openai.prompt_cache_key_mode, OpenAIPromptCacheKeyMode::Session);
         assert_eq!(
             cfg.providers.anthropic.extended_ttl_seconds,
             Some(prompt_cache::ANTHROPIC_EXTENDED_TTL_SECONDS)
@@ -661,10 +648,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(
-            cfg.prompt_cache_retention,
-            Some(PromptCacheRetention::InMemory)
-        );
+        assert_eq!(cfg.prompt_cache_retention, Some(PromptCacheRetention::InMemory));
 
         let cfg2: OpenAIPromptCacheSettings = toml::from_str(
             r#"
@@ -683,10 +667,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        assert_eq!(
-            cfg.prompt_cache_retention,
-            Some(PromptCacheRetention::Unknown)
-        );
+        assert_eq!(cfg.prompt_cache_retention, Some(PromptCacheRetention::Unknown));
     }
 
     #[test]
@@ -706,10 +687,7 @@ prompt_cache_key_mode = "off"
         )
         .expect("prompt cache config should parse");
 
-        assert_eq!(
-            parsed.providers.openai.prompt_cache_key_mode,
-            OpenAIPromptCacheKeyMode::Off
-        );
+        assert_eq!(parsed.providers.openai.prompt_cache_key_mode, OpenAIPromptCacheKeyMode::Off);
     }
 
     #[test]
@@ -741,10 +719,7 @@ prompt_cache_key_mode = "off"
 
     #[test]
     fn provider_enablement_respects_global_and_provider_flags() {
-        let mut cfg = PromptCachingConfig {
-            enabled: true,
-            ..PromptCachingConfig::default()
-        };
+        let mut cfg = PromptCachingConfig { enabled: true, ..PromptCachingConfig::default() };
         cfg.providers.openai.enabled = true;
         assert!(cfg.is_provider_enabled("openai"));
 
@@ -754,10 +729,7 @@ prompt_cache_key_mode = "off"
 
     #[test]
     fn provider_enablement_handles_aliases_and_modes() {
-        let mut cfg = PromptCachingConfig {
-            enabled: true,
-            ..PromptCachingConfig::default()
-        };
+        let mut cfg = PromptCachingConfig { enabled: true, ..PromptCachingConfig::default() };
 
         cfg.providers.anthropic.enabled = true;
         assert!(cfg.is_provider_enabled("minimax"));
@@ -790,10 +762,7 @@ prompt_cache_key_mode = "off"
 
     #[test]
     fn gap_threshold_respects_disable_switches() {
-        let cfg = PromptCachingConfig {
-            gap_warning_enabled: false,
-            ..Default::default()
-        };
+        let cfg = PromptCachingConfig { gap_warning_enabled: false, ..Default::default() };
         assert_eq!(cfg.gap_threshold_secs("anthropic"), None);
 
         let mut cfg = PromptCachingConfig::default();
@@ -801,10 +770,7 @@ prompt_cache_key_mode = "off"
         assert_eq!(cfg.gap_threshold_secs("anthropic"), None);
         assert_eq!(cfg.gap_threshold_secs("minimax"), None);
 
-        let cfg = PromptCachingConfig {
-            enabled: false,
-            ..Default::default()
-        };
+        let cfg = PromptCachingConfig { enabled: false, ..Default::default() };
         assert_eq!(cfg.gap_threshold_secs("openai"), None);
     }
 

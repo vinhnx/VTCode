@@ -34,26 +34,14 @@ mod capabilities_tests {
 
     #[test]
     fn test_supports_vision() {
-        assert!(supports_vision(
-            models::CLAUDE_SONNET_4_6,
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(supports_vision(
-            "claude-3-opus",
-            models::anthropic::DEFAULT_MODEL
-        ));
-        assert!(supports_vision(
-            "claude-4-sonnet",
-            models::anthropic::DEFAULT_MODEL
-        ));
+        assert!(supports_vision(models::CLAUDE_SONNET_4_6, models::anthropic::DEFAULT_MODEL));
+        assert!(supports_vision("claude-3-opus", models::anthropic::DEFAULT_MODEL));
+        assert!(supports_vision("claude-4-sonnet", models::anthropic::DEFAULT_MODEL));
     }
 
     #[test]
     fn test_supports_effort() {
-        assert!(supports_effort(
-            models::CLAUDE_SONNET_4_6,
-            models::anthropic::DEFAULT_MODEL
-        ));
+        assert!(supports_effort(models::CLAUDE_SONNET_4_6, models::anthropic::DEFAULT_MODEL));
     }
 
     #[test]
@@ -399,22 +387,10 @@ mod response_parser_tests {
 
     #[test]
     fn test_parse_finish_reason() {
-        assert!(matches!(
-            parse_finish_reason("end_turn"),
-            FinishReason::Stop
-        ));
-        assert!(matches!(
-            parse_finish_reason("max_tokens"),
-            FinishReason::Length
-        ));
-        assert!(matches!(
-            parse_finish_reason("tool_use"),
-            FinishReason::ToolCalls
-        ));
-        assert!(matches!(
-            parse_finish_reason("refusal"),
-            FinishReason::Refusal
-        ));
+        assert!(matches!(parse_finish_reason("end_turn"), FinishReason::Stop));
+        assert!(matches!(parse_finish_reason("max_tokens"), FinishReason::Length));
+        assert!(matches!(parse_finish_reason("tool_use"), FinishReason::ToolCalls));
+        assert!(matches!(parse_finish_reason("refusal"), FinishReason::Refusal));
         assert!(matches!(
             parse_finish_reason("model_context_window_exceeded"),
             FinishReason::Length
@@ -456,10 +432,7 @@ mod response_parser_tests {
 
         let response =
             parse_response(response_json, "claude-haiku-4-5".to_string()).expect("parse response");
-        let reasoning = response
-            .reasoning
-            .as_deref()
-            .expect("expected reasoning content");
+        let reasoning = response.reasoning.as_deref().expect("expected reasoning content");
         assert!(reasoning.contains("Let me think"));
         assert_eq!(
             response.reasoning_details,
@@ -497,10 +470,7 @@ mod response_parser_tests {
             parse_response(response_json, "claude-haiku-4-5".to_string()).expect("parse response");
         let tool_calls = response.tool_calls.as_ref().expect("expected tool calls");
         assert_eq!(tool_calls.len(), 1);
-        let function = tool_calls[0]
-            .function
-            .as_ref()
-            .expect("expected function call");
+        let function = tool_calls[0].function.as_ref().expect("expected function call");
         assert_eq!(function.name, "get_weather");
     }
 }
@@ -655,10 +625,7 @@ mod request_builder_tests {
         let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
 
         assert_eq!(payload["output_config"]["format"]["type"], "json_schema");
-        assert_eq!(
-            payload["output_config"]["format"]["schema"]["required"],
-            json!(["answer"])
-        );
+        assert_eq!(payload["output_config"]["format"]["schema"]["required"], json!(["answer"]));
         assert!(payload.get("tools").is_none());
     }
 
@@ -776,11 +743,7 @@ mod request_builder_tests {
         // qualifying message must NOT be anchored.
         assert!(payload["tools"][0]["cache_control"].is_object());
         assert!(payload["system"][0]["cache_control"].is_object());
-        assert!(
-            payload["messages"][0]["content"][0]
-                .get("cache_control")
-                .is_none()
-        );
+        assert!(payload["messages"][0]["content"][0].get("cache_control").is_none());
         assert!(payload["messages"][1]["content"][0]["cache_control"].is_object());
         assert!(payload["messages"][2]["content"][0]["cache_control"].is_object());
     }
@@ -824,16 +787,8 @@ mod request_builder_tests {
         // Tools and system exhaust the budget; no message gets an anchor.
         assert!(payload["tools"][0]["cache_control"].is_object());
         assert!(payload["system"][0]["cache_control"].is_object());
-        assert!(
-            payload["messages"][0]["content"][0]
-                .get("cache_control")
-                .is_none()
-        );
-        assert!(
-            payload["messages"][1]["content"][0]
-                .get("cache_control")
-                .is_none()
-        );
+        assert!(payload["messages"][0]["content"][0].get("cache_control").is_none());
+        assert!(payload["messages"][1]["content"][0].get("cache_control").is_none());
     }
 
     #[test]
@@ -874,11 +829,7 @@ mod request_builder_tests {
 
         // Only one breakpoint is left after tools+system; it must go to the
         // newest qualifying message (the primary rolling anchor).
-        assert!(
-            payload["messages"][0]["content"][0]
-                .get("cache_control")
-                .is_none()
-        );
+        assert!(payload["messages"][0]["content"][0].get("cache_control").is_none());
         assert!(payload["messages"][1]["content"][0]["cache_control"].is_object());
     }
 
@@ -906,12 +857,7 @@ mod request_builder_tests {
 
         assert!(payload["system"].is_array());
         assert_eq!(payload["system"][0]["cache_control"]["ttl"], "1h");
-        assert!(
-            payload["system"][0]["text"]
-                .as_str()
-                .unwrap_or("")
-                .contains("stable system")
-        );
+        assert!(payload["system"][0]["text"].as_str().unwrap_or("").contains("stable system"));
         assert!(
             payload["system"][1]["text"]
                 .as_str()
@@ -977,10 +923,7 @@ mod request_builder_tests {
         let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
 
         assert_eq!(payload["cache_control"]["ttl"], "1h");
-        assert_eq!(
-            payload["messages"][0]["content"][0]["cache_control"]["ttl"],
-            "1h"
-        );
+        assert_eq!(payload["messages"][0]["content"][0]["cache_control"]["ttl"], "1h");
     }
 
     #[test]
@@ -1020,10 +963,7 @@ mod request_builder_tests {
                 .unwrap_or("")
                 .contains("Previous turn already completed tool execution")
         );
-        assert_eq!(
-            payload["messages"].as_array().map_or(0, |msgs| msgs.len()),
-            1
-        );
+        assert_eq!(payload["messages"].as_array().map_or(0, |msgs| msgs.len()), 1);
         assert_eq!(payload["messages"][0]["role"], "user");
         assert!(payload["system"][1].get("cache_control").is_none());
     }
@@ -1233,10 +1173,7 @@ mod request_builder_tests {
 
         let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
 
-        assert_eq!(
-            payload["tools"][0]["allowed_callers"],
-            json!(["code_execution_20250825"])
-        );
+        assert_eq!(payload["tools"][0]["allowed_callers"], json!(["code_execution_20250825"]));
     }
 
     #[test]

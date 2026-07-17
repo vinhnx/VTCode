@@ -15,15 +15,9 @@ pub fn reward_from_eval_report(case: &serde_json::Value) -> Option<RewardSignal>
             let g = g.trim().to_ascii_lowercase();
             g == "pass" || g == "true" || g == "success" || g == "1"
         }
-        None => case
-            .get("success")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false),
+        None => case.get("success").and_then(serde_json::Value::as_bool).unwrap_or(false),
     };
-    let latency_secs = case
-        .get("latency")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(0.0);
+    let latency_secs = case.get("latency").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
     let cost_usd = case
         .get("cost_usd")
         .and_then(serde_json::Value::as_f64)
@@ -33,11 +27,7 @@ pub fn reward_from_eval_report(case: &serde_json::Value) -> Option<RewardSignal>
                 .and_then(serde_json::Value::as_f64)
         })
         .unwrap_or(0.0);
-    Some(RewardSignal {
-        success,
-        latency_secs,
-        cost_usd,
-    })
+    Some(RewardSignal { success, latency_secs, cost_usd })
 }
 
 #[cfg(test)]

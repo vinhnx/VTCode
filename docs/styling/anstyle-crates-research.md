@@ -64,7 +64,7 @@ let style = anstyle_ls::parse("34;03").unwrap();
 
 ### Existing Approach
 
-**Location**: `vtcode-core/src/ui/tui/style.rs`, `vtcode-core/src/ui/theme.rs`
+**Location**: `crates/codegen/vtcode-core/src/ui/tui/style.rs`, `crates/codegen/vtcode-core/src/ui/theme.rs`
 
 **Current Stack**:
 1. **anstyle** (v1.0) - Already integrated for ANSI style representation
@@ -114,7 +114,7 @@ anstyle-query = "1.0"
 
 ### 2. Expand InlineTextStyle to Support Full Effects
 
-**Current** (`vtcode-core/src/ui/tui/types.rs`):
+**Current** (`crates/codegen/vtcode-core/src/ui/tui/types.rs`):
 ```rust
 pub struct InlineTextStyle {
     pub color: Option<AnsiColorEnum>,
@@ -158,7 +158,7 @@ impl InlineTextStyle {
 
 ### 3. Create a Theme Configuration Parser
 
-**New Module**: `vtcode-core/src/ui/tui/theme_parser.rs`
+**New Module**: `crates/codegen/vtcode-core/src/ui/tui/theme_parser.rs`
 
 ```rust
 use anstyle_git;
@@ -202,7 +202,7 @@ pub enum StyleDialect {
 
 **Use Case**: When displaying files in the file picker modal, respect system `LS_COLORS` preferences
 
-**Location**: `vtcode-core/src/ui/tui/session/file_palette.rs`
+**Location**: `crates/codegen/vtcode-core/src/ui/tui/session/file_palette.rs`
 
 ```rust
 use anstyle_ls;
@@ -247,7 +247,7 @@ impl FileColorizer {
 
 **Use Case**: Parse `.git/config` color settings for diff/status visualization
 
-**Location**: `vtcode-core/src/ui/diff_renderer.rs`
+**Location**: `crates/codegen/vtcode-core/src/ui/diff_renderer.rs`
 
 ```rust
 use anstyle_git;
@@ -293,7 +293,7 @@ impl GitColorConfig {
 
 ### 6. Update convert_style Function
 
-**Location**: `vtcode-core/src/ui/tui/style.rs`
+**Location**: `crates/codegen/vtcode-core/src/ui/tui/style.rs`
 
 ```rust
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle};
@@ -319,7 +319,7 @@ pub fn convert_style(style: AnsiStyle) -> InlineTextStyle {
 
 ### 7. Update ratatui_style_from_inline
 
-**Location**: `vtcode-core/src/ui/tui/style.rs`
+**Location**: `crates/codegen/vtcode-core/src/ui/tui/style.rs`
 
 ```rust
 use anstyle::Effects;
@@ -403,11 +403,11 @@ pub fn ratatui_style_from_inline(
 
 ## Related Files
 
-- `vtcode-core/src/ui/tui/style.rs` - Style conversion functions
-- `vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
-- `vtcode-core/src/ui/theme.rs` - Theme palette management
-- `vtcode-core/src/ui/tui/session/file_palette.rs` - File listing UI
-- `vtcode-core/src/ui/diff_renderer.rs` - Diff visualization
+- `crates/codegen/vtcode-core/src/ui/tui/style.rs` - Style conversion functions
+- `crates/codegen/vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
+- `crates/codegen/vtcode-core/src/ui/theme.rs` - Theme palette management
+- `crates/codegen/vtcode-core/src/ui/tui/session/file_palette.rs` - File listing UI
+- `crates/codegen/vtcode-core/src/ui/diff_renderer.rs` - Diff visualization
 - `vtcode-core/Cargo.toml` - Dependencies
 
 ## References

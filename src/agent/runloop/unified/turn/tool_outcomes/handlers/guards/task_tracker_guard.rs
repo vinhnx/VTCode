@@ -22,10 +22,7 @@ pub(crate) fn enforce_duplicate_task_tracker_create_guard<'a>(
 ) -> Option<ValidationResult> {
     let signature = task_tracker_create_signature(canonical_tool_name, effective_args)?;
 
-    if ctx
-        .harness_state
-        .record_task_tracker_create_signature(signature)
-    {
+    if ctx.harness_state.record_task_tracker_create_signature(signature) {
         return None;
     }
 

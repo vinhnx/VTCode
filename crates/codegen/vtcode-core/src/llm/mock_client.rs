@@ -21,10 +21,7 @@ pub struct StaticResponseClient {
 impl StaticResponseClient {
     /// Create a mock client for the provided model.
     pub fn new(model: impl Into<String>) -> Self {
-        Self {
-            model: model.into(),
-            queue: VecDeque::new(),
-        }
+        Self { model: model.into(), queue: VecDeque::new() }
     }
 
     /// Queue a successful response. Responses are returned in FIFO order.

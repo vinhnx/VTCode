@@ -83,10 +83,7 @@ impl EditorContextSnapshot {
             return Ok(None);
         };
         let snapshot: Self = serde_json::from_str(&content).with_context(|| {
-            format!(
-                "failed to parse IDE context JSON snapshot at {}",
-                path.display()
-            )
+            format!("failed to parse IDE context JSON snapshot at {}", path.display())
         })?;
         Ok(Some(snapshot.normalized()))
     }
@@ -124,9 +121,7 @@ impl EditorContextSnapshot {
     }
 
     pub fn active_display_language(&self) -> Option<String> {
-        self.active_file
-            .as_ref()
-            .and_then(EditorFileContext::display_language)
+        self.active_file.as_ref().and_then(EditorFileContext::display_language)
     }
 
     pub fn has_explicit_selection(&self) -> bool {
@@ -153,15 +148,10 @@ impl EditorContextSnapshot {
             }
         }
 
-        if let Some(selection) = file
-            .selection
-            .as_ref()
-            .filter(|selection| selection.has_explicit_selection())
+        if let Some(selection) =
+            file.selection.as_ref().filter(|selection| selection.has_explicit_selection())
         {
-            parts.push(format!(
-                "Sel {}-{}",
-                selection.range.start_line, selection.range.end_line
-            ));
+            parts.push(format!("Sel {}-{}", selection.range.start_line, selection.range.end_line));
         }
 
         if parts.is_empty() {
@@ -180,10 +170,7 @@ impl EditorContextSnapshot {
         let active_path = file.display_path(workspace_root, self.workspace_root.as_deref());
         let mut lines = Vec::new();
         lines.push("## Active Editor Context".to_string());
-        lines.push(format!(
-            "- IDE family: {}",
-            provider_family_label(self.provider_family)
-        ));
+        lines.push(format!("- IDE family: {}", provider_family_label(self.provider_family)));
         lines.push(format!("- Active file: {active_path}"));
 
         if let Some(language) = file.display_language() {
@@ -205,10 +192,8 @@ impl EditorContextSnapshot {
             lines.push(format!("- Buffer state: {}", states.join(", ")));
         }
 
-        if let Some(selection) = file
-            .selection
-            .as_ref()
-            .filter(|selection| selection.has_explicit_selection())
+        if let Some(selection) =
+            file.selection.as_ref().filter(|selection| selection.has_explicit_selection())
         {
             lines.push(format!(
                 "- Selection: {}:{}-{}:{}",
@@ -363,10 +348,7 @@ fn parse_legacy_markdown_snapshot(markdown: &str) -> Option<EditorContextSnapsho
     let mut active_file = None;
     let mut visible_editors = Vec::new();
 
-    for section in markdown
-        .split("\n### ")
-        .filter(|section| !section.trim().is_empty())
-    {
+    for section in markdown.split("\n### ").filter(|section| !section.trim().is_empty()) {
         let normalized = if section.starts_with("### ") {
             section.to_string()
         } else {
@@ -436,10 +418,8 @@ fn parse_legacy_fence_language(section: &str) -> Option<String> {
 
 fn parse_line_range_from_details(details: &str) -> Option<EditorLineRange> {
     let marker = "lines ";
-    let line_token = details
-        .split('•')
-        .map(str::trim)
-        .find_map(|entry| entry.strip_prefix(marker))?;
+    let line_token =
+        details.split('•').map(str::trim).find_map(|entry| entry.strip_prefix(marker))?;
 
     parse_line_range(line_token)
 }
@@ -560,10 +540,7 @@ export const value = 1;
         assert_eq!(snapshot.editor_name.as_deref(), Some("VS Code"));
         assert_eq!(active.path, "src/app.tsx");
         assert_eq!(active.language_id.as_deref(), Some("typescriptreact"));
-        assert_eq!(
-            active.line_range,
-            Some(EditorLineRange { start: 12, end: 18 })
-        );
+        assert_eq!(active.line_range, Some(EditorLineRange { start: 12, end: 18 }));
         assert!(active.dirty);
         assert!(active.truncated);
         assert_eq!(snapshot.visible_editors.len(), 1);
@@ -620,9 +597,7 @@ export const value = 1;
             ],
         };
 
-        let prompt = snapshot
-            .prompt_block(Path::new("/workspace"), true)
-            .expect("prompt");
+        let prompt = snapshot.prompt_block(Path::new("/workspace"), true).expect("prompt");
 
         assert!(prompt.contains("## Active Editor Context"));
         assert!(prompt.contains("- Active file: src/main.rs"));
@@ -660,12 +635,8 @@ export const value = 1;
             visible_editors: Vec::new(),
         };
 
-        let header = snapshot
-            .header_summary(Path::new("/workspace"))
-            .expect("header summary");
-        let prompt = snapshot
-            .prompt_block(Path::new("/workspace"), true)
-            .expect("prompt block");
+        let header = snapshot.header_summary(Path::new("/workspace")).expect("header summary");
+        let prompt = snapshot.prompt_block(Path::new("/workspace"), true).expect("prompt block");
 
         assert!(!header.contains("Sel "));
         assert!(!prompt.contains("- Selection:"));

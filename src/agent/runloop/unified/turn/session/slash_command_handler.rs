@@ -44,8 +44,7 @@ pub(crate) async fn handle_input_commands(
             }));
         }
         "help" => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Commands: exit, help")?;
+            ctx.renderer.line(MessageStyle::Info, "Commands: exit, help")?;
             return Ok(CommandProcessingResult::ContinueLoop);
         }
         input if input.starts_with('/') && !is_absolute_image_path_input(input) => {
@@ -193,9 +192,7 @@ async fn handle_session_language_command(
                     "Scheduled session task {} ({}) for {}.",
                     summary.id,
                     summary.name,
-                    run_at
-                        .with_timezone(&chrono::Local)
-                        .format("%Y-%m-%d %H:%M:%S")
+                    run_at.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S")
                 ),
             )?;
             Ok(Some(CommandProcessingResult::ContinueLoop))
@@ -203,18 +200,14 @@ async fn handle_session_language_command(
         SessionLanguageCommand::ListTasks => {
             let tasks = ctx.tool_registry.list_session_tasks().await;
             if tasks.is_empty() {
-                ctx.renderer
-                    .line(MessageStyle::Info, "No session scheduled tasks.")?;
+                ctx.renderer.line(MessageStyle::Info, "No session scheduled tasks.")?;
                 return Ok(Some(CommandProcessingResult::ContinueLoop));
             }
             for task in tasks {
                 let next_run = task
                     .next_run_at
                     .map(|value| {
-                        value
-                            .with_timezone(&chrono::Local)
-                            .format("%Y-%m-%d %H:%M:%S")
-                            .to_string()
+                        value.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string()
                     })
                     .unwrap_or_else(|| "none".to_string());
                 let status = task.last_status.unwrap_or_else(|| "never_run".to_string());
@@ -234,10 +227,7 @@ async fn handle_session_language_command(
             };
             ctx.renderer.line(
                 MessageStyle::Info,
-                &format!(
-                    "Cancelled session scheduled task {} ({}).",
-                    task.id, task.name
-                ),
+                &format!("Cancelled session scheduled task {} ({}).", task.id, task.name),
             )?;
             Ok(Some(CommandProcessingResult::ContinueLoop))
         }
@@ -313,10 +303,7 @@ fn leading_path_token(input: &str) -> Option<String> {
     } else {
         let mut idx = start;
         while idx < input.len() {
-            let ch = input[idx..]
-                .chars()
-                .next()
-                .expect("idx is at valid UTF-8 boundary");
+            let ch = input[idx..].chars().next().expect("idx is at valid UTF-8 boundary");
             if ch.is_ascii_whitespace() {
                 end = idx;
                 break;
@@ -421,9 +408,7 @@ mod tests {
 
     #[test]
     fn absolute_non_image_path_is_still_slash_command_candidate() {
-        assert!(!is_absolute_image_path_input(
-            "/Users/vinhnguyenxuan/Desktop/notes.txt"
-        ));
+        assert!(!is_absolute_image_path_input("/Users/vinhnguyenxuan/Desktop/notes.txt"));
     }
 
     #[test]
@@ -442,9 +427,7 @@ mod tests {
     #[test]
     fn regex_does_not_include_trailing_text_in_match() {
         let input = "/Users/foo/Desktop/Screenshot 2026-02-06 at 3.39.48 PM.png can you see";
-        let captures: Vec<_> = super::ABSOLUTE_IMAGE_PATH_REGEX
-            .captures_iter(input)
-            .collect();
+        let captures: Vec<_> = super::ABSOLUTE_IMAGE_PATH_REGEX.captures_iter(input).collect();
         assert_eq!(captures.len(), 1, "Should match exactly one image path");
         let matched = captures[0].get(1).unwrap().as_str();
         assert!(

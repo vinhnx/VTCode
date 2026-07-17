@@ -89,12 +89,7 @@ impl ToolExecutionError {
         category: ErrorCategory,
         message: impl Into<String>,
     ) -> Self {
-        Self::from_parts(
-            tool_name.into(),
-            category,
-            ToolErrorType::from(category),
-            message.into(),
-        )
+        Self::from_parts(tool_name.into(), category, ToolErrorType::from(category), message.into())
     }
 
     fn from_parts(
@@ -199,36 +194,28 @@ impl ToolExecutionError {
 
     #[must_use]
     pub fn with_surface(mut self, surface: impl Into<String>) -> Self {
-        let debug = self
-            .debug_context
-            .get_or_insert_with(ToolErrorDebugContext::default);
+        let debug = self.debug_context.get_or_insert_with(ToolErrorDebugContext::default);
         debug.surface = Some(surface.into());
         self
     }
 
     #[must_use]
     pub fn with_attempt(mut self, attempt: u32) -> Self {
-        let debug = self
-            .debug_context
-            .get_or_insert_with(ToolErrorDebugContext::default);
+        let debug = self.debug_context.get_or_insert_with(ToolErrorDebugContext::default);
         debug.attempt = Some(attempt);
         self
     }
 
     #[must_use]
     pub fn with_invocation_id(mut self, invocation_id: impl Into<String>) -> Self {
-        let debug = self
-            .debug_context
-            .get_or_insert_with(ToolErrorDebugContext::default);
+        let debug = self.debug_context.get_or_insert_with(ToolErrorDebugContext::default);
         debug.invocation_id = Some(invocation_id.into());
         self
     }
 
     #[must_use]
     pub fn with_debug_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        let debug = self
-            .debug_context
-            .get_or_insert_with(ToolErrorDebugContext::default);
+        let debug = self.debug_context.get_or_insert_with(ToolErrorDebugContext::default);
         debug.metadata.push((key.into(), value.into()));
         self
     }
@@ -251,25 +238,19 @@ impl ToolExecutionError {
 
     #[must_use]
     pub fn attempts_made(&self) -> Option<u32> {
-        self.debug_context
-            .as_ref()
-            .and_then(|context| context.attempt)
+        self.debug_context.as_ref().and_then(|context| context.attempt)
     }
 
     #[must_use]
     pub fn retry_summary(&self) -> Option<String> {
-        let retry_count = self
-            .attempts_made()
-            .map(|attempts| attempts.saturating_sub(1))
-            .unwrap_or(0);
+        let retry_count =
+            self.attempts_made().map(|attempts| attempts.saturating_sub(1)).unwrap_or(0);
 
         let mut summary = if matches!(self.category, ErrorCategory::CircuitOpen) {
             Some("The service is pausing new calls after repeated transient failures.".to_string())
         } else if retry_count > 0 {
             let suffix = if retry_count == 1 { "" } else { "s" };
-            Some(format!(
-                "Retried {retry_count} time{suffix} before failing."
-            ))
+            Some(format!("Retried {retry_count} time{suffix} before failing."))
         } else {
             None
         };
@@ -353,10 +334,8 @@ impl ToolExecutionError {
             // Last-resort fallback: pull out the minimum fields needed to
             // construct a usable error. This branch only fires when the
             // payload is malformed (e.g. wrong type for `category`).
-            let tool_name = error_payload
-                .get("tool_name")
-                .and_then(Value::as_str)
-                .unwrap_or("tool");
+            let tool_name =
+                error_payload.get("tool_name").and_then(Value::as_str).unwrap_or("tool");
             let message = error_payload
                 .get("message")
                 .and_then(Value::as_str)
@@ -381,11 +360,7 @@ impl ToolExecutionError {
 
         error_payload.as_str().map(|message| {
             let category = vtcode_commons::classify_error_message(message);
-            Self::new(
-                "tool".to_string(),
-                ToolErrorType::from(category),
-                message.to_string(),
-            )
+            Self::new("tool".to_string(), ToolErrorType::from(category), message.to_string())
         })
     }
 
@@ -590,10 +565,7 @@ mod tests {
         // Guarantees `with_retry_decision` never changes error_type unless the
         // decision actually recategorized the error.
         for error_type in ALL_TOOL_ERROR_TYPES {
-            assert_eq!(
-                ToolErrorType::from(ErrorCategory::from(error_type)),
-                error_type
-            );
+            assert_eq!(ToolErrorType::from(ErrorCategory::from(error_type)), error_type);
         }
     }
 
@@ -603,10 +575,7 @@ mod tests {
         let structured =
             ToolExecutionError::from_anyhow("grep_search", &err, 0, false, false, None);
         assert_eq!(structured.category, ErrorCategory::RateLimit);
-        assert_eq!(
-            structured.error_type,
-            ToolErrorType::from(structured.category)
-        );
+        assert_eq!(structured.error_type, ToolErrorType::from(structured.category));
     }
 
     #[test]

@@ -13,14 +13,14 @@ echo ""
 
 # Step 1: Check that optimized constants are in place
 echo "1️⃣  Checking cache configuration constants..."
-if grep -q "Duration::from_secs(120)" "$PROJECT_ROOT/vtcode-core/src/cache/mod.rs"; then
+if grep -q "Duration::from_secs(120)" "$PROJECT_ROOT/crates/codegen/vtcode-core/src/cache/mod.rs"; then
     echo "   v Cache TTL optimized to 120s (2 minutes)"
 else
     echo "   x Cache TTL not optimized"
     exit 1
 fi
 
-if grep -q "DEFAULT_MAX_CACHE_CAPACITY.*1_000" "$PROJECT_ROOT/vtcode-core/src/cache/mod.rs"; then
+if grep -q "DEFAULT_MAX_CACHE_CAPACITY.*1_000" "$PROJECT_ROOT/crates/codegen/vtcode-core/src/cache/mod.rs"; then
     echo "   v Cache capacity limited to 1,000 entries"
 else
     echo "   x Cache capacity not properly limited"
@@ -30,7 +30,7 @@ fi
 # Step 2: Check parse cache optimization
 echo ""
 echo "2️⃣  Checking parse cache optimization..."
-if grep -q "Self::new(50, 120" "$PROJECT_ROOT/vtcode-core/src/tools/tree_sitter/parse_cache.rs"; then
+if grep -q "Self::new(50, 120" "$PROJECT_ROOT/crates/codegen/vtcode-core/src/tools/tree_sitter/parse_cache.rs"; then
     echo "   v Parse cache reduced to 50 entries with 120s TTL"
 else
     echo "   x Parse cache not optimized"
@@ -40,7 +40,7 @@ fi
 # Step 3: Check PTY scrollback optimization
 echo ""
 echo "3️⃣  Checking PTY scrollback optimization..."
-if grep -q "25_000_000" "$PROJECT_ROOT/vtcode-config/src/root.rs"; then
+if grep -q "25_000_000" "$PROJECT_ROOT/crates/codegen/vtcode-config/src/root.rs"; then
     echo "   v PTY max scrollback reduced to 25MB"
 else
     echo "   x PTY scrollback not optimized"
@@ -50,14 +50,14 @@ fi
 # Step 4: Check transcript cache width limiting
 echo ""
 echo "4️⃣  Checking transcript cache optimization..."
-if grep -q "max_cached_widths: usize" "$PROJECT_ROOT/vtcode-core/src/ui/tui/session/transcript.rs"; then
+if grep -q "max_cached_widths: usize" "$PROJECT_ROOT/crates/codegen/vtcode-core/src/ui/tui/session/transcript.rs"; then
     echo "   v Transcript cache width limit implemented"
 else
     echo "   x Transcript cache not optimized"
     exit 1
 fi
 
-if grep -q "max_cached_widths: 3" "$PROJECT_ROOT/vtcode-core/src/ui/tui/session/transcript.rs"; then
+if grep -q "max_cached_widths: 3" "$PROJECT_ROOT/crates/codegen/vtcode-core/src/ui/tui/session/transcript.rs"; then
     echo "   v Transcript width limit set to 3"
 else
     echo "   x Transcript width limit not set correctly"
@@ -67,10 +67,10 @@ fi
 # Step 5: Check memory tests exist
 echo ""
 echo "5️⃣  Checking memory test infrastructure..."
-if [ -f "$PROJECT_ROOT/vtcode-core/src/memory_tests.rs" ]; then
+if [ -f "$PROJECT_ROOT/crates/codegen/vtcode-core/src/memory_tests.rs" ]; then
     echo "   v Memory tests module exists"
 
-    TEST_COUNT=$(grep -c "fn test_" "$PROJECT_ROOT/vtcode-core/src/memory_tests.rs")
+    TEST_COUNT=$(grep -c "fn test_" "$PROJECT_ROOT/crates/codegen/vtcode-core/src/memory_tests.rs")
     echo "   v Found $TEST_COUNT memory tests"
 else
     echo "   x Memory tests not found"

@@ -39,10 +39,7 @@ struct ProgressCallbackGuard<'a> {
 impl<'a> ProgressCallbackGuard<'a> {
     fn replace(registry: &'a ToolRegistry, callback: ToolProgressCallback) -> Self {
         let previous = registry.replace_progress_callback(Some(callback));
-        Self {
-            registry,
-            previous: Some(previous),
-        }
+        Self { registry, previous: Some(previous) }
     }
 }
 
@@ -89,10 +86,7 @@ impl StreamingOutputCoalescer {
             return;
         }
         let emit_started = {
-            let mut state = self
-                .state
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             let emit_started = !state.started_emitted;
             state.started_emitted = true;
             state.output.push_str(chunk);
@@ -258,9 +252,7 @@ async fn execute_with_cache_and_streaming_inner(
         let progress_reporter = ProgressReporter::new();
         progress_reporter.set_total(100).await;
         progress_reporter.set_progress(0).await;
-        progress_reporter
-            .set_message(format!("Starting {name}..."))
-            .await;
+        progress_reporter.set_message(format!("Starting {name}...")).await;
         Some(progress_reporter)
     } else {
         None
@@ -607,21 +599,9 @@ mod tests {
             }
         });
 
-        assert!(should_cache_success_output(
-            tools::RUN_PTY_CMD,
-            &completed,
-            true
-        ));
-        assert!(!should_cache_success_output(
-            tools::RUN_PTY_CMD,
-            &partial,
-            true
-        ));
-        assert!(!should_cache_success_output(
-            tools::READ_FILE,
-            &chunked,
-            true
-        ));
+        assert!(should_cache_success_output(tools::RUN_PTY_CMD, &completed, true));
+        assert!(!should_cache_success_output(tools::RUN_PTY_CMD, &partial, true));
+        assert!(!should_cache_success_output(tools::READ_FILE, &chunked, true));
     }
 
     #[test]
@@ -645,14 +625,8 @@ mod tests {
             "limit": 40
         });
 
-        assert!(!should_show_loading_ui_for_tool_call(
-            tools::READ_FILE,
-            &read_args
-        ));
-        assert!(!should_show_loading_ui_for_tool_call(
-            tools::UNIFIED_FILE,
-            &unified_args
-        ));
+        assert!(!should_show_loading_ui_for_tool_call(tools::READ_FILE, &read_args));
+        assert!(!should_show_loading_ui_for_tool_call(tools::UNIFIED_FILE, &unified_args));
     }
 
     #[test]
@@ -674,18 +648,9 @@ mod tests {
             "content": "replacement"
         });
 
-        assert!(should_show_loading_ui_for_tool_call(
-            tools::READ_FILE,
-            &read_args
-        ));
-        assert!(should_show_loading_ui_for_tool_call(
-            tools::UNIFIED_FILE,
-            &unified_read_args
-        ));
-        assert!(should_show_loading_ui_for_tool_call(
-            tools::UNIFIED_FILE,
-            &unified_write_args
-        ));
+        assert!(should_show_loading_ui_for_tool_call(tools::READ_FILE, &read_args));
+        assert!(should_show_loading_ui_for_tool_call(tools::UNIFIED_FILE, &unified_read_args));
+        assert!(should_show_loading_ui_for_tool_call(tools::UNIFIED_FILE, &unified_write_args));
     }
 
     #[test]
@@ -726,22 +691,13 @@ mod tests {
 
         let first_update: serde_json::Value = serde_json::from_str(lines[1]).expect("parse event");
         assert_eq!(first_update["event"]["type"].as_str(), Some("item.updated"));
-        assert_eq!(
-            first_update["event"]["item"]["output"].as_str(),
-            Some("abc")
-        );
+        assert_eq!(first_update["event"]["item"]["output"].as_str(), Some("abc"));
 
         // Each update emits only the new chunk, not the full accumulated output.
         // This avoids O(n^2) memory from cloning the full output on every chunk.
         // The final tool_output_completed_event carries the full output.
         let second_update: serde_json::Value = serde_json::from_str(lines[2]).expect("parse event");
-        assert_eq!(
-            second_update["event"]["type"].as_str(),
-            Some("item.updated")
-        );
-        assert_eq!(
-            second_update["event"]["item"]["output"].as_str(),
-            Some("def")
-        );
+        assert_eq!(second_update["event"]["type"].as_str(), Some("item.updated"));
+        assert_eq!(second_update["event"]["item"]["output"].as_str(), Some("def"));
     }
 }

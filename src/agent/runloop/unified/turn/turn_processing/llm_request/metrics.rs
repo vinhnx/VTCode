@@ -140,11 +140,7 @@ pub(super) fn emit_llm_retry_metrics(
 pub(super) fn estimate_tool_schema_tokens(tools: &[ToolDefinition]) -> usize {
     tools
         .iter()
-        .map(|tool| {
-            serde_json::to_string(tool)
-                .map(|s| s.len() / 4)
-                .unwrap_or(0)
-        })
+        .map(|tool| serde_json::to_string(tool).map(|s| s.len() / 4).unwrap_or(0))
         .sum()
 }
 
@@ -152,10 +148,7 @@ pub(super) fn estimate_tool_schema_tokens(tools: &[ToolDefinition]) -> usize {
 /// chars/token). Non-text content (images, tool calls/results) is not counted,
 /// so this is a lower-bound hint suitable for telemetry, not billing.
 pub(super) fn estimate_message_history_tokens(messages: &[Message]) -> usize {
-    messages
-        .iter()
-        .map(|message| message.content.as_text().len() / 4)
-        .sum()
+    messages.iter().map(|message| message.content.as_text().len() / 4).sum()
 }
 
 /// Per-request token-budget breakdown for the assembled first-request prefix.

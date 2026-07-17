@@ -60,9 +60,7 @@ fn structured_resume_lines_preserve_tool_context() {
     assert!(!lines.iter().any(|line| line.text == "Assistant:"));
     assert!(lines.iter().any(|line| {
         line.style == MessageStyle::Tool
-            && line
-                .text
-                .contains("Tool exec_command [tool_call_id: call_123]:")
+            && line.text.contains("Tool exec_command [tool_call_id: call_123]:")
     }));
     // Tool arguments should show a concise summary instead of raw JSON
     assert!(lines.iter().any(|line| {
@@ -77,18 +75,9 @@ fn structured_resume_lines_preserve_tool_context() {
 #[test]
 fn legacy_style_inference_maps_common_prefixes() {
     assert_eq!(infer_legacy_line_style("  [1] You:"), MessageStyle::User);
-    assert_eq!(
-        infer_legacy_line_style("  [5] Assistant:"),
-        MessageStyle::Response
-    );
-    assert_eq!(
-        infer_legacy_line_style("System: startup"),
-        MessageStyle::Info
-    );
-    assert_eq!(
-        infer_legacy_line_style("Tool [tool_call_id: call_1]:"),
-        MessageStyle::ToolOutput
-    );
+    assert_eq!(infer_legacy_line_style("  [5] Assistant:"), MessageStyle::Response);
+    assert_eq!(infer_legacy_line_style("System: startup"), MessageStyle::Info);
+    assert_eq!(infer_legacy_line_style("Tool [tool_call_id: call_1]:"), MessageStyle::ToolOutput);
 }
 
 #[test]
@@ -107,11 +96,7 @@ fn structured_resume_lines_hide_reasoning_when_unsupported() {
     let mut assistant = uni::Message::assistant("done".to_string());
     assistant.reasoning = Some("trace".to_string());
     let lines = build_structured_resume_lines(&[assistant], false);
-    assert!(
-        !lines
-            .iter()
-            .any(|line| line.style == MessageStyle::Reasoning)
-    );
+    assert!(!lines.iter().any(|line| line.style == MessageStyle::Reasoning));
 }
 
 #[test]
@@ -159,18 +144,10 @@ fn apply_persistent_memory_header_guide_sets_badge_and_highlight() {
     apply_persistent_memory_header_guide(&mut header_context, &sample_memory_status());
 
     assert_eq!(
-        header_context
-            .persistent_memory
-            .as_ref()
-            .map(|badge| badge.text.as_str()),
+        header_context.persistent_memory.as_ref().map(|badge| badge.text.as_str()),
         Some("Memory: On")
     );
-    assert!(
-        header_context
-            .highlights
-            .iter()
-            .any(|highlight| highlight.title == "Memory")
-    );
+    assert!(header_context.highlights.iter().any(|highlight| highlight.title == "Memory"));
 }
 
 #[test]
@@ -279,10 +256,7 @@ fn delegated_local_agent_preview_uses_failure_message() {
         nickname: None,
     };
 
-    assert_eq!(
-        delegated_local_agent_preview_placeholder(&entry),
-        "subagent failed"
-    );
+    assert_eq!(delegated_local_agent_preview_placeholder(&entry), "subagent failed");
 }
 
 #[test]
@@ -344,26 +318,14 @@ fn ide_context_status_label_respects_session_override() {
     );
 
     assert_eq!(
-        ide_context_status_label(
-            &context_manager,
-            workspace.path(),
-            None,
-            Some(&snapshot),
-            None
-        )
-        .as_deref(),
+        ide_context_status_label(&context_manager, workspace.path(), None, Some(&snapshot), None)
+            .as_deref(),
         Some("IDE Context (IDE): src/main.rs")
     );
 
     assert!(!context_manager.toggle_session_ide_context());
     assert_eq!(
-        ide_context_status_label(
-            &context_manager,
-            workspace.path(),
-            None,
-            Some(&snapshot),
-            None
-        ),
+        ide_context_status_label(&context_manager, workspace.path(), None, Some(&snapshot), None),
         None
     );
 }

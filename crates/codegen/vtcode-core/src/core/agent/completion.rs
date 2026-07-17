@@ -51,19 +51,14 @@ pub fn check_completion_candidate(response_text: &str) -> bool {
 
     let response_lower = response_text.to_lowercase();
 
-    if UNRESOLVED_PHRASES
-        .iter()
-        .any(|phrase| response_lower.contains(phrase))
+    if UNRESOLVED_PHRASES.iter().any(|phrase| response_lower.contains(phrase))
         || structured_contract_has_unresolved_sections(response_text)
     {
         return false;
     }
 
     // Strategy 1: Explicit terminal sentences
-    if COMPLETION_SENTENCES
-        .iter()
-        .any(|&s| response_lower.contains(s))
-    {
+    if COMPLETION_SENTENCES.iter().any(|&s| response_lower.contains(s)) {
         return true;
     }
 
@@ -169,10 +164,7 @@ pub fn check_for_response_loop(response_text: &str, session_state: &mut AgentSes
     }
 
     // Simplistic check: is this response identical to the last one (ignoring whitespace)?
-    let normalized_current = response_text
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let normalized_current = response_text.split_whitespace().collect::<Vec<_>>().join(" ");
 
     let repeated = session_state
         .messages
@@ -182,12 +174,8 @@ pub fn check_for_response_loop(response_text: &str, session_state: &mut AgentSes
         .skip(1)
         .take(2)
         .any(|m| {
-            let normalized_prev = m
-                .content
-                .as_text()
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ");
+            let normalized_prev =
+                m.content.as_text().split_whitespace().collect::<Vec<_>>().join(" ");
             normalized_prev == normalized_current
         });
 
@@ -212,27 +200,17 @@ mod tests {
     fn test_completion_candidates() {
         assert!(check_completion_candidate("The task is complete"));
         assert!(check_completion_candidate("Revision 1: task is complete."));
-        assert!(check_completion_candidate(
-            "I have successfully completed the task."
-        ));
+        assert!(check_completion_candidate("I have successfully completed the task."));
         assert!(check_completion_candidate("Task done"));
         assert!(check_completion_candidate("All done"));
 
         // Negative cases
-        assert!(!check_completion_candidate(
-            "I will have the task done soon"
-        ));
+        assert!(!check_completion_candidate("I will have the task done soon"));
         assert!(!check_completion_candidate("Is the task done?"));
         assert!(!check_completion_candidate("random text"));
-        assert!(!check_completion_candidate(
-            "The task is complete once verification finishes."
-        ));
-        assert!(!check_completion_candidate(
-            "All done. Verification pending."
-        ));
-        assert!(!check_completion_candidate(
-            "All done, but open questions remain."
-        ));
+        assert!(!check_completion_candidate("The task is complete once verification finishes."));
+        assert!(!check_completion_candidate("All done. Verification pending."));
+        assert!(!check_completion_candidate("All done, but open questions remain."));
     }
 
     #[test]
@@ -287,9 +265,7 @@ mod tests {
     fn response_loop_ignores_current_assistant_message() {
         let repeated_response = "The task is complete";
         let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
-        state
-            .messages_mut()
-            .push(Message::assistant(repeated_response.to_string()));
+        state.messages_mut().push(Message::assistant(repeated_response.to_string()));
 
         assert!(!check_for_response_loop(repeated_response, &mut state));
     }
@@ -298,12 +274,8 @@ mod tests {
     fn response_loop_still_detects_prior_duplicate_assistant_message() {
         let repeated_response = "The task is complete";
         let mut state = AgentSessionState::new("session".to_string(), 8, 4, 128_000);
-        state
-            .messages_mut()
-            .push(Message::assistant(repeated_response.to_string()));
-        state
-            .messages_mut()
-            .push(Message::assistant(repeated_response.to_string()));
+        state.messages_mut().push(Message::assistant(repeated_response.to_string()));
+        state.messages_mut().push(Message::assistant(repeated_response.to_string()));
 
         assert!(check_for_response_loop(repeated_response, &mut state));
     }

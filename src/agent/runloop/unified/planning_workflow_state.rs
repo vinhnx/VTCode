@@ -148,15 +148,9 @@ pub(crate) fn short_confirmation_hint_with_fallback() -> String {
 }
 
 pub(crate) fn render_planning_workflow_next_step_hint(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        PLANNING_WORKFLOW_REVIEW_AND_EXECUTE_HINT,
-    )?;
+    renderer.line(MessageStyle::Info, PLANNING_WORKFLOW_REVIEW_AND_EXECUTE_HINT)?;
     renderer.line(MessageStyle::Info, PLANNING_WORKFLOW_KEEP_PLANNING_HINT)?;
-    renderer.line(
-        MessageStyle::Info,
-        PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT,
-    )?;
+    renderer.line(MessageStyle::Info, PLANNING_WORKFLOW_MANUAL_SWITCH_FALLBACK_HINT)?;
     Ok(())
 }
 

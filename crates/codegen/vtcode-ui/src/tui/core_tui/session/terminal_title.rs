@@ -166,10 +166,7 @@ impl Session {
             TerminalTitleItem::TaskProgress => self.terminal_title_task_progress.clone(),
         }?;
 
-        Some(RenderedTitlePart {
-            text,
-            spinner: item == TerminalTitleItem::Spinner,
-        })
+        Some(RenderedTitlePart { text, spinner: item == TerminalTitleItem::Spinner })
     }
 
     fn spinner_title_value(&self, status: TerminalTitleStatus) -> Option<String> {
@@ -319,11 +316,7 @@ fn truncate_title(title: &str) -> String {
 }
 
 fn normalize_title_part(value: &str) -> String {
-    value
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_ascii_lowercase()
+    value.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -346,10 +339,7 @@ mod tests {
         session.input_status_left = Some("Thinking".to_string());
         session.thinking_spinner.start();
 
-        assert_eq!(
-            session.render_terminal_title().as_deref(),
-            Some("⠋ demo-project")
-        );
+        assert_eq!(session.render_terminal_title().as_deref(), Some("⠋ demo-project"));
     }
 
     #[test]
@@ -362,10 +352,7 @@ mod tests {
         ]);
         session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
 
-        assert_eq!(
-            session.render_terminal_title().as_deref(),
-            Some("demo-project")
-        );
+        assert_eq!(session.render_terminal_title().as_deref(), Some("demo-project"));
     }
 
     #[test]
@@ -380,32 +367,20 @@ mod tests {
         session.input_status_left = Some("Thinking".to_string());
         session.thinking_spinner.start();
 
-        assert_eq!(
-            session.render_terminal_title().as_deref(),
-            Some("demo-project ⠋ Thinking")
-        );
+        assert_eq!(session.render_terminal_title().as_deref(), Some("demo-project ⠋ Thinking"));
     }
 
     #[test]
     fn status_label_mapping_prefers_short_labels() {
         let mut session = session_for_title_tests();
         session.input_status_left = Some("Action Required: approve command".to_string());
-        assert_eq!(
-            session.terminal_title_status(),
-            TerminalTitleStatus::ActionRequired
-        );
+        assert_eq!(session.terminal_title_status(), TerminalTitleStatus::ActionRequired);
 
         session.input_status_left = Some("Rewinding last turn".to_string());
-        assert_eq!(
-            session.terminal_title_status(),
-            TerminalTitleStatus::Undoing
-        );
+        assert_eq!(session.terminal_title_status(), TerminalTitleStatus::Undoing);
 
         session.input_status_left = Some("Waiting for tool".to_string());
-        assert_eq!(
-            session.terminal_title_status(),
-            TerminalTitleStatus::Waiting
-        );
+        assert_eq!(session.terminal_title_status(), TerminalTitleStatus::Waiting);
     }
 
     #[test]
@@ -454,10 +429,7 @@ mod tests {
         session.terminal_title_task_progress = Some("2/5".to_string());
         session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
 
-        assert_eq!(
-            session.render_terminal_title().as_deref(),
-            Some("2/5 | demo-project")
-        );
+        assert_eq!(session.render_terminal_title().as_deref(), Some("2/5 | demo-project"));
     }
 
     #[test]
@@ -466,10 +438,7 @@ mod tests {
         session.terminal_title_items = Some(vec!["not-real".to_string(), "project".to_string()]);
         session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
 
-        assert_eq!(
-            session.render_terminal_title().as_deref(),
-            Some("demo-project")
-        );
+        assert_eq!(session.render_terminal_title().as_deref(), Some("demo-project"));
     }
 
     #[test]
@@ -484,10 +453,7 @@ mod tests {
         session.terminal_title_git_branch = Some("main".to_string());
         session.input_status_left = Some("Ready".to_string());
 
-        assert_eq!(
-            session.render_terminal_title().as_deref(),
-            Some("main | Ready")
-        );
+        assert_eq!(session.render_terminal_title().as_deref(), Some("main | Ready"));
     }
 
     #[test]

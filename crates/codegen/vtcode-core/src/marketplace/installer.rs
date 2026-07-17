@@ -22,10 +22,7 @@ pub struct PluginInstaller {
 impl PluginInstaller {
     /// Create a new installer targeting the given plugins directory.
     pub fn new(plugins_dir: PathBuf, core_plugin_runtime: Option<PluginRuntime>) -> Self {
-        Self {
-            plugins_dir,
-            core_plugin_runtime,
-        }
+        Self { plugins_dir, core_plugin_runtime }
     }
 
     /// Install a plugin from its manifest
@@ -46,8 +43,7 @@ impl PluginInstaller {
         write_json_file(&manifest_path, manifest).await?;
 
         // Integrate with VT Code's existing plugin system
-        self.integrate_with_core_plugin_system(&manifest_path)
-            .await?;
+        self.integrate_with_core_plugin_system(&manifest_path).await?;
 
         Ok(())
     }
@@ -209,10 +205,7 @@ impl PluginInstaller {
         self.remove_from_core_plugin_system(plugin_id).await?;
 
         fs::remove_dir_all(&plugin_dir).await.with_context(|| {
-            format!(
-                "Failed to remove plugin directory: {}",
-                plugin_dir.display()
-            )
+            format!("Failed to remove plugin directory: {}", plugin_dir.display())
         })?;
 
         Ok(())

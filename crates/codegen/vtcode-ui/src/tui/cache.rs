@@ -105,8 +105,7 @@ where
 
     fn prune_expired(&mut self) {
         let ttl = self.ttl;
-        self.entries
-            .retain(|_, entry| entry.inserted_at.elapsed() < ttl);
+        self.entries.retain(|_, entry| entry.inserted_at.elapsed() < ttl);
         self.lru_order.retain(|key| self.entries.contains_key(key));
     }
 

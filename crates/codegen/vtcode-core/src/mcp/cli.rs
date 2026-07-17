@@ -184,13 +184,8 @@ async fn run_add(add_args: AddArgs) -> Result<()> {
     } = add_args;
 
     let transport = match transport_args.clone() {
-        AddMcpTransportArgs {
-            stdio: Some(stdio), ..
-        } => build_stdio_transport(stdio)?,
-        AddMcpTransportArgs {
-            streamable_http: Some(http),
-            ..
-        } => build_http_transport(http)?,
+        AddMcpTransportArgs { stdio: Some(stdio), .. } => build_stdio_transport(stdio)?,
+        AddMcpTransportArgs { streamable_http: Some(http), .. } => build_http_transport(http)?,
         _ => bail!("either --command or --url must be provided"),
     };
 
@@ -222,10 +217,7 @@ async fn run_remove(remove_args: RemoveArgs) -> Result<()> {
 
     let (mut config, path) = load_global_config()?;
     let original_len = config.mcp.providers.len();
-    config
-        .mcp
-        .providers
-        .retain(|provider| provider.name != remove_args.name);
+    config.mcp.providers.retain(|provider| provider.name != remove_args.name);
 
     if config.mcp.providers.len() == original_len {
         println!("No MCP provider named '{}' found.", remove_args.name);
@@ -243,10 +235,8 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
     providers.sort_by(|a, b| a.name.cmp(&b.name));
 
     if list_args.json {
-        let payload: Vec<_> = providers
-            .into_iter()
-            .map(|provider| json_provider(&provider))
-            .collect();
+        let payload: Vec<_> =
+            providers.into_iter().map(|provider| json_provider(&provider)).collect();
         let output = serde_json::to_string_pretty(&payload)
             .context("failed to serialize MCP providers to JSON")?;
         println!("{output}");
@@ -349,10 +339,7 @@ async fn run_get(get_args: GetArgs) -> Result<()> {
 
     println!("{}", provider.name);
     println!("  enabled: {}", provider.enabled);
-    println!(
-        "  max_concurrent_requests: {}",
-        provider.max_concurrent_requests
-    );
+    println!("  max_concurrent_requests: {}", provider.max_concurrent_requests);
     if !provider.env.is_empty() {
         println!("  env: {}", format_env_map(&provider.env));
     }
@@ -374,10 +361,7 @@ async fn run_get(get_args: GetArgs) -> Result<()> {
             println!("  transport: http");
             println!("  endpoint: {}", http.endpoint);
             println!("  auth: {}", http_auth_label(http));
-            println!(
-                "  oauth_status: {}",
-                http_oauth_status_label(&provider.name, http)
-            );
+            println!("  oauth_status: {}", http_oauth_status_label(&provider.name, http));
             println!("  protocol_version: {}", http.protocol_version);
             if !http.http_headers.is_empty() {
                 println!("  headers: {}", format_env_map(&http.http_headers));
@@ -430,16 +414,11 @@ async fn run_login(login_args: LoginArgs) -> Result<()> {
 
     println!("Starting MCP OAuth login for '{}'...", provider.name);
     open_browser_or_print_url(&prepared.auth_url)?;
-    println!(
-        "Waiting for the OAuth callback on localhost:{}...",
-        prepared.callback_port
-    );
+    println!("Waiting for the OAuth callback on localhost:{}...", prepared.callback_port);
 
     let completion = match callback_server.wait().await? {
         AuthCallbackOutcome::Code(code) => {
-            service
-                .complete_login(&provider.name, oauth, &prepared, &code)
-                .await?
+            service.complete_login(&provider.name, oauth, &prepared, &code).await?
         }
         AuthCallbackOutcome::Cancelled => {
             bail!("OAuth flow was cancelled")
@@ -514,11 +493,8 @@ fn build_http_transport(args: AddMcpStreamableHttpArgs) -> Result<McpTransportCo
 }
 
 fn upsert_provider(config: &mut VTCodeConfig, provider: McpProviderConfig) -> bool {
-    if let Some(existing) = config
-        .mcp
-        .providers
-        .iter_mut()
-        .find(|entry| entry.name == provider.name)
+    if let Some(existing) =
+        config.mcp.providers.iter_mut().find(|entry| entry.name == provider.name)
     {
         *existing = provider;
         false
@@ -559,10 +535,7 @@ fn json_provider(provider: &McpProviderConfig) -> serde_json::Value {
 fn provider_http_oauth_config(provider: &McpProviderConfig) -> Result<&McpOAuthConfig> {
     match &provider.transport {
         McpTransportConfig::Http(http) => http.oauth.as_ref().ok_or_else(|| {
-            anyhow!(
-                "MCP provider '{}' does not have HTTP OAuth configured.",
-                provider.name
-            )
+            anyhow!("MCP provider '{}' does not have HTTP OAuth configured.", provider.name)
         }),
         McpTransportConfig::Stdio(_) => Err(anyhow!(
             "MCP provider '{}' uses stdio transport and does not support HTTP OAuth login.",
@@ -681,10 +654,8 @@ fn parse_env_pair(raw: &str) -> Result<(String, String), String> {
 
 fn validate_provider_name(name: &str) -> Result<()> {
     validate_agent_safe_text("provider name", name)?;
-    let is_valid = !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    let is_valid =
+        !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
 
     if is_valid {
         Ok(())
@@ -802,13 +773,10 @@ mod tests {
     #[test]
     fn global_config_path_uses_test_override() {
         let override_path = PathBuf::from("/tmp/vtcode-mcp-test.toml");
-        *GLOBAL_CONFIG_PATH_OVERRIDE
-            .lock()
-            .expect("override mutex should be available") = Some(override_path.clone());
+        *GLOBAL_CONFIG_PATH_OVERRIDE.lock().expect("override mutex should be available") =
+            Some(override_path.clone());
         let resolved = super::global_config_path().expect("global config path");
         assert_eq!(resolved, override_path);
-        *GLOBAL_CONFIG_PATH_OVERRIDE
-            .lock()
-            .expect("override mutex should be available") = None;
+        *GLOBAL_CONFIG_PATH_OVERRIDE.lock().expect("override mutex should be available") = None;
     }
 }

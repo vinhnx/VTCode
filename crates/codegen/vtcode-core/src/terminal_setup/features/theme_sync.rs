@@ -835,11 +835,7 @@ mod tests {
             .into_iter()
             .map(|rgb| rgb.to_hex())
             .collect();
-        let actual_base16 = palette
-            .iter()
-            .take(16)
-            .map(|rgb| rgb.to_hex())
-            .collect::<Vec<_>>();
+        let actual_base16 = palette.iter().take(16).map(|rgb| rgb.to_hex()).collect::<Vec<_>>();
 
         assert_eq!(actual_base16, expected_base16);
     }

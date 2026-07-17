@@ -151,19 +151,14 @@ fn request_prompt_prefers_message() {
         message: Some("hello".to_string()),
         ..SpawnAgentRequest::default()
     };
-    assert_eq!(
-        request_prompt(&request.message, &request.items).as_deref(),
-        Some("hello")
-    );
+    assert_eq!(request_prompt(&request.message, &request.items).as_deref(), Some("hello"));
 }
 
 #[test]
 fn delegated_task_requires_clarification_for_vague_prompt() {
     assert!(delegated_task_requires_clarification("report"));
     assert!(delegated_task_requires_clarification("report findings"));
-    assert!(!delegated_task_requires_clarification(
-        "review current code changes"
-    ));
+    assert!(!delegated_task_requires_clarification("review current code changes"));
 }
 
 #[test]
@@ -183,14 +178,9 @@ fn resolve_subagent_model_maps_aliases() {
 #[test]
 fn resolve_subagent_model_defaults_to_parent_when_omitted() {
     let cfg = VTCodeConfig::default();
-    let resolved = resolve_subagent_model(
-        &cfg,
-        models::ollama::GPT_OSS_120B_CLOUD,
-        "ollama",
-        None,
-        "worker",
-    )
-    .expect("resolve model");
+    let resolved =
+        resolve_subagent_model(&cfg, models::ollama::GPT_OSS_120B_CLOUD, "ollama", None, "worker")
+            .expect("resolve model");
     assert_eq!(resolved.as_str(), models::ollama::GPT_OSS_120B_CLOUD);
 }
 
@@ -207,10 +197,7 @@ fn resolve_subagent_model_falls_back_to_copilot_default_for_unsupported_inherit_
     let cfg = VTCodeConfig::default();
     let resolved = resolve_subagent_model(&cfg, "claude-haiku-4.5", "copilot", None, "worker")
         .expect("resolve model");
-    assert_eq!(
-        resolved,
-        ModelId::default_orchestrator_for_provider(Provider::Copilot)
-    );
+    assert_eq!(resolved, ModelId::default_orchestrator_for_provider(Provider::Copilot));
 }
 
 #[test]
@@ -338,14 +325,9 @@ fn resolve_subagent_model_honors_custom_provider_model() {
         model: "mycorp-special-coder".to_string(),
         ..CustomProviderConfig::default()
     });
-    let resolved = resolve_subagent_model(
-        &cfg,
-        "mycorp-special-coder",
-        "mycorp",
-        None,
-        "wiki-assistant",
-    )
-    .expect("resolve custom provider model");
+    let resolved =
+        resolve_subagent_model(&cfg, "mycorp-special-coder", "mycorp", None, "wiki-assistant")
+            .expect("resolve custom provider model");
     assert_eq!(resolved.as_str(), "mycorp-special-coder");
 }
 
@@ -354,14 +336,9 @@ fn resolve_subagent_small_model_rejects_cross_provider_configured_lightweight_mo
     let mut cfg = VTCodeConfig::default();
     cfg.agent.small_model.model = models::anthropic::CLAUDE_HAIKU_4_5.to_string();
 
-    let resolved = resolve_subagent_model(
-        &cfg,
-        models::openai::GPT_5_4,
-        "openai",
-        Some("small"),
-        "worker",
-    )
-    .expect("resolve model");
+    let resolved =
+        resolve_subagent_model(&cfg, models::openai::GPT_5_4, "openai", Some("small"), "worker")
+            .expect("resolve model");
 
     assert_eq!(resolved, ModelId::GPT54Mini);
 }
@@ -383,10 +360,7 @@ fn resolve_effective_subagent_model_falls_back_to_spec_model_on_invalid_override
 
 #[test]
 fn background_record_ids_are_stable_and_sanitized() {
-    assert_eq!(
-        background_record_id("Rust Engineer"),
-        "background-Rust-Engineer"
-    );
+    assert_eq!(background_record_id("Rust Engineer"), "background-Rust-Engineer");
     assert_eq!(
         background_record_id("plugin:reviewer/default"),
         "background-plugin-reviewer-default"
@@ -410,37 +384,13 @@ fn background_subagent_command_includes_expected_flags() {
 
     assert!(command.len() >= 15);
     assert_eq!(command[1], "background-subagent");
-    assert!(
-        command
-            .windows(2)
-            .any(|pair| pair == ["--agent-name", "rust-engineer"])
-    );
-    assert!(
-        command
-            .windows(2)
-            .any(|pair| pair == ["--parent-session-id", "session-parent"])
-    );
-    assert!(
-        command
-            .windows(2)
-            .any(|pair| pair == ["--session-id", "session-child"])
-    );
-    assert!(
-        command
-            .windows(2)
-            .any(|pair| pair == ["--prompt", "Inspect the repo"])
-    );
+    assert!(command.windows(2).any(|pair| pair == ["--agent-name", "rust-engineer"]));
+    assert!(command.windows(2).any(|pair| pair == ["--parent-session-id", "session-parent"]));
+    assert!(command.windows(2).any(|pair| pair == ["--session-id", "session-child"]));
+    assert!(command.windows(2).any(|pair| pair == ["--prompt", "Inspect the repo"]));
     assert!(command.windows(2).any(|pair| pair == ["--max-turns", "7"]));
-    assert!(
-        command
-            .windows(2)
-            .any(|pair| pair == ["--model-override", "gpt-5.4-mini"])
-    );
-    assert!(
-        command
-            .windows(2)
-            .any(|pair| pair == ["--reasoning-override", "high"])
-    );
+    assert!(command.windows(2).any(|pair| pair == ["--model-override", "gpt-5.4-mini"]));
+    assert!(command.windows(2).any(|pair| pair == ["--reasoning-override", "high"]));
 }
 
 #[test]
@@ -466,9 +416,7 @@ async fn wait_for_effective_model(controller: &SubagentController, target: &str)
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 
-    Err(anyhow!(
-        "Subagent {target} did not capture an effective runtime configuration in time"
-    ))
+    Err(anyhow!("Subagent {target} did not capture an effective runtime configuration in time"))
 }
 
 fn read_only_test_spec(name: &str) -> SubagentSpec {
@@ -539,10 +487,7 @@ fn filter_child_tools_keeps_public_read_tools_and_removes_mutation_tools() {
         .find(|spec| spec.name == "explorer")
         .expect("explorer");
     let filtered = filter_child_tools(&spec, defs, true);
-    let names = filtered
-        .iter()
-        .map(ToolDefinition::function_name)
-        .collect::<Vec<_>>();
+    let names = filtered.iter().map(ToolDefinition::function_name).collect::<Vec<_>>();
     assert_eq!(names, vec![tools::CODE_SEARCH]);
 }
 
@@ -617,26 +562,13 @@ fn build_child_config_intersects_allowed_tools_and_preserves_global_denies() {
     ]);
 
     let child = build_child_config(&parent, &spec, models::openai::GPT_5_4, None);
-    assert_eq!(
-        child.runtime_agent_permissions.as_ref(),
-        Some(&spec.permissions)
-    );
+    assert_eq!(child.runtime_agent_permissions.as_ref(), Some(&spec.permissions));
     assert_eq!(
         child.permissions.allow,
         vec![tools::READ_FILE.to_string(), tools::CODE_SEARCH.to_string()]
     );
-    assert!(
-        child
-            .permissions
-            .deny
-            .contains(&tools::UNIFIED_EXEC.to_string())
-    );
-    assert!(
-        child
-            .permissions
-            .deny
-            .contains(&tools::SPAWN_AGENT.to_string())
-    );
+    assert!(child.permissions.deny.contains(&tools::UNIFIED_EXEC.to_string()));
+    assert!(child.permissions.deny.contains(&tools::SPAWN_AGENT.to_string()));
 }
 
 #[test]
@@ -672,17 +604,9 @@ fn build_child_config_preserves_subagent_lifecycle_stripping_and_hook_merging() 
             tools::UNIFIED_EXEC.to_string()
         ]
     );
-    assert!(
-        child
-            .permissions
-            .deny
-            .contains(&tools::SPAWN_AGENT.to_string())
-    );
+    assert!(child.permissions.deny.contains(&tools::SPAWN_AGENT.to_string()));
     assert_eq!(child.hooks.lifecycle.pre_tool_use.len(), 1);
-    assert_eq!(
-        child.hooks.lifecycle.pre_tool_use[0].hooks[0].command,
-        "echo child"
-    );
+    assert_eq!(child.hooks.lifecycle.pre_tool_use[0].hooks[0].command, "echo child");
 }
 
 #[test]
@@ -710,9 +634,7 @@ fn prepare_child_runtime_config_uses_shared_view_for_model_and_reasoning() {
             assert_eq!(model_override, None);
             assert_eq!(spec_model, Some(models::openai::GPT_5_4_MINI));
             assert_eq!(agent_name, "worker");
-            Ok(models::openai::GPT_5_4_MINI
-                .parse::<ModelId>()
-                .expect("valid model"))
+            Ok(models::openai::GPT_5_4_MINI.parse::<ModelId>().expect("valid model"))
         },
     )
     .expect("prepared child runtime config");
@@ -813,14 +735,8 @@ fn background_children_get_a_higher_turn_floor() {
 
 #[test]
 fn foreground_children_keep_the_existing_turn_floor() {
-    assert_eq!(
-        normalize_background_child_max_turns(Some(1), false),
-        Some(SUBAGENT_MIN_MAX_TURNS)
-    );
-    assert_eq!(
-        normalize_background_child_max_turns(Some(2), false),
-        Some(2)
-    );
+    assert_eq!(normalize_background_child_max_turns(Some(1), false), Some(SUBAGENT_MIN_MAX_TURNS));
+    assert_eq!(normalize_background_child_max_turns(Some(2), false), Some(2));
     assert_eq!(normalize_background_child_max_turns(None, true), None);
 }
 
@@ -922,26 +838,11 @@ fn explicit_agent_mentions_ignore_primary_only_agents() {
 
 #[test]
 fn explicit_model_request_detects_aliases_and_full_ids() {
-    assert!(contains_explicit_model_request(
-        "delegate this using gpt-5.4-mini",
-        "gpt-5.4-mini"
-    ));
-    assert!(contains_explicit_model_request(
-        "use the worker subagent with haiku",
-        "haiku"
-    ));
-    assert!(contains_explicit_model_request(
-        "run this with the small model",
-        "small"
-    ));
-    assert!(!contains_explicit_model_request(
-        "delegate this small cleanup task",
-        "small"
-    ));
-    assert!(!contains_explicit_model_request(
-        "delegate this task",
-        "gpt-5.4-mini"
-    ));
+    assert!(contains_explicit_model_request("delegate this using gpt-5.4-mini", "gpt-5.4-mini"));
+    assert!(contains_explicit_model_request("use the worker subagent with haiku", "haiku"));
+    assert!(contains_explicit_model_request("run this with the small model", "small"));
+    assert!(!contains_explicit_model_request("delegate this small cleanup task", "small"));
+    assert!(!contains_explicit_model_request("delegate this task", "gpt-5.4-mini"));
 }
 
 #[test]
@@ -1080,10 +981,7 @@ async fn spawn_rejects_mismatched_explicit_mention() {
         .await
         .expect_err("mismatched mention should fail");
 
-    assert!(
-        err.to_string()
-            .contains("user explicitly selected 'explorer'")
-    );
+    assert!(err.to_string().contains("user explicitly selected 'explorer'"));
 }
 
 #[tokio::test]
@@ -1104,10 +1002,7 @@ async fn spawn_rejects_write_capable_agent_without_explicit_request_or_agent_typ
         .await
         .expect_err("write-capable agent should require explicit request or agent_type");
 
-    assert!(
-        err.to_string()
-            .contains("cannot launch write-capable agent")
-    );
+    assert!(err.to_string().contains("cannot launch write-capable agent"));
 }
 
 #[tokio::test]
@@ -1170,9 +1065,7 @@ async fn spawn_accepts_background_flag_outside_managed_background_runtime() {
     .await
     .expect("controller");
 
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
+    controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
     let spawned = controller
         .spawn(SpawnAgentRequest {
@@ -1400,9 +1293,7 @@ async fn spawn_background_subprocess_rejects_non_background_agent() {
             .await
             .expect("controller");
 
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
+    controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
     let err = controller
         .spawn_background_subprocess(SpawnBackgroundSubprocessRequest {
@@ -1428,14 +1319,9 @@ async fn spawn_background_subprocess_returns_active_record_when_settings_match()
             .await
             .expect("controller");
 
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
+    controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
-    let spec = controller
-        .resolve_requested_spec(Some("background-demo"))
-        .await
-        .expect("spec");
+    let spec = controller.resolve_requested_spec(Some("background-demo")).await.expect("spec");
     let record_id = background_record_id(spec.name.as_str());
     let created_at = Utc::now();
     {
@@ -1495,14 +1381,9 @@ async fn spawn_background_subprocess_rejects_conflicting_active_record_settings(
             .await
             .expect("controller");
 
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
+    controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
-    let spec = controller
-        .resolve_requested_spec(Some("background-demo"))
-        .await
-        .expect("spec");
+    let spec = controller.resolve_requested_spec(Some("background-demo")).await.expect("spec");
     let record_id = background_record_id(spec.name.as_str());
     let created_at = Utc::now();
     {
@@ -1589,14 +1470,8 @@ async fn resume_preserves_captured_runtime_overrides() {
     for _ in 0..100 {
         let status = controller.status_for(&spawned.id).await.expect("status");
         if status.updated_at > closed.updated_at && status.status != SubagentStatus::Closed {
-            let snapshot = controller
-                .snapshot_for_thread(&spawned.id)
-                .await
-                .expect("snapshot");
-            assert_eq!(
-                snapshot.effective_config.agent.default_model,
-                models::openai::GPT_5_4_MINI
-            );
+            let snapshot = controller.snapshot_for_thread(&spawned.id).await.expect("snapshot");
+            assert_eq!(snapshot.effective_config.agent.default_model, models::openai::GPT_5_4_MINI);
             controller.close(&spawned.id).await.expect("final close");
             return;
         }
@@ -1616,9 +1491,7 @@ async fn spawn_captures_runtime_config_before_first_child_turn() {
     .await
     .expect("controller");
 
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
+    controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
     let spawned = controller
         .spawn(SpawnAgentRequest {
@@ -1629,20 +1502,10 @@ async fn spawn_captures_runtime_config_before_first_child_turn() {
         .await
         .expect("spawn");
 
-    let snapshot = controller
-        .snapshot_for_thread(&spawned.id)
-        .await
-        .expect("snapshot");
+    let snapshot = controller.snapshot_for_thread(&spawned.id).await.expect("snapshot");
 
     assert_eq!(snapshot.id, spawned.id);
-    assert!(
-        !snapshot
-            .effective_config
-            .agent
-            .default_model
-            .trim()
-            .is_empty()
-    );
+    assert!(!snapshot.effective_config.agent.default_model.trim().is_empty());
 
     controller.close(&spawned.id).await.expect("close");
 }
@@ -1710,10 +1573,7 @@ async fn spawn_custom_rejects_write_capable_spec() {
         .await
         .expect_err("write-capable custom spec should be rejected");
 
-    assert!(
-        err.to_string()
-            .contains("custom subagent spawn only supports read-only specs")
-    );
+    assert!(err.to_string().contains("custom subagent spawn only supports read-only specs"));
 }
 
 #[tokio::test]
@@ -1760,9 +1620,7 @@ async fn close_marks_child_closed() {
     ))
     .await
     .expect("controller");
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
+    controller.set_turn_delegation_hints_from_input("delegate this task").await;
     let spawned = controller
         .spawn(SpawnAgentRequest {
             agent_type: Some("default".to_string()),
@@ -1784,9 +1642,7 @@ async fn close_is_idempotent_for_closed_agents() {
     ))
     .await
     .expect("controller");
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
+    controller.set_turn_delegation_hints_from_input("delegate this task").await;
     let spawned = controller
         .spawn(SpawnAgentRequest {
             agent_type: Some("default".to_string()),
@@ -1837,23 +1693,14 @@ async fn close_and_resume_cascade_through_spawn_tree() {
 
     let closed = controller.close("parent").await.expect("close");
     assert_eq!(closed.status, SubagentStatus::Closed);
+    assert_eq!(controller.status_for("child").await.expect("child").status, SubagentStatus::Closed);
     assert_eq!(
-        controller.status_for("child").await.expect("child").status,
-        SubagentStatus::Closed
-    );
-    assert_eq!(
-        controller
-            .status_for("grandchild")
-            .await
-            .expect("grandchild")
-            .status,
+        controller.status_for("grandchild").await.expect("grandchild").status,
         SubagentStatus::Closed
     );
 
-    let subtree_ids = controller
-        .collect_spawn_subtree_ids("parent")
-        .await
-        .expect("collect subtree");
+    let subtree_ids =
+        controller.collect_spawn_subtree_ids("parent").await.expect("collect subtree");
     assert_eq!(
         subtree_ids,
         vec![
@@ -1865,11 +1712,7 @@ async fn close_and_resume_cascade_through_spawn_tree() {
 
     let mut restart_ids = Vec::new();
     for node_id in subtree_ids {
-        if controller
-            .reopen_single(node_id.as_str())
-            .await
-            .expect("reopen subtree node")
-        {
+        if controller.reopen_single(node_id.as_str()).await.expect("reopen subtree node") {
             restart_ids.push(node_id);
         }
     }
@@ -1883,23 +1726,12 @@ async fn close_and_resume_cascade_through_spawn_tree() {
         ]
     );
     assert_eq!(
-        controller
-            .status_for("parent")
-            .await
-            .expect("parent")
-            .status,
+        controller.status_for("parent").await.expect("parent").status,
         SubagentStatus::Queued
     );
+    assert_eq!(controller.status_for("child").await.expect("child").status, SubagentStatus::Queued);
     assert_eq!(
-        controller.status_for("child").await.expect("child").status,
-        SubagentStatus::Queued
-    );
-    assert_eq!(
-        controller
-            .status_for("grandchild")
-            .await
-            .expect("grandchild")
-            .status,
+        controller.status_for("grandchild").await.expect("grandchild").status,
         SubagentStatus::Queued
     );
 }
@@ -1913,9 +1745,7 @@ async fn spawn_rejects_fourth_active_subagent() {
     ))
     .await
     .expect("controller");
-    controller
-        .set_turn_delegation_hints_from_input("delegate this task")
-        .await;
+    controller.set_turn_delegation_hints_from_input("delegate this task").await;
 
     let spec = vtcode_config::builtin_subagents()
         .into_iter()

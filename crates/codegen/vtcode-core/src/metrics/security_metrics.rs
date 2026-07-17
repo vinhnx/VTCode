@@ -61,10 +61,7 @@ impl SecurityMetrics {
     }
 
     pub fn get_pattern_count(&self, pattern_type: &str) -> u64 {
-        self.pattern_distribution
-            .get(pattern_type)
-            .copied()
-            .unwrap_or(0)
+        self.pattern_distribution.get(pattern_type).copied().unwrap_or(0)
     }
 
     pub fn get_most_detected_pattern(&self) -> Option<&str> {

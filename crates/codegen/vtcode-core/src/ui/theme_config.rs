@@ -437,38 +437,24 @@ executable = "bold cyan"
         let config = ThemeConfig::load_from_file(&temp_file).expect("Failed to load config");
         assert_eq!(config.cli.success, "bold green");
         assert_eq!(config.diff.new, "green");
-        assert_eq!(
-            config.files.extensions.get("rs"),
-            Some(&"bright cyan".to_owned())
-        );
-        assert_eq!(
-            config.files.extensions.get("py"),
-            Some(&"bright cyan".to_owned())
-        );
+        assert_eq!(config.files.extensions.get("rs"), Some(&"bright cyan".to_owned()));
+        assert_eq!(config.files.extensions.get("py"), Some(&"bright cyan".to_owned()));
     }
 
     #[test]
     fn test_parse_styles() {
         let config = ThemeConfig::default();
 
-        let cli_styles = config
-            .parse_cli_styles()
-            .expect("Failed to parse CLI styles");
+        let cli_styles = config.parse_cli_styles().expect("Failed to parse CLI styles");
         assert_ne!(cli_styles.success, AnsiStyle::new());
 
-        let diff_styles = config
-            .parse_diff_styles()
-            .expect("Failed to parse diff styles");
+        let diff_styles = config.parse_diff_styles().expect("Failed to parse diff styles");
         assert_ne!(diff_styles.new, AnsiStyle::new());
 
-        let status_styles = config
-            .parse_status_styles()
-            .expect("Failed to parse status styles");
+        let status_styles = config.parse_status_styles().expect("Failed to parse status styles");
         assert_ne!(status_styles.added, AnsiStyle::new());
 
-        let file_styles = config
-            .parse_file_styles()
-            .expect("Failed to parse file styles");
+        let file_styles = config.parse_file_styles().expect("Failed to parse file styles");
         assert_ne!(file_styles.directory, AnsiStyle::new());
     }
 
@@ -479,36 +465,15 @@ executable = "bold cyan"
         config.diff.new = "#00ff00".to_owned(); // RGB green
         config.files.symlink = "01;35".to_owned(); // ANSI code for bold magenta
 
-        let cli_styles = config
-            .parse_cli_styles()
-            .expect("Failed to parse CLI styles");
-        assert!(
-            cli_styles
-                .success
-                .get_effects()
-                .contains(anstyle::Effects::BOLD)
-        );
-        assert!(
-            cli_styles
-                .success
-                .get_effects()
-                .contains(anstyle::Effects::UNDERLINE)
-        );
+        let cli_styles = config.parse_cli_styles().expect("Failed to parse CLI styles");
+        assert!(cli_styles.success.get_effects().contains(anstyle::Effects::BOLD));
+        assert!(cli_styles.success.get_effects().contains(anstyle::Effects::UNDERLINE));
 
-        let diff_styles = config
-            .parse_diff_styles()
-            .expect("Failed to parse diff styles");
+        let diff_styles = config.parse_diff_styles().expect("Failed to parse diff styles");
         // The green color should be set
         assert_ne!(diff_styles.new.get_fg_color(), None);
 
-        let file_styles = config
-            .parse_file_styles()
-            .expect("Failed to parse file styles");
-        assert!(
-            file_styles
-                .symlink
-                .get_effects()
-                .contains(anstyle::Effects::BOLD)
-        );
+        let file_styles = config.parse_file_styles().expect("Failed to parse file styles");
+        assert!(file_styles.symlink.get_effects().contains(anstyle::Effects::BOLD));
     }
 }

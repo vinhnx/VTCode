@@ -186,14 +186,8 @@ impl ToolResponseBuilder {
             );
         }
 
-        let llm = self
-            .llm_content
-            .or_else(|| self.content.clone())
-            .unwrap_or_default();
-        let ui = self
-            .ui_content
-            .or_else(|| self.content.clone())
-            .unwrap_or_default();
+        let llm = self.llm_content.or_else(|| self.content.clone()).unwrap_or_default();
+        let ui = self.ui_content.or_else(|| self.content.clone()).unwrap_or_default();
 
         let mut res = ToolResult::new(self.tool_name, llm, ui);
         res.metadata = self.metadata.build();
@@ -213,10 +207,7 @@ mod tests {
 
     #[test]
     fn build_json_omits_stdout_when_same_as_content() {
-        let value = ToolResponseBuilder::new("test")
-            .content("same")
-            .stdout("same")
-            .build_json();
+        let value = ToolResponseBuilder::new("test").content("same").stdout("same").build_json();
 
         assert_eq!(value.get("content").and_then(|v| v.as_str()), Some("same"));
         assert!(value.get("stdout").is_none());

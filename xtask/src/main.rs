@@ -130,11 +130,7 @@ fn generate_completions(stage_dir: &Path) -> Result<(), Box<dyn std::error::Erro
 
     for (shell, dir, filename) in [
         (clap_complete::Shell::Bash, "completions/bash", "vtcode"),
-        (
-            clap_complete::Shell::Fish,
-            "completions/fish",
-            "vtcode.fish",
-        ),
+        (clap_complete::Shell::Fish, "completions/fish", "vtcode.fish"),
         (clap_complete::Shell::Zsh, "completions/zsh", "_vtcode"),
     ] {
         let mut output = Vec::new();
@@ -162,11 +158,7 @@ fn create_archive(
     // Archive from stage_dir parent so entries have no directory prefix.
     // self_update needs the binary at the exact path "vtcode".
     let mut cmd = Command::new("tar");
-    cmd.current_dir(out_dir)
-        .arg("-czf")
-        .arg(archive)
-        .arg("-C")
-        .arg(stage_dir);
+    cmd.current_dir(out_dir).arg("-czf").arg(archive).arg("-C").arg(stage_dir);
     for entry in &entries {
         cmd.arg(entry);
     }
@@ -184,9 +176,8 @@ fn bump_version(args: BumpVersionArgs) -> Result<(), Box<dyn std::error::Error>>
     let cargo_toml_path = workspace_root.join("Cargo.toml");
 
     let content = fs::read_to_string(&cargo_toml_path)?;
-    let mut doc: toml_edit::DocumentMut = content
-        .parse()
-        .map_err(|e| format!("Failed to parse Cargo.toml: {e}"))?;
+    let mut doc: toml_edit::DocumentMut =
+        content.parse().map_err(|e| format!("Failed to parse Cargo.toml: {e}"))?;
 
     let current_str = doc["workspace"]["package"]["version"]
         .as_str()
@@ -338,10 +329,7 @@ fn check_file_deps(
             // cannot drift. In TOML this appears as a subtable { workspace = true }
             // rather than a plain string value.
             if let Some(item) = version_item
-                && item
-                    .as_table_like()
-                    .and_then(|t| t.get("workspace"))
-                    .and_then(|v| v.as_bool())
+                && item.as_table_like().and_then(|t| t.get("workspace")).and_then(|v| v.as_bool())
                     == Some(true)
             {
                 continue;

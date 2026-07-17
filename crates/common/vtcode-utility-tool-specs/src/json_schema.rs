@@ -120,10 +120,7 @@ fn write_schema_types(map: &mut Map<String, Value>, schema_types: &[&'static str
             map.remove("type");
         }
         [schema_type] => {
-            map.insert(
-                "type".to_string(),
-                Value::String((*schema_type).to_string()),
-            );
+            map.insert("type".to_string(), Value::String((*schema_type).to_string()));
         }
         _ => {
             map.insert(
@@ -230,9 +227,7 @@ mod tests {
             "additionalProperties": false
         }));
 
-        let variants = schema["properties"]["open"]["anyOf"]
-            .as_array()
-            .expect("open anyOf");
+        let variants = schema["properties"]["open"]["anyOf"].as_array().expect("open anyOf");
         assert_eq!(variants.len(), 2);
         assert_eq!(variants[0]["type"], "array");
         assert_eq!(variants[0]["items"]["type"], "object");
@@ -240,10 +235,7 @@ mod tests {
             variants[0]["items"]["properties"]["lineno"]["type"],
             json!(["integer", "null"])
         );
-        assert_eq!(
-            schema["properties"]["message"]["type"],
-            json!(["string", "null"])
-        );
+        assert_eq!(schema["properties"]["message"]["type"], json!(["string", "null"]));
     }
 
     #[test]

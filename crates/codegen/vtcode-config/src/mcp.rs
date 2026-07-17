@@ -489,17 +489,14 @@ impl McpAllowListConfig {
 }
 
 fn configuration_allowed(rules: &McpAllowListRules, category: &str, key: &str) -> Option<bool> {
-    rules.configuration.as_ref().and_then(|entries| {
-        entries
-            .get(category)
-            .map(|patterns| pattern_matches(patterns, key))
-    })
+    rules
+        .configuration
+        .as_ref()
+        .and_then(|entries| entries.get(category).map(|patterns| pattern_matches(patterns, key)))
 }
 
 fn pattern_matches(patterns: &[String], candidate: &str) -> bool {
-    patterns
-        .iter()
-        .any(|pattern| wildcard_match(pattern, candidate))
+    patterns.iter().any(|pattern| wildcard_match(pattern, candidate))
 }
 
 fn wildcard_match(pattern: &str, candidate: &str) -> bool {
@@ -876,9 +873,7 @@ mod tests {
             tools: Some(vec!["list_*".to_string()]),
             ..Default::default()
         };
-        config
-            .providers
-            .insert("context7".to_string(), provider_rules);
+        config.providers.insert("context7".to_string(), provider_rules);
 
         assert!(config.is_tool_allowed("context7", "list_documents"));
         assert!(!config.is_tool_allowed("context7", "get_current_time"));
@@ -934,9 +929,7 @@ mod tests {
             resources: Some(vec!["journals/*".to_string()]),
             ..Default::default()
         };
-        config
-            .providers
-            .insert("context7".to_string(), provider_rules);
+        config.providers.insert("context7".to_string(), provider_rules);
 
         assert!(config.is_resource_allowed("context7", "journals/2024"));
         assert!(config.is_resource_allowed("other", "docs/config/config.md"));
@@ -959,9 +952,7 @@ mod tests {
             logging: Some(vec!["audit".to_string()]),
             ..Default::default()
         };
-        config
-            .providers
-            .insert("sequential".to_string(), provider_rules);
+        config.providers.insert("sequential".to_string(), provider_rules);
 
         assert!(config.is_logging_channel_allowed(Some("sequential"), "audit"));
         assert!(!config.is_logging_channel_allowed(Some("sequential"), "info"));
@@ -972,10 +963,9 @@ mod tests {
     #[test]
     fn test_mcp_ui_renderer_resolution() {
         let mut config = McpUiConfig::default();
-        config.renderers.insert(
-            mcp_constants::RENDERER_CONTEXT7.to_string(),
-            McpRendererProfile::Context7,
-        );
+        config
+            .renderers
+            .insert(mcp_constants::RENDERER_CONTEXT7.to_string(), McpRendererProfile::Context7);
         config.renderers.insert(
             mcp_constants::RENDERER_SEQUENTIAL_THINKING.to_string(),
             McpRendererProfile::SequentialThinking,

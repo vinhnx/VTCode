@@ -168,10 +168,7 @@ fn convert_tasks(raw_tasks: Vec<RawTaskSpec>, workspace: &Path) -> Result<Vec<Pr
 }
 
 fn prepare_task(mut raw: RawTaskSpec, index: usize, workspace: &Path) -> Result<PreparedTask> {
-    let identifier = raw
-        .id
-        .clone()
-        .unwrap_or_else(|| format!("{}-{}", TASK_PREFIX, index + 1));
+    let identifier = raw.id.clone().unwrap_or_else(|| format!("{}-{}", TASK_PREFIX, index + 1));
 
     let title = raw
         .title
@@ -209,12 +206,7 @@ fn prepare_task(mut raw: RawTaskSpec, index: usize, workspace: &Path) -> Result<
         .filter(|value| !value.is_empty());
 
     let contexts = build_contexts(raw.contexts, raw.reference_context, raw.context, workspace)?;
-    let task = Task {
-        id: identifier,
-        title,
-        description,
-        instructions,
-    };
+    let task = Task { id: identifier, title, description, instructions };
 
     Ok(PreparedTask { task, contexts })
 }
@@ -251,10 +243,7 @@ fn convert_context_entry(
         RawContextEntry::Text(text) => {
             let trimmed = text.trim();
             if trimmed.is_empty() {
-                bail!(
-                    "Encountered an empty context entry at position {}",
-                    index + 1
-                );
+                bail!("Encountered an empty context entry at position {}", index + 1);
             }
 
             Ok(ContextItem {
@@ -281,20 +270,13 @@ fn convert_context_entry(
             }
 
             if content.trim().is_empty() {
-                bail!(
-                    "Encountered an empty context entry at position {}",
-                    index + 1
-                );
+                bail!("Encountered an empty context entry at position {}", index + 1);
             }
 
-            let identifier = detail
-                .id
-                .unwrap_or_else(|| format!("{}-{}", CONTEXT_PREFIX, index + 1));
+            let identifier =
+                detail.id.unwrap_or_else(|| format!("{}-{}", CONTEXT_PREFIX, index + 1));
 
-            Ok(ContextItem {
-                id: identifier,
-                content,
-            })
+            Ok(ContextItem { id: identifier, content })
         }
     }
 }

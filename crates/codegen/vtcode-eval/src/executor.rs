@@ -43,12 +43,7 @@ pub async fn run_suite(executor: &dyn EvalExecutor, suite: &EvalSuite) -> Result
             run_results.push(result);
         }
         let metric = compute_metric(&task.id, &run_results);
-        all_task_reports.push(build_task_report(
-            &task.id,
-            &task.name,
-            task.category,
-            metric,
-        ));
+        all_task_reports.push(build_task_report(&task.id, &task.name, task.category, metric));
     }
 
     let all_metrics: Vec<_> = all_task_reports.iter().map(|r| r.metric.clone()).collect();

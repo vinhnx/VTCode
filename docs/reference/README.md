@@ -58,13 +58,13 @@ Quick lookup for common sequences:
 
 **Stripping ANSI codes**:
 
--   Implementation: `vtcode-core/src/utils/ansi_parser.rs`
+-   Implementation: `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`
 -   Guide: [ansi-in-vtcode.md#ansi-parser](./ansi-in-vtcode.md#1-ansi-parser-vtcode-coresrcutilsansi_parserrs)
 -   Quick ref: [ansi-quick-reference.md#stripping-ansi](./ansi-quick-reference.md#stripping-ansi)
 
 **Converting ANSI to Ratatui styles**:
 
--   Implementation: `vtcode-core/src/utils/anstyle_utils.rs`
+-   Implementation: `crates/codegen/vtcode-core/src/utils/anstyle_utils.rs`
 -   Guide: [ansi-in-vtcode.md#ansi-style-utilities](./ansi-in-vtcode.md#2-ansi-style-utilities-vtcode-coresrcutilsanstyle_utilsrs)
 -   Quick ref: [ansi-quick-reference.md#vtcode-usage-examples](./ansi-quick-reference.md#vtcode-usage-examples)
 
@@ -76,7 +76,7 @@ Quick lookup for common sequences:
 **PTY output processing**:
 
 -   Flow diagram: [ansi-in-vtcode.md#pty-output-processing](./ansi-in-vtcode.md#pty-output-processing)
--   Implementation: `vtcode-core/src/tools/pty.rs`
+-   Implementation: `crates/codegen/vtcode-core/src/tools/pty.rs`
 
 **TUI rendering**:
 
@@ -151,9 +151,9 @@ renderer.render("Success!", MessageStyle::Success);
 
 All ANSI-related code has comprehensive tests:
 
--   **Parser tests**: `vtcode-core/src/utils/ansi_parser.rs`
--   **Style conversion tests**: `vtcode-core/src/utils/anstyle_utils.rs`
--   **Integration tests**: `vtcode-core/src/tools/registry/executors.rs`
+-   **Parser tests**: `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`
+-   **Style conversion tests**: `crates/codegen/vtcode-core/src/utils/anstyle_utils.rs`
+-   **Integration tests**: `crates/codegen/vtcode-core/src/tools/registry/executors.rs`
 
 Run tests:
 

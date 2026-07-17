@@ -61,10 +61,7 @@ fn read_spool_preview_for_guard(path: &str) -> Option<String> {
     if content.len() <= SPOOL_CHUNK_INLINE_HEAD_BYTES + SPOOL_CHUNK_INLINE_TAIL_BYTES {
         return Some(content);
     }
-    let head: String = content
-        .chars()
-        .take(SPOOL_CHUNK_INLINE_HEAD_BYTES)
-        .collect();
+    let head: String = content.chars().take(SPOOL_CHUNK_INLINE_HEAD_BYTES).collect();
     let tail: String = content
         .chars()
         .rev()
@@ -73,9 +70,7 @@ fn read_spool_preview_for_guard(path: &str) -> Option<String> {
         .chars()
         .rev()
         .collect();
-    Some(format!(
-        "{head}\n\n... [spool content truncated; full file is {len} bytes] ...\n\n{tail}"
-    ))
+    Some(format!("{head}\n\n... [spool content truncated; full file is {len} bytes] ...\n\n{tail}"))
 }
 
 /// Inspect the spool filename and try to derive a useful fallback tool call
@@ -84,10 +79,7 @@ fn read_spool_preview_for_guard(path: &str) -> Option<String> {
 fn derive_spool_fallback(path: &str) -> Option<(String, Value)> {
     let file_name = Path::new(path).file_name()?.to_str()?.to_string();
 
-    if let Some(sid) = file_name
-        .strip_suffix(".txt")
-        .and_then(|stem| stem.strip_prefix("run-"))
-    {
+    if let Some(sid) = file_name.strip_suffix(".txt").and_then(|stem| stem.strip_prefix("run-")) {
         return Some((
             tool_names::WRITE_STDIN.to_string(),
             json!({
@@ -101,10 +93,9 @@ fn derive_spool_fallback(path: &str) -> Option<(String, Value)> {
     let stem = file_name.strip_suffix(".txt")?;
     let prefix = stem.split('_').next()?;
     match prefix {
-        "unified" | "outline" | "search" => Some((
-            tool_names::EXEC_COMMAND.to_string(),
-            public_spool_grep_args(path, "."),
-        )),
+        "unified" | "outline" | "search" => {
+            Some((tool_names::EXEC_COMMAND.to_string(), public_spool_grep_args(path, ".")))
+        }
         _ => None,
     }
 }
@@ -286,14 +277,8 @@ mod tests {
         assert_eq!(parsed["fallback_tool_args"]["session_id"], "1");
         assert_eq!(parsed["fallback_tool_args"]["chars"], "");
         assert!(parsed.get("next_action").and_then(Value::as_str).is_some());
-        assert_eq!(
-            parsed.get("loop_detected").and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            parsed.get("recovery_required").and_then(Value::as_bool),
-            Some(true)
-        );
+        assert_eq!(parsed.get("loop_detected").and_then(Value::as_bool), Some(true));
+        assert_eq!(parsed.get("recovery_required").and_then(Value::as_bool), Some(true));
     }
 
     #[test]
@@ -314,14 +299,8 @@ mod tests {
                 .as_str()
                 .is_some_and(|cmd| cmd.contains("unified_search_1782625284532136.txt"))
         );
-        assert_eq!(
-            parsed.get("loop_detected").and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            parsed.get("recovery_required").and_then(Value::as_bool),
-            Some(true)
-        );
+        assert_eq!(parsed.get("loop_detected").and_then(Value::as_bool), Some(true));
+        assert_eq!(parsed.get("recovery_required").and_then(Value::as_bool), Some(true));
     }
 
     #[test]

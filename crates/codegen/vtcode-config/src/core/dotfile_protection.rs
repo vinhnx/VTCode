@@ -267,10 +267,8 @@ impl DotfileProtectionConfig {
             return false;
         }
 
-        let filename = std::path::Path::new(path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(path);
+        let filename =
+            std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
 
         // Check if it's a dotfile (starts with . or contains /. or is in a dotfile directory)
         let is_dotfile = filename.starts_with('.')
@@ -317,10 +315,8 @@ impl DotfileProtectionConfig {
 
     /// Check if a file is in the whitelist.
     pub fn is_whitelisted(&self, path: &str) -> bool {
-        let filename = std::path::Path::new(path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(path);
+        let filename =
+            std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or(path);
 
         self.whitelist.contains(path) || self.whitelist.contains(filename)
     }
@@ -382,10 +378,7 @@ mod tests {
 
     #[test]
     fn test_disabled_protection() {
-        let config = DotfileProtectionConfig {
-            enabled: false,
-            ..Default::default()
-        };
+        let config = DotfileProtectionConfig { enabled: false, ..Default::default() };
 
         assert!(!config.is_protected(".gitignore"));
         assert!(!config.is_protected(".env"));
@@ -393,17 +386,8 @@ mod tests {
 
     #[test]
     fn test_pattern_matching() {
-        assert!(DotfileProtectionConfig::matches_pattern(
-            ".env.local",
-            ".env.*"
-        ));
-        assert!(DotfileProtectionConfig::matches_pattern(
-            ".env.production",
-            ".env.*"
-        ));
-        assert!(DotfileProtectionConfig::matches_pattern(
-            ".vscode/settings.json",
-            ".vscode/*"
-        ));
+        assert!(DotfileProtectionConfig::matches_pattern(".env.local", ".env.*"));
+        assert!(DotfileProtectionConfig::matches_pattern(".env.production", ".env.*"));
+        assert!(DotfileProtectionConfig::matches_pattern(".vscode/settings.json", ".vscode/*"));
     }
 }

@@ -169,7 +169,7 @@ git filter-branch
 
 ## Configuration
 
-Git execution is validated in the execution policy module: `vtcode-core/src/execpolicy/mod.rs`
+Git execution is validated in the execution policy module: `crates/codegen/vtcode-core/src/execpolicy/mod.rs`
 
 To modify allowed operations:
 1. Edit `validate_git()` function

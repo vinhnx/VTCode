@@ -44,12 +44,7 @@ pub async fn handle_pods_command(command: PodsCommands) -> Result<()> {
                 .stop_model(&name)
                 .await?
                 .ok_or_else(|| anyhow!("unknown model '{name}'"))?;
-            println!(
-                "{} Stopped {} (pid {})",
-                green("✓"),
-                cyan(&name),
-                stopped.pid
-            );
+            println!("{} Stopped {} (pid {})", green("✓"), cyan(&name), stopped.pid);
         }
         PodsCommands::StopAll => {
             let count = manager.stop_all_models().await?;
@@ -86,10 +81,7 @@ fn parse_gpu_entries(raw: &[String]) -> Result<Vec<PodGpu>> {
             if name.is_empty() {
                 return Err(anyhow!("GPU name cannot be empty"));
             }
-            Ok(PodGpu {
-                id,
-                name: name.to_string(),
-            })
+            Ok(PodGpu { id, name: name.to_string() })
         })
         .collect()
 }
@@ -102,15 +94,7 @@ fn print_start_result(result: &crate::pods::PodStartResult) {
     println!("  Port: {}", cyan(&result.entry.port.to_string()));
     println!(
         "  GPUs: {}",
-        cyan(
-            &result
-                .entry
-                .gpu_ids
-                .iter()
-                .map(u32::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
+        cyan(&result.entry.gpu_ids.iter().map(u32::to_string).collect::<Vec<_>>().join(", "))
     );
     println!("  Launch: {}", yellow(&result.launch_command));
 }
@@ -133,12 +117,7 @@ fn print_list_report(report: &PodStatusReport) {
             entry.model,
             entry.port,
             entry.pid,
-            entry
-                .gpu_ids
-                .iter()
-                .map(u32::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
+            entry.gpu_ids.iter().map(u32::to_string).collect::<Vec<_>>().join(", ")
         );
     }
 }

@@ -227,18 +227,12 @@ mod tests {
 
     #[test]
     fn base_level_detects_truecolor_from_colorterm() {
-        assert_eq!(
-            base_diff_color_level("truecolor", "xterm-256color"),
-            DiffColorLevel::TrueColor
-        );
+        assert_eq!(base_diff_color_level("truecolor", "xterm-256color"), DiffColorLevel::TrueColor);
     }
 
     #[test]
     fn base_level_detects_ansi256_from_term() {
-        assert_eq!(
-            base_diff_color_level("", "xterm-256color"),
-            DiffColorLevel::Ansi256
-        );
+        assert_eq!(base_diff_color_level("", "xterm-256color"), DiffColorLevel::Ansi256);
     }
 
     #[test]

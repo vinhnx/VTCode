@@ -144,9 +144,7 @@ impl Patch {
     }
 
     pub async fn apply(&self, root: &Path) -> anyhow::Result<Vec<String>> {
-        applicator::apply(root, &self.operations)
-            .await
-            .map_err(|err| anyhow!(err))
+        applicator::apply(root, &self.operations).await.map_err(|err| anyhow!(err))
     }
 }
 
@@ -230,13 +228,8 @@ mod tests {
                 .unwrap();
 
         let result = patch.apply(temp_dir.path()).await.unwrap();
-        assert_eq!(
-            result,
-            vec!["[1/1] Added file: file.txt (8 bytes)".to_string()]
-        );
-        let written = tokio::fs::read_to_string(temp_dir.path().join("file.txt"))
-            .await
-            .unwrap();
+        assert_eq!(result, vec!["[1/1] Added file: file.txt (8 bytes)".to_string()]);
+        let written = tokio::fs::read_to_string(temp_dir.path().join("file.txt")).await.unwrap();
         assert_eq!(written, "content\n");
     }
 
@@ -247,9 +240,7 @@ mod tests {
     #[test]
     fn looks_like_vte_patch_detects_envelope_and_bare_headers() {
         assert!(looks_like_vte_patch("*** Begin Patch\n*** End Patch"));
-        assert!(looks_like_vte_patch(
-            "*** Update File: src/main.rs\n@@\n+new\n"
-        ));
+        assert!(looks_like_vte_patch("*** Update File: src/main.rs\n@@\n+new\n"));
         assert!(looks_like_vte_patch("*** Add File: new.txt\n+content\n"));
         assert!(looks_like_vte_patch("*** Delete File: old.txt"));
         // Leading whitespace is tolerated.

@@ -47,18 +47,12 @@ impl FileOpsTool {
     pub async fn create_file(&self, args: Value) -> Result<Value> {
         let input: CreateInput = deserialize_tool_args(&args, "create_file")?;
 
-        let CreateInput {
-            path,
-            content,
-            encoding,
-        } = input;
+        let CreateInput { path, content, encoding } = input;
 
         let file_path = self.normalize_and_validate_user_path(&path).await?;
 
         if self.should_exclude(&file_path).await {
-            return Err(anyhow!(
-                "Error: Path '{path}' is excluded by .vtcodegitignore"
-            ));
+            return Err(anyhow!("Error: Path '{path}' is excluded by .vtcodegitignore"));
         }
 
         if tokio::fs::try_exists(&file_path).await? {
@@ -94,19 +88,12 @@ impl FileOpsTool {
     pub async fn delete_file(&self, args: Value) -> Result<Value> {
         let input: DeleteInput = deserialize_tool_args(&args, "delete_file")?;
 
-        let DeleteInput {
-            path,
-            recursive,
-            force,
-        } = input;
+        let DeleteInput { path, recursive, force } = input;
 
         let target_path = self.workspace_root.join(&path);
 
-        let exists = with_path_context(
-            tokio::fs::try_exists(&target_path).await,
-            "check if exists",
-            &path,
-        )?;
+        let exists =
+            with_path_context(tokio::fs::try_exists(&target_path).await, "check if exists", &path)?;
 
         if !exists {
             if force {
@@ -142,11 +129,8 @@ impl FileOpsTool {
             ));
         }
 
-        let metadata = with_path_context(
-            tokio::fs::metadata(&canonical).await,
-            "read metadata for",
-            &path,
-        )?;
+        let metadata =
+            with_path_context(tokio::fs::metadata(&canonical).await, "read metadata for", &path)?;
 
         let deleted_kind = if metadata.is_dir() {
             if !recursive {
@@ -162,11 +146,7 @@ impl FileOpsTool {
             )?;
             "directory"
         } else {
-            with_path_context(
-                tokio::fs::remove_file(&canonical).await,
-                "remove file",
-                &path,
-            )?;
+            with_path_context(tokio::fs::remove_file(&canonical).await, "remove file", &path)?;
             "file"
         };
 
@@ -182,15 +162,10 @@ impl FileOpsTool {
     pub async fn move_file(&self, args: Value) -> Result<Value> {
         let input: MoveInput = deserialize_tool_args(&args, "move_file")?;
 
-        let MoveInput {
-            path,
-            destination,
-            force,
-        } = input;
+        let MoveInput { path, destination, force } = input;
 
-        let (from_path, to_path) = self
-            .validate_move_copy_args(&path, &destination, "moved")
-            .await?;
+        let (from_path, to_path) =
+            self.validate_move_copy_args(&path, &destination, "moved").await?;
 
         if tokio::fs::try_exists(&to_path).await? && !force {
             return Err(anyhow!(
@@ -215,15 +190,10 @@ impl FileOpsTool {
     pub async fn copy_file(&self, args: Value) -> Result<Value> {
         let input: CopyInput = deserialize_tool_args(&args, "copy_file")?;
 
-        let CopyInput {
-            path,
-            destination,
-            recursive,
-        } = input;
+        let CopyInput { path, destination, recursive } = input;
 
-        let (from_path, to_path) = self
-            .validate_move_copy_args(&path, &destination, "copied")
-            .await?;
+        let (from_path, to_path) =
+            self.validate_move_copy_args(&path, &destination, "copied").await?;
 
         let metadata = tokio::fs::metadata(&from_path).await?;
         if metadata.is_dir() {
@@ -234,10 +204,7 @@ impl FileOpsTool {
             }
             // Simple recursive copy
             use vtcode_commons::walk::build_walker_single_threaded;
-            for entry in build_walker_single_threaded(&from_path)
-                .build()
-                .filter_map(|e| e.ok())
-            {
+            for entry in build_walker_single_threaded(&from_path).build().filter_map(|e| e.ok()) {
                 let entry_path = entry.path();
                 let relative = entry_path.strip_prefix(&from_path).unwrap_or(entry_path);
                 let target = to_path.join(relative);

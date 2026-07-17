@@ -13,11 +13,7 @@ impl ToolRegistry {
     /// Get a tool by name from the inventory (with hot cache optimization).
     pub fn get_tool(&self, name: &str) -> Option<Arc<dyn Tool>> {
         // Check hot cache first if optimizations are enabled
-        if self
-            .optimization_config
-            .tool_registry
-            .use_optimized_registry
-        {
+        if self.optimization_config.tool_registry.use_optimized_registry {
             // Use a separate read and write operation to avoid borrow checker issues
             {
                 let cache = self.hot_tool_cache.read();
@@ -28,24 +24,16 @@ impl ToolRegistry {
         }
 
         // Fallback to inventory lookup
-        let tool = self
-            .inventory
-            .get_registration(name)
-            .and_then(|reg| match reg.handler() {
-                ToolHandler::TraitObject(tool) => Some(tool.clone()),
-                _ => None,
-            });
+        let tool = self.inventory.get_registration(name).and_then(|reg| match reg.handler() {
+            ToolHandler::TraitObject(tool) => Some(tool.clone()),
+            _ => None,
+        });
 
         // Cache the result if optimizations are enabled and tool was found
         if let Some(ref tool_arc) = tool
-            && self
-                .optimization_config
-                .tool_registry
-                .use_optimized_registry
+            && self.optimization_config.tool_registry.use_optimized_registry
         {
-            self.hot_tool_cache
-                .write()
-                .put(name.to_string(), tool_arc.clone());
+            self.hot_tool_cache.write().put(name.to_string(), tool_arc.clone());
         }
 
         tool

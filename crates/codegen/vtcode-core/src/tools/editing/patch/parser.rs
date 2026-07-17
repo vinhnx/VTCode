@@ -20,9 +20,7 @@ pub(crate) fn parse(input: &str) -> Result<Vec<PatchOperation>, PatchError> {
 
     let raw_lines: Vec<&str> = trimmed.lines().collect();
     if raw_lines.is_empty() {
-        return Err(PatchError::InvalidFormat(
-            "missing '*** Begin Patch' marker".to_string(),
-        ));
+        return Err(PatchError::InvalidFormat("missing '*** Begin Patch' marker".to_string()));
     }
 
     let lines = normalize_patch_lines(raw_lines.as_slice(), true)?;
@@ -99,9 +97,7 @@ fn check_patch_boundaries(lines: &[&str]) -> Result<(), PatchError> {
             };
             Err(PatchError::InvalidFormat(hint.to_string()))
         }
-        _ => Err(PatchError::InvalidFormat(
-            "missing '*** End Patch' marker".to_string(),
-        )),
+        _ => Err(PatchError::InvalidFormat("missing '*** End Patch' marker".to_string())),
     }
 }
 
@@ -125,10 +121,7 @@ fn parse_operation(
     line_number: usize,
 ) -> Result<(PatchOperation, usize), PatchError> {
     if lines.is_empty() {
-        return Err(invalid_hunk(
-            line_number,
-            "unexpected end of input before operation header",
-        ));
+        return Err(invalid_hunk(line_number, "unexpected end of input before operation header"));
     }
 
     let header = lines[0].trim();
@@ -168,24 +161,13 @@ fn parse_add_file(
         }
     }
 
-    Ok((
-        PatchOperation::AddFile {
-            path: path.to_string(),
-            content,
-        },
-        consumed,
-    ))
+    Ok((PatchOperation::AddFile { path: path.to_string(), content }, consumed))
 }
 
 fn parse_delete_file(path_text: &str) -> Result<(PatchOperation, usize), PatchError> {
     let path = path_text.trim();
     validate_patch_path("Delete File", path)?;
-    Ok((
-        PatchOperation::DeleteFile {
-            path: path.to_string(),
-        },
-        1,
-    ))
+    Ok((PatchOperation::DeleteFile { path: path.to_string() }, 1))
 }
 
 fn parse_update_file(
@@ -200,9 +182,8 @@ fn parse_update_file(
     let mut index = 0usize;
     let mut new_path = None;
 
-    if let Some(candidate) = remaining
-        .first()
-        .and_then(|line| line.trim().strip_prefix(MOVE_TO_MARKER))
+    if let Some(candidate) =
+        remaining.first().and_then(|line| line.trim().strip_prefix(MOVE_TO_MARKER))
     {
         let candidate_trimmed = candidate.trim();
         validate_patch_path("Move to", candidate_trimmed)?;
@@ -226,11 +207,8 @@ fn parse_update_file(
             continue;
         }
 
-        let (chunk, used) = parse_update_chunk(
-            &remaining[index..],
-            line_number + consumed,
-            allow_missing_context,
-        )?;
+        let (chunk, used) =
+            parse_update_chunk(&remaining[index..], line_number + consumed, allow_missing_context)?;
         chunks.push(chunk);
         index += used;
         consumed += used;
@@ -244,14 +222,7 @@ fn parse_update_file(
         ));
     }
 
-    Ok((
-        PatchOperation::UpdateFile {
-            path: path.to_string(),
-            new_path,
-            chunks,
-        },
-        consumed,
-    ))
+    Ok((PatchOperation::UpdateFile { path: path.to_string(), new_path, chunks }, consumed))
 }
 
 fn parse_update_chunk(
@@ -260,10 +231,7 @@ fn parse_update_chunk(
     allow_missing_context: bool,
 ) -> Result<(PatchChunk, usize), PatchError> {
     if lines.is_empty() {
-        return Err(invalid_hunk(
-            line_number,
-            "update hunk does not contain any lines",
-        ));
+        return Err(invalid_hunk(line_number, "update hunk does not contain any lines"));
     }
 
     let first = lines[0];
@@ -277,17 +245,11 @@ fn parse_update_chunk(
     } else if allow_missing_context {
         (None, 0)
     } else {
-        return Err(invalid_hunk(
-            line_number,
-            &format!("expected '@@' marker, found '{first}'"),
-        ));
+        return Err(invalid_hunk(line_number, &format!("expected '@@' marker, found '{first}'")));
     };
 
     if offset >= lines.len() {
-        return Err(invalid_hunk(
-            line_number,
-            "update hunk does not contain any diff lines",
-        ));
+        return Err(invalid_hunk(line_number, "update hunk does not contain any diff lines"));
     }
 
     let mut chunk = PatchChunk {
@@ -323,19 +285,13 @@ fn parse_update_chunk(
 
         match current.chars().next() {
             Some(' ') => {
-                chunk
-                    .lines
-                    .push(PatchLine::Context(current[1..].to_string()));
+                chunk.lines.push(PatchLine::Context(current[1..].to_string()));
             }
             Some('+') => {
-                chunk
-                    .lines
-                    .push(PatchLine::Addition(current[1..].to_string()));
+                chunk.lines.push(PatchLine::Addition(current[1..].to_string()));
             }
             Some('-') => {
-                chunk
-                    .lines
-                    .push(PatchLine::Removal(current[1..].to_string()));
+                chunk.lines.push(PatchLine::Removal(current[1..].to_string()));
             }
             None => {
                 chunk.lines.push(PatchLine::Context(String::new()));
@@ -356,20 +312,14 @@ fn parse_update_chunk(
     }
 
     if parsed_lines == 0 {
-        return Err(invalid_hunk(
-            line_number,
-            "update hunk does not contain any diff lines",
-        ));
+        return Err(invalid_hunk(line_number, "update hunk does not contain any diff lines"));
     }
 
     Ok((chunk, consumed))
 }
 
 fn invalid_hunk(line: usize, message: &str) -> PatchError {
-    PatchError::InvalidHunk {
-        line,
-        message: message.to_string(),
-    }
+    PatchError::InvalidHunk { line, message: message.to_string() }
 }
 
 #[cfg(test)]
@@ -453,14 +403,8 @@ mod tests {
                     +new\n";
         let err = parse(diff).expect_err("unified diff should be rejected");
         let msg = err.to_string();
-        assert!(
-            msg.contains("unified diff"),
-            "error should identify the format: {msg}"
-        );
-        assert!(
-            msg.contains("*** Begin Patch"),
-            "error should name the required envelope: {msg}"
-        );
+        assert!(msg.contains("unified diff"), "error should identify the format: {msg}");
+        assert!(msg.contains("*** Begin Patch"), "error should name the required envelope: {msg}");
     }
 
     #[test]

@@ -11,14 +11,10 @@ pub(super) struct SetupInterrupted;
 
 pub(super) fn prompt_with_placeholder(prompt: &str) -> Result<String> {
     print!("{prompt}: ");
-    io::stdout()
-        .flush()
-        .context("Failed to flush prompt to stdout")?;
+    io::stdout().flush().context("Failed to flush prompt to stdout")?;
 
     let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .context("Failed to read setup input")?;
+    io::stdin().read_line(&mut input).context("Failed to read setup input")?;
     Ok(input)
 }
 

@@ -178,10 +178,7 @@ async fn fetch_latest_prerelease_info(
             Err(_) => continue,
         };
 
-        let is_prerelease = release
-            .get("prerelease")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let is_prerelease = release.get("prerelease").and_then(|v| v.as_bool()).unwrap_or(false);
 
         let matches_channel = match channel {
             ReleaseChannel::Stable | ReleaseChannel::Unknown => !is_prerelease,
@@ -206,14 +203,10 @@ async fn fetch_latest_prerelease_info(
         }
     }
 
-    let (version, release_notes) = best.context(format!(
-        "No {channel} releases found on GitHub for {REPO_SLUG}"
-    ))?;
+    let (version, release_notes) =
+        best.context(format!("No {channel} releases found on GitHub for {REPO_SLUG}"))?;
 
-    Ok(UpdateInfo {
-        version,
-        release_notes,
-    })
+    Ok(UpdateInfo { version, release_notes })
 }
 
 pub(super) async fn list_versions(limit: usize, timeout_secs: u64) -> Result<Vec<VersionInfo>> {
@@ -229,14 +222,10 @@ pub(super) async fn list_versions(limit: usize, timeout_secs: u64) -> Result<Vec
             let tag_name = release.get("tag_name")?.as_str()?;
             let version_str = tag_name.trim_start_matches('v');
             let version = Version::parse(version_str).ok()?;
-            let is_prerelease = release
-                .get("prerelease")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let published_at = release
-                .get("published_at")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+            let is_prerelease =
+                release.get("prerelease").and_then(|v| v.as_bool()).unwrap_or(false);
+            let published_at =
+                release.get("published_at").and_then(|v| v.as_str()).map(|s| s.to_string());
 
             Some(VersionInfo {
                 version,

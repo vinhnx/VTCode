@@ -104,9 +104,7 @@ pub(super) fn render_plan_with_tracker(
     tracker_markdown: Option<&str>,
 ) -> String {
     let base_plan = strip_embedded_tracker(plan_markdown);
-    let Some(tracker_markdown) = tracker_markdown
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    let Some(tracker_markdown) = tracker_markdown.map(str::trim).filter(|value| !value.is_empty())
     else {
         return format!("{}\n", base_plan.trim_end());
     };
@@ -251,14 +249,9 @@ pub fn validate_plan_content(content: &str) -> PlanValidationReport {
             .count();
     }
     if report.implementation_step_count == 0
-        && !report
-            .missing_sections
-            .iter()
-            .any(|s| s == "Implementation Steps")
+        && !report.missing_sections.iter().any(|s| s == "Implementation Steps")
     {
-        report
-            .missing_sections
-            .push("Implementation Steps".to_string());
+        report.missing_sections.push("Implementation Steps".to_string());
     }
 
     if let Some(body) = validation_body.as_deref() {
@@ -268,14 +261,9 @@ pub fn validate_plan_content(content: &str) -> PlanValidationReport {
             .count();
     }
     if report.validation_item_count == 0
-        && !report
-            .missing_sections
-            .iter()
-            .any(|s| s == "Test Cases and Validation")
+        && !report.missing_sections.iter().any(|s| s == "Test Cases and Validation")
     {
-        report
-            .missing_sections
-            .push("Test Cases and Validation".to_string());
+        report.missing_sections.push("Test Cases and Validation".to_string());
     }
 
     if let Some(body) = assumptions_body.as_deref() {
@@ -285,14 +273,9 @@ pub fn validate_plan_content(content: &str) -> PlanValidationReport {
             .count();
     }
     if report.assumption_count == 0
-        && !report
-            .missing_sections
-            .iter()
-            .any(|s| s == "Assumptions and Defaults")
+        && !report.missing_sections.iter().any(|s| s == "Assumptions and Defaults")
     {
-        report
-            .missing_sections
-            .push("Assumptions and Defaults".to_string());
+        report.missing_sections.push("Assumptions and Defaults".to_string());
     }
 
     report
@@ -313,9 +296,7 @@ pub(super) fn tracker_has_progress_or_notes(tracker: &str) -> bool {
     if lower.contains("## notes") {
         return true;
     }
-    ["[x]", "[~]", "[!]", "[/]"]
-        .iter()
-        .any(|marker| lower.contains(marker))
+    ["[x]", "[~]", "[!]", "[/]"].iter().any(|marker| lower.contains(marker))
 }
 
 pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String> {
@@ -327,18 +308,11 @@ pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String
         .unwrap_or("Implementation Plan");
 
     let mut items = Vec::new();
-    for line in implementation
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-    {
+    for line in implementation.lines().map(str::trim).filter(|line| !line.is_empty()) {
         if !is_numbered_line(line) {
             continue;
         }
-        let description = line
-            .split_once(['.', ')'])
-            .map(|(_, rest)| rest.trim())
-            .unwrap_or(line);
+        let description = line.split_once(['.', ')']).map(|(_, rest)| rest.trim()).unwrap_or(line);
         let segments = description.split("->").map(str::trim).collect::<Vec<_>>();
         let main = segments.first().copied().unwrap_or_default();
         if main.is_empty() {
@@ -382,9 +356,5 @@ pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String
         return None;
     }
 
-    Some(format!(
-        "# {}\n\n## Plan of Work\n\n{}",
-        title,
-        items.concat().trim_end()
-    ))
+    Some(format!("# {}\n\n## Plan of Work\n\n{}", title, items.concat().trim_end()))
 }

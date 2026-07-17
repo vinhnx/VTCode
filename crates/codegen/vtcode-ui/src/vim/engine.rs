@@ -59,11 +59,7 @@ pub fn handle_key<E: Editor>(
         return HandleKeyOutcome::default();
     }
 
-    let mut ctx = VimContext {
-        state,
-        editor,
-        clipboard,
-    };
+    let mut ctx = VimContext { state, editor, clipboard };
     ctx.handle_key(key)
 }
 
@@ -86,10 +82,7 @@ impl<E: Editor> VimContext<'_, E> {
             self.finish_insert_capture();
             self.state.set_mode(VimMode::Normal);
             self.state.pending = None;
-            return HandleKeyOutcome {
-                handled: true,
-                clear_selection: true,
-            };
+            return HandleKeyOutcome { handled: true, clear_selection: true };
         }
         HandleKeyOutcome::default()
     }
@@ -98,10 +91,7 @@ impl<E: Editor> VimContext<'_, E> {
         let handled = match key.code {
             KeyCode::Esc => {
                 self.state.pending = None;
-                return HandleKeyOutcome {
-                    handled: true,
-                    clear_selection: true,
-                };
+                return HandleKeyOutcome { handled: true, clear_selection: true };
             }
             KeyCode::Char(ch) => {
                 if let Some(pending) = self.state.pending.take() {
@@ -131,10 +121,7 @@ impl<E: Editor> VimContext<'_, E> {
             _ => false,
         };
 
-        HandleKeyOutcome {
-            handled,
-            clear_selection: false,
-        }
+        HandleKeyOutcome { handled, clear_selection: false }
     }
 
     fn handle_pending(&mut self, pending: PendingState, ch: char) -> bool {
@@ -194,10 +181,8 @@ impl<E: Editor> VimContext<'_, E> {
                 true
             }
             '^' => {
-                self.editor.set_cursor(vim_line_first_non_ws(
-                    self.editor.content(),
-                    self.editor.cursor(),
-                ));
+                self.editor
+                    .set_cursor(vim_line_first_non_ws(self.editor.content(), self.editor.cursor()));
                 self.state.preferred_column = None;
                 true
             }
@@ -216,31 +201,19 @@ impl<E: Editor> VimContext<'_, E> {
                 true
             }
             'f' => {
-                self.state.pending = Some(PendingState::Find {
-                    till: false,
-                    forward: true,
-                });
+                self.state.pending = Some(PendingState::Find { till: false, forward: true });
                 true
             }
             'F' => {
-                self.state.pending = Some(PendingState::Find {
-                    till: false,
-                    forward: false,
-                });
+                self.state.pending = Some(PendingState::Find { till: false, forward: false });
                 true
             }
             't' => {
-                self.state.pending = Some(PendingState::Find {
-                    till: true,
-                    forward: true,
-                });
+                self.state.pending = Some(PendingState::Find { till: true, forward: true });
                 true
             }
             'T' => {
-                self.state.pending = Some(PendingState::Find {
-                    till: true,
-                    forward: false,
-                });
+                self.state.pending = Some(PendingState::Find { till: true, forward: false });
                 true
             }
             ';' => self.repeat_find(false),
@@ -370,31 +343,11 @@ impl<E: Editor> VimContext<'_, E> {
         let object = match ch {
             'w' => TextObjectSpec::Word { around, big: false },
             'W' => TextObjectSpec::Word { around, big: true },
-            '"' => TextObjectSpec::Delimited {
-                around,
-                open: '"',
-                close: '"',
-            },
-            '\'' => TextObjectSpec::Delimited {
-                around,
-                open: '\'',
-                close: '\'',
-            },
-            '(' => TextObjectSpec::Delimited {
-                around,
-                open: '(',
-                close: ')',
-            },
-            '[' => TextObjectSpec::Delimited {
-                around,
-                open: '[',
-                close: ']',
-            },
-            '{' => TextObjectSpec::Delimited {
-                around,
-                open: '{',
-                close: '}',
-            },
+            '"' => TextObjectSpec::Delimited { around, open: '"', close: '"' },
+            '\'' => TextObjectSpec::Delimited { around, open: '\'', close: '\'' },
+            '(' => TextObjectSpec::Delimited { around, open: '(', close: ')' },
+            '[' => TextObjectSpec::Delimited { around, open: '[', close: ']' },
+            '{' => TextObjectSpec::Delimited { around, open: '{', close: '}' },
             _ => return false,
         };
 
@@ -411,13 +364,9 @@ impl<E: Editor> VimContext<'_, E> {
     }
 
     fn handle_find(&mut self, forward: bool, till: bool, ch: char) -> bool {
-        if let Some(pos) = vim_find_char(
-            self.editor.content(),
-            self.editor.cursor(),
-            ch,
-            forward,
-            till,
-        ) {
+        if let Some(pos) =
+            vim_find_char(self.editor.content(), self.editor.cursor(), ch, forward, till)
+        {
             self.editor.set_cursor(pos);
             self.state.last_find = Some(FindState { ch, till, forward });
             self.state.preferred_column = None;
@@ -451,14 +400,12 @@ impl<E: Editor> VimContext<'_, E> {
             let inserted = self.editor.content()[capture.start..cursor].to_string();
             self.state.last_change = match capture.repeat {
                 InsertRepeat::Insert(_) if inserted.is_empty() => None,
-                InsertRepeat::Insert(kind) => Some(RepeatableCommand::InsertText {
-                    kind,
-                    text: inserted,
-                }),
-                InsertRepeat::Change(target) => Some(RepeatableCommand::Change {
-                    target,
-                    text: inserted,
-                }),
+                InsertRepeat::Insert(kind) => {
+                    Some(RepeatableCommand::InsertText { kind, text: inserted })
+                }
+                InsertRepeat::Change(target) => {
+                    Some(RepeatableCommand::Change { target, text: inserted })
+                }
             };
         }
     }
@@ -467,10 +414,8 @@ impl<E: Editor> VimContext<'_, E> {
         self.capture_range(start, end);
         self.replace_range(start, end, "");
         self.state.set_mode(VimMode::Insert);
-        self.state.insert_capture = Some(InsertCapture {
-            repeat: InsertRepeat::Change(target),
-            start,
-        });
+        self.state.insert_capture =
+            Some(InsertCapture { repeat: InsertRepeat::Change(target), start });
     }
 
     fn start_change(&mut self, target: ChangeTarget) -> bool {
@@ -542,10 +487,7 @@ impl<E: Editor> VimContext<'_, E> {
             self.editor.cursor()
         } else {
             let prev_end = line_start - 1;
-            let prev_start = content[..prev_end]
-                .rfind('\n')
-                .map(|idx| idx + 1)
-                .unwrap_or(0);
+            let prev_start = content[..prev_end].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
             (prev_start + column).min(prev_end)
         };
         self.editor.set_cursor(target);
@@ -724,8 +666,7 @@ impl<E: Editor> VimContext<'_, E> {
                 } else {
                     self.editor.cursor()
                 };
-                self.editor
-                    .replace_range(insert_at, insert_at, self.clipboard);
+                self.editor.replace_range(insert_at, insert_at, self.clipboard);
                 self.editor.set_cursor(insert_at + self.clipboard.len());
             }
             ClipboardKind::LineWise => {
@@ -740,8 +681,7 @@ impl<E: Editor> VimContext<'_, E> {
                 } else {
                     line_start
                 };
-                self.editor
-                    .replace_range(insert_at, insert_at, self.clipboard);
+                self.editor.replace_range(insert_at, insert_at, self.clipboard);
                 let cursor = (insert_at + self.clipboard.len()).min(self.editor.content().len());
                 self.editor.set_cursor(cursor);
             }

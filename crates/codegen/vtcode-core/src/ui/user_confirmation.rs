@@ -67,10 +67,7 @@ impl UserConfirmation {
 
         match selection {
             0 => {
-                println!(
-                    "{}",
-                    style("✓ Using Gemini 3 Pro model for this task").green()
-                );
+                println!("{}", style("✓ Using Gemini 3 Pro model for this task").green());
                 Ok(ProModelConfirmationResult::Yes)
             }
             1 => {
@@ -125,16 +122,10 @@ impl UserConfirmation {
 
         match complexity {
             TaskComplexity::Simple => {
-                println!(
-                    "{}",
-                    style("Simple task - Single agent recommended").green()
-                );
+                println!("{}", style("Simple task - Single agent recommended").green());
             }
             TaskComplexity::Moderate => {
-                println!(
-                    "{}",
-                    style("Moderate task - Single agent usually sufficient").cyan()
-                );
+                println!("{}", style("Moderate task - Single agent usually sufficient").cyan());
             }
             TaskComplexity::Complex => {
                 println!(

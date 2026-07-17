@@ -13,12 +13,7 @@ pub async fn handle_models_command(cli: &Cli, command: &ModelCommands) -> Result
         ModelCommands::List => handle_list_models(cli).await,
         ModelCommands::SetProvider { provider } => handle_set_provider(cli, provider).await,
         ModelCommands::SetModel { model } => handle_set_model(cli, model).await,
-        ModelCommands::Config {
-            provider,
-            api_key,
-            base_url,
-            model,
-        } => {
+        ModelCommands::Config { provider, api_key, base_url, model } => {
             handle_config_provider(
                 cli,
                 provider,
@@ -113,9 +108,7 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
         "evolink" => (config.providers.evolink.as_ref(), false),
         _ => return false,
     };
-    provider_config
-        .map(|p| p.enabled)
-        .unwrap_or(default_enabled)
+    provider_config.map(|p| p.enabled).unwrap_or(default_enabled)
 }
 
 /// Set default provider
@@ -152,9 +145,7 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
     println!(
         "{} Configure: {}",
         cyan("・"),
-        dimmed(&format!(
-            "vtcode models config {provider} --api-key YOUR_KEY"
-        ))
+        dimmed(&format!("vtcode models config {provider} --api-key YOUR_KEY"))
     );
 
     Ok(())
@@ -300,11 +291,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
             if content.to_lowercase().contains("ok") {
                 println!("{} {} test successful!", green("✓"), green(&bold(provider)));
             } else {
-                println!(
-                    "{} {} responded unexpectedly",
-                    yellow("・"),
-                    yellow(&bold(provider))
-                );
+                println!("{} {} responded unexpectedly", yellow("・"), yellow(&bold(provider)));
             }
         }
         Err(e) => {
@@ -346,10 +333,7 @@ async fn handle_compare_models(_cli: &Cli) -> Result<()> {
     println!("{} Coming soon! Will compare:", yellow("✦"));
     println!("• Response times • Token usage • Cost • Quality");
     println!();
-    println!(
-        "{} Use 'vtcode models list' for available models",
-        cyan("・")
-    );
+    println!("{} Use 'vtcode models list' for available models", cyan("・"));
 
     Ok(())
 }
@@ -382,10 +366,7 @@ async fn handle_model_info(_cli: &Cli, model: &str) -> Result<()> {
                 yellow("No")
             }
         );
-        println!(
-            "Availability: {}",
-            model_availability_label(&resolved.availability)
-        );
+        println!("Availability: {}", model_availability_label(&resolved.availability));
     } else {
         println!("Provider: {}", infer_provider_from_model(model));
         println!("Availability: {}", yellow("Unknown"));

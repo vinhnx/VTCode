@@ -106,10 +106,7 @@ impl ErrorRecoveryManager {
         recovery_strategies.insert(
             ErrorType::ToolExecution,
             vec![
-                RecoveryStrategy::RetryWithBackoff {
-                    delay_ms: 1000,
-                    attempt_number: 1,
-                },
+                RecoveryStrategy::RetryWithBackoff { delay_ms: 1000, attempt_number: 1 },
                 RecoveryStrategy::AlternativeTool {
                     original_tool: String::new(),
                     alternative_tool: String::new(),
@@ -120,13 +117,8 @@ impl ErrorRecoveryManager {
         recovery_strategies.insert(
             ErrorType::ApiCall,
             vec![
-                RecoveryStrategy::RetryWithBackoff {
-                    delay_ms: 2000,
-                    attempt_number: 1,
-                },
-                RecoveryStrategy::ContextReset {
-                    preserved_data: IndexMap::new(),
-                },
+                RecoveryStrategy::RetryWithBackoff { delay_ms: 2000, attempt_number: 1 },
+                RecoveryStrategy::ContextReset { preserved_data: IndexMap::new() },
             ],
         );
 
@@ -225,9 +217,7 @@ impl ErrorRecoveryManager {
                     preserve_decisions: true,
                     preserve_errors: true,
                 },
-                PreservationStrategy::ContextReset {
-                    preserve_session_data: true,
-                },
+                PreservationStrategy::ContextReset { preserve_session_data: true },
             ]
         } else {
             vec![PreservationStrategy::NoAction]
@@ -275,13 +265,7 @@ impl ErrorRecoveryManager {
 
         // Get recent errors more efficiently
         let recent_count = total_errors.min(5);
-        let recent_errors: Vec<_> = self
-            .errors
-            .iter()
-            .rev()
-            .take(recent_count)
-            .cloned()
-            .collect();
+        let recent_errors: Vec<_> = self.errors.iter().rev().take(recent_count).cloned().collect();
 
         ErrorStatistics {
             total_errors,
@@ -343,9 +327,7 @@ impl ErrorRecoveryManager {
         attempt: u32,
     ) -> bool {
         let operation_type = self.get_operation_type(error_type);
-        TIMEOUT_DETECTOR
-            .should_retry(&operation_type, error, attempt)
-            .await
+        TIMEOUT_DETECTOR.should_retry(&operation_type, error, attempt).await
     }
 
     /// Get timeout statistics for monitoring and optimization

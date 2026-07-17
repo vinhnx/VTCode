@@ -15,9 +15,7 @@ pub(super) fn looks_like_shell_command(command_part: &str) -> bool {
     parse_shell_commands_tree_sitter(command_part)
         .map(|commands| !commands.is_empty())
         .unwrap_or_else(|_| {
-            shell_split(command_part)
-                .map(|tokens| !tokens.is_empty())
-                .unwrap_or(false)
+            shell_split(command_part).map(|tokens| !tokens.is_empty()).unwrap_or(false)
         })
 }
 

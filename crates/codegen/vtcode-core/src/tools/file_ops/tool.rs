@@ -81,9 +81,7 @@ impl FileOpsTool {
     /// Get relative path from workspace root, avoiding allocation when possible
     #[inline]
     pub(super) fn relative_path<'a>(&self, path: &'a Path) -> Cow<'a, str> {
-        path.strip_prefix(&self.workspace_root)
-            .unwrap_or(path)
-            .to_string_lossy()
+        path.strip_prefix(&self.workspace_root).unwrap_or(path).to_string_lossy()
     }
 
     /// Get relative path as JSON value (for API responses)
@@ -97,18 +95,13 @@ impl FileOpsTool {
 impl Tool for FileOpsTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let mut input: ListInput = deserialize_tool_args(&args, "list_files")?;
-        if input
-            .mode
-            .as_deref()
-            .is_some_and(|mode| mode.trim().is_empty())
-        {
+        if input.mode.as_deref().is_some_and(|mode| mode.trim().is_empty()) {
             input.mode = None;
         }
 
         // Standard path extraction from args (handles aliases)
-        let path_args: PathArgs = serde_json::from_value(args).unwrap_or(PathArgs {
-            path: input.path.clone(),
-        });
+        let path_args: PathArgs =
+            serde_json::from_value(args).unwrap_or(PathArgs { path: input.path.clone() });
         input.path = path_args.path;
 
         // Normalize path: strip /workspace prefix if present (common LLM pattern)
@@ -123,13 +116,9 @@ impl Tool for FileOpsTool {
         validate_non_root_listing_path(Some(input.path.as_str()))?;
 
         let should_promote_glob_to_recursive = input.mode.is_none()
-            && input
-                .glob_pattern
-                .as_deref()
-                .map(str::trim)
-                .is_some_and(|pattern| {
-                    !pattern.is_empty() && (pattern.contains('/') || pattern.contains("**"))
-                });
+            && input.glob_pattern.as_deref().map(str::trim).is_some_and(|pattern| {
+                !pattern.is_empty() && (pattern.contains('/') || pattern.contains("**"))
+            });
         if should_promote_glob_to_recursive {
             input.mode = Some("recursive".to_string());
         }
@@ -257,11 +246,8 @@ mod tests {
         let temp_dir = TempDir::new().expect("workspace tempdir");
         fs::create_dir_all(temp_dir.path().join("src/nested")).expect("create nested src");
         fs::write(temp_dir.path().join("src/lib.rs"), "pub fn lib() {}\n").expect("write lib");
-        fs::write(
-            temp_dir.path().join("src/nested/mod.rs"),
-            "pub fn nested() {}\n",
-        )
-        .expect("write nested");
+        fs::write(temp_dir.path().join("src/nested/mod.rs"), "pub fn nested() {}\n")
+            .expect("write nested");
         fs::write(temp_dir.path().join("src/notes.md"), "# notes\n").expect("write notes");
 
         let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
@@ -281,11 +267,11 @@ mod tests {
 
         let items = result["items"].as_array().expect("items array");
         assert_eq!(items.len(), 2);
-        assert!(items.iter().all(|item| {
-            item["path"]
-                .as_str()
-                .is_some_and(|path| path.ends_with(".rs"))
-        }));
+        assert!(
+            items
+                .iter()
+                .all(|item| { item["path"].as_str().is_some_and(|path| path.ends_with(".rs")) })
+        );
     }
 
     #[tokio::test]
@@ -339,11 +325,8 @@ mod tests {
     async fn blank_mode_allows_recursive_glob_promotion() {
         let temp_dir = TempDir::new().expect("workspace tempdir");
         fs::create_dir_all(temp_dir.path().join("src/nested")).expect("create nested src");
-        fs::write(
-            temp_dir.path().join("src/nested/lib.rs"),
-            "pub fn lib() {}\n",
-        )
-        .expect("write lib");
+        fs::write(temp_dir.path().join("src/nested/lib.rs"), "pub fn lib() {}\n")
+            .expect("write lib");
 
         let grep_manager = Arc::new(GrepSearchManager::new(temp_dir.path().to_path_buf()));
         let file_ops = FileOpsTool::new(temp_dir.path().to_path_buf(), grep_manager);

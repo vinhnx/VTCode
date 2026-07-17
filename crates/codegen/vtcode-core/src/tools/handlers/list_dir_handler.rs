@@ -52,9 +52,7 @@ pub struct ListDirHandler {
 
 impl Default for ListDirHandler {
     fn default() -> Self {
-        Self {
-            max_entries: MAX_ENTRIES,
-        }
+        Self { max_entries: MAX_ENTRIES }
     }
 }
 
@@ -68,9 +66,7 @@ impl ListDirHandler {
         match &invocation.payload {
             ToolPayload::Function { arguments } => serde_json::from_str(arguments)
                 .map_err(|e| ToolCallError::respond(format!("Invalid list_dir arguments: {e}"))),
-            _ => Err(ToolCallError::respond(
-                "Invalid payload type for list_dir handler",
-            )),
+            _ => Err(ToolCallError::respond("Invalid payload type for list_dir handler")),
         }
     }
 
@@ -82,17 +78,11 @@ impl ListDirHandler {
         depth: usize,
     ) -> Result<Vec<DirEntry>, ToolCallError> {
         if !path.exists() {
-            return Err(ToolCallError::respond(format!(
-                "Directory not found: {}",
-                path.display()
-            )));
+            return Err(ToolCallError::respond(format!("Directory not found: {}", path.display())));
         }
 
         if !path.is_dir() {
-            return Err(ToolCallError::respond(format!(
-                "Not a directory: {}",
-                path.display()
-            )));
+            return Err(ToolCallError::respond(format!("Not a directory: {}", path.display())));
         }
 
         let max_depth = args.max_depth.unwrap_or(3);
@@ -120,9 +110,7 @@ impl ListDirHandler {
 
             // Apply pattern filter
             if let Some(pattern) = &args.pattern
-                && !glob::Pattern::new(pattern)
-                    .map(|p| p.matches(&file_name))
-                    .unwrap_or(true)
+                && !glob::Pattern::new(pattern).map(|p| p.matches(&file_name)).unwrap_or(true)
             {
                 continue;
             }

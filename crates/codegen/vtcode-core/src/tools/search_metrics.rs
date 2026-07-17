@@ -115,9 +115,7 @@ impl SearchMetrics {
 
     /// Check if search should be sampled (too many results)
     pub fn should_sample_results(&self, pattern: &str) -> bool {
-        self.get_search(pattern)
-            .map(|m| m.is_expensive)
-            .unwrap_or(false)
+        self.get_search(pattern).map(|m| m.is_expensive).unwrap_or(false)
     }
 
     /// Estimate sampling ratio for expensive search
@@ -145,11 +143,7 @@ impl SearchMetrics {
         output.push_str("[SEARCH] Metrics Summary\n");
         let _ = writeln!(output, "  Total searches: {}", self.total_searches);
         let _ = writeln!(output, "  Total tokens: {}", self.total_tokens);
-        let _ = writeln!(
-            output,
-            "  Avg tokens/search: {:.0}",
-            self.avg_tokens_per_search()
-        );
+        let _ = writeln!(output, "  Avg tokens/search: {:.0}", self.avg_tokens_per_search());
         let _ = writeln!(
             output,
             "  Expensive searches: {}",

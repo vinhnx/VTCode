@@ -53,11 +53,7 @@ impl VTCodeGitignore {
             Gitignore::empty()
         });
 
-        Ok(Self {
-            root_dir: root_dir.to_path_buf(),
-            matcher,
-            loaded,
-        })
+        Ok(Self { root_dir: root_dir.to_path_buf(), matcher, loaded })
     }
 
     /// Load patterns from the .vtcodegitignore file into the builder
@@ -75,12 +71,7 @@ impl VTCodeGitignore {
             }
 
             builder.add_line(None, line).map_err(|e| {
-                anyhow!(
-                    "Invalid pattern on line {}: '{}': {}",
-                    line_num + 1,
-                    line,
-                    e
-                )
+                anyhow!("Invalid pattern on line {}: '{}': {}", line_num + 1, line, e)
             })?;
         }
 
@@ -110,10 +101,7 @@ impl VTCodeGitignore {
             return paths;
         }
 
-        paths
-            .into_iter()
-            .filter(|path| !self.should_exclude(path))
-            .collect()
+        paths.into_iter().filter(|path| !self.should_exclude(path)).collect()
     }
 
     /// Check if the .vtcodegitignore file was loaded successfully
@@ -136,11 +124,7 @@ impl Default for VTCodeGitignore {
     fn default() -> Self {
         let root_dir = PathBuf::new();
         let matcher = Gitignore::empty();
-        Self {
-            root_dir,
-            matcher,
-            loaded: false,
-        }
+        Self { root_dir, matcher, loaded: false }
     }
 }
 

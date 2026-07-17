@@ -24,8 +24,7 @@ impl AgentRunner {
                     Some(&self.config().agent.provider),
                     &self.model,
                 ),
-                self.provider_client
-                    .supports_responses_compaction(&self.model),
+                self.provider_client.supports_responses_compaction(&self.model),
                 Some(self.config()),
             ),
             anthropic_native_memory_enabled:
@@ -59,17 +58,13 @@ impl AgentRunner {
         if let Some(full_auto_allowlist) = self.tool_registry.current_full_auto_allowlist().await {
             runtime_tool_names.extend(full_auto_allowlist);
         }
-        let supports_active_name_restriction = self
-            .provider_client
-            .supports_native_allowed_tools(&self.model);
+        let supports_active_name_restriction =
+            self.provider_client.supports_native_allowed_tools(&self.model);
         let mut active_tool_names = Vec::new();
         let mut exposed_definitions = Vec::new();
         for tool in definitions {
             let tool_name = tool.function_name().to_string();
-            if !self
-                .is_tool_permitted_for_advertisement(tool_name.as_str())
-                .await
-            {
+            if !self.is_tool_permitted_for_advertisement(tool_name.as_str()).await {
                 continue;
             }
             let active = runtime_tool_names.contains(&tool_name)
@@ -95,11 +90,8 @@ impl AgentRunner {
 
     pub(super) async fn build_exposed_tool_definitions(&self) -> Result<Vec<ToolDefinition>> {
         let snapshot = self.build_exposed_tool_snapshot().await?;
-        let active_tool_names: HashSet<&str> = snapshot
-            .active_tool_names
-            .iter()
-            .map(String::as_str)
-            .collect();
+        let active_tool_names: HashSet<&str> =
+            snapshot.active_tool_names.iter().map(String::as_str).collect();
         Ok(snapshot
             .snapshot
             .as_ref()
@@ -142,11 +134,7 @@ impl AgentRunner {
     ///
     /// Returns the first invariant violation encountered.
     pub(super) fn validate_llm_request(&self, request: &LLMRequest) -> Result<()> {
-        if request
-            .system_prompt
-            .as_ref()
-            .is_none_or(|s| s.trim().is_empty())
-        {
+        if request.system_prompt.as_ref().is_none_or(|s| s.trim().is_empty()) {
             return Err(anyhow!("system prompt cannot be empty"));
         }
         if request.messages.is_empty() {
@@ -192,9 +180,7 @@ fn validate_tool_definition<'a>(
     {
         for req in required_arr.iter().filter_map(|v| v.as_str()) {
             if !props.contains_key(req) {
-                return Err(anyhow!(
-                    "tool '{name}' has required field '{req}' not in properties"
-                ));
+                return Err(anyhow!("tool '{name}' has required field '{req}' not in properties"));
             }
         }
     }

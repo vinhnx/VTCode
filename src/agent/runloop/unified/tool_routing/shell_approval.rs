@@ -30,11 +30,7 @@ pub(super) struct ApprovalLearningTarget {
 
 impl ApprovalLearningTarget {
     pub fn new(approval_key: String, display_label: String) -> Self {
-        Self {
-            approval_key,
-            display_label,
-            pattern: None,
-        }
+        Self { approval_key, display_label, pattern: None }
     }
 
     pub fn with_pattern(mut self, pattern: Option<LearnedPattern>) -> Self {
@@ -104,9 +100,7 @@ fn exact_shell_learning_target(
         ));
     }
 
-    let fallback_key = tool_args
-        .map(Value::to_string)
-        .unwrap_or_else(|| tool_name.to_string());
+    let fallback_key = tool_args.map(Value::to_string).unwrap_or_else(|| tool_name.to_string());
     Some(ApprovalLearningTarget::new(
         format!("{fallback_key}|{scope_signature}"),
         default_learning_label.to_string(),
@@ -276,9 +270,7 @@ pub(super) fn persistent_approval_target(
 
     if extract_shell_permission_scope_signature(tool_name, tool_args).is_some() {
         let learning = approval_learning_target(tool_name, tool_args, default_learning_label);
-        return PersistentApprovalTarget::ExactInvocation {
-            display_label: learning.display_label,
-        };
+        return PersistentApprovalTarget::ExactInvocation { display_label: learning.display_label };
     }
 
     PersistentApprovalTarget::ToolLevel
@@ -291,10 +283,7 @@ pub(super) fn tool_display_labels(tool_name: &str, tool_args: Option<&Value>) ->
         .filter(|headline| !headline.is_empty())
         .unwrap_or_else(|| learning_label.clone());
 
-    ToolDisplayLabels {
-        prompt_label,
-        learning_label,
-    }
+    ToolDisplayLabels { prompt_label, learning_label }
 }
 
 /// Build a conservative family/pattern learning key for safe shell commands.
@@ -339,9 +328,7 @@ fn learned_readonly_path_pattern(
         return None;
     }
     if command_words.len() < 2
-        || !command_words[1..]
-            .iter()
-            .any(|word| is_probable_readonly_path_arg(word))
+        || !command_words[1..].iter().any(|word| is_probable_readonly_path_arg(word))
     {
         return None;
     }
@@ -376,14 +363,8 @@ fn command_looks_like_readonly_path_query(program: &str, words: &[String]) -> bo
 
     !program.is_empty()
         && !KNOWN_MUTATING_COMMANDS.contains(&program)
-        && !words
-            .iter()
-            .skip(1)
-            .any(|word| MUTATING_OPTION_HINTS.contains(&word.as_str()))
-        && words
-            .iter()
-            .skip(1)
-            .any(|word| is_probable_readonly_path_arg(word))
+        && !words.iter().skip(1).any(|word| MUTATING_OPTION_HINTS.contains(&word.as_str()))
+        && words.iter().skip(1).any(|word| is_probable_readonly_path_arg(word))
 }
 
 fn is_probable_readonly_path_arg(word: &str) -> bool {
@@ -411,10 +392,7 @@ fn learned_find_pattern(command_words: &[String], scope_signature: &str) -> Opti
         return None;
     }
 
-    if command_words
-        .iter()
-        .any(|word| is_destructive_find_option(word))
-    {
+    if command_words.iter().any(|word| is_destructive_find_option(word)) {
         return None;
     }
 
@@ -487,19 +465,14 @@ fn normalize_find_root(root: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    let stripped = trimmed
-        .strip_prefix("./")
-        .unwrap_or(trimmed)
-        .trim_end_matches('/');
+    let stripped = trimmed.strip_prefix("./").unwrap_or(trimmed).trim_end_matches('/');
 
     if stripped.is_empty()
         || stripped == "."
         || stripped == "/"
         || stripped.starts_with('/')
         || stripped.starts_with('~')
-        || stripped
-            .split('/')
-            .any(|part| part.is_empty() || part == "." || part == "..")
+        || stripped.split('/').any(|part| part.is_empty() || part == "." || part == "..")
     {
         return None;
     }
@@ -544,11 +517,7 @@ mod tests {
     #[test]
     fn find_under_subdir_yields_pattern_key() {
         let pattern = pattern_for("find src -type f -name '*.rs'").expect("pattern");
-        assert!(
-            pattern
-                .key
-                .starts_with("shell-pattern:find src|sandbox_permissions=")
-        );
+        assert!(pattern.key.starts_with("shell-pattern:find src|sandbox_permissions="));
         assert_eq!(pattern.label, "safe `find src` commands");
     }
 
@@ -614,7 +583,7 @@ mod tests {
 
     #[test]
     fn sed_print_under_workspace_path_yields_pattern_key() {
-        let pattern = pattern_for("sed -n '87,140p' vtcode-core/src/core/agent/features.rs")
+        let pattern = pattern_for("sed -n '87,140p' crates/codegen/vtcode-core/src/core/agent/features.rs")
             .expect("pattern");
 
         assert!(
@@ -639,11 +608,7 @@ mod tests {
         )
         .expect("pattern");
 
-        assert!(
-            pattern
-                .key
-                .starts_with("shell-pattern:ls|sandbox_permissions=")
-        );
+        assert!(pattern.key.starts_with("shell-pattern:ls|sandbox_permissions="));
         assert_eq!(pattern.label, "safe `ls` path reads");
     }
 
@@ -680,11 +645,7 @@ mod tests {
     #[test]
     fn find_subdir_path_collapses_to_first_segment() {
         let pattern = pattern_for("find src/agent/runloop -type f").expect("pattern");
-        assert!(
-            pattern
-                .key
-                .starts_with("shell-pattern:find src|sandbox_permissions=")
-        );
+        assert!(pattern.key.starts_with("shell-pattern:find src|sandbox_permissions="));
     }
 
     #[test]
@@ -702,10 +663,7 @@ mod tests {
                 label: "pattern-label".into(),
             }));
         let keys: Vec<_> = target.iter_keys().collect();
-        assert_eq!(
-            keys,
-            vec![("exact", "exact-label"), ("pattern", "pattern-label")]
-        );
+        assert_eq!(keys, vec![("exact", "exact-label"), ("pattern", "pattern-label")]);
     }
 
     #[tokio::test]
@@ -812,10 +770,7 @@ mod tests {
         );
         let pattern = new_target.pattern.as_ref().expect("pattern attached");
         assert!(recorder.should_auto_approve(&pattern.key).await);
-        assert_eq!(
-            recorder.get_approval_count(&new_target.approval_key).await,
-            0
-        );
+        assert_eq!(recorder.get_approval_count(&new_target.approval_key).await, 0);
 
         // Destructive `find src -delete` MUST NOT inherit the pattern.
         let destructive = approval_learning_target(
@@ -823,10 +778,7 @@ mod tests {
             Some(&json!({"action":"run","command":"find src -delete"})),
             "default",
         );
-        assert!(
-            destructive.pattern.is_none(),
-            "destructive find must not carry pattern"
-        );
+        assert!(destructive.pattern.is_none(), "destructive find must not carry pattern");
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

@@ -47,16 +47,11 @@ impl GatekeeperPolicy {
     }
 
     fn should_auto_clear(&self, target: &Path) -> bool {
-        self.auto_clear_paths
-            .iter()
-            .any(|base| target.starts_with(base))
+        self.auto_clear_paths.iter().any(|base| target.starts_with(base))
     }
 
     fn cache_entry(&self, path: &Path) -> Option<GatekeeperCacheEntry> {
-        self.cache
-            .lock()
-            .ok()
-            .and_then(|cache| cache.get(path).cloned())
+        self.cache.lock().ok().and_then(|cache| cache.get(path).cloned())
     }
 
     fn update_cache(&self, path: PathBuf, entry: GatekeeperCacheEntry) {
@@ -133,10 +128,7 @@ pub fn check_quarantine(path: &Path) {
                             );
                             policy.update_cache(
                                 canonical,
-                                GatekeeperCacheEntry {
-                                    quarantined: false,
-                                    warned: false,
-                                },
+                                GatekeeperCacheEntry { quarantined: false, warned: false },
                             );
                             return;
                         }
@@ -150,21 +142,12 @@ pub fn check_quarantine(path: &Path) {
                     }
                 }
 
-                policy.update_cache(
-                    canonical,
-                    GatekeeperCacheEntry {
-                        quarantined: true,
-                        warned,
-                    },
-                );
+                policy.update_cache(canonical, GatekeeperCacheEntry { quarantined: true, warned });
             }
             Ok(None) => {
                 policy.update_cache(
                     canonical,
-                    GatekeeperCacheEntry {
-                        quarantined: false,
-                        warned: false,
-                    },
+                    GatekeeperCacheEntry { quarantined: false, warned: false },
                 );
             }
             Err(err) => {

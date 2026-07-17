@@ -64,15 +64,9 @@ pub(crate) async fn read_byte_range(
         .await
         .with_context(|| format!("Failed to open: {}", file_path.display()))?;
 
-    file.seek(std::io::SeekFrom::Start(offset_bytes))
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to seek to offset {} in: {}",
-                offset_bytes,
-                file_path.display()
-            )
-        })?;
+    file.seek(std::io::SeekFrom::Start(offset_bytes)).await.with_context(|| {
+        format!("Failed to seek to offset {} in: {}", offset_bytes, file_path.display())
+    })?;
 
     // Clamp read size to file bounds, guarding against overflow
     let page_size_u64 = page_size_bytes as u64;
@@ -82,27 +76,21 @@ pub(crate) async fn read_byte_range(
         .unwrap_or(file_size);
     let actual_read_size = (end_pos - offset_bytes) as usize;
 
-    let buffer = read_exact_uninit(&mut file, actual_read_size)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to read {} bytes from offset {} in: {}",
-                actual_read_size,
-                offset_bytes,
-                file_path.display()
-            )
-        })?;
+    let buffer = read_exact_uninit(&mut file, actual_read_size).await.with_context(|| {
+        format!(
+            "Failed to read {} bytes from offset {} in: {}",
+            actual_read_size,
+            offset_bytes,
+            file_path.display()
+        )
+    })?;
 
     let raw = String::from_utf8_lossy(&buffer).into_owned();
     let has_more = end_pos < file_size;
 
     if !line_numbers {
         // Raw mode: return content without line numbers or boundary alignment
-        return Ok(ByteRangeReadResult {
-            content: raw,
-            has_more,
-            lines_read: 0,
-        });
+        return Ok(ByteRangeReadResult { content: raw, has_more, lines_read: 0 });
     }
 
     // Line-number mode: align to line boundaries and add line numbers
@@ -151,11 +139,7 @@ pub(crate) async fn read_byte_range(
     let lines_read = formatted_lines.len();
     let content = formatted_lines.join("\n");
 
-    Ok(ByteRangeReadResult {
-        content,
-        has_more,
-        lines_read,
-    })
+    Ok(ByteRangeReadResult { content, has_more, lines_read })
 }
 
 /// Count the number of newlines before the given byte offset to determine
@@ -176,10 +160,7 @@ async fn count_lines_before(file_path: &Path, offset_bytes: u64) -> Result<usize
 
     while bytes_read < offset_bytes {
         buffer.clear();
-        let n = reader
-            .read_until(b'\n', &mut buffer)
-            .await
-            .context("failed to count lines")?;
+        let n = reader.read_until(b'\n', &mut buffer).await.context("failed to count lines")?;
 
         if n == 0 {
             break;

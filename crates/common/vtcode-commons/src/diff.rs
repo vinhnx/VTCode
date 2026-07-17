@@ -382,11 +382,7 @@ where
         formatter(&hunks, &options)
     };
 
-    DiffBundle {
-        hunks,
-        formatted,
-        is_empty: !has_changes,
-    }
+    DiffBundle { hunks, formatted, is_empty: !has_changes }
 }
 
 fn split_lines_with_terminator(text: &str) -> Vec<String> {
@@ -394,10 +390,7 @@ fn split_lines_with_terminator(text: &str) -> Vec<String> {
         return Vec::with_capacity(0);
     }
 
-    let mut lines: Vec<String> = text
-        .split_inclusive('\n')
-        .map(|line| line.to_string())
-        .collect();
+    let mut lines: Vec<String> = text.split_inclusive('\n').map(|line| line.to_string()).collect();
 
     if lines.is_empty() {
         lines.push(text.to_string());
@@ -575,13 +568,7 @@ fn build_hunks(records: &[LineRecord<'_>], context: usize) -> Vec<DiffHunk> {
             })
             .collect();
 
-        hunks.push(DiffHunk {
-            old_start,
-            old_lines,
-            new_start,
-            new_lines,
-            lines,
-        });
+        hunks.push(DiffHunk { old_start, old_lines, new_start, new_lines, lines });
     }
 
     hunks
@@ -697,14 +684,8 @@ mod tests {
         // No common prefix or suffix
         assert!(!chunks.is_empty());
         // All old chars deleted, all new chars inserted
-        let deletes: usize = chunks
-            .iter()
-            .filter(|c| matches!(c, Chunk::Delete(_)))
-            .count();
-        let inserts: usize = chunks
-            .iter()
-            .filter(|c| matches!(c, Chunk::Insert(_)))
-            .count();
+        let deletes: usize = chunks.iter().filter(|c| matches!(c, Chunk::Delete(_))).count();
+        let inserts: usize = chunks.iter().filter(|c| matches!(c, Chunk::Insert(_))).count();
         assert!(deletes > 0 || inserts > 0);
     }
 
@@ -768,12 +749,7 @@ mod tests {
 
     #[test]
     fn diff_identical_content() {
-        let result = compute_diff(
-            "hello\n",
-            "hello\n",
-            DiffOptions::default(),
-            identity_formatter,
-        );
+        let result = compute_diff("hello\n", "hello\n", DiffOptions::default(), identity_formatter);
         assert!(result.is_empty);
         assert!(result.hunks.is_empty());
         assert!(result.formatted.is_empty());
@@ -788,12 +764,7 @@ mod tests {
 
     #[test]
     fn diff_old_empty() {
-        let result = compute_diff(
-            "",
-            "line1\nline2\n",
-            DiffOptions::default(),
-            identity_formatter,
-        );
+        let result = compute_diff("", "line1\nline2\n", DiffOptions::default(), identity_formatter);
         assert!(!result.is_empty);
         assert!(!result.hunks.is_empty());
         // All lines should be additions
@@ -806,12 +777,7 @@ mod tests {
 
     #[test]
     fn diff_new_empty() {
-        let result = compute_diff(
-            "line1\nline2\n",
-            "",
-            DiffOptions::default(),
-            identity_formatter,
-        );
+        let result = compute_diff("line1\nline2\n", "", DiffOptions::default(), identity_formatter);
         assert!(!result.is_empty);
         assert!(!result.hunks.is_empty());
         for hunk in &result.hunks {
@@ -872,21 +838,14 @@ mod tests {
     fn diff_context_lines_zero() {
         let old = "a\nb\nc\nd\ne\n";
         let new = "a\nb\nX\nd\ne\n";
-        let opts = DiffOptions {
-            context_lines: 0,
-            ..DiffOptions::default()
-        };
+        let opts = DiffOptions { context_lines: 0, ..DiffOptions::default() };
         let result = compute_diff(old, new, opts, identity_formatter);
 
         assert!(!result.is_empty);
         // With 0 context, only the changed line and its neighbors should appear
         let hunk = &result.hunks[0];
         // Should be minimal: just the deletion and addition
-        let context_count = hunk
-            .lines
-            .iter()
-            .filter(|l| l.kind == DiffLineKind::Context)
-            .count();
+        let context_count = hunk.lines.iter().filter(|l| l.kind == DiffLineKind::Context).count();
         assert!(context_count <= 2); // At most one context line on each side
     }
 
@@ -894,10 +853,7 @@ mod tests {
     fn diff_context_lines_large() {
         let old = "a\nb\nc\nd\ne\n";
         let new = "a\nb\nX\nd\ne\n";
-        let opts = DiffOptions {
-            context_lines: 10,
-            ..DiffOptions::default()
-        };
+        let opts = DiffOptions { context_lines: 10, ..DiffOptions::default() };
         let result = compute_diff(old, new, opts, identity_formatter);
 
         assert!(!result.is_empty);
@@ -925,18 +881,11 @@ mod tests {
         // Insert in first half and insert in second half with small context => two hunks
         let old = "a\nb\nc\nd\ne\nf\ng\nh\n";
         let new = "a\nINSERTED1\nb\nc\nd\ne\nf\ng\nINSERTED2\nh\n";
-        let opts = DiffOptions {
-            context_lines: 1,
-            ..DiffOptions::default()
-        };
+        let opts = DiffOptions { context_lines: 1, ..DiffOptions::default() };
         let result = compute_diff(old, new, opts, identity_formatter);
 
         assert!(!result.is_empty);
-        assert!(
-            result.hunks.len() >= 2,
-            "expected at least 2 hunks, got {}",
-            result.hunks.len()
-        );
+        assert!(result.hunks.len() >= 2, "expected at least 2 hunks, got {}", result.hunks.len());
     }
 
     #[test]
@@ -1055,18 +1004,9 @@ mod tests {
 
     #[test]
     fn diff_line_kind_serializes() {
-        assert_eq!(
-            serde_json::to_string(&DiffLineKind::Context).unwrap(),
-            "\"context\""
-        );
-        assert_eq!(
-            serde_json::to_string(&DiffLineKind::Addition).unwrap(),
-            "\"addition\""
-        );
-        assert_eq!(
-            serde_json::to_string(&DiffLineKind::Deletion).unwrap(),
-            "\"deletion\""
-        );
+        assert_eq!(serde_json::to_string(&DiffLineKind::Context).unwrap(), "\"context\"");
+        assert_eq!(serde_json::to_string(&DiffLineKind::Addition).unwrap(), "\"addition\"");
+        assert_eq!(serde_json::to_string(&DiffLineKind::Deletion).unwrap(), "\"deletion\"");
     }
 
     // ── Edge cases ───────────────────────────────────────────────────

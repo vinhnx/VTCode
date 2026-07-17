@@ -53,11 +53,7 @@ impl Session {
                 self.push_line(kind, segments);
                 self.request_transcript_clear();
             }
-            InlineCommand::AppendPastedMessage {
-                kind,
-                text,
-                line_count,
-            } => {
+            InlineCommand::AppendPastedMessage { kind, text, line_count } => {
                 self.clear_thinking_spinner_if_active(kind);
                 self.append_pasted_message(kind, text, line_count);
                 self.request_transcript_clear();
@@ -67,12 +63,7 @@ impl Session {
                 self.append_inline(kind, segment);
                 self.request_transcript_clear();
             }
-            InlineCommand::ReplaceLast {
-                count,
-                kind,
-                lines,
-                link_ranges,
-            } => {
+            InlineCommand::ReplaceLast { count, kind, lines, link_ranges } => {
                 self.clear_thinking_spinner_if_active(kind);
                 self.replace_last(count, kind, lines, link_ranges);
                 self.request_transcript_clear();
@@ -191,10 +182,7 @@ impl Session {
                 self.apply_suggested_prompt(content);
                 self.scroll_manager.set_offset(0);
             }
-            InlineCommand::SetInlinePromptSuggestion {
-                suggestion,
-                llm_generated,
-            } => {
+            InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated } => {
                 self.set_inline_prompt_suggestion(suggestion, llm_generated);
             }
             InlineCommand::ClearInlinePromptSuggestion => {

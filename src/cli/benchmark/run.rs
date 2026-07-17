@@ -91,15 +91,9 @@ pub async fn handle_benchmark_command(
             .execute_task_with_retry(&prepared.task, &prepared.contexts, max_retries)
             .await
             .with_context(|| {
-                format!(
-                    "Failed to execute task '{}' after retries",
-                    prepared.task.id
-                )
+                format!("Failed to execute task '{}' after retries", prepared.task.id)
             })?;
-        reports.push(BenchmarkTaskReport::from_task_result(
-            &prepared.task,
-            result,
-        ));
+        reports.push(BenchmarkTaskReport::from_task_result(&prepared.task, result));
     }
 
     let report = BenchmarkReport {

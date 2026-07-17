@@ -51,11 +51,8 @@ const WORKFLOW_FILE_OPENER: &str = "file_opener";
 pub(crate) async fn handle_new_session(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
-    ctx.renderer
-        .line(MessageStyle::Info, "Starting new session...")?;
-    Ok(SlashCommandControl::BreakWithReason(
-        SessionEndReason::NewSession,
-    ))
+    ctx.renderer.line(MessageStyle::Info, "Starting new session...")?;
+    Ok(SlashCommandControl::BreakWithReason(SessionEndReason::NewSession))
 }
 
 pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
@@ -72,25 +69,19 @@ pub(crate) async fn handle_open_docs(ctx: SlashCommandContext<'_>) -> Result<Sla
             )?;
         }
         ExternalUrlOpenOutcome::OpenFailed(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to open browser: {err}"),
-            )?;
             ctx.renderer
-                .line(MessageStyle::Info, &format!("Please visit: {DOCS_URL}"))?;
+                .line(MessageStyle::Error, &format!("Failed to open browser: {err}"))?;
+            ctx.renderer.line(MessageStyle::Info, &format!("Please visit: {DOCS_URL}"))?;
         }
         ExternalUrlOpenOutcome::Cancelled => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Cancelled opening documentation link.")?;
+            ctx.renderer.line(MessageStyle::Info, "Cancelled opening documentation link.")?;
         }
         ExternalUrlOpenOutcome::Exit => {
             return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
         }
         ExternalUrlOpenOutcome::Unsupported => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Blocked unsupported documentation link target.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, "Blocked unsupported documentation link target.")?;
         }
     }
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -153,20 +144,16 @@ pub(crate) async fn handle_open_donate_links(
 
     match outcome {
         OverlayWaitOutcome::Submitted(url) => match open_external_url(&url) {
-            Ok(()) => ctx
+            Ok(()) => ctx.renderer.line(MessageStyle::Info, &format!("Opening browser: {url}"))?,
+            Err(err) => ctx
                 .renderer
-                .line(MessageStyle::Info, &format!("Opening browser: {url}"))?,
-            Err(err) => ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to open browser: {err}"),
-            )?,
+                .line(MessageStyle::Error, &format!("Failed to open browser: {err}"))?,
         },
         OverlayWaitOutcome::Exit => {
             return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
         }
         OverlayWaitOutcome::Cancelled | OverlayWaitOutcome::Interrupted => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Cancelled opening support link.")?;
+            ctx.renderer.line(MessageStyle::Info, "Cancelled opening support link.")?;
         }
     }
 
@@ -248,16 +235,10 @@ pub(crate) async fn launch_editor_from_context(
     let (message_style, message) = match launch_result {
         Ok(Some(edited_content)) => {
             ctx.handle.set_input(edited_content);
-            (
-                MessageStyle::Info,
-                "Editor closed. Input updated with edited content.".to_owned(),
-            )
+            (MessageStyle::Info, "Editor closed. Input updated with edited content.".to_owned())
         }
         Ok(None) => (MessageStyle::Info, "Editor closed.".to_owned()),
-        Err(err) => (
-            MessageStyle::Error,
-            format!("Failed to launch editor: {err}"),
-        ),
+        Err(err) => (MessageStyle::Error, format!("Failed to launch editor: {err}")),
     };
 
     ctx.handle.force_redraw();
@@ -318,8 +299,7 @@ pub(crate) async fn handle_configure_editor(
     )
     .await?;
 
-    ctx.renderer
-        .line(MessageStyle::Info, "Saved external editor settings.")?;
+    ctx.renderer.line(MessageStyle::Info, "Saved external editor settings.")?;
     ctx.renderer.line(
         MessageStyle::Output,
         "Use `/config file_opener` if you also want terminal hyperlinks to target a specific editor URI scheme.",
@@ -332,10 +312,8 @@ pub(crate) async fn handle_configure_editor(
         let mut settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
         settings_state.view_path = Some(resolve_settings_view_path(FILE_OPENER_SETTINGS_PATH));
         if show_settings_palette(ctx.renderer, &settings_state, None)? {
-            *ctx.palette_state = Some(ActivePalette::Settings {
-                state: Box::new(settings_state),
-                esc_armed: false,
-            });
+            *ctx.palette_state =
+                Some(ActivePalette::Settings { state: Box::new(settings_state), esc_armed: false });
         }
     }
 
@@ -400,9 +378,7 @@ fn editor_command_from_settings(editor_config: &EditorToolConfig) -> Option<Stri
 }
 
 fn editor_command_requires_terminal(command: &str) -> bool {
-    let Some(program) = shell_words::split(command)
-        .ok()
-        .and_then(|tokens| tokens.first().cloned())
+    let Some(program) = shell_words::split(command).ok().and_then(|tokens| tokens.first().cloned())
     else {
         return false;
     };
@@ -603,10 +579,7 @@ fn build_editor_config_steps(
         WizardStep {
             title: "Preset".to_string(),
             question: format!("Current editor preset: {}.", current_preset.label()),
-            items: EDITOR_PRESET_CHOICES
-                .into_iter()
-                .map(preset_choice_item)
-                .collect(),
+            items: EDITOR_PRESET_CHOICES.into_iter().map(preset_choice_item).collect(),
             completed: false,
             answer: Some(InlineListSelection::RequestUserInputAnswer {
                 question_id: EDITOR_PRESET_ID.to_string(),
@@ -694,10 +667,7 @@ async fn prompt_for_custom_editor_command(
     editor_config: &EditorToolConfig,
 ) -> Result<Option<String>> {
     let placeholder = if editor_config.preferred_editor.trim().is_empty() {
-        EditorPreset::Vscode
-            .default_command()
-            .unwrap_or_default()
-            .to_string()
+        EditorPreset::Vscode.default_command().unwrap_or_default().to_string()
     } else {
         editor_config.preferred_editor.clone()
     };
@@ -718,19 +688,17 @@ async fn prompt_for_custom_editor_command(
 
     let (value, submitted) = match outcome {
         WizardModalOutcome::Submitted(selections) => (
-            selections
-                .into_iter()
-                .find_map(|selection| match selection {
-                    InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        other,
-                    } if question_id == EDITOR_CUSTOM_COMMAND_ID => other
+            selections.into_iter().find_map(|selection| match selection {
+                InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
+                    if question_id == EDITOR_CUSTOM_COMMAND_ID =>
+                {
+                    other
                         .or_else(|| selected.first().cloned())
                         .map(|value| value.trim().to_string())
-                        .filter(|value| !value.is_empty()),
-                    _ => None,
-                }),
+                        .filter(|value| !value.is_empty())
+                }
+                _ => None,
+            }),
             true,
         ),
         WizardModalOutcome::Cancelled { .. } => (None, false),
@@ -847,21 +815,12 @@ mod tests {
     #[test]
     fn editor_preset_detects_known_commands() {
         assert_eq!(EditorPreset::from_saved(""), EditorPreset::Auto);
-        assert_eq!(
-            EditorPreset::from_saved("code --wait"),
-            EditorPreset::Vscode
-        );
+        assert_eq!(EditorPreset::from_saved("code --wait"), EditorPreset::Vscode);
         assert_eq!(EditorPreset::from_saved("zed"), EditorPreset::Zed);
         assert_eq!(EditorPreset::from_saved("nvim"), EditorPreset::Neovim);
         assert_eq!(EditorPreset::from_saved("vim"), EditorPreset::Vim);
-        assert_eq!(
-            EditorPreset::from_saved("subl -w"),
-            EditorPreset::SublimeText
-        );
-        assert_eq!(
-            EditorPreset::from_saved("/opt/custom/editor --flag"),
-            EditorPreset::Custom
-        );
+        assert_eq!(EditorPreset::from_saved("subl -w"), EditorPreset::SublimeText);
+        assert_eq!(EditorPreset::from_saved("/opt/custom/editor --flag"), EditorPreset::Custom);
     }
 
     #[test]

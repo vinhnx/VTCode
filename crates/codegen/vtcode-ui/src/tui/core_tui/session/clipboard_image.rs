@@ -149,9 +149,7 @@ fn read_clipboard_png(
 
 fn first_readable_image_file_as_png(paths: Vec<PathBuf>) -> Option<Vec<u8>> {
     paths.into_iter().find_map(|path| {
-        image::open(path)
-            .ok()
-            .and_then(|image| encode_dynamic_image_png(&image).ok())
+        image::open(path).ok().and_then(|image| encode_dynamic_image_png(&image).ok())
     })
 }
 
@@ -314,10 +312,8 @@ impl ClipboardCommandRunner for SystemCommandRunner {
         let start = Instant::now();
         loop {
             if let Some(status) = child.try_wait()? {
-                let stdout = stdout_rx
-                    .recv()
-                    .unwrap_or_else(|_| Ok(Vec::new()))
-                    .unwrap_or_default();
+                let stdout =
+                    stdout_rx.recv().unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
                 return Ok(CommandRunOutput {
                     status_code: status.code(),
                     stdout,
@@ -328,15 +324,9 @@ impl ClipboardCommandRunner for SystemCommandRunner {
             if start.elapsed() >= timeout {
                 let _ = child.kill();
                 let _ = child.wait();
-                let stdout = stdout_rx
-                    .recv()
-                    .unwrap_or_else(|_| Ok(Vec::new()))
-                    .unwrap_or_default();
-                return Ok(CommandRunOutput {
-                    status_code: None,
-                    stdout,
-                    timed_out: true,
-                });
+                let stdout =
+                    stdout_rx.recv().unwrap_or_else(|_| Ok(Vec::new())).unwrap_or_default();
+                return Ok(CommandRunOutput { status_code: None, stdout, timed_out: true });
             }
 
             thread::sleep(Duration::from_millis(10));
@@ -358,15 +348,11 @@ mod tests {
 
     impl ClipboardImageSource for MockClipboardSource {
         fn file_paths(&mut self) -> Result<Vec<PathBuf>, ClipboardImageError> {
-            self.file_paths_result
-                .take()
-                .unwrap_or(Err(ClipboardImageError::NoImage))
+            self.file_paths_result.take().unwrap_or(Err(ClipboardImageError::NoImage))
         }
 
         fn rgba_image(&mut self) -> Result<ClipboardRgbaImage, ClipboardImageError> {
-            self.rgba_result
-                .take()
-                .unwrap_or(Err(ClipboardImageError::NoImage))
+            self.rgba_result.take().unwrap_or(Err(ClipboardImageError::NoImage))
         }
     }
 
@@ -385,10 +371,7 @@ mod tests {
         }
 
         fn called_programs(&self) -> Vec<String> {
-            self.calls
-                .lock()
-                .expect("mock command calls should not be poisoned")
-                .clone()
+            self.calls.lock().expect("mock command calls should not be poisoned").clone()
         }
     }
 
@@ -408,20 +391,14 @@ mod tests {
                 .expect("mock command outputs should not be poisoned")
                 .pop_front()
                 .unwrap_or_else(|| {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        "missing mock command",
-                    ))
+                    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "missing mock command"))
                 })
         }
     }
 
     fn temp_file(name: &str) -> PathBuf {
         let mut path = env::temp_dir();
-        path.push(format!(
-            "vtcode-clipboard-image-{}-{name}",
-            std::process::id()
-        ));
+        path.push(format!("vtcode-clipboard-image-{}-{name}", std::process::id()));
         path
     }
 

@@ -77,22 +77,12 @@ impl OllamaPullProgressReporter for CliPullProgressReporter {
                 out.write_all(line.as_bytes())?;
                 out.flush()
             }
-            OllamaPullEvent::ChunkProgress {
-                digest,
-                total,
-                completed,
-            } => {
+            OllamaPullEvent::ChunkProgress { digest, total, completed } => {
                 if let Some(t) = total {
-                    self.totals_by_digest
-                        .entry(digest.clone())
-                        .or_insert((0, 0))
-                        .0 = *t;
+                    self.totals_by_digest.entry(digest.clone()).or_insert((0, 0)).0 = *t;
                 }
                 if let Some(c) = completed {
-                    self.totals_by_digest
-                        .entry(digest.clone())
-                        .or_insert((0, 0))
-                        .1 = *c;
+                    self.totals_by_digest.entry(digest.clone()).or_insert((0, 0)).1 = *c;
                 }
                 let (sum_total, sum_completed) = self
                     .totals_by_digest
@@ -108,10 +98,7 @@ impl OllamaPullProgressReporter for CliPullProgressReporter {
                         self.printed_header = true;
                     }
                     let now = std::time::Instant::now();
-                    let dt = now
-                        .duration_since(self.last_instant)
-                        .as_secs_f64()
-                        .max(0.001);
+                    let dt = now.duration_since(self.last_instant).as_secs_f64().max(0.001);
                     let dbytes = sum_completed.saturating_sub(self.last_completed_sum) as f64;
                     let speed_mb_s = dbytes / (1024.0 * 1024.0) / dt;
                     self.last_completed_sum = sum_completed;

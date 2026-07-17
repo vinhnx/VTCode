@@ -13,12 +13,7 @@ fn style_text(style: Style, text: &str) -> String {
     if !color_policy::color_output_enabled() {
         return text.to_string();
     }
-    format!(
-        "{}{}{}",
-        Styles::render(&style),
-        text,
-        Styles::render_reset()
-    )
+    format!("{}{}{}", Styles::render(&style), text, Styles::render_reset())
 }
 
 /// Get a styled error message with enhanced coloring

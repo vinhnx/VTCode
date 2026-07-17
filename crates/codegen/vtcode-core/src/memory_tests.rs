@@ -106,10 +106,7 @@ mod memory_profiling {
         let stats = cache.stats();
         #[allow(clippy::cast_sign_loss)]
         let expected_bytes = test_size_bytes as u64; // safe: positive literal
-        assert_eq!(
-            stats.total_memory_bytes, expected_bytes,
-            "Memory tracking mismatch"
-        );
+        assert_eq!(stats.total_memory_bytes, expected_bytes, "Memory tracking mismatch");
     }
 
     /// Verify LRU eviction policy works correctly

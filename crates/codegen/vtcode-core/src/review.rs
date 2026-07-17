@@ -31,9 +31,7 @@ pub fn build_review_spec(
         bail!("--target cannot be combined with explicit files");
     }
 
-    let style = style
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
+    let style = style.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
 
     let target = if last_diff {
         ReviewTarget::LastDiff
@@ -104,13 +102,7 @@ mod tests {
     #[test]
     fn review_spec_defaults_to_current_diff() {
         let spec = build_review_spec(false, None, Vec::new(), None).expect("spec");
-        assert_eq!(
-            spec,
-            ReviewSpec {
-                target: ReviewTarget::CurrentDiff,
-                style: None,
-            }
-        );
+        assert_eq!(spec, ReviewSpec { target: ReviewTarget::CurrentDiff, style: None });
     }
 
     #[test]

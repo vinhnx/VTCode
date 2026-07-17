@@ -171,12 +171,8 @@ impl ErrorRecoveryState {
         open_circuits: &[String],
         max_recent_errors: usize,
     ) -> RecoveryDiagnostics {
-        let recent_errors: Vec<RecentError> = self
-            .recent_errors
-            .iter()
-            .take(max_recent_errors)
-            .cloned()
-            .collect();
+        let recent_errors: Vec<RecentError> =
+            self.recent_errors.iter().take(max_recent_errors).cloned().collect();
 
         let error_patterns = self.detect_error_patterns();
 
@@ -219,14 +215,12 @@ impl ErrorRecoveryState {
         tool_errors
             .into_iter()
             .filter(|(_, (count, _, _))| *count >= 2)
-            .map(
-                |(tool_name, (count, common_error, error_types))| ErrorPattern {
-                    tool_name,
-                    error_count: count,
-                    common_error,
-                    error_types: error_types.into_iter().collect(),
-                },
-            )
+            .map(|(tool_name, (count, common_error, error_types))| ErrorPattern {
+                tool_name,
+                error_count: count,
+                common_error,
+                error_types: error_types.into_iter().collect(),
+            })
             .collect()
     }
 
@@ -346,11 +340,7 @@ mod tests {
             );
         }
 
-        state.record_error(
-            "read_file",
-            "File not found".to_string(),
-            ErrorType::ResourceNotFound,
-        );
+        state.record_error("read_file", "File not found".to_string(), ErrorType::ResourceNotFound);
 
         let diagnostics = state.get_diagnostics(&[], 10);
         assert_eq!(diagnostics.error_patterns.len(), 1);

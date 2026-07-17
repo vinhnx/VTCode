@@ -200,9 +200,7 @@ pub(crate) fn show_mode_palette(
             MODE_SELECT_HINT.to_string(),
         ],
         items,
-        Some(InlineListSelection::ConfigAction(format!(
-            "{MODE_ACTION_PREFIX}{canonical_current}"
-        ))),
+        Some(InlineListSelection::ConfigAction(format!("{MODE_ACTION_PREFIX}{canonical_current}"))),
         Some(InlineListSearchConfig {
             label: MODE_SEARCH_LABEL.to_string(),
             placeholder: Some(MODE_SEARCH_PLACEHOLDER.to_string()),
@@ -255,15 +253,8 @@ pub(crate) fn show_sessions_palette(
 
     let mut items = Vec::with_capacity(listings.len());
     for (index, listing) in listings.iter().enumerate() {
-        let ended_local = listing
-            .snapshot
-            .ended_at
-            .with_timezone(&Local)
-            .format("%Y-%m-%d %H:%M");
-        let duration = listing
-            .snapshot
-            .ended_at
-            .signed_duration_since(listing.snapshot.started_at);
+        let ended_local = listing.snapshot.ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
+        let duration = listing.snapshot.ended_at.signed_duration_since(listing.snapshot.started_at);
         let duration_std = duration.to_std().unwrap_or_else(|_| Duration::from_secs(0));
         let duration_label = format_duration_label(duration_std);
         let tool_count = listing.snapshot.distinct_tools.len();
@@ -307,12 +298,7 @@ pub(crate) fn show_sessions_palette(
     };
 
     let lines = vec![
-        format!(
-            "Showing {} of {} archived sessions {}",
-            listings.len(),
-            limit,
-            scope_label
-        ),
+        format!("Showing {} of {} archived sessions {}", listings.len(), limit, scope_label),
         SESSIONS_HINT_PRIMARY.to_string(),
         hint_secondary.to_string(),
     ];
@@ -528,10 +514,7 @@ pub(crate) async fn handle_palette_selection(
     full_auto: bool,
 ) -> Result<Option<ActivePalette>> {
     match palette {
-        ActivePalette::Theme {
-            mode,
-            original_theme_id,
-        } => match selection {
+        ActivePalette::Theme { mode, original_theme_id } => match selection {
             InlineListSelection::Theme(theme_id) => match mode {
                 ThemePaletteMode::Select => {
                     match theme::set_active_theme(&theme_id) {
@@ -557,49 +540,23 @@ pub(crate) async fn handle_palette_selection(
                     Ok(None)
                 }
             },
-            _ => Ok(Some(ActivePalette::Theme {
-                mode,
-                original_theme_id,
-            })),
+            _ => Ok(Some(ActivePalette::Theme { mode, original_theme_id })),
         },
-        ActivePalette::Sessions {
-            mode,
-            listings,
-            limit,
-            show_all,
-        } => {
+        ActivePalette::Sessions { mode, listings, limit, show_all } => {
             if show_sessions_palette(renderer, mode, &listings, limit, show_all)? {
-                Ok(Some(ActivePalette::Sessions {
-                    mode,
-                    listings,
-                    limit,
-                    show_all,
-                }))
+                Ok(Some(ActivePalette::Sessions { mode, listings, limit, show_all }))
             } else {
                 Ok(None)
             }
         }
-        ActivePalette::ForkMode {
-            session_id,
-            listings,
-            limit,
-            show_all,
-        } => {
+        ActivePalette::ForkMode { session_id, listings, limit, show_all } => {
             if show_fork_mode_palette(renderer, &session_id)? {
-                Ok(Some(ActivePalette::ForkMode {
-                    session_id,
-                    listings,
-                    limit,
-                    show_all,
-                }))
+                Ok(Some(ActivePalette::ForkMode { session_id, listings, limit, show_all }))
             } else {
                 Ok(None)
             }
         }
-        ActivePalette::Settings {
-            mut state,
-            esc_armed: _,
-        } => {
+        ActivePalette::Settings { mut state, esc_armed: _ } => {
             let normalized_selection = normalize_config_selection(&selection);
 
             if let InlineListSelection::ConfigAction(action) = &selection {
@@ -622,10 +579,7 @@ pub(crate) async fn handle_palette_selection(
             }
 
             if show_settings_palette(renderer, state.as_ref(), Some(normalized_selection))? {
-                Ok(Some(ActivePalette::Settings {
-                    state,
-                    esc_armed: false,
-                }))
+                Ok(Some(ActivePalette::Settings { state, esc_armed: false }))
             } else {
                 Ok(None)
             }
@@ -681,10 +635,7 @@ pub(crate) fn handle_palette_preview(
     handle: &InlineHandle,
 ) -> Result<Option<ActivePalette>> {
     match palette {
-        ActivePalette::Theme {
-            mode,
-            original_theme_id,
-        } => {
+        ActivePalette::Theme { mode, original_theme_id } => {
             if let InlineListSelection::Theme(theme_id) = selection {
                 match mode {
                     ThemePaletteMode::Select => {
@@ -702,10 +653,7 @@ pub(crate) fn handle_palette_preview(
                     }
                 }
             }
-            Ok(Some(ActivePalette::Theme {
-                mode,
-                original_theme_id,
-            }))
+            Ok(Some(ActivePalette::Theme { mode, original_theme_id }))
         }
         ActivePalette::ModelTarget => Ok(Some(ActivePalette::ModelTarget)),
         ActivePalette::LightweightModel { view } => {
@@ -714,10 +662,9 @@ pub(crate) fn handle_palette_preview(
         ActivePalette::UrlGuard { prompt, previous } => {
             Ok(Some(ActivePalette::UrlGuard { prompt, previous }))
         }
-        ActivePalette::Settings { state, .. } => Ok(Some(ActivePalette::Settings {
-            state,
-            esc_armed: false,
-        })),
+        ActivePalette::Settings { state, .. } => {
+            Ok(Some(ActivePalette::Settings { state, esc_armed: false }))
+        }
         other => Ok(Some(other)),
     }
 }
@@ -742,10 +689,7 @@ pub(crate) fn handle_palette_cancel(
     handle: &InlineHandle,
 ) -> Result<Option<ActivePalette>> {
     match palette {
-        ActivePalette::Theme {
-            mode,
-            original_theme_id,
-        } => {
+        ActivePalette::Theme { mode, original_theme_id } => {
             if theme::active_theme_id() != original_theme_id
                 && theme::set_active_theme(&original_theme_id).is_ok()
             {
@@ -768,12 +712,7 @@ pub(crate) fn handle_palette_cancel(
             }
             Ok(None)
         }
-        ActivePalette::ForkMode {
-            listings,
-            limit,
-            show_all,
-            ..
-        } => {
+        ActivePalette::ForkMode { listings, limit, show_all, .. } => {
             if show_sessions_palette(
                 renderer,
                 SessionPaletteMode::Fork,
@@ -791,10 +730,7 @@ pub(crate) fn handle_palette_cancel(
                 Ok(None)
             }
         }
-        ActivePalette::Settings {
-            mut state,
-            esc_armed,
-        } => {
+        ActivePalette::Settings { mut state, esc_armed } => {
             if esc_armed {
                 return Ok(None);
             }
@@ -808,10 +744,7 @@ pub(crate) fn handle_palette_cancel(
 
             state.view_path = parent_view_path(&current_path);
             if show_settings_palette(renderer, state.as_ref(), None)? {
-                Ok(Some(ActivePalette::Settings {
-                    state,
-                    esc_armed: true,
-                }))
+                Ok(Some(ActivePalette::Settings { state, esc_armed: true }))
             } else {
                 Ok(None)
             }
@@ -957,11 +890,7 @@ mod tests {
             Some(&vt_cfg),
             &DynamicModelRegistry::default(),
         );
-        assert!(
-            view.items
-                .iter()
-                .any(|item| item.title == "Automatic (recommended)")
-        );
+        assert!(view.items.iter().any(|item| item.title == "Automatic (recommended)"));
         assert!(view.items.iter().any(|item| item.title == "Use main model"));
         assert_eq!(
             view.selected,
@@ -969,11 +898,7 @@ mod tests {
                 "{LIGHTWEIGHT_MODEL_ACTION_PREFIX}auto"
             )))
         );
-        assert!(
-            view.lines
-                .iter()
-                .any(|line| line.contains("gpt-5.4-mini -> fallback gpt-5.4"))
-        );
+        assert!(view.lines.iter().any(|line| line.contains("gpt-5.4-mini -> fallback gpt-5.4")));
     }
 
     #[test]

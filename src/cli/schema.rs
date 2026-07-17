@@ -29,11 +29,9 @@ pub async fn handle_schema_command(
     config: &VTCodeConfig,
 ) -> Result<String> {
     match command {
-        SchemaCommands::Tools {
-            mode,
-            format,
-            names,
-        } => render_tools_schema(mode, format, &names, config).await,
+        SchemaCommands::Tools { mode, format, names } => {
+            render_tools_schema(mode, format, &names, config).await
+        }
     }
 }
 
@@ -110,10 +108,7 @@ fn filter_tools_by_name(tools: Vec<ToolSchemaEntry>, names: &[String]) -> Vec<To
     }
 
     let allowed: HashSet<&str> = names.iter().map(String::as_str).collect();
-    tools
-        .into_iter()
-        .filter(|tool| allowed.contains(tool.name.as_str()))
-        .collect()
+    tools.into_iter().filter(|tool| allowed.contains(tool.name.as_str())).collect()
 }
 
 fn to_tool_documentation_mode(mode: SchemaMode) -> ToolDocumentationMode {
@@ -159,18 +154,12 @@ mod tests {
 
     #[test]
     fn schema_mode_maps_to_tool_documentation_mode() {
-        assert_eq!(
-            to_tool_documentation_mode(SchemaMode::Minimal),
-            ToolDocumentationMode::Minimal
-        );
+        assert_eq!(to_tool_documentation_mode(SchemaMode::Minimal), ToolDocumentationMode::Minimal);
         assert_eq!(
             to_tool_documentation_mode(SchemaMode::Progressive),
             ToolDocumentationMode::Progressive
         );
-        assert_eq!(
-            to_tool_documentation_mode(SchemaMode::Full),
-            ToolDocumentationMode::Full
-        );
+        assert_eq!(to_tool_documentation_mode(SchemaMode::Full), ToolDocumentationMode::Full);
     }
 
     #[test]

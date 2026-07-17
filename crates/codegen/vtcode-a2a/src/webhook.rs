@@ -61,8 +61,7 @@ impl WebhookNotifier {
         let json = serde_json::to_string(&response)
             .map_err(|e| WebhookError::Serialization(e.to_string()))?;
 
-        self.send_with_retry(&config.url, &json, config.authentication.as_deref())
-            .await
+        self.send_with_retry(&config.url, &json, config.authentication.as_deref()).await
     }
 
     /// Send webhook with retry logic
@@ -77,10 +76,7 @@ impl WebhookNotifier {
         for attempt in 0..=self.max_retries {
             if attempt > 0 {
                 let delay = self.retry_delay_ms * 2u64.pow(attempt - 1); // Exponential backoff
-                debug!(
-                    "Retrying webhook delivery after {}ms (attempt {})",
-                    delay, attempt
-                );
+                debug!("Retrying webhook delivery after {}ms (attempt {})", delay, attempt);
                 tokio::time::sleep(Duration::from_millis(delay)).await;
             }
 

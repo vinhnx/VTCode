@@ -32,22 +32,14 @@ pub fn parse_response_openai_format(
     }
 
     let first_choice = &choices[0];
-    let message = first_choice
-        .get("message")
-        .context("Missing message in choice")?;
+    let message = first_choice.get("message").context("Missing message in choice")?;
 
-    let content = message
-        .get("content")
-        .and_then(|c| c.as_str())
-        .unwrap_or("")
-        .to_string();
+    let content = message.get("content").and_then(|c| c.as_str()).unwrap_or("").to_string();
 
     // Extract usage information
     let usage = response.get("usage");
-    let input_tokens = usage
-        .and_then(|u| u.get("prompt_tokens"))
-        .and_then(|t| t.as_u64())
-        .unwrap_or(0);
+    let input_tokens =
+        usage.and_then(|u| u.get("prompt_tokens")).and_then(|t| t.as_u64()).unwrap_or(0);
 
     let output_tokens = usage
         .and_then(|u| u.get("completion_tokens"))
@@ -77,10 +69,7 @@ pub fn parse_response_openai_format(
             total_tokens: u32::try_from(input_tokens.saturating_add(output_tokens))
                 .unwrap_or(u32::MAX),
             cached_prompt_tokens: if include_cache {
-                response
-                    .get("cache_hit")
-                    .and_then(|c| c.as_bool())
-                    .map(|_| 0)
+                response.get("cache_hit").and_then(|c| c.as_bool()).map(|_| 0)
             } else {
                 None
             },
@@ -122,9 +111,7 @@ pub fn parse_stream_event_openai_format(
     let delta = choices[0].get("delta")?;
     let content = delta.get("content").and_then(|c| c.as_str())?;
 
-    Some(LLMStreamEvent::Token {
-        delta: content.to_string(),
-    })
+    Some(LLMStreamEvent::Token { delta: content.to_string() })
 }
 
 /// Extract reasoning content from text (for providers that support reasoning)
@@ -143,9 +130,7 @@ pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>)
     if let Some((deprecated_reasoning, deprecated_content)) =
         extract_deprecated_reasoning_sections(content)
     {
-        let reasoning_parts = deprecated_reasoning
-            .map(|value| vec![value])
-            .unwrap_or_default();
+        let reasoning_parts = deprecated_reasoning.map(|value| vec![value]).unwrap_or_default();
         return (reasoning_parts, deprecated_content);
     }
 
@@ -412,11 +397,7 @@ mod tests {
         // Note: Current implementation may merge adjacent reasoning segments
         // Testing that at least one reasoning section is extracted
         assert!(!reasoning.is_empty());
-        assert!(
-            reasoning
-                .iter()
-                .any(|r| r.contains("Step 1") || r.contains("Step 2"))
-        );
+        assert!(reasoning.iter().any(|r| r.contains("Step 1") || r.contains("Step 2")));
         let main_text = main.unwrap();
         assert!(main_text.contains("text") || main_text.contains("end"));
     }

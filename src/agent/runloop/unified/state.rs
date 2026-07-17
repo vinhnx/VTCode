@@ -136,8 +136,7 @@ impl SessionStats {
         let Some(usage) = usage else {
             return;
         };
-        self.total_usage
-            .add(&usage_cost::normalized_turn_usage(provider, usage));
+        self.total_usage.add(&usage_cost::normalized_turn_usage(provider, usage));
     }
 
     pub(crate) fn total_usage(&self) -> HarnessUsage {
@@ -254,9 +253,7 @@ impl SessionStats {
         }
 
         if self.turn_stalled {
-            FollowUpPromptAction::RecoverFromStall {
-                stall_reason: self.turn_stall_reason.clone(),
-            }
+            FollowUpPromptAction::RecoverFromStall { stall_reason: self.turn_stall_reason.clone() }
         } else {
             FollowUpPromptAction::ForceConclusion
         }
@@ -414,10 +411,8 @@ impl SessionStats {
                 continue;
             }
 
-            if let Some(existing) = self
-                .recent_touched_files
-                .iter()
-                .position(|entry| entry == normalized)
+            if let Some(existing) =
+                self.recent_touched_files.iter().position(|entry| entry == normalized)
             {
                 let _ = self.recent_touched_files.remove(existing);
             }
@@ -643,20 +638,15 @@ impl CtrlCState {
     /// exit. After this window, the state machine resets to `CancelRequested`
     /// on the next signal.
     pub(crate) fn register_signal(&self) -> CtrlCSignal {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        let now =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let last = self.last_signal_time.swap(now, Ordering::SeqCst);
         let current_phase = self.phase();
 
         // Debounce repeated cancel signals, but allow an already-armed stop to
         // escalate immediately so a quick second press can still exit.
         if last > 0 && now.saturating_sub(last) < 200 {
-            if matches!(
-                current_phase,
-                CtrlCPhase::ExitArmed | CtrlCPhase::ExitRequested
-            ) {
+            if matches!(current_phase, CtrlCPhase::ExitArmed | CtrlCPhase::ExitRequested) {
                 self.set_phase(CtrlCPhase::ExitRequested);
                 return CtrlCSignal::Exit;
             }
@@ -666,10 +656,8 @@ impl CtrlCState {
         let window_ms = DOUBLE_CTRL_C_WINDOW.as_millis() as u64;
         let is_within_window = last > 0 && now.saturating_sub(last) <= window_ms;
 
-        if matches!(
-            current_phase,
-            CtrlCPhase::CancelRequested | CtrlCPhase::ExitArmed
-        ) && is_within_window
+        if matches!(current_phase, CtrlCPhase::CancelRequested | CtrlCPhase::ExitArmed)
+            && is_within_window
         {
             self.set_phase(CtrlCPhase::ExitRequested);
             return CtrlCSignal::Exit;
@@ -793,10 +781,7 @@ mod tests {
     #[test]
     fn follow_up_prompt_variants_are_detected() {
         let mut stats = SessionStats::default();
-        assert_eq!(
-            stats.register_follow_up_prompt("continue."),
-            FollowUpPromptAction::None
-        );
+        assert_eq!(stats.register_follow_up_prompt("continue."), FollowUpPromptAction::None);
         assert_eq!(
             stats.register_follow_up_prompt("continue with your recommendation"),
             FollowUpPromptAction::None
@@ -813,18 +798,11 @@ mod tests {
         stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
         stats.suppress_next_follow_up_prompt();
 
-        assert_eq!(
-            stats.register_follow_up_prompt("continue"),
-            FollowUpPromptAction::None
-        );
+        assert_eq!(stats.register_follow_up_prompt("continue"), FollowUpPromptAction::None);
         assert!(stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), Some("turn blocked"));
 
-        assert!(
-            stats
-                .register_follow_up_prompt("continue")
-                .is_stalled_recovery()
-        );
+        assert!(stats.register_follow_up_prompt("continue").is_stalled_recovery());
     }
 
     #[test]
@@ -843,9 +821,8 @@ mod tests {
 
     #[test]
     fn follow_up_prompt_action_exposes_stall_reason() {
-        let action = FollowUpPromptAction::RecoverFromStall {
-            stall_reason: Some("blocked".to_string()),
-        };
+        let action =
+            FollowUpPromptAction::RecoverFromStall { stall_reason: Some("blocked".to_string()) };
 
         assert!(action.should_force_autonomous_response());
         assert!(action.is_stalled_recovery());
@@ -917,30 +894,15 @@ mod tests {
     fn prompt_cache_fingerprint_reports_expected_change_reasons() {
         let mut stats = SessionStats::default();
 
-        assert_eq!(
-            stats.record_prompt_cache_fingerprint("gpt-5", 11, Some(22)),
-            "model"
-        );
-        assert_eq!(
-            stats.record_prompt_cache_fingerprint("gpt-5", 11, Some(22)),
-            "unchanged"
-        );
-        assert_eq!(
-            stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(22)),
-            "stable_prefix"
-        );
-        assert_eq!(
-            stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(44)),
-            "tool_catalog"
-        );
+        assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5", 11, Some(22)), "model");
+        assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5", 11, Some(22)), "unchanged");
+        assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(22)), "stable_prefix");
+        assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5", 33, Some(44)), "tool_catalog");
         assert_eq!(
             stats.record_prompt_cache_fingerprint("gpt-5", 55, Some(66)),
             "stable_prefix+tool_catalog"
         );
-        assert_eq!(
-            stats.record_prompt_cache_fingerprint("gpt-5-mini", 55, Some(66)),
-            "model"
-        );
+        assert_eq!(stats.record_prompt_cache_fingerprint("gpt-5-mini", 55, Some(66)), "model");
 
         assert_eq!(
             stats.prompt_cache_diagnostics(),

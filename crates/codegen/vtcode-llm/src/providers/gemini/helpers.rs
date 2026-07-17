@@ -142,10 +142,7 @@ impl GeminiProvider {
         request: &LLMRequest,
     ) -> Result<GenerateContentRequest, LLMError> {
         if self.prompt_cache_enabled
-            && matches!(
-                self.prompt_cache_settings.mode,
-                GeminiPromptCacheMode::Explicit
-            )
+            && matches!(self.prompt_cache_settings.mode, GeminiPromptCacheMode::Explicit)
         {
             // Explicit cache handling requires separate cache lifecycle APIs which are
             // coordinated outside of the request payload. Placeholder ensures we surface
@@ -177,10 +174,8 @@ impl GeminiProvider {
 
             if message.role == MessageRole::Tool {
                 if let Some(tool_call_id) = &message.tool_call_id {
-                    let func_name = call_map
-                        .get(tool_call_id)
-                        .cloned()
-                        .unwrap_or_else(|| tool_call_id.clone());
+                    let func_name =
+                        call_map.get(tool_call_id).cloned().unwrap_or_else(|| tool_call_id.clone());
                     let response_text = serde_json::from_str::<Value>(&message.content.as_text())
                         .map(|value| {
                             serde_json::to_string_pretty(&value)
@@ -234,11 +229,7 @@ impl GeminiProvider {
             }
         }
 
-        let has_tools = request
-            .tools
-            .as_ref()
-            .map(|defs| !defs.is_empty())
-            .unwrap_or(false);
+        let has_tools = request.tools.as_ref().map(|defs| !defs.is_empty()).unwrap_or(false);
         let has_function_tools = tool_spec.has_function_tools;
         let tool_config = if has_tools || request.tool_choice.is_some() {
             let function_calling_config = if has_function_tools {
@@ -299,10 +290,7 @@ impl GeminiProvider {
                 );
 
                 if self.prompt_cache_enabled
-                    && matches!(
-                        self.prompt_cache_settings.mode,
-                        GeminiPromptCacheMode::Explicit
-                    )
+                    && matches!(self.prompt_cache_settings.mode, GeminiPromptCacheMode::Explicit)
                 {
                     if let Some(ttl) = self.prompt_cache_settings.explicit_ttl_seconds {
                         merged_system_prompt.map(|text| SystemInstruction::with_ttl(text, ttl))
@@ -388,10 +376,7 @@ impl GeminiProvider {
         let candidate = candidates.next().ok_or_else(|| {
             let formatted_error =
                 error_display::format_llm_error("Gemini", "No candidate in response");
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
+            LLMError::Provider { message: formatted_error, metadata: None }
         })?;
 
         if candidate.content.parts.is_empty() {
@@ -420,20 +405,14 @@ impl GeminiProvider {
 
         for part in candidate.content.parts {
             match part {
-                Part::Text {
-                    text,
-                    thought_signature,
-                } => {
+                Part::Text { text, thought_signature } => {
                     text_content.push_str(&text);
                     if thought_signature.is_some() {
                         last_text_thought_signature = thought_signature;
                     }
                 }
                 Part::InlineData { .. } => {}
-                Part::FunctionCall {
-                    function_call,
-                    thought_signature,
-                } => {
+                Part::FunctionCall { function_call, thought_signature } => {
                     let call_id = function_call
                         .id
                         .clone()
@@ -673,10 +652,8 @@ impl GeminiProvider {
                 }
             }
             "content.start" => {
-                let index = payload
-                    .get("index")
-                    .and_then(Value::as_u64)
-                    .unwrap_or_default() as usize;
+                let index =
+                    payload.get("index").and_then(Value::as_u64).unwrap_or_default() as usize;
                 let builder = state.outputs.entry(index).or_default();
                 if let Some(output_type) = payload
                     .get("content")
@@ -688,10 +665,8 @@ impl GeminiProvider {
                 }
             }
             "content.delta" => {
-                let index = payload
-                    .get("index")
-                    .and_then(Value::as_u64)
-                    .unwrap_or_default() as usize;
+                let index =
+                    payload.get("index").and_then(Value::as_u64).unwrap_or_default() as usize;
                 let Some(delta) = payload.get("delta").and_then(Value::as_object) else {
                     return Ok(events);
                 };
@@ -707,10 +682,7 @@ impl GeminiProvider {
                     .and_then(Value::as_str)
                     .unwrap_or("Unknown Gemini interactions streaming error");
                 let formatted = error_display::format_llm_error("Gemini", error_message);
-                return Err(LLMError::Provider {
-                    message: formatted,
-                    metadata: None,
-                });
+                return Err(LLMError::Provider { message: formatted, metadata: None });
             }
             _ => {}
         }
@@ -723,9 +695,7 @@ impl GeminiProvider {
         model: String,
     ) -> Result<LLMResponse, LLMError> {
         let interaction = Interaction {
-            id: state
-                .interaction_id
-                .unwrap_or_else(|| "interaction_stream".to_string()),
+            id: state.interaction_id.unwrap_or_else(|| "interaction_stream".to_string()),
             model: model.clone(),
             status: state.status,
             outputs: state
@@ -767,25 +737,15 @@ impl GeminiProvider {
             StreamingError::NetworkError { message, .. } => {
                 let formatted =
                     error_display::format_llm_error("Gemini", &format!("Network error: {message}"));
-                LLMError::Network {
-                    message: formatted,
-                    metadata: None,
-                }
+                LLMError::Network { message: formatted, metadata: None }
             }
-            StreamingError::ApiError {
-                status_code,
-                message,
-                ..
-            } => {
+            StreamingError::ApiError { status_code, message, .. } => {
                 if status_code == 401 || status_code == 403 {
                     let formatted = error_display::format_llm_error(
                         "Gemini",
                         &format!("HTTP {status_code}: {message}"),
                     );
-                    LLMError::Authentication {
-                        message: formatted,
-                        metadata: None,
-                    }
+                    LLMError::Authentication { message: formatted, metadata: None }
                 } else if status_code == 429 {
                     LLMError::RateLimit { metadata: None }
                 } else {
@@ -793,50 +753,32 @@ impl GeminiProvider {
                         "Gemini",
                         &format!("API error ({status_code}): {message}"),
                     );
-                    LLMError::Provider {
-                        message: formatted,
-                        metadata: None,
-                    }
+                    LLMError::Provider { message: formatted, metadata: None }
                 }
             }
             StreamingError::ParseError { message, .. } => {
                 let formatted =
                     error_display::format_llm_error("Gemini", &format!("Parse error: {message}"));
-                LLMError::Provider {
-                    message: formatted,
-                    metadata: None,
-                }
+                LLMError::Provider { message: formatted, metadata: None }
             }
-            StreamingError::TimeoutError {
-                operation,
-                duration,
-            } => {
+            StreamingError::TimeoutError { operation, duration } => {
                 let formatted = error_display::format_llm_error(
                     "Gemini",
                     &format!("Streaming timeout during {operation} after {duration:?}"),
                 );
-                LLMError::Network {
-                    message: formatted,
-                    metadata: None,
-                }
+                LLMError::Network { message: formatted, metadata: None }
             }
             StreamingError::ContentError { message } => {
                 let formatted =
                     error_display::format_llm_error("Gemini", &format!("Content error: {message}"));
-                LLMError::Provider {
-                    message: formatted,
-                    metadata: None,
-                }
+                LLMError::Provider { message: formatted, metadata: None }
             }
             StreamingError::StreamingError { message, .. } => {
                 let formatted = error_display::format_llm_error(
                     "Gemini",
                     &format!("Streaming error: {message}"),
                 );
-                LLMError::Provider {
-                    message: formatted,
-                    metadata: None,
-                }
+                LLMError::Provider { message: formatted, metadata: None }
             }
         }
     }
@@ -848,10 +790,7 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
             if text.is_empty() {
                 Vec::new()
             } else {
-                vec![Part::Text {
-                    text: text.clone(),
-                    thought_signature: None,
-                }]
+                vec![Part::Text { text: text.clone(), thought_signature: None }]
             }
         }
         MessageContent::Parts(parts) => {
@@ -860,15 +799,11 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                 match part {
                     ContentPart::Text { text } => {
                         if !text.is_empty() {
-                            converted.push(Part::Text {
-                                text: text.clone(),
-                                thought_signature: None,
-                            });
+                            converted
+                                .push(Part::Text { text: text.clone(), thought_signature: None });
                         }
                     }
-                    ContentPart::Image {
-                        data, mime_type, ..
-                    } => {
+                    ContentPart::Image { data, mime_type, .. } => {
                         converted.push(Part::InlineData {
                             inline_data: InlineData {
                                 mime_type: mime_type.clone(),
@@ -876,12 +811,7 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                             },
                         });
                     }
-                    ContentPart::File {
-                        filename,
-                        file_id,
-                        file_url,
-                        ..
-                    } => {
+                    ContentPart::File { filename, file_id, file_url, .. } => {
                         let fallback = filename
                             .clone()
                             .or_else(|| file_id.clone())
@@ -917,18 +847,13 @@ fn build_interaction_content(content: &MessageContent) -> Vec<InteractionContent
                             converted.push(InteractionContent::Text { text: text.clone() });
                         }
                     }
-                    ContentPart::Image {
-                        data, mime_type, ..
-                    } => converted.push(InteractionContent::Image {
-                        data: data.clone(),
-                        mime_type: mime_type.clone(),
-                    }),
-                    ContentPart::File {
-                        filename,
-                        file_id,
-                        file_url,
-                        ..
-                    } => {
+                    ContentPart::Image { data, mime_type, .. } => {
+                        converted.push(InteractionContent::Image {
+                            data: data.clone(),
+                            mime_type: mime_type.clone(),
+                        })
+                    }
+                    ContentPart::File { filename, file_id, file_url, .. } => {
                         let fallback = filename
                             .clone()
                             .or_else(|| file_id.clone())
@@ -1053,10 +978,9 @@ fn gemini_built_in_tool(tool: &ToolDefinition) -> Option<Tool> {
             code_execution: Some(tool.hosted_tool_config.clone().unwrap_or_else(|| json!({}))),
             ..Tool::default()
         }),
-        other if other.starts_with("code_execution_") => Some(Tool {
-            code_execution: Some(json!({})),
-            ..Tool::default()
-        }),
+        other if other.starts_with("code_execution_") => {
+            Some(Tool { code_execution: Some(json!({})), ..Tool::default() })
+        }
         _ => None,
     }
 }
@@ -1181,9 +1105,8 @@ fn build_generation_config(provider: &GeminiProvider, request: &LLMRequest) -> G
         };
 
         if let Some(level) = thinking_level {
-            generation_config.thinking_config = Some(ThinkingConfig {
-                thinking_level: Some(level.to_string()),
-            });
+            generation_config.thinking_config =
+                Some(ThinkingConfig { thinking_level: Some(level.to_string()) });
         }
     }
 
@@ -1316,14 +1239,11 @@ fn build_interaction_turns(
         }
         if message.role == MessageRole::Tool {
             let tool_call_id =
-                message
-                    .tool_call_id
-                    .clone()
-                    .ok_or_else(|| LLMError::InvalidRequest {
-                        message: "Gemini interactions require tool_call_id for tool messages"
-                            .to_string(),
-                        metadata: None,
-                    })?;
+                message.tool_call_id.clone().ok_or_else(|| LLMError::InvalidRequest {
+                    message: "Gemini interactions require tool_call_id for tool messages"
+                        .to_string(),
+                    metadata: None,
+                })?;
             content.push(InteractionContent::FunctionResult {
                 call_id: tool_call_id.clone(),
                 name: call_map.get(&tool_call_id).cloned(),
@@ -1345,10 +1265,7 @@ fn build_interaction_turns(
             [InteractionContent::Text { text }] => InteractionTurnContent::Text(text.clone()),
             _ => InteractionTurnContent::Content(content),
         };
-        turns.push(InteractionTurn {
-            role: role.to_string(),
-            content,
-        });
+        turns.push(InteractionTurn { role: role.to_string(), content });
     }
 
     Ok(turns)
@@ -1392,9 +1309,8 @@ fn interaction_result_content_array(value: &Value) -> Option<Vec<InteractionCont
     for item in items {
         let item_type = item.get("type")?.as_str()?;
         match item_type {
-            "text" => content.push(InteractionContent::Text {
-                text: item.get("text")?.as_str()?.to_string(),
-            }),
+            "text" => content
+                .push(InteractionContent::Text { text: item.get("text")?.as_str()?.to_string() }),
             "image" => {
                 let mime_type = item.get("mime_type")?.as_str()?.to_string();
                 let data = item.get("data")?.as_str()?.to_string();
@@ -1420,19 +1336,14 @@ fn apply_interaction_delta(
     delta: &Map<String, Value>,
     events: &mut Vec<LLMStreamEvent>,
 ) {
-    let delta_type = delta
-        .get("type")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
+    let delta_type = delta.get("type").and_then(Value::as_str).unwrap_or_default();
 
     match delta_type {
         "text" => {
             builder.output_type = "text".to_string();
             if let Some(text) = delta.get("text").and_then(Value::as_str) {
                 builder.text.push_str(text);
-                events.push(LLMStreamEvent::Token {
-                    delta: text.to_string(),
-                });
+                events.push(LLMStreamEvent::Token { delta: text.to_string() });
             }
         }
         "thought" => {
@@ -1443,9 +1354,7 @@ fn apply_interaction_delta(
                 .or_else(|| delta.get("text").and_then(Value::as_str))
             {
                 builder.summary.push_str(text);
-                events.push(LLMStreamEvent::Reasoning {
-                    delta: text.to_string(),
-                });
+                events.push(LLMStreamEvent::Reasoning { delta: text.to_string() });
             }
         }
         "thought_summary" => {
@@ -1458,9 +1367,7 @@ fn apply_interaction_delta(
                 .or_else(|| delta.get("text").and_then(Value::as_str))
             {
                 builder.summary.push_str(text);
-                events.push(LLMStreamEvent::Reasoning {
-                    delta: text.to_string(),
-                });
+                events.push(LLMStreamEvent::Reasoning { delta: text.to_string() });
             }
         }
         "thought_signature" => {
@@ -1551,10 +1458,7 @@ mod fabricated_id_tests {
         let first_id = first.tool_calls.expect("tool call expected")[0].id.clone();
         let second_id = second.tool_calls.expect("tool call expected")[0].id.clone();
 
-        assert_ne!(
-            first_id, second_id,
-            "fabricated ids must differ across responses"
-        );
+        assert_ne!(first_id, second_id, "fabricated ids must differ across responses");
         assert!(first_id.starts_with("call_"));
         assert!(second_id.starts_with("call_"));
     }
@@ -1597,11 +1501,7 @@ mod fabricated_id_tests {
         let mut unique = HashSet::new();
         unique.insert(first_id.clone());
         unique.insert(second_id.clone());
-        assert_eq!(
-            unique.len(),
-            2,
-            "fabricated ids must differ across responses"
-        );
+        assert_eq!(unique.len(), 2, "fabricated ids must differ across responses");
         assert!(first_id.starts_with("call_"));
         assert!(second_id.starts_with("call_"));
     }

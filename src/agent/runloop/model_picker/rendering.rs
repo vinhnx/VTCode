@@ -71,9 +71,7 @@ fn is_current_model(
     current_provider: &str,
     current_model: &str,
 ) -> bool {
-    provider
-        .to_string()
-        .eq_ignore_ascii_case(current_provider.trim())
+    provider.to_string().eq_ignore_ascii_case(current_provider.trim())
         && model_id.eq_ignore_ascii_case(current_model.trim())
 }
 
@@ -101,11 +99,7 @@ fn context_window_segment(provider: &str, model_id: &str) -> Option<String> {
         .flatten()
         .filter(|context_window_size| *context_window_size > 0)
         .map(|context_window_size| {
-            format!(
-                "{}: {}",
-                CONTEXT_LABEL,
-                compact_context_window_label(context_window_size)
-            )
+            format!("{}: {}", CONTEXT_LABEL, compact_context_window_label(context_window_size))
         })
 }
 
@@ -213,9 +207,7 @@ fn is_current_custom_provider(
     current_provider: &str,
     current_model: &str,
 ) -> bool {
-    provider_key
-        .trim()
-        .eq_ignore_ascii_case(current_provider.trim())
+    provider_key.trim().eq_ignore_ascii_case(current_provider.trim())
         && model_id.eq_ignore_ascii_case(current_model.trim())
 }
 
@@ -318,11 +310,7 @@ pub(super) fn render_step_one_inline(
             };
             items.push(InlineListItem {
                 title: option.display.to_string(),
-                subtitle: Some(static_model_subtitle(
-                    option,
-                    current_provider,
-                    current_model,
-                )),
+                subtitle: Some(static_model_subtitle(option, current_provider, current_model)),
                 badge: Some(provider.label().to_string()),
                 indent: 0,
                 selection: Some(InlineListSelection::Model(*idx)),
@@ -464,22 +452,11 @@ pub(super) fn render_step_one_plain(
     custom_providers: &[SelectionDetail],
     current_provider: &str,
 ) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        "Model picker: select the model you want to use.",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Type '<provider> <model-id>' to select a model.",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Type 'cancel' to exit the picker at any time.",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Type 'refresh' to re-query LM Studio and Ollama servers.",
-    )?;
+    renderer.line(MessageStyle::Info, "Model picker: select the model you want to use.")?;
+    renderer.line(MessageStyle::Info, "Type '<provider> <model-id>' to select a model.")?;
+    renderer.line(MessageStyle::Info, "Type 'cancel' to exit the picker at any time.")?;
+    renderer
+        .line(MessageStyle::Info, "Type 'refresh' to re-query LM Studio and Ollama servers.")?;
     if should_show_codex_runtime_note(current_provider) {
         renderer.line(MessageStyle::Info, CODEX_RUNTIME_NOTE)?;
     }
@@ -597,18 +574,12 @@ pub(super) fn render_step_one_plain(
         }
         renderer.line(MessageStyle::Info, "[Custom providers]")?;
         for selection in custom_providers {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  {}", selection.provider_label),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("  {}", selection.provider_label))?;
             renderer.line(
                 MessageStyle::Info,
                 &format!("      {}", custom_provider_subtitle(selection, "", "")),
             )?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("      env: {}", selection.env_key),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("      env: {}", selection.env_key))?;
         }
     }
 

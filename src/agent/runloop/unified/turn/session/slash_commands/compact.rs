@@ -21,10 +21,7 @@ pub(crate) async fn handle_compact_conversation(
     command: CompactConversationCommand,
 ) -> Result<SlashCommandControl> {
     match command {
-        CompactConversationCommand::Run {
-            options,
-            native_only,
-        } => {
+        CompactConversationCommand::Run { options, native_only } => {
             if native_only && !manual_compaction_available(&mut ctx)? {
                 return Ok(SlashCommandControl::Continue);
             }
@@ -83,19 +80,15 @@ async fn edit_default_prompt(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
     let edited =
         fs::read_to_string(temp_file.path()).context("Failed to read edited compaction prompt")?;
     persist_default_prompt(ctx, trimmed_optional(edited)).await?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Saved workspace default manual compaction prompt.",
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, "Saved workspace default manual compaction prompt.")?;
     Ok(())
 }
 
 async fn reset_default_prompt(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
     persist_default_prompt(ctx, None).await?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Reset workspace default manual compaction prompt.",
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, "Reset workspace default manual compaction prompt.")?;
     Ok(())
 }
 
@@ -107,9 +100,7 @@ async fn persist_default_prompt(
         .context("Failed to load VT Code configuration")?;
     let workspace_config_path = preferred_workspace_config_path(&manager, &ctx.config.workspace);
     let mut root = load_toml_value(&workspace_config_path)?;
-    let root_table = root
-        .as_table_mut()
-        .context("Workspace config root is not a TOML table")?;
+    let root_table = root.as_table_mut().context("Workspace config root is not a TOML table")?;
     set_manual_compaction_prompt(root_table, value);
     save_toml_value(&workspace_config_path, &root)?;
     refresh_runtime_config_from_manager(
@@ -130,8 +121,7 @@ async fn execute_manual_compaction(
     native_only: bool,
 ) -> Result<SlashCommandControl> {
     if ctx.conversation_history.is_empty() {
-        ctx.renderer
-            .line(MessageStyle::Info, "No conversation history to compact.")?;
+        ctx.renderer.line(MessageStyle::Info, "No conversation history to compact.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -162,15 +152,13 @@ async fn execute_manual_compaction(
     let outcome = match outcome {
         Ok(outcome) => outcome,
         Err(err) => {
-            ctx.renderer
-                .line(MessageStyle::Error, &format!("Compaction failed: {err}"))?;
+            ctx.renderer.line(MessageStyle::Error, &format!("Compaction failed: {err}"))?;
             return Ok(SlashCommandControl::Continue);
         }
     };
 
     let Some(outcome) = outcome else {
-        ctx.renderer
-            .line(MessageStyle::Info, "Conversation is already compact.")?;
+        ctx.renderer.line(MessageStyle::Info, "Conversation is already compact.")?;
         return Ok(SlashCommandControl::Continue);
     };
 
@@ -192,10 +180,7 @@ fn resolve_manual_compaction_options(
 ) -> vtcode_core::compaction::ManualCompactionOptions {
     let default_prompt = current_default_prompt(ctx);
     vtcode_core::compaction::ManualCompactionOptions {
-        instructions: options
-            .instructions
-            .and_then(trimmed_optional)
-            .or(default_prompt),
+        instructions: options.instructions.and_then(trimmed_optional).or(default_prompt),
         max_output_tokens: options.max_output_tokens,
         reasoning_effort: options.reasoning_effort,
         verbosity: options.verbosity,
@@ -210,10 +195,7 @@ fn current_default_prompt(ctx: &SlashCommandContext<'_>) -> Option<String> {
 }
 
 fn manual_compaction_available(ctx: &mut SlashCommandContext<'_>) -> Result<bool> {
-    if ctx
-        .provider_client
-        .supports_manual_openai_compaction(&ctx.config.model)
-    {
+    if ctx.provider_client.supports_manual_openai_compaction(&ctx.config.model) {
         return Ok(true);
     }
 

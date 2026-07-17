@@ -30,9 +30,7 @@ impl PtyScreenState {
     }
 
     pub(super) fn prepare_snapshot(&self) -> ScreenSnapshot {
-        ScreenSnapshot {
-            screen_contents: self.parser.screen().contents(),
-        }
+        ScreenSnapshot { screen_contents: self.parser.screen().contents() }
     }
 }
 
@@ -51,12 +49,7 @@ mod tests {
     use super::PtyScreenState;
 
     fn test_size() -> PtySize {
-        PtySize {
-            rows: 4,
-            cols: 10,
-            pixel_width: 0,
-            pixel_height: 0,
-        }
+        PtySize { rows: 4, cols: 10, pixel_width: 0, pixel_height: 0 }
     }
 
     #[test]

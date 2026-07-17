@@ -22,10 +22,7 @@ async fn update_failure_preserves_original_content() {
 
     let err = patch.apply(temp_dir.path()).await.unwrap_err();
     let patch_err = err.downcast::<PatchError>().unwrap();
-    assert!(matches!(
-        original_patch_error(&patch_err),
-        PatchError::SegmentNotFound { .. }
-    ));
+    assert!(matches!(original_patch_error(&patch_err), PatchError::SegmentNotFound { .. }));
 
     let contents = tokio::fs::read_to_string(&file_path).await.unwrap();
     assert_eq!(contents, "original\n");
@@ -73,9 +70,7 @@ async fn update_failure_restores_file_after_partial_write() {
 async fn add_file_validation_errors_when_target_exists() {
     let temp_dir = TempDir::new().unwrap();
     let existing_path = temp_dir.path().join("duplicate.txt");
-    tokio::fs::write(&existing_path, "original\n")
-        .await
-        .unwrap();
+    tokio::fs::write(&existing_path, "original\n").await.unwrap();
 
     let patch_text = "*** Begin Patch\n*** Add File: duplicate.txt\n+hello\n*** End Patch";
     let patch = Patch::parse(patch_text).unwrap();

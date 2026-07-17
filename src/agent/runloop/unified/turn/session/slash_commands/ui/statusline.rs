@@ -82,10 +82,8 @@ pub(crate) async fn handle_start_statusline_setup(
     _instructions: Option<String>,
 ) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Status line setup is available in inline UI only.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Status line setup is available in inline UI only.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -94,8 +92,7 @@ pub(crate) async fn handle_start_statusline_setup(
     }
 
     let Some(target) = select_statusline_target(&mut ctx).await? else {
-        ctx.renderer
-            .line(MessageStyle::Info, "Status line setup cancelled.")?;
+        ctx.renderer.line(MessageStyle::Info, "Status line setup cancelled.")?;
         return Ok(SlashCommandControl::Continue);
     };
 
@@ -111,11 +108,7 @@ pub(crate) async fn handle_start_statusline_setup(
     let script_path = statusline_script_path(target, &ctx.config.workspace, &config_path);
     let script_command = default_script_command(target, &script_path);
 
-    let mut draft = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.ui.status_line.clone())
-        .unwrap_or_default();
+    let mut draft = ctx.vt_cfg.as_ref().map(|cfg| cfg.ui.status_line.clone()).unwrap_or_default();
 
     loop {
         let script_exists = script_path.exists();
@@ -156,23 +149,18 @@ pub(crate) async fn handle_start_statusline_setup(
                 format!("Preview: {preview}"),
             ],
             build_statusline_setup_items(&draft, script_exists),
-            Some(InlineListSelection::ConfigAction(
-                "statusline:save".to_string(),
-            )),
+            Some(InlineListSelection::ConfigAction("statusline:save".to_string())),
             None,
         );
 
         let Some(selection) = wait_for_list_modal_selection(&mut ctx).await else {
-            ctx.renderer
-                .line(MessageStyle::Info, "Status line setup cancelled.")?;
+            ctx.renderer.line(MessageStyle::Info, "Status line setup cancelled.")?;
             return Ok(SlashCommandControl::Continue);
         };
 
         let InlineListSelection::ConfigAction(action) = selection else {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Unsupported status line setup selection.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, "Unsupported status line setup selection.")?;
             continue;
         };
 
@@ -189,16 +177,12 @@ pub(crate) async fn handle_start_statusline_setup(
                 .await?;
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    &format!(
-                        "Saved status line configuration to {}.",
-                        config_path.display()
-                    ),
+                    &format!("Saved status line configuration to {}.", config_path.display()),
                 )?;
                 return Ok(SlashCommandControl::Continue);
             }
             StatuslineSetupAction::Cancel => {
-                ctx.renderer
-                    .line(MessageStyle::Info, "Status line setup cancelled.")?;
+                ctx.renderer.line(MessageStyle::Info, "Status line setup cancelled.")?;
                 return Ok(SlashCommandControl::Continue);
             }
             StatuslineSetupAction::EditCommand => {
@@ -227,15 +211,12 @@ pub(crate) async fn handle_start_statusline_setup(
             StatuslineSetupAction::UseScriptPath => {
                 draft.command = Some(script_command.clone());
                 draft.mode = StatusLineMode::Command;
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    &format!("Command set to `{script_command}`."),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Info, &format!("Command set to `{script_command}`."))?;
             }
             StatuslineSetupAction::ClearCommand => {
                 draft.command = None;
-                ctx.renderer
-                    .line(MessageStyle::Info, "Cleared status line command.")?;
+                ctx.renderer.line(MessageStyle::Info, "Cleared status line command.")?;
             }
             StatuslineSetupAction::EditRefreshInterval => {
                 let default_value = draft.refresh_interval_ms.to_string();
@@ -316,9 +297,7 @@ async fn select_statusline_target(
                 subtitle: Some("Personal VT Code setup in your user config layer".to_string()),
                 badge: Some("User".to_string()),
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    "statusline:user".to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction("statusline:user".to_string())),
                 search_value: Some("statusline user home personal".to_string()),
             },
             InlineListItem {
@@ -332,9 +311,7 @@ async fn select_statusline_target(
                 search_value: Some("statusline workspace repo local".to_string()),
             },
         ],
-        Some(InlineListSelection::ConfigAction(
-            "statusline:user".to_string(),
-        )),
+        Some(InlineListSelection::ConfigAction("statusline:user".to_string())),
         None,
     );
 
@@ -349,10 +326,8 @@ async fn select_statusline_target(
             StatuslineTargetMode::Workspace
         }
         _ => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Unsupported status line setup selection.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, "Unsupported status line setup selection.")?;
             return Ok(None);
         }
     };
@@ -376,11 +351,7 @@ fn build_statusline_setup_items(
             "Use command mode",
             "Run a shell command and render its first output line.",
         ),
-        (
-            StatusLineMode::Hidden,
-            "Hide status line",
-            "Disable the bottom status line.",
-        ),
+        (StatusLineMode::Hidden, "Hide status line", "Disable the bottom status line."),
     ] {
         let active = draft.mode == mode;
         items.push(config_action_item(
@@ -409,12 +380,7 @@ fn build_statusline_setup_items(
         "statusline:command:script",
         "statusline command script",
     ));
-    if draft
-        .command
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|value| !value.is_empty())
-    {
+    if draft.command.as_deref().map(str::trim).is_some_and(|value| !value.is_empty()) {
         items.push(config_action_item(
             "Clear command",
             "Remove command so command mode falls back to auto.",
@@ -494,14 +460,10 @@ fn apply_statusline_action(
         "statusline:refresh:edit" => return Ok(StatuslineSetupAction::EditRefreshInterval),
         "statusline:timeout:edit" => return Ok(StatuslineSetupAction::EditTimeout),
         "statusline:script:create" => {
-            return Ok(StatuslineSetupAction::ScaffoldScript {
-                replace_existing: false,
-            });
+            return Ok(StatuslineSetupAction::ScaffoldScript { replace_existing: false });
         }
         "statusline:script:replace" => {
-            return Ok(StatuslineSetupAction::ScaffoldScript {
-                replace_existing: true,
-            });
+            return Ok(StatuslineSetupAction::ScaffoldScript { replace_existing: true });
         }
         _ => {}
     }
@@ -616,18 +578,14 @@ async fn prompt_statusline_input(
 
     let value = match outcome {
         WizardModalOutcome::Submitted(selections) => {
-            selections
-                .into_iter()
-                .find_map(|selection| match selection {
-                    InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        other,
-                    } if question_id == STATUSLINE_INPUT_ID => {
-                        other.or_else(|| selected.first().cloned())
-                    }
-                    _ => None,
-                })
+            selections.into_iter().find_map(|selection| match selection {
+                InlineListSelection::RequestUserInputAnswer { question_id, selected, other }
+                    if question_id == STATUSLINE_INPUT_ID =>
+                {
+                    other.or_else(|| selected.first().cloned())
+                }
+                _ => None,
+            })
         }
         WizardModalOutcome::Cancelled { .. } => None,
     };
@@ -637,8 +595,7 @@ async fn prompt_statusline_input(
 
     let trimmed = value.trim().to_string();
     if trimmed.is_empty() && !allow_empty {
-        ctx.renderer
-            .line(MessageStyle::Info, "Input was empty. Nothing changed.")?;
+        ctx.renderer.line(MessageStyle::Info, "Input was empty. Nothing changed.")?;
         return Ok(None);
     }
     if trimmed.is_empty() {
@@ -706,12 +663,7 @@ async fn persist_statusline_config(
     .await?;
 
     if target == StatuslineTargetMode::Workspace {
-        let command = draft
-            .command
-            .as_deref()
-            .map(str::trim)
-            .unwrap_or_default()
-            .to_string();
+        let command = draft.command.as_deref().map(str::trim).unwrap_or_default().to_string();
         if command == default_script_command(target, script_path) && !script_path.exists() {
             ctx.renderer.line(
                 MessageStyle::Warning,
@@ -725,42 +677,25 @@ async fn persist_statusline_config(
 
 fn write_statusline_config(config_path: &Path, draft: &StatusLineConfig) -> Result<()> {
     let mut root = load_toml_value(config_path)?;
-    let root_table = root
-        .as_table_mut()
-        .context("Status line config root is not a TOML table")?;
+    let root_table = root.as_table_mut().context("Status line config root is not a TOML table")?;
     let ui_table = ensure_child_table(root_table, "ui");
     let status_table = ensure_child_table(ui_table, "status_line");
 
-    status_table.insert(
-        "mode".to_string(),
-        TomlValue::String(statusline_mode_id(&draft.mode).to_string()),
-    );
-    if let Some(command) = draft
-        .command
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    status_table
+        .insert("mode".to_string(), TomlValue::String(statusline_mode_id(&draft.mode).to_string()));
+    if let Some(command) = draft.command.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
-        status_table.insert(
-            "command".to_string(),
-            TomlValue::String(command.to_string()),
-        );
+        status_table.insert("command".to_string(), TomlValue::String(command.to_string()));
     } else {
         status_table.remove("command");
     }
     status_table.insert(
         "refresh_interval_ms".to_string(),
-        TomlValue::Integer(u64_to_toml_integer(
-            draft.refresh_interval_ms,
-            "refresh_interval_ms",
-        )?),
+        TomlValue::Integer(u64_to_toml_integer(draft.refresh_interval_ms, "refresh_interval_ms")?),
     );
     status_table.insert(
         "command_timeout_ms".to_string(),
-        TomlValue::Integer(u64_to_toml_integer(
-            draft.command_timeout_ms,
-            "command_timeout_ms",
-        )?),
+        TomlValue::Integer(u64_to_toml_integer(draft.command_timeout_ms, "command_timeout_ms")?),
     );
 
     save_toml_value(config_path, &root)
@@ -811,10 +746,7 @@ fn preferred_user_config_path(manager: &ConfigManager) -> Option<PathBuf> {
         })
         .or_else(|| {
             let defaults = current_config_defaults();
-            defaults
-                .home_config_paths(manager.config_file_name())
-                .into_iter()
-                .next()
+            defaults.home_config_paths(manager.config_file_name()).into_iter().next()
         })
         .or_else(|| dirs::home_dir().map(|home| home.join(manager.config_file_name())))
 }
@@ -896,10 +828,7 @@ mod tests {
             "gpt-5.4",
         );
 
-        assert_eq!(
-            preview,
-            "command mode (setup does not execute command): .vtcode/statusline.sh"
-        );
+        assert_eq!(preview, "command mode (setup does not execute command): .vtcode/statusline.sh");
     }
 
     #[test]
@@ -907,16 +836,8 @@ mod tests {
         let draft = StatusLineConfig::default();
         let items = build_statusline_setup_items(&draft, true);
 
-        assert!(
-            items
-                .iter()
-                .any(|item| item.title == "Replace script template")
-        );
-        assert!(
-            !items
-                .iter()
-                .any(|item| item.title == "Create script template")
-        );
+        assert!(items.iter().any(|item| item.title == "Replace script template"));
+        assert!(!items.iter().any(|item| item.title == "Create script template"));
     }
 
     #[test]

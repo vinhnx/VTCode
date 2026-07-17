@@ -88,9 +88,6 @@ mod tests {
             &messages,
         );
 
-        assert_eq!(
-            session_stats.previous_response_chain_for("openai", "gpt-5.4"),
-            None
-        );
+        assert_eq!(session_stats.previous_response_chain_for("openai", "gpt-5.4"), None);
     }
 }

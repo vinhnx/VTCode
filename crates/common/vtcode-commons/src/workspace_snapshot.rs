@@ -70,10 +70,7 @@ pub struct SnapshotDelta {
 pub fn capture(workspace: &Path, max_file_bytes: u64) -> io::Result<WorkspaceSnapshot> {
     let mut files = BTreeMap::new();
     collect(workspace, workspace, max_file_bytes, &mut files)?;
-    Ok(WorkspaceSnapshot {
-        files,
-        captured_at: now_rfc3339(),
-    })
+    Ok(WorkspaceSnapshot { files, captured_at: now_rfc3339() })
 }
 
 fn collect(
@@ -87,10 +84,10 @@ fn collect(
         let path = entry.path();
         let ft = entry.file_type()?;
         if ft.is_dir() {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if SKIP_DIRS.contains(&name) {
-                    continue;
-                }
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && SKIP_DIRS.contains(&name)
+            {
+                continue;
             }
             collect(root, &path, max_file_bytes, out)?;
         } else if ft.is_file() {
@@ -112,14 +109,7 @@ fn collect(
                     } else {
                         0
                     };
-                    out.insert(
-                        rel,
-                        FileStat {
-                            size,
-                            mtime_ns,
-                            head_hash,
-                        },
-                    );
+                    out.insert(rel, FileStat { size, mtime_ns, head_hash });
                 }
                 Err(_) => continue,
             }
@@ -235,14 +225,7 @@ mod tests {
         let snap = WorkspaceSnapshot {
             files: {
                 let mut m = BTreeMap::new();
-                m.insert(
-                    "x.rs".to_string(),
-                    FileStat {
-                        size: 3,
-                        mtime_ns: 42,
-                        head_hash: 7,
-                    },
-                );
+                m.insert("x.rs".to_string(), FileStat { size: 3, mtime_ns: 42, head_hash: 7 });
                 m
             },
             captured_at: "2026-01-01T00:00:00Z".to_string(),

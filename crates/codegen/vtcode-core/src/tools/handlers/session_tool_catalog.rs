@@ -156,11 +156,8 @@ impl DeferredToolPolicy {
     }
 
     fn keeps_entry_available(&self, entry: &ToolCatalogEntry) -> bool {
-        self.always_available_tools
-            .contains(entry.public_name.as_str())
-            || self
-                .always_available_tools
-                .contains(entry.registration_name.as_str())
+        self.always_available_tools.contains(entry.public_name.as_str())
+            || self.always_available_tools.contains(entry.registration_name.as_str())
             || entry
                 .aliases
                 .iter()
@@ -204,13 +201,7 @@ pub fn deferred_tool_policy_for_runtime(
                 .map(|cfg| cfg.provider.anthropic.tool_search.algorithm)
                 .unwrap_or_default();
             let always_available_tools = vtcode_config
-                .map(|cfg| {
-                    cfg.provider
-                        .anthropic
-                        .tool_search
-                        .always_available_tools
-                        .clone()
-                })
+                .map(|cfg| cfg.provider.anthropic.tool_search.always_available_tools.clone())
                 .unwrap_or_default();
             DeferredToolPolicy::anthropic(algorithm, always_available_tools)
         }
@@ -223,13 +214,7 @@ pub fn deferred_tool_policy_for_runtime(
             }
 
             let always_available_tools = vtcode_config
-                .map(|cfg| {
-                    cfg.provider
-                        .openai
-                        .tool_search
-                        .always_available_tools
-                        .clone()
-                })
+                .map(|cfg| cfg.provider.openai.tool_search.always_available_tools.clone())
                 .unwrap_or_default();
             DeferredToolPolicy::openai_hosted(always_available_tools)
         }
@@ -425,9 +410,7 @@ fn estimate_schema_tokens(entries: &[&ToolCatalogEntry], config: &SessionToolsCo
                 description,
                 parameters,
             };
-            serde_json::to_string(&entry)
-                .map(|s| s.len() / 4)
-                .unwrap_or(0)
+            serde_json::to_string(&entry).map(|s| s.len() / 4).unwrap_or(0)
         })
         .sum()
 }
@@ -454,9 +437,7 @@ impl SessionToolCatalog {
 
     /// Returns the names of all public tools visible with the given config.
     pub fn public_tool_names(&self, config: SessionToolsConfig) -> Vec<String> {
-        self.filtered_entries(&config)
-            .map(|entry| entry.public_name.clone())
-            .collect()
+        self.filtered_entries(&config).map(|entry| entry.public_name.clone()).collect()
     }
 
     /// Returns schema entries for all visible tools.
@@ -602,9 +583,7 @@ impl SessionToolCatalog {
         name: &str,
         config: SessionToolsConfig,
     ) -> Option<ToolSchemaEntry> {
-        self.schema_entries(config)
-            .into_iter()
-            .find(|entry| entry.name == name)
+        self.schema_entries(config).into_iter().find(|entry| entry.name == name)
     }
 
     pub(crate) fn entries(&self) -> &[ToolCatalogEntry] {
@@ -615,9 +594,7 @@ impl SessionToolCatalog {
         &self,
         config: &SessionToolsConfig,
     ) -> impl Iterator<Item = &ToolCatalogEntry> {
-        self.entries
-            .iter()
-            .filter(move |entry| entry.is_visible(config))
+        self.entries.iter().filter(move |entry| entry.is_visible(config))
     }
 }
 
@@ -625,10 +602,8 @@ impl ToolCatalogEntry {
     fn from_registration(registration: &ToolRegistration) -> Option<Self> {
         let metadata = registration.metadata();
         let description = metadata.description()?.to_string();
-        let parameters = metadata
-            .parameter_schema()
-            .cloned()
-            .unwrap_or_else(default_parameter_schema);
+        let parameters =
+            metadata.parameter_schema().cloned().unwrap_or_else(default_parameter_schema);
         let default_permission = metadata.default_permission().unwrap_or(ToolPolicy::Prompt);
         let supports_parallel_tool_calls = registration_supports_parallel_tool_calls(registration);
         let aliases = metadata.aliases().to_vec();
@@ -771,11 +746,9 @@ impl ToolCatalogEntry {
 fn profile_allows_tool(profile: ToolProfile, tool_name: &str, planning_active: bool) -> bool {
     match profile {
         ToolProfile::CodexDefault => {
-            matches!(
-                tool_name,
-                tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH
-            ) || (planning_active
-                && matches!(tool_name, tools::CODE_SEARCH | tools::REQUEST_USER_INPUT))
+            matches!(tool_name, tools::EXEC_COMMAND | tools::WRITE_STDIN | tools::APPLY_PATCH)
+                || (planning_active
+                    && matches!(tool_name, tools::CODE_SEARCH | tools::REQUEST_USER_INPUT))
         }
         ToolProfile::AdvancedVtCode => !matches!(
             tool_name,
@@ -825,10 +798,7 @@ fn should_defer_tool_loading(entry: &ToolCatalogEntry, config: &SessionToolsConf
         return matches!(entry.source, ToolCatalogSource::Mcp);
     }
 
-    matches!(
-        entry.source,
-        ToolCatalogSource::Builtin | ToolCatalogSource::Mcp
-    )
+    matches!(entry.source, ToolCatalogSource::Builtin | ToolCatalogSource::Mcp)
 }
 
 fn is_core_tool_entry(entry: &ToolCatalogEntry, config: &SessionToolsConfig) -> bool {
@@ -1004,11 +974,7 @@ mod tests {
                 .with_llm_visibility(false)
                 .with_description("Apply patch")
                 .with_parameter_schema(apply_patch_parameters())
-                .with_behavior(ToolBehavior::apply_patch(
-                    ToolMutationModel::Mutating,
-                    false,
-                    true,
-                )),
+                .with_behavior(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true)),
             registration(tools::CODE_SEARCH)
                 .with_description("Search code")
                 .with_parameter_schema(empty_object_schema()),
@@ -1138,15 +1104,11 @@ mod tests {
         let properties = &entry.parameters["properties"];
 
         assert_eq!(entry.parameters["required"], json!(["cmd"]));
-        assert!(
-            properties["cmd"]["description"]
-                .as_str()
-                .is_some_and(|text| {
-                    ["ls", "rg", "find", "cat", "sed", "awk"]
-                        .iter()
-                        .all(|command| text.contains(command))
-                })
-        );
+        assert!(properties["cmd"]["description"].as_str().is_some_and(|text| {
+            ["ls", "rg", "find", "cat", "sed", "awk"]
+                .iter()
+                .all(|command| text.contains(command))
+        }));
         assert_eq!(properties["tty"]["type"], "boolean");
         for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
             assert!(
@@ -1271,11 +1233,7 @@ mod tests {
                 .with_llm_visibility(false)
                 .with_description("Apply patch")
                 .with_parameter_schema(apply_patch_parameters())
-                .with_behavior(ToolBehavior::apply_patch(
-                    ToolMutationModel::Mutating,
-                    false,
-                    true,
-                )),
+                .with_behavior(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true)),
             registration(tools::CODE_SEARCH)
                 .with_description("Search code")
                 .with_parameter_schema(empty_object_schema()),
@@ -1430,20 +1388,14 @@ mod tests {
             .with_llm_visibility(false)
             .with_description("Apply patch")
             .with_parameter_schema(apply_patch_parameters())
-            .with_behavior(ToolBehavior::apply_patch(
-                ToolMutationModel::Mutating,
-                false,
-                true,
-            ));
+            .with_behavior(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true));
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
         let tools = catalog.model_tools(SessionToolsConfig::full_public(
             SessionSurface::Interactive,
             CapabilityLevel::CodeSearch,
             ToolDocumentationMode::Full,
-            ToolModelCapabilities {
-                supports_apply_patch_tool: true,
-            },
+            ToolModelCapabilities { supports_apply_patch_tool: true },
         ));
 
         assert_eq!(tools.len(), 1);
@@ -1456,11 +1408,7 @@ mod tests {
             .with_llm_visibility(false)
             .with_description("Apply patch")
             .with_parameter_schema(apply_patch_parameters())
-            .with_behavior(ToolBehavior::apply_patch(
-                ToolMutationModel::Mutating,
-                false,
-                true,
-            ));
+            .with_behavior(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true));
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
         let tools = catalog.model_tools(SessionToolsConfig::full_public(
@@ -1510,11 +1458,7 @@ mod tests {
         let registration = registration("parallel_catalog_tool")
             .with_description("parallel-safe test tool")
             .with_parameter_schema(empty_object_schema())
-            .with_behavior(ToolBehavior::function(
-                ToolMutationModel::ReadOnly,
-                true,
-                false,
-            ));
+            .with_behavior(ToolBehavior::function(ToolMutationModel::ReadOnly, true, false));
 
         let catalog = SessionToolCatalog::rebuild_from_registrations(vec![registration]);
         assert_eq!(catalog.entries().len(), 1);
@@ -1552,9 +1496,7 @@ mod tests {
 
     #[test]
     fn compact_parameters_preserves_property_named_description() {
-        let schema = RequestUserInputTool
-            .parameter_schema()
-            .expect("request_user_input schema");
+        let schema = RequestUserInputTool.parameter_schema().expect("request_user_input schema");
 
         let compacted = compact_parameters(schema, ToolDocumentationMode::Progressive);
         let description_property = &compacted["properties"]["questions"]["items"]["properties"]["options"]
@@ -1576,11 +1518,7 @@ mod tests {
             .with_llm_visibility(false)
             .with_description("Apply patch")
             .with_parameter_schema(apply_patch_parameters())
-            .with_behavior(ToolBehavior::apply_patch(
-                ToolMutationModel::Mutating,
-                false,
-                true,
-            ));
+            .with_behavior(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true));
         let mcp_tool = registration("mcp::context7::search")
             .with_catalog_source(ToolCatalogSource::Mcp)
             .with_llm_visibility(false)
@@ -1664,10 +1602,7 @@ mod tests {
             .as_ref()
             .expect("mcp tool should derive a namespace from its server name");
         assert_eq!(namespace.name, "context7");
-        assert_eq!(
-            namespace.description,
-            "Tools provided by MCP server 'context7'"
-        );
+        assert_eq!(namespace.description, "Tools provided by MCP server 'context7'");
     }
 
     #[test]
@@ -1683,10 +1618,7 @@ mod tests {
             .find(|entry| entry.public_name == tools::EXEC_COMMAND)
             .expect("core tool entry should be present");
 
-        assert!(
-            entry.namespace.is_none(),
-            "core/builtin tools should not derive a namespace"
-        );
+        assert!(entry.namespace.is_none(), "core/builtin tools should not derive a namespace");
     }
 
     #[test]
@@ -1823,9 +1755,7 @@ mod tests {
         );
 
         assert!(
-            definitions
-                .iter()
-                .any(|tool| tool.function_name() == "mcp__context7__search"),
+            definitions.iter().any(|tool| tool.function_name() == "mcp__context7__search"),
             "mcp tool should still be listed in the model-facing catalog for client-local search"
         );
         let mcp_definition = definitions
@@ -2070,9 +2000,7 @@ mod tests {
                 SessionSurface::Interactive,
                 CapabilityLevel::CodeSearch,
                 ToolDocumentationMode::Full,
-                ToolModelCapabilities {
-                    supports_apply_patch_tool: true,
-                },
+                ToolModelCapabilities { supports_apply_patch_tool: true },
             )
             .with_tool_profile(ToolProfile::AdvancedVtCode)
             .with_deferred_tool_policy(DeferredToolPolicy::openai_hosted(vec![
@@ -2081,9 +2009,7 @@ mod tests {
         );
 
         assert!(
-            definitions
-                .iter()
-                .any(|tool| tool.tool_type == "tool_search"),
+            definitions.iter().any(|tool| tool.tool_type == "tool_search"),
             "openai hosted tool search should be injected when deferred tools exist"
         );
         let mcp_tool = definitions
@@ -2130,19 +2056,14 @@ mod tests {
         );
 
         assert!(
-            definitions
-                .iter()
-                .any(|tool| tool.tool_type == "tool_search"),
+            definitions.iter().any(|tool| tool.tool_type == "tool_search"),
             "MCP presence should trigger tool search even for a small catalog"
         );
         let mcp_tool = definitions
             .iter()
             .find(|tool| tool.function_name() == "mcp__context7__search")
             .expect("mcp tool should be present");
-        assert_eq!(
-            mcp_tool.defer_loading, None,
-            "always-available tool stays eager"
-        );
+        assert_eq!(mcp_tool.defer_loading, None, "always-available tool stays eager");
 
         let direct_mcp_tool = definitions
             .iter()
@@ -2233,9 +2154,7 @@ mod tests {
             deferred_tool_policy_for_runtime(Some(Provider::Anthropic), false, Some(&config));
         assert!(anthropic.is_enabled());
         assert_eq!(
-            anthropic
-                .tool_search_definition()
-                .map(|tool| tool.tool_type),
+            anthropic.tool_search_definition().map(|tool| tool.tool_type),
             Some("tool_search_tool_regex_20251119".to_string())
         );
 

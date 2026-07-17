@@ -267,11 +267,8 @@ impl AgentRunner {
                 model
             );
         }
-        let max_repeated_tool_calls = session_config
-            .effective()
-            .tools
-            .max_repeated_tool_calls
-            .max(1);
+        let max_repeated_tool_calls =
+            session_config.effective().tools.max_repeated_tool_calls.max(1);
         let deferred_tool_policy = crate::tools::handlers::deferred_tool_policy_for_runtime(
             crate::llm::factory::infer_provider(
                 Some(&session_config.effective().agent.provider),
@@ -361,12 +358,7 @@ impl AgentRunner {
         }
         let thread_handle = crate::core::threads::ThreadManager::new()
             .start_thread_with_identifier(session_id.clone(), bootstrap);
-        let max_turns = session_config
-            .effective()
-            .automation
-            .full_auto
-            .max_turns
-            .max(1);
+        let max_turns = session_config.effective().automation.full_auto.max_turns.max(1);
 
         Ok(Self {
             agent_type,
@@ -504,18 +496,16 @@ impl AgentRunner {
 
     /// Restrict an allow-list to tools suitable for strict review-only runs.
     pub async fn review_tool_allowlist(&self, allowed_tools: &[String]) -> Vec<String> {
-        let review_candidates = if allowed_tools
-            .iter()
-            .any(|tool| tool.trim() == tools::WILDCARD_ALL)
-        {
-            let mut candidates = self.tool_registry.available_tools().await;
-            if !candidates.iter().any(|tool| tool == tools::CODE_SEARCH) {
-                candidates.push(tools::CODE_SEARCH.to_string());
-            }
-            candidates
-        } else {
-            allowed_tools.to_vec()
-        };
+        let review_candidates =
+            if allowed_tools.iter().any(|tool| tool.trim() == tools::WILDCARD_ALL) {
+                let mut candidates = self.tool_registry.available_tools().await;
+                if !candidates.iter().any(|tool| tool == tools::CODE_SEARCH) {
+                    candidates.push(tools::CODE_SEARCH.to_string());
+                }
+                candidates
+            } else {
+                allowed_tools.to_vec()
+            };
 
         review_candidates
             .iter()

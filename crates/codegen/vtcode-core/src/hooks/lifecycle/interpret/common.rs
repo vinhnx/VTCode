@@ -130,11 +130,7 @@ pub(crate) fn handle_non_zero_exit(
     let text = if result.stderr.trim().is_empty() {
         format!("Hook `{}` exited with status {code}", command.command)
     } else {
-        format!(
-            "Hook `{}` exited with status {code}: {}",
-            command.command,
-            result.stderr.trim()
-        )
+        format!("Hook `{}` exited with status {code}: {}", command.command, result.stderr.trim())
     };
 
     messages.push(HookMessage { level, text });

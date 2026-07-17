@@ -174,11 +174,7 @@ pub fn enqueue_message_with_kind(
         return;
     }
 
-    let queued = QueuedMessage {
-        text: message.to_string(),
-        kind,
-        style: text_style,
-    };
+    let queued = QueuedMessage { text: message.to_string(), kind, style: text_style };
 
     // Enqueue the message
     {
@@ -236,20 +232,12 @@ pub fn display_immediate(message: &str, style: MessageStyle) {
 
 /// Get all queued messages as plain text
 pub fn get_queued_messages() -> Vec<String> {
-    MESSAGE_QUEUE
-        .read()
-        .iter()
-        .map(|m| m.text.clone())
-        .collect()
+    MESSAGE_QUEUE.read().iter().map(|m| m.text.clone()).collect()
 }
 
 /// Get all queued messages with their metadata
 pub fn get_queued_messages_with_metadata() -> Vec<(String, InlineMessageKind)> {
-    MESSAGE_QUEUE
-        .read()
-        .iter()
-        .map(|m| (m.text.clone(), m.kind))
-        .collect()
+    MESSAGE_QUEUE.read().iter().map(|m| (m.text.clone(), m.kind)).collect()
 }
 
 /// Clear the message queue
@@ -319,10 +307,7 @@ mod tests {
         }
         assert_eq!(len(), MAX_LINES - (MAX_LINES / 5) + 10);
         let snap = snapshot();
-        assert_eq!(
-            snap.first().unwrap(),
-            &format!("line {}", MAX_LINES / 5).to_owned()
-        );
+        assert_eq!(snap.first().unwrap(), &format!("line {}", MAX_LINES / 5).to_owned());
         clear();
     }
 

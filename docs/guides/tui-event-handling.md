@@ -14,7 +14,7 @@ VT Code uses a modular event-driven architecture with async/await and `tokio::se
          
          
 
-  vtcode-ui/src/tui/core_tui/runner/       Event filtering & multiplexing
+  crates/codegen/vtcode-ui/src/tui/core_tui/runner/       Event filtering & multiplexing
   Tui::start() spawns task               
   tokio::select! on 3 channels:          
   - tick_interval                        
@@ -40,7 +40,7 @@ VT Code uses a modular event-driven architecture with async/await and `tokio::se
 
 VT Code filters key events to avoid duplicates on Windows:
 
-**File:** `vtcode-ui/src/tui/core_tui/runner/`
+**File:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`
 ```rust
 CrosstermEvent::Key(key) => {
     if key.kind == KeyEventKind::Press {
@@ -55,7 +55,7 @@ CrosstermEvent::Key(key) => {
 
 VT Code multiplexes three independent timers and one blocking read:
 
-**File:** `vtcode-ui/src/tui/core_tui/runner/`
+**File:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 fn start(&mut self) {
@@ -90,7 +90,7 @@ fn start(&mut self) {
 
 ### 3. Graceful Shutdown with CancellationToken
 
-**File:** `vtcode-ui/src/tui/`
+**File:** `crates/codegen/vtcode-ui/src/tui/`
 
 ```rust
 pub fn cancel(&self) {
@@ -110,7 +110,7 @@ pub fn exit(&mut self) -> Result<()> {
 
 When launching external editors/git clients, VT Code suspends the TUI:
 
-**File:** `vtcode-ui/src/tui/`
+**File:** `crates/codegen/vtcode-ui/src/tui/`
 
 ```rust
 pub async fn with_suspended_tui<F, T>(&mut self, f: F) -> Result<T>
@@ -150,7 +150,7 @@ where
 
 VT Code defines these application events:
 
-**File:** `vtcode-ui/src/tui/core_tui/runner/`
+**File:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`
 
 | Event | Source | Purpose |
 |-------|--------|---------|
@@ -171,7 +171,7 @@ VT Code defines these application events:
 
 ### Frame and Tick Rates
 
-**File:** `vtcode-ui/src/tui/core_tui/runner/`
+**File:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 let tick_rate = 4.0;     // 4 ticks per second (250ms intervals)
@@ -187,7 +187,7 @@ let tui = Tui::new()?
 
 ### Mouse and Paste Support
 
-**File:** `vtcode-ui/src/tui/core_tui/runner/`
+**File:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`
 
 ```rust
 pub mouse: bool,   // Capture mouse events
@@ -363,7 +363,7 @@ crossterm::terminal::enable_raw_mode()?;
 
 ## Testing
 
-VT Code includes tests in `vtcode-ui/src/tui/` (marked with `#[allow(dead_code)]`). To test event handling:
+VT Code includes tests in `crates/codegen/vtcode-ui/src/tui/` (marked with `#[allow(dead_code)]`). To test event handling:
 
 1. Create a mock `Event` stream
 2. Assert state changes per event

@@ -34,10 +34,7 @@ where
 {
     pub fn new(workspace_root: PathBuf, executor: E, policy: P) -> Result<Self> {
         if !workspace_root.exists() {
-            bail!(
-                "workspace root `{}` does not exist",
-                workspace_root.display()
-            );
+            bail!("workspace root `{}` does not exist", workspace_root.display());
         }
 
         let canonical_root = workspace_root
@@ -91,9 +88,7 @@ where
             .with_context(|| format!("failed to canonicalize `{}`", path.display()))?;
 
         // Store in cache
-        self.path_cache
-            .lock()
-            .put(path.to_path_buf(), canonical.clone());
+        self.path_cache.lock().put(path.to_path_buf(), canonical.clone());
 
         Ok(canonical)
     }
@@ -158,9 +153,9 @@ where
     pub fn pwd(&self) -> Result<String> {
         let command = match self.shell_kind {
             ShellKind::Unix => ShellCommand::new(ShellKind::Unix).verb("pwd").build(),
-            ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
-                .verb("Get-Location")
-                .build(),
+            ShellKind::Windows => {
+                ShellCommand::new(ShellKind::Windows).verb("Get-Location").build()
+            }
         };
         let invocation = CommandInvocation::new(
             self.shell_kind,
@@ -439,11 +434,7 @@ fn default_shell_kind() -> ShellKind {
 }
 
 fn join_command(parts: Vec<String>) -> String {
-    parts
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+    parts.into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" ")
 }
 
 fn format_path(shell: ShellKind, path: &Path) -> String {
@@ -472,10 +463,7 @@ struct ShellCommand {
 
 impl ShellCommand {
     fn new(shell: ShellKind) -> Self {
-        Self {
-            shell,
-            parts: Vec::with_capacity(6),
-        }
+        Self { shell, parts: Vec::with_capacity(6) }
     }
 
     /// Append the command verb (first token).
@@ -554,11 +542,8 @@ mod tests {
         let dir = TempDir::new()?;
         let nested = dir.path().join("nested");
         fs::create_dir(&nested)?;
-        let runner = BashRunner::new(
-            dir.path().to_path_buf(),
-            RecordingExecutor::default(),
-            AllowAllPolicy,
-        );
+        let runner =
+            BashRunner::new(dir.path().to_path_buf(), RecordingExecutor::default(), AllowAllPolicy);
         let mut runner = runner?;
         runner.cd("nested")?;
         // Canonicalize expected path to match runner's canonical working_dir

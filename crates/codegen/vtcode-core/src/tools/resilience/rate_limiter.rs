@@ -180,10 +180,7 @@ impl PerToolRateLimiter {
     }
 
     pub fn new_with_config(config: RateLimiterConfig) -> Self {
-        Self {
-            buckets: HashMap::new(),
-            default_config: config,
-        }
+        Self { buckets: HashMap::new(), default_config: config }
     }
 
     /// Try to acquire a token for a specific tool.
@@ -233,9 +230,8 @@ pub static PER_TOOL_RATE_LIMITER: Lazy<Mutex<PerToolRateLimiter>> =
 ///
 /// Returns `Ok(())` when the call is allowed, otherwise an error.
 pub fn try_acquire() -> Result<()> {
-    let mut guard: MutexGuard<'_, RateLimiterInner> = GLOBAL_RATE_LIMITER
-        .lock()
-        .map_err(|e| anyhow!("rate limiter poisoned: {e}"))?;
+    let mut guard: MutexGuard<'_, RateLimiterInner> =
+        GLOBAL_RATE_LIMITER.lock().map_err(|e| anyhow!("rate limiter poisoned: {e}"))?;
     guard.try_acquire()
 }
 

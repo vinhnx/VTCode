@@ -100,10 +100,7 @@ impl ToolResilience {
     /// Construct a new facade with the supplied adaptive rate limiter and
     /// circuit breaker.
     pub fn new(rate_limiter: AdaptiveRateLimiter, circuit_breaker: CircuitBreaker) -> Self {
-        Self {
-            rate_limiter,
-            circuit_breaker,
-        }
+        Self { rate_limiter, circuit_breaker }
     }
 
     /// Try to acquire a token for the tool. Returns `Ok(())` when the call is
@@ -138,9 +135,9 @@ impl ToolResilience {
             None => self.circuit_breaker.record_success_for_tool(tool_name),
             // Failure: the breaker API is a no-op for non-circuit-breaking
             // categories, so InvalidArgument collapses to a harmless call.
-            Some(category) => self
-                .circuit_breaker
-                .record_failure_category_for_tool(tool_name, category),
+            Some(category) => {
+                self.circuit_breaker.record_failure_category_for_tool(tool_name, category)
+            }
         }
     }
 
@@ -153,10 +150,7 @@ impl ToolResilience {
 /// Process-wide resilience facade. Constructed lazily from the shared adaptive
 /// rate limiter and a default circuit breaker.
 pub static GLOBAL_TOOL_RESILIENCE: Lazy<Arc<ToolResilience>> = Lazy::new(|| {
-    Arc::new(ToolResilience::new(
-        AdaptiveRateLimiter::default(),
-        CircuitBreaker::default(),
-    ))
+    Arc::new(ToolResilience::new(AdaptiveRateLimiter::default(), CircuitBreaker::default()))
 });
 
 #[cfg(test)]
@@ -174,14 +168,10 @@ mod tests {
         );
 
         // First two calls allowed; record two execution errors to open the circuit.
-        resilience
-            .try_acquire("alpha", Priority::Normal)
-            .expect("first call allowed");
+        resilience.try_acquire("alpha", Priority::Normal).expect("first call allowed");
         resilience.record_outcome("alpha", CallOutcome::ExecutionError);
 
-        resilience
-            .try_acquire("alpha", Priority::Normal)
-            .expect("second call allowed");
+        resilience.try_acquire("alpha", Priority::Normal).expect("second call allowed");
         resilience.record_outcome("alpha", CallOutcome::ExecutionError);
 
         // Third call must be rejected by the circuit breaker.
@@ -200,9 +190,7 @@ mod tests {
         );
 
         for _ in 0..3 {
-            resilience
-                .try_acquire("beta", Priority::Normal)
-                .expect("call allowed");
+            resilience.try_acquire("beta", Priority::Normal).expect("call allowed");
             resilience.record_outcome("beta", CallOutcome::InvalidArgument);
         }
 

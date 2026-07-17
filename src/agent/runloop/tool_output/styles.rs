@@ -45,9 +45,7 @@ impl GitStyles {
                     .effects(remove_effects),
             ),
             header: Some(
-                AnsiStyle::new()
-                    .fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
-                    .bg_color(None),
+                AnsiStyle::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))).bg_color(None),
             ),
         }
     }
@@ -80,11 +78,7 @@ impl LsStyles {
             return None;
         }
 
-        let token = trimmed
-            .split_whitespace()
-            .last()
-            .unwrap_or(trimmed)
-            .trim_matches('"');
+        let token = trimmed.split_whitespace().last().unwrap_or(trimmed).trim_matches('"');
 
         let mut name = token;
         let mut class_hint: Option<&str> = None;
@@ -172,10 +166,7 @@ pub(crate) fn select_line_style(
 
     if tool_name.is_some_and(|name| {
         tool_intent::canonical_command_session_tool_name(name).is_some()
-            || matches!(
-                name,
-                tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH
-            )
+            || matches!(name, tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH)
     }) && let Some(style) = ls.style_for_line(trimmed)
     {
         return Some(style);

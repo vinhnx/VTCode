@@ -127,14 +127,8 @@ mod tests {
 
     #[test]
     fn detect_from_key_prefix() {
-        assert_eq!(
-            detect_mimo_auth_method("sk-abc123", None),
-            MiMoAuthMethod::PayAsYouGo
-        );
-        assert_eq!(
-            detect_mimo_auth_method("tp-abc123", None),
-            MiMoAuthMethod::TokenPlan
-        );
+        assert_eq!(detect_mimo_auth_method("sk-abc123", None), MiMoAuthMethod::PayAsYouGo);
+        assert_eq!(detect_mimo_auth_method("tp-abc123", None), MiMoAuthMethod::TokenPlan);
     }
 
     #[test]
@@ -151,30 +145,15 @@ mod tests {
 
     #[test]
     fn detect_defaults_to_payg() {
-        assert_eq!(
-            detect_mimo_auth_method("", None),
-            MiMoAuthMethod::PayAsYouGo
-        );
-        assert_eq!(
-            detect_mimo_auth_method("unknown", None),
-            MiMoAuthMethod::PayAsYouGo
-        );
+        assert_eq!(detect_mimo_auth_method("", None), MiMoAuthMethod::PayAsYouGo);
+        assert_eq!(detect_mimo_auth_method("unknown", None), MiMoAuthMethod::PayAsYouGo);
     }
 
     #[test]
     fn parse_from_str() {
-        assert_eq!(
-            "payg".parse::<MiMoAuthMethod>().unwrap(),
-            MiMoAuthMethod::PayAsYouGo
-        );
-        assert_eq!(
-            "token-plan".parse::<MiMoAuthMethod>().unwrap(),
-            MiMoAuthMethod::TokenPlan
-        );
-        assert_eq!(
-            "tp".parse::<MiMoAuthMethod>().unwrap(),
-            MiMoAuthMethod::TokenPlan
-        );
+        assert_eq!("payg".parse::<MiMoAuthMethod>().unwrap(), MiMoAuthMethod::PayAsYouGo);
+        assert_eq!("token-plan".parse::<MiMoAuthMethod>().unwrap(), MiMoAuthMethod::TokenPlan);
+        assert_eq!("tp".parse::<MiMoAuthMethod>().unwrap(), MiMoAuthMethod::TokenPlan);
         assert!("invalid".parse::<MiMoAuthMethod>().is_err());
     }
 

@@ -108,11 +108,8 @@ fn matching_declarations(
         .iter()
         .filter(|item| !item.is_import)
         .flat_map(|item| {
-            std::iter::once((&item.name, &item.range)).chain(
-                item.members
-                    .iter()
-                    .map(|member| (&member.name, &member.range)),
-            )
+            std::iter::once((&item.name, &item.range))
+                .chain(item.members.iter().map(|member| (&member.name, &member.range)))
         })
         .filter(|(name, _)| smart_case_eq(name, query))
         .collect::<Vec<_>>();
@@ -217,12 +214,7 @@ pub(crate) async fn search_declarations_bounded(
             let remaining = candidate_cap.saturating_sub(retained);
             let (declarations, complete) = matching_declarations(&file, query, remaining);
             retained = retained.saturating_add(declarations.len());
-            files.push(DeclarationFileRecord {
-                path,
-                language,
-                declarations,
-                complete,
-            });
+            files.push(DeclarationFileRecord { path, language, declarations, complete });
             if !complete || retained >= candidate_cap {
                 truncated = true;
                 break;
@@ -233,20 +225,13 @@ pub(crate) async fn search_declarations_bounded(
         if truncated {
             let _ = child.start_kill();
         }
-        let status = child
-            .wait()
-            .await
-            .context("failed to reap definition search process")?;
+        let status = child.wait().await.context("failed to reap definition search process")?;
         if !truncated && !status.success() {
             bail!("definition search failed");
         }
     }
 
-    Ok(DeclarationSearchOutcome {
-        files,
-        stream_complete: !truncated,
-        truncated,
-    })
+    Ok(DeclarationSearchOutcome { files, stream_complete: !truncated, truncated })
 }
 
 fn outline_paths<'a>(
@@ -255,10 +240,7 @@ fn outline_paths<'a>(
     languages: &'a [AstGrepLanguage],
 ) -> Box<dyn Iterator<Item = String> + Send + 'a> {
     if resolved_path.is_file() {
-        return Box::new(std::iter::once(command_path_arg(
-            workspace_root,
-            resolved_path,
-        )));
+        return Box::new(std::iter::once(command_path_arg(workspace_root, resolved_path)));
     }
     let mut builder = build_walker_single_threaded(resolved_path);
     builder.filter_entry(|entry| !is_excluded_dir(entry));
@@ -269,10 +251,7 @@ fn outline_paths<'a>(
         .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
         .map(|entry| entry.into_path())
         .filter(|path| {
-            !path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(is_sensitive_file)
+            !path.file_name().and_then(|name| name.to_str()).is_some_and(is_sensitive_file)
                 && (languages.is_empty()
                     || AstGrepLanguage::from_path(path)
                         .is_some_and(|language| languages.contains(&language)))
@@ -297,9 +276,7 @@ fn next_outline_path_batch_with_cap(
     let mut total_arg_bytes = arg_os_bytes(executable.as_os_str());
     total_arg_bytes = CODE_SEARCH_OUTLINE_FIXED_ARGS
         .iter()
-        .fold(total_arg_bytes, |total, arg| {
-            total.saturating_add(arg_bytes(arg))
-        });
+        .fold(total_arg_bytes, |total, arg| total.saturating_add(arg_bytes(arg)));
     while batch.len() < CODE_SEARCH_OUTLINE_PATH_BATCH_SIZE {
         let Some(next) = paths.peek() else {
             break;

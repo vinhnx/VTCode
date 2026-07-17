@@ -64,11 +64,7 @@ pub(super) fn emit_tool_completion_for_status(
     tool_status: &ToolExecutionStatus,
 ) {
     let (status, exit_code, output_payload) = match tool_status {
-        ToolExecutionStatus::Success {
-            output,
-            command_success,
-            ..
-        } => (
+        ToolExecutionStatus::Success { output, command_success, .. } => (
             if *command_success {
                 ToolCallStatus::Completed
             } else {
@@ -159,10 +155,7 @@ mod tests {
 
         let payload = tool_output_payload_from_value(&output);
         assert_eq!(payload.aggregated_output, "");
-        assert_eq!(
-            payload.spool_path.as_deref(),
-            Some(".vtcode/context/tool_outputs/run-1.txt")
-        );
+        assert_eq!(payload.spool_path.as_deref(), Some(".vtcode/context/tool_outputs/run-1.txt"));
     }
 
     #[test]
@@ -194,11 +187,7 @@ mod tests {
         };
 
         let (event_status, exit_code, output_payload) = match &status {
-            ToolExecutionStatus::Success {
-                output,
-                command_success,
-                ..
-            } => (
+            ToolExecutionStatus::Success { output, command_success, .. } => (
                 if *command_success {
                     ToolCallStatus::Completed
                 } else {

@@ -170,8 +170,7 @@ impl ContinuationController {
         };
 
         if self.manages_internal_scaffold && is_internal_scaffold(&checklist) {
-            self.sync_internal_scaffold_before_completion(session_state, &checklist)
-                .await?;
+            self.sync_internal_scaffold_before_completion(session_state, &checklist).await?;
             checklist = self
                 .load_tracker()
                 .await?
@@ -241,8 +240,7 @@ impl ContinuationController {
         if let Some(failure) = first_failure {
             let summary = build_verification_failure_summary(failure);
             if self.manages_internal_scaffold {
-                self.update_internal_step(2, "in_progress", None, None, None)
-                    .await?;
+                self.update_internal_step(2, "in_progress", None, None, None).await?;
                 self.update_internal_step(
                     3,
                     "blocked",
@@ -266,8 +264,7 @@ impl ContinuationController {
             } else {
                 format!("Verification passed: {}", format_command_list(results))
             };
-            self.update_internal_step(3, "completed", None, Some(summary), None)
-                .await?;
+            self.update_internal_step(3, "completed", None, Some(summary), None).await?;
         }
 
         self.note_progress_advance();
@@ -496,11 +493,7 @@ fn is_internal_scaffold(checklist: &TrackerChecklist) -> bool {
 }
 
 fn collect_verify_commands(checklist: &TrackerChecklist) -> Vec<String> {
-    checklist
-        .items
-        .iter()
-        .flat_map(|item| item.verify.iter().cloned())
-        .collect()
+    checklist.items.iter().flat_map(|item| item.verify.iter().cloned()).collect()
 }
 
 fn format_command_list(results: &[VerificationResult]) -> String {
@@ -513,10 +506,7 @@ fn format_command_list(results: &[VerificationResult]) -> String {
 
 pub(super) fn build_verification_failure_summary(failure: &VerificationResult) -> String {
     match failure.exit_code {
-        Some(code) => format!(
-            "Verification failed: {} (exit code {}).",
-            failure.command, code
-        ),
+        Some(code) => format!("Verification failed: {} (exit code {}).", failure.command, code),
         None => format!("Verification failed: {}.", failure.command),
     }
 }
@@ -605,11 +595,7 @@ mod tests {
 
         controller.prepare(&sample_task()).await.expect("prepare");
 
-        let checklist = controller
-            .load_tracker()
-            .await
-            .expect("load")
-            .expect("checklist");
+        let checklist = controller.load_tracker().await.expect("load").expect("checklist");
         assert!(is_internal_scaffold(&checklist));
     }
 
@@ -659,10 +645,7 @@ mod tests {
             .await
             .expect("assessment");
 
-        assert!(matches!(
-            assessment,
-            CompletionAssessment::SkipAccept { .. }
-        ));
+        assert!(matches!(assessment, CompletionAssessment::SkipAccept { .. }));
     }
 
     #[tokio::test]
@@ -677,10 +660,7 @@ mod tests {
             .await
             .expect("assessment");
 
-        assert!(matches!(
-            assessment,
-            CompletionAssessment::SkipAccept { .. }
-        ));
+        assert!(matches!(assessment, CompletionAssessment::SkipAccept { .. }));
     }
 
     #[tokio::test]
@@ -696,9 +676,6 @@ mod tests {
             .await
             .expect("assessment");
 
-        assert!(matches!(
-            assessment,
-            CompletionAssessment::SkipAccept { .. }
-        ));
+        assert!(matches!(assessment, CompletionAssessment::SkipAccept { .. }));
     }
 }

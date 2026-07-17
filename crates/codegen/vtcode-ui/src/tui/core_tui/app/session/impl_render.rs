@@ -14,10 +14,7 @@ impl Session {
         };
         let mut metrics = self.core.measure_frame(viewport);
         let local_agents_captures_input = self.inline_lists_visible()
-            && matches!(
-                self.visible_bottom_docked_surface(),
-                Some(TransientSurface::LocalAgents)
-            );
+            && matches!(self.visible_bottom_docked_surface(), Some(TransientSurface::LocalAgents));
         let panel = resolve_bottom_panel_spec(
             self,
             viewport,
@@ -31,20 +28,13 @@ impl Session {
         if local_agents_captures_input {
             metrics.input_core_height = 0;
         }
-        let layout = self
-            .core
-            .build_frame_layout(viewport, metrics, panel.height);
+        let layout = self.core.build_frame_layout(viewport, metrics, panel.height);
         self.core.set_modal_list_area(None);
         let transcript_area = layout.main_area;
         let (input_area, bottom_panel_area) = if matches!(panel.kind, BottomPanelKind::LocalAgents)
         {
             (
-                Rect::new(
-                    layout.input_area.x,
-                    layout.input_area.y,
-                    layout.input_area.width,
-                    0,
-                ),
+                Rect::new(layout.input_area.x, layout.input_area.y, layout.input_area.width, 0),
                 Some(layout.input_area),
             )
         } else {

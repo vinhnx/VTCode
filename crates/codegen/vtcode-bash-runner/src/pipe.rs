@@ -180,9 +180,7 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
     command.stderr(Stdio::piped());
 
     let mut child = command.spawn().context("failed to spawn pipe process")?;
-    let pid = child
-        .id()
-        .ok_or_else(|| io::Error::other("missing child pid"))?;
+    let pid = child.id().ok_or_else(|| io::Error::other("missing child pid"))?;
 
     #[cfg(unix)]
     let process_group_id = pid;
@@ -280,11 +278,7 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
         None,
     );
 
-    Ok(SpawnedProcess {
-        session: handle,
-        output_rx,
-        exit_rx,
-    })
+    Ok(SpawnedProcess { session: handle, output_rx, exit_rx })
 }
 
 /// Spawn a process using regular pipes (no PTY), returning handles for stdin, output, and exit.
@@ -351,10 +345,7 @@ mod tests {
     fn find_echo_command() -> Option<(String, Vec<String>)> {
         #[cfg(windows)]
         {
-            Some((
-                "cmd.exe".to_string(),
-                vec!["/C".to_string(), "echo".to_string()],
-            ))
+            Some(("cmd.exe".to_string(), vec!["/C".to_string(), "echo".to_string()]))
         }
         #[cfg(not(windows))]
         {

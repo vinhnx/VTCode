@@ -124,21 +124,13 @@ impl ConfigService {
             .map(|layer| ConfigLayerView {
                 source: layer.source.clone(),
                 metadata: layer.metadata.clone(),
-                disabled_reason: layer
-                    .disabled_reason
-                    .as_ref()
-                    .map(|reason| format!("{reason:?}")),
+                disabled_reason: layer.disabled_reason.as_ref().map(|reason| format!("{reason:?}")),
                 error: layer.error.as_ref().map(|error| error.message.clone()),
             })
             .collect();
 
         let origins = origins.into_iter().collect::<BTreeMap<_, _>>();
-        Ok(ConfigReadResponse {
-            effective_config,
-            merged_version,
-            layers,
-            origins,
-        })
+        Ok(ConfigReadResponse { effective_config, merged_version, layers, origins })
     }
 
     pub fn write(request: ConfigWriteRequest) -> Result<ConfigWriteResponse> {
@@ -148,10 +140,7 @@ impl ConfigService {
 
         let manager =
             ConfigManager::load_from_workspace(&request.workspace).with_context(|| {
-                format!(
-                    "Failed to load workspace config from {}",
-                    request.workspace.display()
-                )
+                format!("Failed to load workspace config from {}", request.workspace.display())
             })?;
 
         let target_path = resolve_target_path(&manager, &request.workspace, &request.target)?;
@@ -175,35 +164,21 @@ impl ConfigService {
         }
 
         let mut target_toml = load_or_default_toml(&target_path)?;
-        apply_write(
-            &mut target_toml,
-            &request.path,
-            &request.value,
-            request.strategy,
-        )?;
+        apply_write(&mut target_toml, &request.path, &request.value, request.strategy)?;
 
         let updated_config: VTCodeConfig = target_toml.clone().try_into().with_context(|| {
-            format!(
-                "Updated configuration at {} could not be deserialized",
-                target_path.display()
-            )
+            format!("Updated configuration at {} could not be deserialized", target_path.display())
         })?;
-        updated_config
-            .validate()
-            .context("Updated configuration failed validation")?;
+        updated_config.validate().context("Updated configuration failed validation")?;
 
         ConfigManager::save_config_to_path(&target_path, &updated_config).with_context(|| {
-            format!(
-                "Failed to write updated configuration to {}",
-                target_path.display()
-            )
+            format!("Failed to write updated configuration to {}", target_path.display())
         })?;
 
         let reloaded_manager = ConfigManager::load_from_workspace(&request.workspace)
             .context("Failed to reload configuration after write")?;
-        let (effective_toml, origins) = reloaded_manager
-            .layer_stack()
-            .effective_config_with_origins();
+        let (effective_toml, origins) =
+            reloaded_manager.layer_stack().effective_config_with_origins();
 
         let written_layer = reloaded_manager
             .layer_stack()
@@ -211,10 +186,7 @@ impl ConfigService {
             .iter()
             .find(|layer| source_matches_target(&layer.source, &request.target, &target_path))
             .with_context(|| {
-                format!(
-                    "Unable to find written layer {} in reloaded stack",
-                    target_path.display()
-                )
+                format!("Unable to find written layer {} in reloaded stack", target_path.display())
             })?;
 
         let effective_value = get_value_by_path(&effective_toml, &request.path).cloned();
@@ -255,10 +227,7 @@ fn merged_version(layers: &[vtcode_config::loader::layers::ConfigLayerEntry]) ->
         if !layer.is_enabled() {
             continue;
         }
-        parts.push(format!(
-            "{}:{}",
-            layer.metadata.name, layer.metadata.version
-        ));
+        parts.push(format!("{}:{}", layer.metadata.name, layer.metadata.version));
     }
     fingerprint_str(&parts.join("|"))
 }
@@ -462,10 +431,7 @@ mod tests {
             })
             .expect("write response");
 
-            assert_eq!(
-                response.effective_value,
-                Some(TomlValue::String("gemini".to_string()))
-            );
+            assert_eq!(response.effective_value, Some(TomlValue::String("gemini".to_string())));
             assert!(response.overridden_metadata.is_some());
         });
     }

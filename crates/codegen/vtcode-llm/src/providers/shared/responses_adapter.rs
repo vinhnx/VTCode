@@ -292,20 +292,14 @@ fn adapt_policy_payload(
         ResponsesStreamEventPolicy::Unsupported => {
             Err(StreamAssemblyError::InvalidPayload(format!(
                 "unsupported Responses stream event type `{}`",
-                payload
-                    .get("type")
-                    .and_then(Value::as_str)
-                    .unwrap_or("<missing>")
+                payload.get("type").and_then(Value::as_str).unwrap_or("<missing>")
             ))
             .into_llm_error(provider_name))
         }
         ResponsesStreamEventPolicy::RigSupportedTyped => {
             Err(StreamAssemblyError::InvalidPayload(format!(
                 "Rig-supported Responses stream event `{}` reached overlay fallback",
-                payload
-                    .get("type")
-                    .and_then(Value::as_str)
-                    .unwrap_or("<missing>")
+                payload.get("type").and_then(Value::as_str).unwrap_or("<missing>")
             ))
             .into_llm_error(provider_name))
         }
@@ -313,10 +307,7 @@ fn adapt_policy_payload(
 }
 
 fn adapt_value_bearing_rig_gap(payload: Value) -> Result<ResponsesStreamEvent, LLMError> {
-    let event_type = payload
-        .get("type")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
+    let event_type = payload.get("type").and_then(Value::as_str).unwrap_or_default();
 
     match event_type {
         "response.code_interpreter_call_code.delta"
@@ -338,14 +329,8 @@ fn adapt_value_bearing_rig_gap(payload: Value) -> Result<ResponsesStreamEvent, L
             // ignore this internal event.
             Ok(ResponsesStreamEvent::ProviderValueBearingRigGap {
                 event_type: event_type.to_string(),
-                item_id: payload
-                    .get("item_id")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-                call_id: payload
-                    .get("call_id")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
+                item_id: payload.get("item_id").and_then(Value::as_str).map(ToOwned::to_owned),
+                call_id: payload.get("call_id").and_then(Value::as_str).map(ToOwned::to_owned),
                 output_index: payload
                     .get("output_index")
                     .and_then(Value::as_u64)
@@ -368,9 +353,7 @@ fn adapt_rig_supported_envelope_fallback(payload: &Value) -> Option<ResponsesStr
             // not just those with Rig-unknown output item types. Rig can fail
             // for missing required fields (sequence_number, object, model, etc.)
             // and the raw response is always preferable to a hard error.
-            Some(ResponsesStreamEvent::CompletedResponse {
-                response: response.clone(),
-            })
+            Some(ResponsesStreamEvent::CompletedResponse { response: response.clone() })
         }
         "response.output_item.added" | "response.output_item.done" => {
             adapt_rig_gap_output_item_envelope(payload)
@@ -448,10 +431,8 @@ fn adapt_overlay_conversion(
                 Ok(ResponsesStreamEvent::Unknown)
             }
         }
-        _ => Err(
-            StreamAssemblyError::InvalidPayload("unsupported overlay conversion".to_string())
-                .into_llm_error(provider_name),
-        ),
+        _ => Err(StreamAssemblyError::InvalidPayload("unsupported overlay conversion".to_string())
+            .into_llm_error(provider_name)),
     }
 }
 
@@ -553,15 +534,12 @@ fn optional_string_field(
     field: &'static str,
 ) -> Result<Option<String>, LLMError> {
     match payload.get(field) {
-        Some(value) => value
-            .as_str()
-            .map(|value| Some(value.to_string()))
-            .ok_or_else(|| {
-                StreamAssemblyError::InvalidPayload(format!(
-                    "field `{field}` in stream payload must be a string"
-                ))
-                .into_llm_error(provider_name)
-            }),
+        Some(value) => value.as_str().map(|value| Some(value.to_string())).ok_or_else(|| {
+            StreamAssemblyError::InvalidPayload(format!(
+                "field `{field}` in stream payload must be a string"
+            ))
+            .into_llm_error(provider_name)
+        }),
         None => Ok(None),
     }
 }
@@ -594,10 +572,7 @@ mod tests {
     fn assert_invalid_stream_payload(payload: Value) {
         let err = ResponsesStreamAdapter::parse_sse_data(&payload.to_string())
             .expect_err("fixture should be rejected as invalid stream payload");
-        assert!(
-            err.to_string().contains("invalid stream payload"),
-            "unexpected error: {err}"
-        );
+        assert!(err.to_string().contains("invalid stream payload"), "unexpected error: {err}");
     }
 
     fn assert_provider_value_bearing_rig_gap(
@@ -1187,9 +1162,7 @@ mod tests {
                 "output_index": 0,
                 "delta": "private chain summary"
             })),
-            ResponsesStreamEvent::ReasoningDelta {
-                delta: "private chain summary".to_string()
-            }
+            ResponsesStreamEvent::ReasoningDelta { delta: "private chain summary".to_string() }
         );
 
         assert_eq!(
@@ -1223,9 +1196,7 @@ mod tests {
                 "output_index": 0,
                 "text": "final reasoning text"
             })),
-            ResponsesStreamEvent::ReasoningDelta {
-                delta: "final reasoning text".to_string()
-            }
+            ResponsesStreamEvent::ReasoningDelta { delta: "final reasoning text".to_string() }
         );
     }
 
@@ -1276,9 +1247,7 @@ mod tests {
                     "tools": []
                 }
             })),
-            ResponsesStreamEvent::Lifecycle {
-                kind: ResponsesLifecycleEvent::Created
-            }
+            ResponsesStreamEvent::Lifecycle { kind: ResponsesLifecycleEvent::Created }
         );
 
         assert_eq!(
@@ -1290,9 +1259,7 @@ mod tests {
                 "sequence_number": 1,
                 "delta": "hello"
             })),
-            ResponsesStreamEvent::TextDelta {
-                delta: "hello".to_string()
-            }
+            ResponsesStreamEvent::TextDelta { delta: "hello".to_string() }
         );
 
         assert_eq!(
@@ -1304,9 +1271,7 @@ mod tests {
                 "sequence_number": 2,
                 "delta": "no"
             })),
-            ResponsesStreamEvent::RefusalDelta {
-                delta: "no".to_string()
-            }
+            ResponsesStreamEvent::RefusalDelta { delta: "no".to_string() }
         );
 
         assert_eq!(
@@ -1318,9 +1283,7 @@ mod tests {
                 "sequence_number": 3,
                 "delta": "thinking"
             })),
-            ResponsesStreamEvent::ReasoningDelta {
-                delta: "thinking".to_string()
-            }
+            ResponsesStreamEvent::ReasoningDelta { delta: "thinking".to_string() }
         );
 
         let completed = event_fixture(json!({
@@ -1382,9 +1345,7 @@ mod tests {
                     "tools": []
                 }
             })),
-            ResponsesStreamEvent::Error {
-                message: "backend failed".to_string()
-            }
+            ResponsesStreamEvent::Error { message: "backend failed".to_string() }
         );
 
         assert_eq!(
@@ -1409,9 +1370,7 @@ mod tests {
                     "tools": []
                 }
             })),
-            ResponsesStreamEvent::Error {
-                message: "max output tokens reached".to_string()
-            }
+            ResponsesStreamEvent::Error { message: "max output tokens reached".to_string() }
         );
 
         assert_eq!(
@@ -1419,9 +1378,7 @@ mod tests {
                 "type": "error",
                 "error": {"message": "rate limited"}
             })),
-            ResponsesStreamEvent::Error {
-                message: "rate limited".to_string()
-            }
+            ResponsesStreamEvent::Error { message: "rate limited".to_string() }
         );
     }
 

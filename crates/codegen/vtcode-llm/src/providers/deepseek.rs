@@ -15,11 +15,7 @@ fn deepseek_reasoning(message: &Value, choice: &Value) -> Option<String> {
         .get("reasoning_content")
         .and_then(extract_reasoning_trace)
         .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
-        .or_else(|| {
-            choice
-                .get("reasoning_content")
-                .and_then(extract_reasoning_trace)
-        })
+        .or_else(|| choice.get("reasoning_content").and_then(extract_reasoning_trace))
 }
 
 impl OpenAiCompatSpec for DeepSeekSpec {
@@ -61,10 +57,7 @@ impl OpenAiCompatSpec for DeepSeekSpec {
     ) -> Result<(), LLMError> {
         if let Some(effort) = request.reasoning_effort {
             if effort == vtcode_config::types::ReasoningEffortLevel::None {
-                payload.insert(
-                    "thinking".to_owned(),
-                    serde_json::json!({"type": "disabled"}),
-                );
+                payload.insert("thinking".to_owned(), serde_json::json!({"type": "disabled"}));
             } else {
                 use crate::rig_adapter::RigProviderCapabilities;
                 use vtcode_config::models::Provider;

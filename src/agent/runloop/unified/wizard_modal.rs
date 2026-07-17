@@ -31,13 +31,7 @@ pub(crate) async fn show_wizard_modal_and_wait(
     let outcome = show_overlay_and_wait(
         handle,
         session,
-        TransientRequest::Wizard(WizardOverlayRequest {
-            title,
-            steps,
-            current_step,
-            search,
-            mode,
-        }),
+        TransientRequest::Wizard(WizardOverlayRequest { title, steps, current_step, search, mode }),
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
@@ -50,11 +44,7 @@ pub(crate) async fn show_wizard_modal_and_wait(
     Ok(match outcome {
         OverlayWaitOutcome::Submitted(selections) => WizardModalOutcome::Submitted(selections),
         OverlayWaitOutcome::Cancelled => WizardModalOutcome::Cancelled { signal: None },
-        OverlayWaitOutcome::Interrupted => WizardModalOutcome::Cancelled {
-            signal: Some("cancel"),
-        },
-        OverlayWaitOutcome::Exit => WizardModalOutcome::Cancelled {
-            signal: Some("exit"),
-        },
+        OverlayWaitOutcome::Interrupted => WizardModalOutcome::Cancelled { signal: Some("cancel") },
+        OverlayWaitOutcome::Exit => WizardModalOutcome::Cancelled { signal: Some("exit") },
     })
 }

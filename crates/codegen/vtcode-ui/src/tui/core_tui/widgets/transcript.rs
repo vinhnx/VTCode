@@ -35,11 +35,7 @@ pub struct TranscriptWidget<'a> {
 impl<'a> TranscriptWidget<'a> {
     /// Create a new TranscriptWidget with required parameters
     pub fn new(session: &'a mut Session) -> Self {
-        Self {
-            session,
-            show_scrollbar: false,
-            custom_style: None,
-        }
+        Self { session, show_scrollbar: false, custom_style: None }
     }
 
     /// Enable or disable scrollbar rendering
@@ -98,9 +94,8 @@ impl<'a> Widget for TranscriptWidget<'a> {
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = self.session.total_transcript_rows(content_width) + effective_padding;
-        let (top_offset, _clamped_total_rows) = self
-            .session
-            .prepare_transcript_scroll(total_rows, viewport_rows);
+        let (top_offset, _clamped_total_rows) =
+            self.session.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.session.scroll_manager.max_offset());
         self.session.transcript_view_top = vertical_offset;
 
@@ -126,8 +121,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
                 lines.resize_with(target_len, TranscriptLine::default);
             }
             self.session.overlay_queue_lines(&mut lines, content_width);
-            self.session
-                .decorate_visible_cached_transcript_links(lines, scroll_area)
+            self.session.decorate_visible_cached_transcript_links(lines, scroll_area)
         } else {
             self.session
                 .decorate_borrowed_cached_transcript_links(cached_lines.as_slice(), scroll_area)
@@ -191,14 +185,8 @@ fn active_file_operation_spinner_frame(session: &Session) -> Option<&'static str
 }
 
 fn is_file_operation_indicator_line(line: &Line<'_>) -> bool {
-    let text = line
-        .spans
-        .iter()
-        .map(|span| span.content.as_ref())
-        .collect::<String>();
-    FILE_OPERATION_INDICATORS
-        .iter()
-        .any(|pattern| text.contains(pattern))
+    let text = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
+    FILE_OPERATION_INDICATORS.iter().any(|pattern| text.contains(pattern))
 }
 
 fn replace_indicator_icon(line: &mut Line<'static>, frame: &str) -> bool {
@@ -266,9 +254,7 @@ mod tests {
     }
 
     fn row_text(buf: &Buffer, area: Rect, row: u16) -> String {
-        (area.left()..area.right())
-            .map(|x| buf[(x, row)].symbol())
-            .collect::<String>()
+        (area.left()..area.right()).map(|x| buf[(x, row)].symbol()).collect::<String>()
     }
 
     #[test]
@@ -357,10 +343,7 @@ mod tests {
         let mut session = Session::new(InlineTheme::default(), None, 12);
 
         for index in 0..6 {
-            session.push_line(
-                InlineMessageKind::Agent,
-                vec![segment(&format!("line {index}"))],
-            );
+            session.push_line(InlineMessageKind::Agent, vec![segment(&format!("line {index}"))]);
         }
 
         TranscriptWidget::new(&mut session).render(small_area, &mut small_buf);
@@ -390,10 +373,7 @@ mod tests {
         let mut session = Session::new(InlineTheme::default(), None, 12);
 
         for index in 0..4 {
-            session.push_line(
-                InlineMessageKind::Agent,
-                vec![segment(&format!("line {index}"))],
-            );
+            session.push_line(InlineMessageKind::Agent, vec![segment(&format!("line {index}"))]);
         }
 
         TranscriptWidget::new(&mut session).render(wide_area, &mut wide_buf);

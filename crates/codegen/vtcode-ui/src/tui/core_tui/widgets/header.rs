@@ -35,11 +35,7 @@ pub struct HeaderWidget<'a> {
 impl<'a> HeaderWidget<'a> {
     /// Create a new HeaderWidget with required parameters
     pub fn new(session: &'a Session) -> Self {
-        Self {
-            session,
-            lines: Vec::new(),
-            custom_style: None,
-        }
+        Self { session, lines: Vec::new(), custom_style: None }
     }
 
     /// Set the header lines to display

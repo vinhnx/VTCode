@@ -85,11 +85,7 @@ impl PerfSpan {
 impl Drop for PerfSpan {
     fn drop(&mut self) {
         if self.enabled {
-            record_duration(
-                self.name,
-                self.start.elapsed(),
-                std::mem::take(&mut self.tags),
-            );
+            record_duration(self.name, self.start.elapsed(), std::mem::take(&mut self.tags));
         }
     }
 }

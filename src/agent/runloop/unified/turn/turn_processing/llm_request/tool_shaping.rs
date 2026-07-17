@@ -136,11 +136,5 @@ pub(super) fn client_local_wire_tools(
     if !tools.iter().any(|tool| tool.defer_loading == Some(true)) {
         return Some(tools);
     }
-    Some(Arc::new(
-        tools
-            .iter()
-            .filter(|tool| tool.defer_loading != Some(true))
-            .cloned()
-            .collect(),
-    ))
+    Some(Arc::new(tools.iter().filter(|tool| tool.defer_loading != Some(true)).cloned().collect()))
 }

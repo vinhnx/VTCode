@@ -73,10 +73,7 @@ pub struct ReasoningSegment {
 
 impl ReasoningSegment {
     pub fn new(text: impl Into<String>, stage: Option<String>) -> Self {
-        Self {
-            text: text.into(),
-            stage,
-        }
+        Self { text: text.into(), stage }
     }
 }
 
@@ -222,11 +219,7 @@ fn parse_start_tag<'a>(lower: &'a str, start: usize) -> Option<ParsedTag<'a>> {
         return None;
     };
 
-    Some(ParsedTag {
-        name,
-        end_index,
-        category,
-    })
+    Some(ParsedTag { name, end_index, category })
 }
 
 pub fn split_reasoning_from_text(text: &str) -> (Vec<ReasoningSegment>, Option<String>) {

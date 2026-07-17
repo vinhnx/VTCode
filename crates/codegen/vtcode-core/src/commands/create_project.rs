@@ -23,11 +23,9 @@ pub async fn handle_create_project_command(
 ) -> Result<()> {
     println!(
         "{}",
-        style(format!(
-            "Creating Rust project '{name}' with features: {features}"
-        ))
-        .cyan()
-        .bold()
+        style(format!("Creating Rust project '{name}' with features: {features}"))
+            .cyan()
+            .bold()
     );
 
     let features: Vec<String> = if features.is_empty() {
@@ -39,10 +37,7 @@ pub async fn handle_create_project_command(
     let registry = ToolRegistry::new(config.workspace.clone()).await;
 
     // Step 1: Create project directory structure
-    println!(
-        "{}",
-        style("Step 1: Creating project directory structure...").cyan()
-    );
+    println!("{}", style("Step 1: Creating project directory structure...").cyan());
     let create_dir_result = registry
         .execute_tool(
             tools::WRITE_FILE,
@@ -94,10 +89,7 @@ edition = "2021"
     print_result("Created Cargo.toml", &cargo_result);
 
     // Step 3: Create src directory and main.rs
-    println!(
-        "{}",
-        style("Step 3: Creating source code structure...").cyan()
-    );
+    println!("{}", style("Step 3: Creating source code structure...").cyan());
 
     let main_rs_content = if features.iter().any(|s| s == "serde") {
         r#"use serde::{Deserialize, Serialize};
@@ -228,30 +220,15 @@ Cargo.lock
                 println!("   {} Project structure verified", style("[+]").green());
             }
         }
-        Err(e) => println!(
-            "   {} Failed to verify project structure: {}",
-            style("✗").red(),
-            e
-        ),
+        Err(e) => println!("   {} Failed to verify project structure: {}", style("✗").red(), e),
     }
 
     println!("{}", style("Project creation complete!").green().bold());
     println!(
         "{}",
-        style(format!(
-            " Project '{}' created with {} features",
-            name,
-            features.len()
-        ))
-        .cyan()
+        style(format!(" Project '{}' created with {} features", name, features.len())).cyan()
     );
-    println!(
-        "{}",
-        style(format!(
-            " Run 'cd {name} && cargo run' to test your new project"
-        ))
-        .dim()
-    );
+    println!("{}", style(format!(" Run 'cd {name} && cargo run' to test your new project")).dim());
 
     Ok(())
 }

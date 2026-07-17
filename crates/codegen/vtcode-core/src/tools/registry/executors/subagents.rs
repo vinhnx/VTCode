@@ -44,8 +44,7 @@ impl ToolRegistry {
     {
         let request =
             serde_json::from_value::<Request>(args).with_context(|| parse_context.to_string())?;
-        self.execute_subagent_call(|controller| executor(controller, request))
-            .await
+        self.execute_subagent_call(|controller| executor(controller, request)).await
     }
 
     /// Unified `agent` executor: dispatches on `action`

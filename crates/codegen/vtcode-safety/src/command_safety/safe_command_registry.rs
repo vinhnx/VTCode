@@ -84,9 +84,7 @@ impl CommandRule {
 impl SafeCommandRegistry {
     /// Creates a new empty registry
     pub fn new() -> Self {
-        Self {
-            rules: Self::default_rules(),
-        }
+        Self { rules: Self::default_rules() }
     }
 
     /// Builds the default safe command rules (Codex patterns + VT Code extensions)
@@ -115,10 +113,7 @@ impl SafeCommandRegistry {
             "cargo".to_string(),
             CommandRule {
                 safe_subcommands: Some(
-                    vec!["check", "build", "clippy"]
-                        .into_iter()
-                        .map(|s| s.to_string())
-                        .collect(),
+                    vec!["check", "build", "clippy"].into_iter().map(|s| s.to_string()).collect(),
                 ),
                 forbidden_options: vec![],
                 custom_check: Some(Self::check_cargo),
@@ -233,11 +228,8 @@ impl SafeCommandRegistry {
         // Check forbidden options
         if !rule.forbidden_options.is_empty() {
             // Pre-calculate forbidden prefixes to avoid allocations in the loop
-            let forbidden_with_eq: Vec<String> = rule
-                .forbidden_options
-                .iter()
-                .map(|opt| format!("{opt}="))
-                .collect();
+            let forbidden_with_eq: Vec<String> =
+                rule.forbidden_options.iter().map(|opt| format!("{opt}=")).collect();
 
             for arg in command {
                 for (forbidden, forbidden_eq) in
@@ -376,10 +368,9 @@ impl SafeCommandRegistry {
                     SafetyDecision::Deny("cargo fmt without --check is not allowed".to_string())
                 }
             }
-            _ => SafetyDecision::Deny(format!(
-                "cargo {} is not in safe subcommand list",
-                command[1]
-            )),
+            _ => {
+                SafetyDecision::Deny(format!("cargo {} is not in safe subcommand list", command[1]))
+            }
         }
     }
 
@@ -643,14 +634,8 @@ mod tests {
 
     #[test]
     fn extract_command_name_from_path() {
-        assert_eq!(
-            SafeCommandRegistry::extract_command_name("/usr/bin/git"),
-            "git"
-        );
-        assert_eq!(
-            SafeCommandRegistry::extract_command_name("/usr/local/bin/cargo"),
-            "cargo"
-        );
+        assert_eq!(SafeCommandRegistry::extract_command_name("/usr/bin/git"), "git");
+        assert_eq!(SafeCommandRegistry::extract_command_name("/usr/local/bin/cargo"), "cargo");
         assert_eq!(SafeCommandRegistry::extract_command_name("git"), "git");
     }
 }

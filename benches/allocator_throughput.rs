@@ -74,26 +74,18 @@ fn bench_event_burst(c: &mut Criterion) {
     let events = 200usize;
     let tokens = 1000usize;
     group.throughput(Throughput::Elements((events * tokens) as u64));
-    group.bench_function(
-        BenchmarkId::new("payload_and_tokens", "{events}x{tokens}"),
-        |b| {
-            b.iter(|| {
-                for _ in 0..events {
-                    let payload = make_payload(4096);
-                    let tokens_vec: Vec<String> =
-                        (0..tokens).map(|i| format!("token-{i}-{i:064}")).collect();
-                    std::hint::black_box((&payload, &tokens_vec));
-                }
-            });
-        },
-    );
+    group.bench_function(BenchmarkId::new("payload_and_tokens", "{events}x{tokens}"), |b| {
+        b.iter(|| {
+            for _ in 0..events {
+                let payload = make_payload(4096);
+                let tokens_vec: Vec<String> =
+                    (0..tokens).map(|i| format!("token-{i}-{i:064}")).collect();
+                std::hint::black_box((&payload, &tokens_vec));
+            }
+        });
+    });
     group.finish();
 }
 
-criterion_group!(
-    benches,
-    bench_small_churn,
-    bench_large_churn,
-    bench_event_burst
-);
+criterion_group!(benches, bench_small_churn, bench_large_churn, bench_event_burst);
 criterion_main!(benches);

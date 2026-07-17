@@ -37,12 +37,7 @@ async fn handle_create(startup: &StartupContext, args: ScheduleCreateArgs) -> Re
     println!("Kind: {}", summary.action_kind);
     println!("Schedule: {}", summary.schedule);
     if let Some(next_run_at) = summary.next_run_at {
-        println!(
-            "Next run: {}",
-            next_run_at
-                .with_timezone(&Local)
-                .format("%Y-%m-%d %H:%M:%S")
-        );
+        println!("Next run: {}", next_run_at.with_timezone(&Local).format("%Y-%m-%d %H:%M:%S"));
     }
     println!("{DURABLE_SCHEDULER_RUNTIME_HINT}");
     println!("Use `vtcode schedule install-service` to keep durable tasks running after restart.");
@@ -63,12 +58,7 @@ async fn handle_list(startup: &StartupContext) -> Result<()> {
     for task in tasks {
         let next_run = task
             .next_run_at
-            .map(|value| {
-                value
-                    .with_timezone(&Local)
-                    .format("%Y-%m-%d %H:%M:%S")
-                    .to_string()
-            })
+            .map(|value| value.with_timezone(&Local).format("%Y-%m-%d %H:%M:%S").to_string())
             .unwrap_or_else(|| "none".to_string());
         let is_overdue = durable_task_is_overdue(
             task.next_run_at,
@@ -119,10 +109,7 @@ async fn handle_install_service(startup: &StartupContext) -> Result<()> {
     ensure_scheduler_enabled(startup)?;
     let executable = std::env::current_exe()?;
     let plan = install_service_file(&executable)?;
-    println!(
-        "Installed scheduler service file at {}",
-        plan.path.display()
-    );
+    println!("Installed scheduler service file at {}", plan.path.display());
     match plan.manager {
         vtcode_core::scheduler::ServiceManager::Launchd => {
             println!(

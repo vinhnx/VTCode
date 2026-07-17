@@ -40,22 +40,22 @@ Complete guide to VT Code's security documentation.
 ## Security Features by Layer
 
 ### Layer 1: Command Allowlist
-- **Location**: `vtcode-core/src/execpolicy/mod.rs`
+- **Location**: `crates/codegen/vtcode-core/src/execpolicy/mod.rs`
 - **Documentation**: [Security Model - Layer 1](./SECURITY_MODEL.md#layer-1-command-allowlist)
 - **Only 9 commands allowed**: ls, cat, cp, head, printenv, pwd, rg, sed, which
 
 ### Layer 2: Argument Validation
-- **Location**: `vtcode-core/src/execpolicy/mod.rs`
+- **Location**: `crates/codegen/vtcode-core/src/execpolicy/mod.rs`
 - **Documentation**: [Security Model - Layer 2](./SECURITY_MODEL.md#layer-2-per-command-argument-validation)
 - **Per-command validators**: Explicit flag allowlists, execution flag blocking
 
 ### Layer 3: Workspace Isolation
-- **Location**: `vtcode-core/src/execpolicy/mod.rs`
+- **Location**: `crates/codegen/vtcode-core/src/execpolicy/mod.rs`
 - **Documentation**: [Security Model - Layer 3](./SECURITY_MODEL.md#layer-3-workspace-boundary-enforcement)
 - **Path validation**: Normalization, symlink resolution, boundary checks
 
 ### Layer 4: Sandbox Integration
-- **Location**: `vtcode-core/src/sandbox/`, `vtcode-core/src/tools/bash_tool.rs`
+- **Location**: `crates/codegen/vtcode-core/src/sandbox/`, `crates/codegen/vtcode-core/src/tools/bash_tool.rs`
 - **Documentation**: [Security Guide - Sandbox](../guides/security.md#sandbox-configuration)
 - **Anthropic sandbox**: Filesystem isolation, network allowlist
 

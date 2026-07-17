@@ -65,10 +65,7 @@ impl uni::LLMProvider for ScriptedProvider {
             .pop_front()
             .expect("provider script should have enough outcomes")
         {
-            ScriptedProviderOutcome::Success {
-                content,
-                request_id,
-            } => Ok(uni::LLMResponse {
+            ScriptedProviderOutcome::Success { content, request_id } => Ok(uni::LLMResponse {
                 content: content.map(str::to_string),
                 model: "noop-model".to_string(),
                 tool_calls: None,
@@ -99,9 +96,7 @@ impl uni::LLMProvider for ScriptedProvider {
 
 #[test]
 fn retryable_llm_error_includes_internal_server_error_message() {
-    assert!(is_retryable_llm_error(
-        "Provider error: Internal Server Error"
-    ));
+    assert!(is_retryable_llm_error("Provider error: Internal Server Error"));
 }
 
 #[test]
@@ -132,8 +127,7 @@ async fn compatible_previous_response_not_found_without_sent_chain_is_not_recove
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.extend(prior_messages.clone());
-    ctx.working_history
-        .push(uni::Message::user("continue".to_string()));
+    ctx.working_history.push(uni::Message::user("continue".to_string()));
     ctx.session_stats.set_previous_response_chain(
         "mycorp",
         "noop-model",
@@ -196,8 +190,7 @@ async fn openai_stale_previous_response_retry_is_disabled() {
     let mut ctx = backing.turn_processing_context();
     *ctx.provider_client = Box::new(provider);
     ctx.working_history.extend(prior_messages.clone());
-    ctx.working_history
-        .push(uni::Message::user("continue".to_string()));
+    ctx.working_history.push(uni::Message::user("continue".to_string()));
     ctx.session_stats.set_previous_response_chain(
         "openai",
         "noop-model",
@@ -235,19 +228,13 @@ fn retryable_llm_error_excludes_forbidden_quota_failures() {
 
 #[test]
 fn retryable_llm_error_includes_rate_limit_429() {
-    assert!(is_retryable_llm_error(
-        "Provider error: 429 Too Many Requests"
-    ));
+    assert!(is_retryable_llm_error("Provider error: 429 Too Many Requests"));
 }
 
 #[test]
 fn retryable_llm_error_includes_service_unavailable_class() {
-    assert!(is_retryable_llm_error(
-        "Provider error: 503 Service Unavailable"
-    ));
-    assert!(is_retryable_llm_error(
-        "Provider error: 504 Gateway Timeout"
-    ));
+    assert!(is_retryable_llm_error("Provider error: 503 Service Unavailable"));
+    assert!(is_retryable_llm_error("Provider error: 504 Gateway Timeout"));
 }
 
 #[test]
@@ -259,23 +246,17 @@ fn previous_response_chain_error_detects_provider_code() {
 
 #[test]
 fn previous_response_chain_error_detects_human_readable_message() {
-    assert!(is_previous_response_chain_error(
-        "Previous response with id 'resp_cached' not found."
-    ));
+    assert!(is_previous_response_chain_error("Previous response with id 'resp_cached' not found."));
 }
 
 #[test]
 fn previous_response_chain_error_ignores_service_unavailable() {
-    assert!(!is_previous_response_chain_error(
-        "Provider error: 503 Service Unavailable"
-    ));
+    assert!(!is_previous_response_chain_error("Provider error: 503 Service Unavailable"));
 }
 
 #[test]
 fn retryable_llm_error_excludes_usage_limit_messages() {
-    assert!(!is_retryable_llm_error(
-        "Provider error: you have reached your weekly usage limit"
-    ));
+    assert!(!is_retryable_llm_error("Provider error: you have reached your weekly usage limit"));
 }
 
 #[test]
@@ -365,15 +346,9 @@ fn llm_retry_attempts_respects_upper_bound() {
 
 #[test]
 fn stream_timeout_error_detection_matches_common_messages() {
-    assert!(is_stream_timeout_error(
-        "Stream request timed out after 75s"
-    ));
-    assert!(is_stream_timeout_error(
-        "Streaming request timed out after configured timeout"
-    ));
-    assert!(is_stream_timeout_error(
-        "LLM first token timed out after 120 seconds"
-    ));
+    assert!(is_stream_timeout_error("Stream request timed out after 75s"));
+    assert!(is_stream_timeout_error("Streaming request timed out after configured timeout"));
+    assert!(is_stream_timeout_error("LLM first token timed out after 120 seconds"));
 }
 
 #[test]
@@ -393,18 +368,12 @@ fn llm_first_progress_timeout_planning_workflow_respects_smaller_turn_budget() {
 
 #[test]
 fn llm_first_progress_timeout_planning_workflow_huggingface_uses_higher_floor() {
-    assert_eq!(
-        llm_first_progress_timeout_secs(150, true, "huggingface"),
-        90
-    );
+    assert_eq!(llm_first_progress_timeout_secs(150, true, "huggingface"), 90);
 }
 
 #[test]
 fn llm_first_progress_timeout_respects_planning_workflow_cap() {
-    assert_eq!(
-        llm_first_progress_timeout_secs(1_200, true, "huggingface"),
-        180
-    );
+    assert_eq!(llm_first_progress_timeout_secs(1_200, true, "huggingface"), 180);
 }
 
 #[test]
@@ -430,10 +399,7 @@ fn prompt_cache_shaping_mode_requires_global_opt_in_and_provider_cache() {
     );
 
     cfg.cache_friendly_prompt_shaping = false;
-    assert_eq!(
-        resolve_prompt_cache_shaping_mode("openai", &cfg),
-        PromptCacheShapingMode::Disabled
-    );
+    assert_eq!(resolve_prompt_cache_shaping_mode("openai", &cfg), PromptCacheShapingMode::Disabled);
 }
 
 #[test]
@@ -465,10 +431,7 @@ fn prompt_cache_shaping_mode_respects_gemini_mode_off() {
     cfg.providers.gemini.enabled = true;
     cfg.providers.gemini.mode = vtcode_core::config::core::GeminiPromptCacheMode::Off;
 
-    assert_eq!(
-        resolve_prompt_cache_shaping_mode("gemini", &cfg),
-        PromptCacheShapingMode::Disabled
-    );
+    assert_eq!(resolve_prompt_cache_shaping_mode("gemini", &cfg), PromptCacheShapingMode::Disabled);
 }
 
 #[test]
@@ -529,10 +492,7 @@ fn harness_streaming_bridge_emits_incremental_agent_and_reasoning_items() {
     for line in payload.lines() {
         let value: serde_json::Value = serde_json::from_str(line).expect("json");
         let event = value.get("event").expect("event");
-        let event_type = event
-            .get("type")
-            .and_then(|kind| kind.as_str())
-            .unwrap_or_default();
+        let event_type = event.get("type").and_then(|kind| kind.as_str()).unwrap_or_default();
         let item_type = event
             .get("item")
             .and_then(|item| item.get("type"))
@@ -587,9 +547,7 @@ fn harness_streaming_bridge_throttles_reasoning_update_events() {
     for _ in 0..12 {
         bridge.on_progress(StreamProgressEvent::ReasoningDelta("tiny".to_string()));
     }
-    bridge.on_progress(StreamProgressEvent::ReasoningStage(
-        "diagnosing".to_string(),
-    ));
+    bridge.on_progress(StreamProgressEvent::ReasoningStage("diagnosing".to_string()));
     bridge.on_progress(StreamProgressEvent::ReasoningDelta("x".repeat(200)));
     bridge.on_progress(StreamProgressEvent::ReasoningStage("final".to_string()));
     bridge.complete_open_items();
@@ -681,32 +639,17 @@ fn harness_streaming_bridge_emits_tool_invocation_items() {
     for line in payload.lines() {
         let value: serde_json::Value = serde_json::from_str(line).expect("json");
         let event = value.get("event").expect("event");
-        let event_type = event
-            .get("type")
-            .and_then(|kind| kind.as_str())
-            .unwrap_or_default();
+        let event_type = event.get("type").and_then(|kind| kind.as_str()).unwrap_or_default();
         let item = event.get("item").expect("item");
-        let item_type = item
-            .get("type")
-            .and_then(|kind| kind.as_str())
-            .unwrap_or_default();
+        let item_type = item.get("type").and_then(|kind| kind.as_str()).unwrap_or_default();
 
         if item_type != "tool_invocation" {
             continue;
         }
 
-        let tool_name = item
-            .get("tool_name")
-            .and_then(|name| name.as_str())
-            .unwrap_or_default();
-        let tool_call_id = item
-            .get("tool_call_id")
-            .and_then(|id| id.as_str())
-            .unwrap_or_default();
-        let status = item
-            .get("status")
-            .and_then(|status| status.as_str())
-            .unwrap_or_default();
+        let tool_name = item.get("tool_name").and_then(|name| name.as_str()).unwrap_or_default();
+        let tool_call_id = item.get("tool_call_id").and_then(|id| id.as_str()).unwrap_or_default();
+        let status = item.get("status").and_then(|status| status.as_str()).unwrap_or_default();
         let arguments = item.get("arguments");
 
         if event_type == "item.started" {
@@ -717,18 +660,14 @@ fn harness_streaming_bridge_emits_tool_invocation_items() {
             saw_updated = tool_name == "shell"
                 && tool_call_id == "call_1"
                 && status == "in_progress"
-                && arguments
-                    .and_then(|value| value.get("cmd"))
-                    .and_then(|cmd| cmd.as_str())
+                && arguments.and_then(|value| value.get("cmd")).and_then(|cmd| cmd.as_str())
                     == Some("echo hi");
         }
         if event_type == "item.completed" {
             saw_completed = tool_name == "shell"
                 && tool_call_id == "call_1"
                 && status == "completed"
-                && arguments
-                    .and_then(|value| value.get("cmd"))
-                    .and_then(|cmd| cmd.as_str())
+                && arguments.and_then(|value| value.get("cmd")).and_then(|cmd| cmd.as_str())
                     == Some("echo hi");
         }
     }

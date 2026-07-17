@@ -16,12 +16,7 @@ pub(crate) fn persistent_memory_base_dir(config: &PersistentMemoryConfig) -> Res
 
 pub(crate) fn persistent_memory_project_name(workspace_root: &Path) -> String {
     ConfigManager::current_project_name(workspace_root)
-        .or_else(|| {
-            workspace_root
-                .file_name()
-                .and_then(|v| v.to_str())
-                .map(|v| v.to_string())
-        })
+        .or_else(|| workspace_root.file_name().and_then(|v| v.to_str()).map(|v| v.to_string()))
         .unwrap_or_else(|| "workspace".to_string())
 }
 
@@ -53,9 +48,8 @@ pub(super) fn migrate_legacy_memory_dir(legacy_dir: &Path, target_dir: &Path) ->
         std::fs::remove_dir_all(target_dir)
             .with_context(|| format!("Failed to clear {}", target_dir.display()))?;
     }
-    let target_parent = target_dir
-        .parent()
-        .context("Persistent memory directory is missing a parent")?;
+    let target_parent =
+        target_dir.parent().context("Persistent memory directory is missing a parent")?;
     std::fs::create_dir_all(target_parent)
         .with_context(|| format!("Failed to create {}", target_parent.display()))?;
     std::fs::rename(legacy_dir, target_dir).with_context(|| {

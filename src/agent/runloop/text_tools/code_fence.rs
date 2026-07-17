@@ -31,17 +31,12 @@ pub(crate) fn extract_code_fence_blocks(text: &str) -> Vec<CodeFenceBlock> {
                         }
                     });
                     let block_lines = std::mem::take(&mut current_lines);
-                    blocks.push(CodeFenceBlock {
-                        language,
-                        lines: block_lines,
-                    });
+                    blocks.push(CodeFenceBlock { language, lines: block_lines });
                     continue;
                 }
             } else {
                 let token = rest_trimmed.split_whitespace().next().unwrap_or_default();
-                let normalized = token
-                    .trim_matches(|ch| matches!(ch, '"' | '\'' | '`'))
-                    .trim();
+                let normalized = token.trim_matches(|ch| matches!(ch, '"' | '\'' | '`')).trim();
                 current_language = Some(normalized.to_ascii_lowercase());
                 current_lines.clear();
                 continue;

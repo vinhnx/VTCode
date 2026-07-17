@@ -140,9 +140,9 @@ pub async fn intercept_apply_patch(
 
     match result {
         Ok(output) => Ok(Some(ToolOutput::simple(output))),
-        Err(e) => Ok(Some(ToolOutput::error(format!(
-            "{e} (call_id={call_id}, tool_name={tool_name})"
-        )))),
+        Err(e) => {
+            Ok(Some(ToolOutput::error(format!("{e} (call_id={call_id}, tool_name={tool_name})"))))
+        }
     }
 }
 

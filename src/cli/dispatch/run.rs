@@ -14,10 +14,7 @@ pub(crate) async fn handle_ask_single_command(
     options: AskCommandOptions,
 ) -> Result<()> {
     let prompt_vec = prompt.into_iter().collect::<Vec<_>>();
-    if core_cfg
-        .provider
-        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-    {
+    if core_cfg.provider.eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER) {
         crate::codex_app_server::handle_codex_ask_command(
             core_cfg,
             prompt_vec,
@@ -55,10 +52,7 @@ pub(super) async fn handle_analyze_command(
     vt_cfg: Option<VTCodeConfig>,
     analysis_type: analyze::AnalysisType,
 ) -> Result<()> {
-    if core_cfg
-        .provider
-        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-    {
+    if core_cfg.provider.eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER) {
         let prompt = codex_analyze_prompt(&analysis_type);
         let completed = crate::codex_app_server::run_codex_noninteractive(
             &core_cfg,

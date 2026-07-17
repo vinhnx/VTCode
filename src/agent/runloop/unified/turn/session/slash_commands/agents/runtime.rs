@@ -29,10 +29,8 @@ pub(super) async fn close_subagent_entry(
 ) -> Result<SlashCommandControl> {
     controller.close(id).await?;
     refresh_local_agents(ctx.handle, controller).await?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Closed delegated agent {display_label}."),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Closed delegated agent {display_label}."))?;
     Ok(SlashCommandControl::Continue)
 }
 
@@ -60,15 +58,10 @@ pub(super) async fn show_threads_modal(
 
     loop {
         let threads = visible_subagent_entries(controller.status_entries().await);
-        let active_count = threads
-            .iter()
-            .filter(|entry| !entry.status.is_terminal())
-            .count();
+        let active_count = threads.iter().filter(|entry| !entry.status.is_terminal()).count();
         if threads.is_empty() {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "No delegated agents are available in this session.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "No delegated agents are available in this session.")?;
             return Ok(SlashCommandControl::Continue);
         }
 
@@ -263,10 +256,7 @@ async fn wait_for_inspector_action(
                     TransientHotkeyAction::ForceCancelSubagent => InspectorActionKind::ForceCancel,
                     _ => continue,
                 };
-                return Some(InspectorAction {
-                    kind,
-                    selection: current_selection.clone(),
-                });
+                return Some(InspectorAction { kind, selection: current_selection.clone() });
             }
             vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Cancelled)
             | vtcode_ui::tui::app::InlineEvent::Cancel
@@ -708,11 +698,7 @@ fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
             format!("thinking: {}", summarize_preview_text(&reasoning.text)?)
         }
         ThreadItemDetails::ToolInvocation(tool) => {
-            format!(
-                "tool {}: {}",
-                tool.tool_name,
-                tool_status_label(tool.status.clone())
-            )
+            format!("tool {}: {}", tool.tool_name, tool_status_label(tool.status.clone()))
         }
         ThreadItemDetails::ToolOutput(output) => summarize_preview_text(&output.output)
             .map(|text| format!("tool output: {text}"))
@@ -782,10 +768,7 @@ fn truncate_preview_text(text: String, max_chars: usize) -> String {
         return text;
     }
 
-    let mut truncated = text
-        .chars()
-        .take(max_chars.saturating_sub(1))
-        .collect::<String>();
+    let mut truncated = text.chars().take(max_chars.saturating_sub(1)).collect::<String>();
     truncated.push_str("...");
     truncated
 }
@@ -918,10 +901,7 @@ async fn confirm_subprocess_action(
 pub(super) fn active_subagent_entries(
     entries: Vec<SubagentStatusEntry>,
 ) -> Vec<SubagentStatusEntry> {
-    entries
-        .into_iter()
-        .filter(|entry| !entry.status.is_terminal())
-        .collect()
+    entries.into_iter().filter(|entry| !entry.status.is_terminal()).collect()
 }
 
 pub(super) fn visible_subagent_entries(
@@ -943,11 +923,7 @@ pub(super) fn subprocess_action_prompt(
     force: bool,
 ) -> (&'static str, String, &'static str) {
     if force {
-        (
-            "Force cancel subprocess",
-            format!("Force cancel `{name}` immediately?"),
-            "Force cancel",
-        )
+        ("Force cancel subprocess", format!("Force cancel `{name}` immediately?"), "Force cancel")
     } else {
         (
             "Graceful stop subprocess",
@@ -988,9 +964,7 @@ async fn confirm_list_action(
                 search_value: Some("cancel".to_string()),
             },
         ],
-        Some(InlineListSelection::ConfigAction(
-            "agents:cancel-action".to_string(),
-        )),
+        Some(InlineListSelection::ConfigAction("agents:cancel-action".to_string())),
         None,
     );
     let Some(selection) = wait_for_list_modal_selection(ctx).await else {
@@ -1041,10 +1015,8 @@ pub(super) fn render_active_agent_status_text(
         &format!("Summary: {}", active_agent_summary(entry, snapshot)),
     )?;
     if let Some(path) = entry.transcript_path.as_ref() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("Transcript: {}", path.display()),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, &format!("Transcript: {}", path.display()))?;
     }
     Ok(())
 }
@@ -1054,24 +1026,18 @@ pub(super) fn render_background_subprocess_status_text(
     snapshot: &vtcode_core::subagents::BackgroundSubprocessSnapshot,
 ) -> Result<()> {
     render_subprocess_status(ctx, &snapshot.entry)?;
-    if let Some(path) = snapshot
-        .entry
-        .transcript_path
-        .as_ref()
-        .or(snapshot.entry.archive_path.as_ref())
+    if let Some(path) =
+        snapshot.entry.transcript_path.as_ref().or(snapshot.entry.archive_path.as_ref())
     {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("Transcript: {}", path.display()),
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, &format!("Transcript: {}", path.display()))?;
     }
     let preview = if snapshot.preview.trim().is_empty() {
         background_subprocess_preview_placeholder(&snapshot.entry)
     } else {
         snapshot.preview.clone()
     };
-    ctx.renderer
-        .line(MessageStyle::Output, &format!("Preview: {preview}"))?;
+    ctx.renderer.line(MessageStyle::Output, &format!("Preview: {preview}"))?;
     Ok(())
 }
 
@@ -1085,10 +1051,7 @@ pub(super) fn render_subprocess_status(
             "{} {} pid {}",
             entry.display_label,
             entry.status.as_str(),
-            entry
-                .pid
-                .map(|pid| pid.to_string())
-                .unwrap_or_else(|| "-".to_string())
+            entry.pid.map(|pid| pid.to_string()).unwrap_or_else(|| "-".to_string())
         ),
     )?;
     ctx.renderer.line(
@@ -1096,8 +1059,7 @@ pub(super) fn render_subprocess_status(
         &format!("Summary: {}", background_subprocess_summary(entry)),
     )?;
     if let Some(error) = entry.error.as_deref() {
-        ctx.renderer
-            .line(MessageStyle::Error, &format!("Error: {error}"))?;
+        ctx.renderer.line(MessageStyle::Error, &format!("Error: {error}"))?;
     }
     Ok(())
 }
@@ -1106,15 +1068,13 @@ pub(super) async fn handle_list_subprocesses_text(
     ctx: &mut SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     let Some(controller) = ctx.tool_registry.subagent_controller() else {
-        ctx.renderer
-            .line(MessageStyle::Info, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE)?;
+        ctx.renderer.line(MessageStyle::Info, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE)?;
         return Ok(SlashCommandControl::Continue);
     };
 
     let entries = controller.refresh_background_processes().await?;
     if entries.is_empty() {
-        ctx.renderer
-            .line(MessageStyle::Info, "No managed background subprocesses.")?;
+        ctx.renderer.line(MessageStyle::Info, "No managed background subprocesses.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
@@ -1133,16 +1093,11 @@ async fn launch_editor_path(
 }
 
 fn format_datetime(timestamp: chrono::DateTime<chrono::Utc>) -> String {
-    timestamp
-        .with_timezone(&chrono::Local)
-        .format("%Y-%m-%d %H:%M:%S")
-        .to_string()
+    timestamp.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 fn format_optional_datetime(timestamp: Option<chrono::DateTime<chrono::Utc>>) -> String {
-    timestamp
-        .map(format_datetime)
-        .unwrap_or_else(|| "unknown".to_string())
+    timestamp.map(format_datetime).unwrap_or_else(|| "unknown".to_string())
 }
 
 fn format_uptime(started_at: chrono::DateTime<chrono::Utc>) -> String {
@@ -1162,8 +1117,7 @@ pub(super) async fn handle_list_threads_text(
     ctx: &mut SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
     let Some(controller) = ctx.tool_registry.subagent_controller() else {
-        ctx.renderer
-            .line(MessageStyle::Info, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE)?;
+        ctx.renderer.line(MessageStyle::Info, SUBAGENT_CONTROLLER_INACTIVE_MESSAGE)?;
         return Ok(SlashCommandControl::Continue);
     };
 
@@ -1176,16 +1130,10 @@ pub(super) async fn handle_list_threads_text(
         return Ok(SlashCommandControl::Continue);
     }
 
-    let active_count = threads
-        .iter()
-        .filter(|entry| !entry.status.is_terminal())
-        .count();
+    let active_count = threads.iter().filter(|entry| !entry.status.is_terminal()).count();
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Delegated agents for main thread {} ({} active):",
-            ctx.thread_id, active_count
-        ),
+        &format!("Delegated agents for main thread {} ({} active):", ctx.thread_id, active_count),
     )?;
     for entry in threads {
         let summary = entry.summary.unwrap_or_default();
@@ -1197,13 +1145,7 @@ pub(super) async fn handle_list_threads_text(
         };
         ctx.renderer.line(
             MessageStyle::Output,
-            &format!(
-                "{} {} {}{}",
-                entry.id,
-                entry.agent_name,
-                status_label(entry.status),
-                suffix
-            ),
+            &format!("{} {} {}{}", entry.id, entry.agent_name, status_label(entry.status), suffix),
         )?;
     }
     Ok(SlashCommandControl::Continue)

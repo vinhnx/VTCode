@@ -135,11 +135,7 @@ impl<H: ToolHandler + 'static> Tool for HandlerToToolAdapter<H> {
                 let llm_content = if ui_content.len() > 500 {
                     let truncated =
                         vtcode_commons::formatting::truncate_byte_budget(&ui_content, 500, "");
-                    format!(
-                        "{}...[truncated, {} chars total]",
-                        truncated,
-                        ui_content.len()
-                    )
+                    format!("{}...[truncated, {} chars total]", truncated, ui_content.len())
                 } else {
                     ui_content.clone()
                 };
@@ -233,20 +229,12 @@ impl DefaultToolSession {
     pub fn new(cwd: PathBuf) -> Self {
         let workspace_root = cwd.clone();
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-        Self {
-            cwd,
-            workspace_root,
-            shell,
-        }
+        Self { cwd, workspace_root, shell }
     }
 
     pub fn with_workspace(cwd: PathBuf, workspace_root: PathBuf) -> Self {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-        Self {
-            cwd,
-            workspace_root,
-            shell,
-        }
+        Self { cwd, workspace_root, shell }
     }
 }
 
@@ -343,12 +331,7 @@ mod tests {
         assert_eq!(adapter.description(), "A test tool");
 
         let result = adapter.execute(serde_json::json!({})).await.unwrap();
-        assert!(
-            result
-                .get("success")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        );
+        assert!(result.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
     }
 
     #[tokio::test]
@@ -368,10 +351,7 @@ mod tests {
             create_cwd_session,
         );
 
-        let err = adapter
-            .execute_dual(serde_json::json!({}))
-            .await
-            .unwrap_err();
+        let err = adapter.execute_dual(serde_json::json!({})).await.unwrap_err();
         assert!(err.to_string().contains("boom"));
     }
 

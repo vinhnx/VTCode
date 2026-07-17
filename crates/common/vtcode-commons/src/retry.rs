@@ -48,12 +48,7 @@ impl RetryPolicy {
         max_delay: Duration,
         multiplier: f64,
     ) -> Self {
-        Self::new(
-            max_retries.saturating_add(1),
-            initial_delay,
-            max_delay,
-            multiplier,
-        )
+        Self::new(max_retries.saturating_add(1), initial_delay, max_delay, multiplier)
     }
 
     /// Millisecond-based constructor for wire clients.

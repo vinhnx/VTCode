@@ -25,11 +25,7 @@ pub(super) fn section_subtitle(path: &str, value: &TomlValue) -> String {
     if !heading.summary.is_empty() {
         parts.push(heading.summary.into_owned());
     }
-    parts.push(format!(
-        "{} setting{}",
-        count,
-        if count == 1 { "" } else { "s" }
-    ));
+    parts.push(format!("{} setting{}", count, if count == 1 { "" } else { "s" }));
     parts.join(" • ")
 }
 
@@ -187,11 +183,9 @@ pub(super) fn summarize_value(value: &TomlValue) -> String {
                 "Off".to_string()
             }
         }
-        TomlValue::Array(values) => format!(
-            "{} item{}",
-            values.len(),
-            if values.len() == 1 { "" } else { "s" }
-        ),
+        TomlValue::Array(values) => {
+            format!("{} item{}", values.len(), if values.len() == 1 { "" } else { "s" })
+        }
         TomlValue::Table(_) => {
             let count = count_leaf_entries(value);
             format!("{} setting{}", count, if count == 1 { "" } else { "s" })

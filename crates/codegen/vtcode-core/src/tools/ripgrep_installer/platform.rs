@@ -64,16 +64,12 @@ pub(super) fn install_with_smart_detection() -> Result<()> {
             debug_log("Attempting installation via Scoop (fallback)");
             return install_via_scoop();
         }
-        return Err(anyhow!(
-            "No supported installer found. Install Cargo, Chocolatey, or Scoop."
-        ));
+        return Err(anyhow!("No supported installer found. Install Cargo, Chocolatey, or Scoop."));
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
-        Err(anyhow!(
-            "Unsupported platform for automatic ripgrep installation"
-        ))
+        Err(anyhow!("Unsupported platform for automatic ripgrep installation"))
     }
 }
 
@@ -109,10 +105,7 @@ fn install_via_homebrew() -> Result<()> {
         tracing::info!(method = "homebrew", "ripgrep installed successfully");
         Ok(())
     } else {
-        Err(anyhow!(
-            "Homebrew installation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
+        Err(anyhow!("Homebrew installation failed: {}", String::from_utf8_lossy(&output.stderr)))
     }
 }
 
@@ -135,10 +128,7 @@ fn install_via_apt() -> Result<()> {
             tracing::info!(method = "apt", "ripgrep installed successfully");
             Ok(())
         } else {
-            Err(anyhow!(
-                "apt installation failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ))
+            Err(anyhow!("apt installation failed: {}", String::from_utf8_lossy(&output.stderr)))
         }
     } else {
         // Need sudo - log a warning about elevated privileges
@@ -171,10 +161,7 @@ fn install_via_apt() -> Result<()> {
             tracing::info!(method = "apt", "ripgrep installed successfully");
             Ok(())
         } else {
-            Err(anyhow!(
-                "apt installation failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ))
+            Err(anyhow!("apt installation failed: {}", String::from_utf8_lossy(&output.stderr)))
         }
     }
 }
@@ -190,10 +177,7 @@ fn install_via_cargo() -> Result<()> {
         tracing::info!(method = "cargo", "ripgrep installed successfully");
         Ok(())
     } else {
-        Err(anyhow!(
-            "cargo installation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
+        Err(anyhow!("cargo installation failed: {}", String::from_utf8_lossy(&output.stderr)))
     }
 }
 
@@ -208,10 +192,7 @@ fn install_via_chocolatey() -> Result<()> {
         tracing::info!(method = "chocolatey", "ripgrep installed successfully");
         Ok(())
     } else {
-        Err(anyhow!(
-            "Chocolatey installation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
+        Err(anyhow!("Chocolatey installation failed: {}", String::from_utf8_lossy(&output.stderr)))
     }
 }
 
@@ -226,9 +207,6 @@ fn install_via_scoop() -> Result<()> {
         tracing::info!(method = "scoop", "ripgrep installed successfully");
         Ok(())
     } else {
-        Err(anyhow!(
-            "Scoop installation failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ))
+        Err(anyhow!("Scoop installation failed: {}", String::from_utf8_lossy(&output.stderr)))
     }
 }

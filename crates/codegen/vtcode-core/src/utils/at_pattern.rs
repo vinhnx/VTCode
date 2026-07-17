@@ -67,11 +67,7 @@ pub async fn parse_at_patterns_with_options(
         });
     }
     for m in raw_matches {
-        matches.push(PathMatch::Raw {
-            start: m.start,
-            end: m.end,
-            raw: m.raw,
-        });
+        matches.push(PathMatch::Raw { start: m.start, end: m.end, raw: m.raw });
     }
     for m in data_url_matches {
         matches.push(PathMatch::DataUrl {
@@ -102,9 +98,7 @@ pub async fn parse_at_patterns_with_options(
         }
 
         match m {
-            PathMatch::At {
-                full_match, path, ..
-            } => {
+            PathMatch::At { full_match, path, .. } => {
                 let is_url = path.starts_with("http://") || path.starts_with("https://");
                 if is_url {
                     if looks_like_image_url(&path) {
@@ -181,9 +175,7 @@ pub async fn parse_at_patterns_with_options(
                     parts.push(ContentPart::text(raw));
                 }
             }
-            PathMatch::DataUrl {
-                mime_type, data, ..
-            } => {
+            PathMatch::DataUrl { mime_type, data, .. } => {
                 parts.push(ContentPart::Image {
                     data,
                     mime_type,
@@ -206,14 +198,8 @@ pub async fn parse_at_patterns_with_options(
         return Ok(MessageContent::text(input.to_string()));
     }
 
-    if parts
-        .iter()
-        .all(|part| matches!(part, ContentPart::Text { .. }))
-    {
-        let text = parts
-            .iter()
-            .filter_map(ContentPart::as_text)
-            .collect::<String>();
+    if parts.iter().all(|part| matches!(part, ContentPart::Text { .. })) {
+        let text = parts.iter().filter_map(ContentPart::as_text).collect::<String>();
         return Ok(MessageContent::text(text));
     }
 
@@ -428,12 +414,7 @@ fn find_data_url_matches(input: &str, protected_ranges: &[(usize, usize)]) -> Ve
             }
             let raw = data_match.as_str();
             let (mime_type, data) = parse_data_image_url(raw)?;
-            Some(DataUrlMatch {
-                start,
-                end,
-                mime_type,
-                data,
-            })
+            Some(DataUrlMatch { start, end, mime_type, data })
         })
         .collect()
 }
@@ -484,11 +465,7 @@ fn add_spacey_absolute_path_matches(
         let trimmed = trim_trailing_image_path_str(raw);
         let end = start + trimmed.len();
 
-        matches.push(RawPathMatch {
-            start,
-            end,
-            raw: trimmed.to_string(),
-        });
+        matches.push(RawPathMatch { start, end, raw: trimmed.to_string() });
     }
 }
 
@@ -555,10 +532,7 @@ fn is_leading_punct(ch: char) -> bool {
 }
 
 fn is_trailing_punct(ch: char) -> bool {
-    matches!(
-        ch,
-        ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | '.' | ';' | ':' | '!' | '?'
-    )
+    matches!(ch, ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | '.' | ';' | ':' | '!' | '?')
 }
 
 fn looks_like_image_path(token: &str) -> bool {
@@ -662,10 +636,8 @@ mod tests {
             .unwrap();
         temp_file.flush().unwrap();
 
-        let input = format!(
-            "Look at this image: @{}",
-            image_path.file_name().unwrap().to_string_lossy()
-        );
+        let input =
+            format!("Look at this image: @{}", image_path.file_name().unwrap().to_string_lossy());
 
         let result = parse_at_patterns(&input, temp_dir.path()).await.unwrap();
 
@@ -752,11 +724,7 @@ mod tests {
 
         match result {
             MessageContent::Parts(parts) => {
-                assert!(
-                    parts
-                        .iter()
-                        .any(|part| matches!(part, ContentPart::Image { .. }))
-                );
+                assert!(parts.iter().any(|part| matches!(part, ContentPart::Image { .. })));
             }
             _ => panic!("Expected multi-part content"),
         }
@@ -782,11 +750,7 @@ mod tests {
 
         match result {
             MessageContent::Parts(parts) => {
-                assert!(
-                    parts
-                        .iter()
-                        .any(|part| matches!(part, ContentPart::Image { .. }))
-                );
+                assert!(parts.iter().any(|part| matches!(part, ContentPart::Image { .. })));
             }
             _ => panic!("Expected multi-part content"),
         }
@@ -811,11 +775,7 @@ mod tests {
 
         match result {
             MessageContent::Parts(parts) => {
-                assert!(
-                    parts
-                        .iter()
-                        .any(|part| matches!(part, ContentPart::Image { .. }))
-                );
+                assert!(parts.iter().any(|part| matches!(part, ContentPart::Image { .. })));
             }
             _ => panic!("Expected multi-part content"),
         }
@@ -840,11 +800,7 @@ mod tests {
 
         match result {
             MessageContent::Parts(parts) => {
-                assert!(
-                    parts
-                        .iter()
-                        .any(|part| matches!(part, ContentPart::Image { .. }))
-                );
+                assert!(parts.iter().any(|part| matches!(part, ContentPart::Image { .. })));
             }
             _ => panic!("Expected multi-part content"),
         }
@@ -954,10 +910,7 @@ mod tests {
         let file_path = temp_dir.path().join("report.pdf");
         std::fs::write(&file_path, b"%PDF-1.7\nhello").unwrap();
 
-        let input = format!(
-            "Summarize @{}",
-            file_path.file_name().unwrap().to_string_lossy()
-        );
+        let input = format!("Summarize @{}", file_path.file_name().unwrap().to_string_lossy());
         let result = parse_at_patterns_with_options(
             &input,
             temp_dir.path(),
@@ -974,12 +927,7 @@ mod tests {
                 assert_eq!(parts.len(), 2);
                 assert!(matches!(parts[0], ContentPart::Text { .. }));
                 match &parts[1] {
-                    ContentPart::File {
-                        filename,
-                        file_data,
-                        file_url,
-                        ..
-                    } => {
+                    ContentPart::File { filename, file_data, file_url, .. } => {
                         assert_eq!(filename.as_deref(), Some("report.pdf"));
                         assert!(file_data.as_ref().is_some_and(|value| !value.is_empty()));
                         assert!(file_url.is_none());
@@ -1012,11 +960,7 @@ mod tests {
                 assert_eq!(parts.len(), 2);
                 assert!(matches!(parts[0], ContentPart::Text { .. }));
                 match &parts[1] {
-                    ContentPart::File {
-                        file_url,
-                        file_data,
-                        ..
-                    } => {
+                    ContentPart::File { file_url, file_data, .. } => {
                         assert_eq!(file_url.as_deref(), Some("https://example.com/report.pdf"));
                         assert!(file_data.is_none());
                     }
@@ -1054,10 +998,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("report.pdf");
         std::fs::write(&file_path, b"%PDF-1.7\nhello").unwrap();
-        let input = format!(
-            "Summarize @{}",
-            file_path.file_name().unwrap().to_string_lossy()
-        );
+        let input = format!("Summarize @{}", file_path.file_name().unwrap().to_string_lossy());
 
         let result = parse_at_patterns(&input, temp_dir.path()).await.unwrap();
 
@@ -1127,10 +1068,7 @@ mod tests {
         assert_eq!(captures.len(), 1);
         let matched = captures[0].get(1).unwrap().as_str();
         let trimmed = trim_trailing_image_path_str(matched);
-        assert!(
-            trimmed.ends_with(".png"),
-            "Trimmed path should end with .png, got: {trimmed}"
-        );
+        assert!(trimmed.ends_with(".png"), "Trimmed path should end with .png, got: {trimmed}");
     }
 
     #[test]
@@ -1160,10 +1098,8 @@ mod tests {
 
         match result {
             MessageContent::Parts(parts) => {
-                let image_count = parts
-                    .iter()
-                    .filter(|p| matches!(p, ContentPart::Image { .. }))
-                    .count();
+                let image_count =
+                    parts.iter().filter(|p| matches!(p, ContentPart::Image { .. })).count();
                 assert_eq!(image_count, 1, "Should detect exactly one image");
             }
             other => panic!("Expected multi-part content, got {other:?}"),

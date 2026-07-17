@@ -36,9 +36,7 @@ impl Session {
             let mut lines: Vec<Line<'static>> = Vec::new();
             for (index, _) in self.lines.iter().enumerate() {
                 lines.extend(
-                    self.reflow_message_lines(index, 0, false)
-                        .into_iter()
-                        .map(|line| line.line),
+                    self.reflow_message_lines(index, 0, false).into_iter().map(|line| line.line),
                 );
             }
             if lines.is_empty() {
@@ -50,9 +48,7 @@ impl Session {
         let mut wrapped_lines = Vec::new();
         for (index, _) in self.lines.iter().enumerate() {
             wrapped_lines.extend(
-                self.reflow_message_lines(index, width, false)
-                    .into_iter()
-                    .map(|line| line.line),
+                self.reflow_message_lines(index, width, false).into_iter().map(|line| line.line),
             );
         }
 
@@ -83,10 +79,8 @@ impl Session {
         // Thinking/reasoning blocks are rendered as contiguous `Policy` runs.
         // Delegate the whole run (header + body) to the dedicated thinking
         // module so collapsed and expanded states share one layout.
-        if collapse_thinking {
-            if let Some(lines) = self.reflow_thinking_lines(index, width) {
-                return lines;
-            }
+        if collapse_thinking && let Some(lines) = self.reflow_thinking_lines(index, width) {
+            return lines;
         }
 
         if message.kind == InlineMessageKind::Tool {
@@ -146,10 +140,8 @@ impl Session {
                 }
             }
             let divider = self.message_divider_line(max_width, message.kind);
-            wrapped.push(transcript_line_with_detected_links(
-                divider,
-                self.workspace_root.as_deref(),
-            ));
+            wrapped
+                .push(transcript_line_with_detected_links(divider, self.workspace_root.as_deref()));
         }
 
         let lines = if message.kind == InlineMessageKind::Agent {
@@ -225,10 +217,7 @@ impl Session {
         index: usize,
         width: u16,
     ) -> Vec<TranscriptLine> {
-        let Some(collapsed) = self
-            .collapsed_pastes
-            .iter()
-            .find(|paste| paste.line_index == index)
+        let Some(collapsed) = self.collapsed_pastes.iter().find(|paste| paste.line_index == index)
         else {
             return self.reflow_message_lines(index, width, false);
         };
@@ -356,11 +345,7 @@ impl Session {
         for line in grouped_lines {
             let line_wrapped = self.wrap_line(line, content_width);
             for wrapped_line in line_wrapped {
-                let text: String = wrapped_line
-                    .spans
-                    .iter()
-                    .map(|span| &*span.content)
-                    .collect();
+                let text: String = wrapped_line.spans.iter().map(|span| &*span.content).collect();
                 if !text.trim().is_empty() {
                     wrapped.push(wrapped_line);
                 }
@@ -474,10 +459,7 @@ impl Session {
         }
 
         let first_line_prefix_text = {
-            let mut text: String = prefix_spans
-                .iter()
-                .map(|span| span.content.as_ref())
-                .collect();
+            let mut text: String = prefix_spans.iter().map(|span| span.content.as_ref()).collect();
             text.push_str(left_padding);
             text
         };
@@ -529,10 +511,7 @@ pub(super) fn transcript_line_with_detected_links(
     workspace_root: Option<&Path>,
 ) -> TranscriptLine {
     let explicit_links = transcript_links::detect_rendered_transcript_links(&line, workspace_root);
-    TranscriptLine {
-        line,
-        explicit_links,
-    }
+    TranscriptLine { line, explicit_links }
 }
 
 fn into_transcript_lines(

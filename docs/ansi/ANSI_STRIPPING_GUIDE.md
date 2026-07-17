@@ -56,7 +56,7 @@ When `allow_tool_ansi = false`, the following ANSI sequences are removed:
 
 ```
 warning: function check_prompt_reference_trigger is never used
---> vtcode-core/src/ui/tui/session/command.rs:321:15
+--> crates/codegen/vtcode-core/src/ui/tui/session/command.rs:321:15
 ```
 
 (The function name and path would be colored yellow/orange and red respectively)
@@ -65,7 +65,7 @@ warning: function check_prompt_reference_trigger is never used
 
 ```
 warning: function check_prompt_reference_trigger is never used
---> vtcode-core/src/ui/tui/session/command.rs:321:15
+--> crates/codegen/vtcode-core/src/ui/tui/session/command.rs:321:15
 ```
 
 (Plain text, no colors)

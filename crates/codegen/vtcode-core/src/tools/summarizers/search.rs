@@ -27,11 +27,7 @@ pub struct GrepSummarizer {
 
 impl Default for GrepSummarizer {
     fn default() -> Self {
-        Self {
-            max_files: 5,
-            max_symbols: 5,
-            max_tokens: 100,
-        }
+        Self { max_files: 5, max_symbols: 5, max_tokens: 100 }
     }
 }
 
@@ -45,10 +41,8 @@ impl Summarizer for GrepSummarizer {
         let stats = parse_grep_output(full_output);
 
         // Build concise summary
-        let mut summary = format!(
-            "Found {} matches in {} files",
-            stats.total_matches, stats.unique_files
-        );
+        let mut summary =
+            format!("Found {} matches in {} files", stats.total_matches, stats.unique_files);
 
         // Add top files if available
         if !stats.top_files.is_empty() {
@@ -63,12 +57,8 @@ impl Summarizer for GrepSummarizer {
 
         // Add pattern context if available
         if !stats.symbols.is_empty() {
-            let symbol_list: Vec<&str> = stats
-                .symbols
-                .iter()
-                .take(self.max_symbols)
-                .map(|s| s.as_str())
-                .collect();
+            let symbol_list: Vec<&str> =
+                stats.symbols.iter().take(self.max_symbols).map(|s| s.as_str()).collect();
             summary.push_str(&format!(". Pattern in: {}", symbol_list.join(", ")));
         }
 
@@ -86,11 +76,7 @@ pub struct ListSummarizer {
 
 impl Default for ListSummarizer {
     fn default() -> Self {
-        Self {
-            max_dirs: 3,
-            max_files: 10,
-            max_tokens: 80,
-        }
+        Self { max_dirs: 3, max_files: 10, max_tokens: 80 }
     }
 }
 
@@ -109,12 +95,8 @@ impl Summarizer for ListSummarizer {
 
         // Add sample files if available
         if !stats.sample_files.is_empty() {
-            let files: Vec<&str> = stats
-                .sample_files
-                .iter()
-                .take(self.max_files)
-                .map(|s| s.as_str())
-                .collect();
+            let files: Vec<&str> =
+                stats.sample_files.iter().take(self.max_files).map(|s| s.as_str()).collect();
             summary.push_str(&format!(". Files: {}", files.join(", ")));
         }
 
@@ -348,9 +330,6 @@ src/tools/list.rs:23:    // comment
 
         // Verify massive savings
         let savings = summarizer.estimate_savings(&output, &summary);
-        assert!(
-            savings.savings_percent > 95.0,
-            "Should save >95% on large output"
-        );
+        assert!(savings.savings_percent > 95.0, "Should save >95% on large output");
     }
 }

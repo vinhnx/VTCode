@@ -359,10 +359,7 @@ impl ToolChoice {
     }
 
     pub fn allowed_tools_auto(tools: Vec<String>) -> Self {
-        Self::AllowedTools(AllowedToolsChoice {
-            mode: AllowedToolsMode::Auto,
-            tools,
-        })
+        Self::AllowedTools(AllowedToolsChoice { mode: AllowedToolsMode::Auto, tools })
     }
 
     /// Check if this tool choice allows parallel tool use

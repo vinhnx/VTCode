@@ -31,10 +31,7 @@ pub(super) fn read_snapshot() -> Result<UpdateCacheSnapshot> {
     }
 
     let metadata = std::fs::metadata(&cache_file).with_context(|| {
-        format!(
-            "Failed to read update cache metadata {}",
-            cache_file.display()
-        )
+        format!("Failed to read update cache metadata {}", cache_file.display())
     })?;
     let modified = metadata.modified().ok();
 
@@ -110,17 +107,13 @@ pub(super) fn record_seen_version(version: &Version) -> Result<()> {
 
 fn write_snapshot(snapshot: UpdateCacheSnapshot) -> Result<()> {
     let last_checked = snapshot.last_checked.unwrap_or_else(SystemTime::now);
-    let last_checked_unix_secs = last_checked
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    let last_checked_unix_secs =
+        last_checked.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
     let payload = UpdateCachePayload {
         last_checked_unix_secs,
         latest_version: snapshot.latest_version.map(|version| version.to_string()),
         latest_was_newer: snapshot.latest_was_newer,
-        last_seen_version: snapshot
-            .last_seen_version
-            .map(|version| version.to_string()),
+        last_seen_version: snapshot.last_seen_version.map(|version| version.to_string()),
     };
     let serialized =
         serde_json::to_string(&payload).context("Failed to serialize update cache payload")?;

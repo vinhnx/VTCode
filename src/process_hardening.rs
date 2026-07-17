@@ -192,12 +192,7 @@ where
     I: IntoIterator<Item = (OsString, OsString)>,
 {
     vars.into_iter()
-        .filter_map(|(key, _)| {
-            key.as_os_str()
-                .as_bytes()
-                .starts_with(prefix)
-                .then_some(key)
-        })
+        .filter_map(|(key, _)| key.as_os_str().as_bytes().starts_with(prefix).then_some(key))
         .collect()
 }
 
@@ -277,24 +272,15 @@ mod tests {
         ];
 
         let keys = env_keys_with_prefix(vars, b"LD_");
-        assert_eq!(
-            keys,
-            vec![OsString::from("LD_"), OsString::from("LD_PRELOAD")]
-        );
+        assert_eq!(keys, vec![OsString::from("LD_"), OsString::from("LD_PRELOAD")]);
     }
 
     #[test]
     fn env_keys_with_prefix_supports_dyld_prefix_filtering() {
         let vars = vec![
-            (
-                OsString::from("DYLD_INSERT_LIBRARIES"),
-                OsString::from("/tmp/inject.dylib"),
-            ),
+            (OsString::from("DYLD_INSERT_LIBRARIES"), OsString::from("/tmp/inject.dylib")),
             (OsString::from("DYLD_FOO"), OsString::from("bar")),
-            (
-                OsString::from("LD_PRELOAD"),
-                OsString::from("/tmp/other.so"),
-            ),
+            (OsString::from("LD_PRELOAD"), OsString::from("/tmp/other.so")),
         ];
 
         let keys = env_keys_with_prefix(vars, b"DYLD_");

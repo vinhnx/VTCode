@@ -33,10 +33,7 @@ pub(super) async fn run_status_line_command(
         .spawn()
         .with_context(|| format!("failed to spawn status line command `{command}`"))?;
 
-    let mut stdout_pipe = child
-        .stdout
-        .take()
-        .context("status line command missing stdout pipe")?;
+    let mut stdout_pipe = child.stdout.take().context("status line command missing stdout pipe")?;
 
     if let Some(mut stdin) = child.stdin.take() {
         let payload =
@@ -49,10 +46,7 @@ pub(super) async fn run_status_line_command(
             .write_all(&payload_bytes)
             .await
             .context("failed to write status line payload")?;
-        stdin
-            .shutdown()
-            .await
-            .context("failed to close status line command stdin")?;
+        stdin.shutdown().await.context("failed to close status line command stdin")?;
     }
 
     let timeout_ms = std::cmp::max(config.command_timeout_ms, 1);
@@ -73,9 +67,7 @@ pub(super) async fn run_status_line_command(
             child.wait().await.with_context(|| {
                 format!("failed to wait for killed status line command `{command}` after timeout")
             })?;
-            return Err(anyhow!(
-                "status line command `{command}` timed out after {timeout_ms}ms"
-            ));
+            return Err(anyhow!("status line command `{command}` timed out after {timeout_ms}ms"));
         }
     };
 
@@ -152,9 +144,7 @@ impl StatusLineCommandPayload {
                 id: model_id.to_string(),
                 display_name: model_display.to_string(),
             },
-            runtime: StatusLineRuntime {
-                reasoning_effort: reasoning.to_string(),
-            },
+            runtime: StatusLineRuntime { reasoning_effort: reasoning.to_string() },
             context,
             git: git.map(StatusLineGit::from_summary),
             version: env!("CARGO_PKG_VERSION"),
@@ -220,14 +210,8 @@ mod tests {
             StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
         let value = serde_json::to_value(payload).expect("serialize payload");
 
-        assert_eq!(
-            value["workspace"]["dominant_language"],
-            Value::String("Rust".to_string())
-        );
-        assert_eq!(
-            value["workspace"]["active_language"],
-            Value::String("Rust".to_string())
-        );
+        assert_eq!(value["workspace"]["dominant_language"], Value::String("Rust".to_string()));
+        assert_eq!(value["workspace"]["active_language"], Value::String("Rust".to_string()));
 
         remove_env_var(IDE_CONTEXT_ENV_VAR);
         remove_env_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
@@ -266,10 +250,7 @@ mod tests {
             StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
         let value = serde_json::to_value(payload).expect("serialize payload");
 
-        assert_eq!(
-            value["workspace"]["active_language"],
-            Value::String("Python".to_string())
-        );
+        assert_eq!(value["workspace"]["active_language"], Value::String("Python".to_string()));
 
         remove_env_var(IDE_CONTEXT_ENV_VAR);
     }
@@ -307,9 +288,6 @@ mod tests {
             StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
         let value = serde_json::to_value(payload).expect("serialize payload");
 
-        assert_eq!(
-            value["workspace"]["active_language"],
-            Value::String("Python".to_string())
-        );
+        assert_eq!(value["workspace"]["active_language"], Value::String("Python".to_string()));
     }
 }

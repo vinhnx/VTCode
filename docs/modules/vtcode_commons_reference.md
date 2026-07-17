@@ -8,7 +8,7 @@ depending on VT Code's binary or storage defaults.
 ## Workspace Paths
 
 `StaticWorkspacePaths` offers a straightforward implementation of the
-[`WorkspacePaths`](../../vtcode-commons/src/paths.rs) trait. Callers
+[`WorkspacePaths`](../../crates/common/vtcode-commons/src/paths.rs) trait. Callers
 provide concrete directories for the workspace root and configuration
 data, with optional cache and telemetry paths.
 
@@ -36,7 +36,7 @@ paths are already known.
 
 ## Telemetry
 
-`MemoryTelemetry<Event>` implements [`TelemetrySink`](../../vtcode-commons/src/telemetry.rs)
+`MemoryTelemetry<Event>` implements [`TelemetrySink`](../../crates/common/vtcode-commons/src/telemetry.rs)
 by collecting cloned event payloads in memory. The `take` method drains
 and returns the recorded events, making it useful for assertions in
 tests or examples.
@@ -57,7 +57,7 @@ When no telemetry output is required, consumers can rely on the
 
 ## Error Reporting
 
-`MemoryErrorReporter` implements [`ErrorReporter`](../../vtcode-commons/src/errors.rs)
+`MemoryErrorReporter` implements [`ErrorReporter`](../../crates/common/vtcode-commons/src/errors.rs)
 by storing formatted error messages in memory. Use it to verify that
 components surface recoverable errors as expected during tests.
 

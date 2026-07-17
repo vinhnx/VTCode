@@ -291,9 +291,7 @@ pub(crate) fn detect_vague_references(prompt: &str) -> Vec<VagueReference> {
         for word in prompt_lower.split_whitespace() {
             let cleaned = word.trim_matches(|c: char| !c.is_alphanumeric());
             if cleaned == pattern_word {
-                references.push(VagueReference {
-                    term: cleaned.to_string(),
-                });
+                references.push(VagueReference { term: cleaned.to_string() });
             }
         }
     }
@@ -419,12 +417,7 @@ impl PromptEnricher {
         }
 
         // Step 5: Infer values for relative expressions (if enabled)
-        if self
-            .vt_cfg
-            .agent
-            .vibe_coding
-            .enable_relative_value_inference
-        {
+        if self.vt_cfg.agent.vibe_coding.enable_relative_value_inference {
             let state = self.workspace_state.read().await;
             if let Some(resolved_value) = state.resolve_relative_value(prompt) {
                 enriched.add_inferred_value(prompt.to_string(), resolved_value);

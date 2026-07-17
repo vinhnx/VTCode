@@ -11,7 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 tempfile = "3.25"
 tokio = { version = "1.49", features = ["rt-multi-thread", "fs"] }
-vtcode-core = { path = "../vtcode-core", default-features = false, features = ["tui"] }
+vtcode-core = { path = "../crates/codegen/vtcode-core", default-features = false, features = ["tui"] }
 
 [workspace]
 members = ["."]

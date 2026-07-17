@@ -28,17 +28,11 @@ fn sample_tool(name: &str) -> ToolDefinition {
 }
 
 fn sample_tools(count: usize) -> Arc<Vec<ToolDefinition>> {
-    Arc::new(
-        (0..count)
-            .map(|index| sample_tool(&format!("tool_{index}")))
-            .collect(),
-    )
+    Arc::new((0..count).map(|index| sample_tool(&format!("tool_{index}"))).collect())
 }
 
 fn sample_messages(count: usize) -> Vec<Message> {
-    (0..count)
-        .map(|index| Message::user(format!("message {index}")))
-        .collect()
+    (0..count).map(|index| Message::user(format!("message {index}"))).collect()
 }
 
 fn request_plan_benchmark(c: &mut Criterion) {
@@ -95,9 +89,7 @@ fn tool_catalog_projection_benchmark(c: &mut Criterion) {
     let tools = Arc::new(RwLock::new((*sample_tools(32)).clone()));
 
     runtime.block_on(async {
-        let _ = state
-            .filtered_snapshot_with_stats(&tools, true, false)
-            .await;
+        let _ = state.filtered_snapshot_with_stats(&tools, true, false).await;
     });
 
     c.bench_function("agent_harness_tool_catalog_cache_hit", |b| {
@@ -105,11 +97,7 @@ fn tool_catalog_projection_benchmark(c: &mut Criterion) {
             let state = Arc::clone(&state);
             let tools = Arc::clone(&tools);
             runtime.block_on(async move {
-                black_box(
-                    state
-                        .filtered_snapshot_with_stats(&tools, true, false)
-                        .await,
-                )
+                black_box(state.filtered_snapshot_with_stats(&tools, true, false).await)
             })
         })
     });
@@ -120,11 +108,7 @@ fn tool_catalog_projection_benchmark(c: &mut Criterion) {
             let tools = Arc::clone(&tools);
             runtime.block_on(async move {
                 state.note_explicit_refresh("benchmark");
-                black_box(
-                    state
-                        .filtered_snapshot_with_stats(&tools, true, false)
-                        .await,
-                )
+                black_box(state.filtered_snapshot_with_stats(&tools, true, false).await)
             })
         })
     });

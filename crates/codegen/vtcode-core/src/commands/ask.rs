@@ -142,12 +142,8 @@ mod tests {
 
         async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
             Ok(Box::pin(stream::iter(vec![
-                Ok(LLMStreamEvent::Token {
-                    delta: "hello ".to_string(),
-                }),
-                Ok(LLMStreamEvent::Token {
-                    delta: "world".to_string(),
-                }),
+                Ok(LLMStreamEvent::Token { delta: "hello ".to_string() }),
+                Ok(LLMStreamEvent::Token { delta: "world".to_string() }),
                 Ok(LLMStreamEvent::Completed {
                     response: Box::new(LLMResponse {
                         content: None,
@@ -221,12 +217,8 @@ mod tests {
             _request: LLMRequest,
         ) -> Result<LLMNormalizedStream, LLMError> {
             Ok(Box::pin(stream::iter(vec![
-                Ok(NormalizedStreamEvent::TextDelta {
-                    delta: "hello ".to_string(),
-                }),
-                Ok(NormalizedStreamEvent::ReasoningDelta {
-                    delta: "thinking ".to_string(),
-                }),
+                Ok(NormalizedStreamEvent::TextDelta { delta: "hello ".to_string() }),
+                Ok(NormalizedStreamEvent::ReasoningDelta { delta: "thinking ".to_string() }),
                 Ok(NormalizedStreamEvent::Usage {
                     usage: Usage {
                         prompt_tokens: 10,
@@ -280,10 +272,7 @@ mod tests {
 
         assert_eq!(response.content.as_deref(), Some("hello "));
         assert_eq!(response.reasoning.as_deref(), Some("thinking "));
-        assert_eq!(
-            response.usage.as_ref().map(|usage| usage.total_tokens),
-            Some(12)
-        );
+        assert_eq!(response.usage.as_ref().map(|usage| usage.total_tokens), Some(12));
     }
 }
 
@@ -309,17 +298,12 @@ fn extract_code_fence_blocks(text: &str) -> Vec<CodeFenceBlock> {
                         }
                     });
                     let block_lines = std::mem::take(&mut current_lines);
-                    blocks.push(CodeFenceBlock {
-                        language,
-                        lines: block_lines,
-                    });
+                    blocks.push(CodeFenceBlock { language, lines: block_lines });
                     continue;
                 }
             } else {
                 let token = rest_trimmed.split_whitespace().next().unwrap_or_default();
-                let normalized = token
-                    .trim_matches(|ch| matches!(ch, '"' | '\'' | '`'))
-                    .trim();
+                let normalized = token.trim_matches(|ch| matches!(ch, '"' | '\'' | '`')).trim();
                 current_language = Some(normalized.to_ascii_lowercase());
                 current_lines.clear();
                 continue;
@@ -348,15 +332,8 @@ fn select_best_code_block(blocks: &[CodeFenceBlock]) -> Option<&CodeFenceBlock> 
 }
 
 fn score_code_block(block: &CodeFenceBlock) -> (usize, u8) {
-    let line_count = block
-        .lines
-        .iter()
-        .filter(|line| !line.trim().is_empty())
-        .count();
-    let has_language = block
-        .language
-        .as_ref()
-        .is_some_and(|lang| !lang.trim().is_empty());
+    let line_count = block.lines.iter().filter(|line| !line.trim().is_empty()).count();
+    let has_language = block.language.as_ref().is_some_and(|lang| !lang.trim().is_empty());
     (line_count, if has_language { 1 } else { 0 })
 }
 

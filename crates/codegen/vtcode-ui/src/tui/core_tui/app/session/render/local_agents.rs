@@ -30,8 +30,7 @@ impl SharedListWidgetModel for LocalAgentsPanelModel {
                 InlineListRow::single(
                     Line::from(Span::styled(
                         "No local agents yet".to_owned(),
-                        self.base_style
-                            .add_modifier(Modifier::DIM | Modifier::ITALIC),
+                        self.base_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
                     )),
                     self.base_style.add_modifier(Modifier::DIM),
                 ),
@@ -48,12 +47,7 @@ impl SharedListWidgetModel for LocalAgentsPanelModel {
             .map(|(idx, entry)| {
                 let is_selected = self.selected == Some(idx);
                 let row_text = truncate_row(
-                    format!(
-                        "{} · {} · {}",
-                        entry.display_label,
-                        entry.kind.as_str(),
-                        entry.status
-                    ),
+                    format!("{} · {} · {}", entry.display_label, entry.kind.as_str(), entry.status),
                     max_chars,
                 );
                 let cursor = if is_selected {
@@ -150,11 +144,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
     let highlight_style = modal_list_highlight_style(session);
     let (selected_index, scroll_offset, entries) = {
         let state = &session.local_agents_state;
-        (
-            state.selected(),
-            state.scroll_offset(),
-            state.entries().to_vec(),
-        )
+        (state.selected(), state.scroll_offset(), state.entries().to_vec())
     };
 
     let info_line = if entries.is_empty() {
@@ -212,10 +202,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
     );
 
     let [list_area, preview_area] = body
-        .try_layout(&Layout::horizontal([
-            Constraint::Percentage(38),
-            Constraint::Percentage(62),
-        ]))
+        .try_layout(&Layout::horizontal([Constraint::Percentage(38), Constraint::Percentage(62)]))
         .unwrap_or([body; 2]);
 
     render_shared_list_panel(
@@ -232,9 +219,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
         &mut list_model,
     );
 
-    session
-        .local_agents_state
-        .set_visible_rows(list_model.visible_rows.max(1));
+    session.local_agents_state.set_visible_rows(list_model.visible_rows.max(1));
 
     let selected_entry = selected_index.and_then(|index| entries.get(index));
     let preview_text = selected_entry
@@ -250,9 +235,7 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
         });
 
     frame.render_widget(
-        Paragraph::new(preview_text)
-            .style(default_style)
-            .wrap(Wrap { trim: false }),
+        Paragraph::new(preview_text).style(default_style).wrap(Wrap { trim: false }),
         preview_area,
     );
 }
@@ -260,16 +243,8 @@ pub fn render_local_agents(session: &mut Session, frame: &mut Frame<'_>, area: R
 fn format_local_agent_preview(session: &Session, entry: &LocalAgentEntry) -> Vec<Line<'static>> {
     let mut lines = vec![local_agent_title_line(session, entry)];
 
-    if let Some(summary) = entry
-        .summary
-        .as_deref()
-        .filter(|summary| !summary.trim().is_empty())
-    {
-        lines.push(local_agent_status_line(
-            session,
-            summary,
-            entry.is_loading(),
-        ));
+    if let Some(summary) = entry.summary.as_deref().filter(|summary| !summary.trim().is_empty()) {
+        lines.push(local_agent_status_line(session, summary, entry.is_loading()));
     }
 
     if let Some(path) = entry.transcript_path.as_ref() {
@@ -330,10 +305,7 @@ fn truncate_row(text: String, max_chars: usize) -> String {
         return text;
     }
 
-    let mut truncated = text
-        .chars()
-        .take(max_chars.saturating_sub(1))
-        .collect::<String>();
+    let mut truncated = text.chars().take(max_chars.saturating_sub(1)).collect::<String>();
     truncated.push('…');
     truncated
 }
@@ -347,11 +319,7 @@ fn local_agents_divider_style(
     let Some(entry) = selected_index.and_then(|index| entries.get(index)) else {
         return fallback;
     };
-    let Some(color_spec) = entry
-        .color
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    else {
+    let Some(color_spec) = entry.color.as_deref().filter(|value| !value.trim().is_empty()) else {
         return fallback;
     };
 

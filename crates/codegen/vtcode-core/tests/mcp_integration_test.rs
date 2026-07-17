@@ -60,11 +60,7 @@ max_concurrent_requests = 1
         assert!(!mcp_config.experimental_use_rmcp_client);
         // retry_attempts uses default value of 3, which is fine
 
-        assert_eq!(
-            mcp_config.providers.len(),
-            1,
-            "Should have exactly 1 provider"
-        );
+        assert_eq!(mcp_config.providers.len(), 1, "Should have exactly 1 provider");
 
         let provider = &mcp_config.providers[0];
         assert_eq!(provider.name, "time");
@@ -219,10 +215,7 @@ max_concurrent_requests = 1
 
     #[tokio::test]
     async fn test_mcp_client_initialization() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let config = McpClientConfig { enabled: true, ..Default::default() };
 
         let mut client = McpClient::new(config);
 
@@ -233,32 +226,19 @@ max_concurrent_requests = 1
 
     #[tokio::test]
     async fn test_mcp_client_tool_execution() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let config = McpClientConfig { enabled: true, ..Default::default() };
 
         let client = McpClient::new(config);
 
         // Test tool execution without providers (should fail gracefully)
-        let result = client
-            .execute_tool("test_tool", serde_json::json!({}))
-            .await;
+        let result = client.execute_tool("test_tool", serde_json::json!({})).await;
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("No MCP providers are configured")
-        );
+        assert!(result.unwrap_err().to_string().contains("No MCP providers are configured"));
     }
 
     #[tokio::test]
     async fn test_mcp_client_tool_listing() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let config = McpClientConfig { enabled: true, ..Default::default() };
 
         let client = McpClient::new(config);
 
@@ -270,10 +250,7 @@ max_concurrent_requests = 1
 
     #[tokio::test]
     async fn test_mcp_client_disabled() {
-        let config = McpClientConfig {
-            enabled: false,
-            ..Default::default()
-        };
+        let config = McpClientConfig { enabled: false, ..Default::default() };
 
         let client = McpClient::new(config);
 
@@ -293,10 +270,7 @@ max_concurrent_requests = 1
 
     #[tokio::test]
     async fn test_mcp_client_status() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let config = McpClientConfig { enabled: true, ..Default::default() };
 
         let client = McpClient::new(config);
         let status = client.get_status();
@@ -309,10 +283,7 @@ max_concurrent_requests = 1
 
     #[tokio::test]
     async fn test_provider_tool_availability() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..Default::default()
-        };
+        let config = McpClientConfig { enabled: true, ..Default::default() };
 
         let client = McpClient::new(config);
 
@@ -368,10 +339,7 @@ max_concurrent_requests = 1
         };
 
         assert_eq!(provider_config.env.len(), 2);
-        assert_eq!(
-            provider_config.env.get("API_KEY"),
-            Some(&"secret_key".to_string())
-        );
+        assert_eq!(provider_config.env.get("API_KEY"), Some(&"secret_key".to_string()));
         assert_eq!(provider_config.env.get("DEBUG"), Some(&"true".to_string()));
     }
 }

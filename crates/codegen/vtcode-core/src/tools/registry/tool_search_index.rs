@@ -84,10 +84,8 @@ const NAME_MATCH_BOOST: f64 = 2.0;
 /// rule so the index and query are tokenized identically (DRY).
 fn tokenize(text: &str) -> impl Iterator<Item = String> + '_ {
     text.split_whitespace().filter_map(|raw| {
-        let normalized = raw
-            .to_lowercase()
-            .trim_matches(|c: char| !c.is_alphanumeric())
-            .to_string();
+        let normalized =
+            raw.to_lowercase().trim_matches(|c: char| !c.is_alphanumeric()).to_string();
         (!normalized.is_empty() && normalized.len() > 1).then_some(normalized)
     })
 }
@@ -106,10 +104,9 @@ impl ToolEmbeddingIndex {
                 // terms (but not the returned `description`) so a query for
                 // a server name ranks that server's tools higher.
                 let combined = match tool.namespace.as_ref() {
-                    Some(namespace) => format!(
-                        "{name} {description} {} {}",
-                        namespace.name, namespace.description
-                    ),
+                    Some(namespace) => {
+                        format!("{name} {description} {} {}", namespace.name, namespace.description)
+                    }
                     None => format!("{name} {description}"),
                 };
                 let mut term_freq: HashMap<String, u32> = HashMap::new();
@@ -118,12 +115,7 @@ impl ToolEmbeddingIndex {
                     *term_freq.entry(term).or_insert(0) += 1;
                     term_count += 1;
                 }
-                Some(ToolIndexEntry {
-                    name,
-                    description,
-                    term_freq,
-                    term_count,
-                })
+                Some(ToolIndexEntry { name, description, term_freq, term_count })
             })
             .collect();
 
@@ -143,12 +135,7 @@ impl ToolEmbeddingIndex {
             total_dl as f64 / entries.len() as f64
         };
 
-        Self {
-            entries,
-            doc_freq,
-            avg_dl,
-            epoch,
-        }
+        Self { entries, doc_freq, avg_dl, epoch }
     }
 }
 
@@ -213,11 +200,7 @@ impl ToolSearchEngine for ToolEmbeddingIndex {
             .filter(|r| r.score > 0.0)
             .collect();
 
-        results.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         results.truncate(max_results);
         results
     }
@@ -244,10 +227,7 @@ mod tests {
                 "search_code",
                 "Search for code patterns using regex or structural search",
             ),
-            tool_with_desc(
-                "run_command",
-                "Execute a shell command and return its output",
-            ),
+            tool_with_desc("run_command", "Execute a shell command and return its output"),
         ];
 
         let index = ToolEmbeddingIndex::build(&tools, 0);

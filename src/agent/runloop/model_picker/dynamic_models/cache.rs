@@ -33,27 +33,15 @@ pub(super) struct CachedDynamicModelStore {
 impl CachedDynamicModelStore {
     pub(super) async fn load() -> Self {
         let Some(path) = dynamic_model_cache_path() else {
-            return Self {
-                entries: HashMap::new(),
-                dirty: false,
-            };
+            return Self { entries: HashMap::new(), dirty: false };
         };
 
         match fs::read(&path).await {
             Ok(data) => match serde_json::from_slice::<CacheEntries>(&data) {
-                Ok(entries) => Self {
-                    entries,
-                    dirty: false,
-                },
-                Err(_) => Self {
-                    entries: HashMap::new(),
-                    dirty: false,
-                },
+                Ok(entries) => Self { entries, dirty: false },
+                Err(_) => Self { entries: HashMap::new(), dirty: false },
             },
-            Err(_) => Self {
-                entries: HashMap::new(),
-                dirty: false,
-            },
+            Err(_) => Self { entries: HashMap::new(), dirty: false },
         }
     }
 
@@ -91,14 +79,10 @@ impl CachedDynamicModelStore {
             }
         }
 
-        let resolved_base = base_url
-            .clone()
-            .unwrap_or_else(|| default_provider_base(provider).to_string());
+        let resolved_base =
+            base_url.clone().unwrap_or_else(|| default_provider_base(provider).to_string());
         let key = Self::cache_key(provider, &resolved_base);
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
 
         if let Some(entry) = self.entries.get(&key)
             && now.saturating_sub(entry.fetched_at) <= DYNAMIC_MODEL_CACHE_TTL_SECS
@@ -143,9 +127,5 @@ impl CachedDynamicModelStore {
 
 fn dynamic_model_cache_path() -> Option<PathBuf> {
     let manager = get_dot_manager().ok()?.lock().ok()?.clone();
-    Some(
-        manager
-            .cache_dir("models")
-            .join(DYNAMIC_MODEL_CACHE_FILENAME),
-    )
+    Some(manager.cache_dir("models").join(DYNAMIC_MODEL_CACHE_FILENAME))
 }

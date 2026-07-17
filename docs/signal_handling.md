@@ -86,7 +86,7 @@ This ensures the program exits immediately, even if other tasks are blocked.
 
 ### 3. SIGTERM Emergency Handler
 
-**Location:** `vtcode-ui/src/tui/core_tui/runner/signal.rs`
+**Location:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/signal.rs`
 
 A dedicated thread handles SIGTERM as an emergency fallback. This is necessary because the process may not have a running Tokio reactor to observe SIGTERM through the async path.
 
@@ -139,7 +139,7 @@ This ensures that:
 
 ## Process Group Management
 
-**Location:** `vtcode-bash-runner/src/process_group.rs`
+**Location:** `crates/codegen/vtcode-bash-runner/src/process_group.rs`
 
 Child processes are managed using process groups to ensure clean termination:
 
@@ -149,7 +149,7 @@ Child processes are managed using process groups to ensure clean termination:
 
 ## Emergency Terminal Cleanup
 
-**Location:** `vtcode-ui/src/tui/panic_hook.rs`
+**Location:** `crates/codegen/vtcode-ui/src/tui/panic_hook.rs`
 
 The `restore_tui()` function ensures the terminal is left in a usable state even on emergency exit:
 

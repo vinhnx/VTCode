@@ -184,9 +184,7 @@ impl AnthropicProvider {
         let resolved = base_url
             .and_then(|value| sanitize(&value))
             .or_else(|| {
-                env::var(env_vars::MINIMAX_BASE_URL)
-                    .ok()
-                    .and_then(|value| sanitize(&value))
+                env::var(env_vars::MINIMAX_BASE_URL).ok().and_then(|value| sanitize(&value))
             })
             .or_else(|| sanitize(urls::MINIMAX_API_BASE))
             .unwrap_or_else(|| urls::MINIMAX_API_BASE.trim_end_matches('/').to_string());
@@ -194,10 +192,7 @@ impl AnthropicProvider {
         let mut normalized = resolved;
 
         if normalized.ends_with("/messages") {
-            normalized = normalized
-                .trim_end_matches("/messages")
-                .trim_end_matches('/')
-                .to_string();
+            normalized = normalized.trim_end_matches("/messages").trim_end_matches('/').to_string();
         }
 
         if let Some(pos) = normalized.find("/v1/") {
@@ -206,10 +201,7 @@ impl AnthropicProvider {
 
         let mut without_v1 = normalized.trim_end_matches('/').to_string();
         if without_v1.ends_with("/v1") {
-            without_v1 = without_v1
-                .trim_end_matches("/v1")
-                .trim_end_matches('/')
-                .to_string();
+            without_v1 = without_v1.trim_end_matches("/v1").trim_end_matches('/').to_string();
         }
 
         if is_official_minimax_host(&without_v1)
@@ -225,14 +217,8 @@ impl AnthropicProvider {
         request.tools.as_ref().is_some_and(|tools| {
             tools.iter().any(|tool| {
                 (tool.is_tool_search() || tool.defer_loading.unwrap_or(false))
-                    || tool
-                        .allowed_callers
-                        .as_ref()
-                        .is_some_and(|callers| !callers.is_empty())
-                    || tool
-                        .input_examples
-                        .as_ref()
-                        .is_some_and(|examples| !examples.is_empty())
+                    || tool.allowed_callers.as_ref().is_some_and(|callers| !callers.is_empty())
+                    || tool.input_examples.as_ref().is_some_and(|examples| !examples.is_empty())
             })
         })
     }
@@ -286,21 +272,12 @@ impl AnthropicProvider {
     }
 
     fn requires_files_api_beta(&self, request: &LLMRequest) -> bool {
-        request
-            .messages
-            .iter()
-            .any(|message| match &message.content {
-                MessageContent::Parts(parts) => parts.iter().any(|part| {
-                    matches!(
-                        part,
-                        ContentPart::File {
-                            file_id: Some(_),
-                            ..
-                        }
-                    )
-                }),
-                MessageContent::Text(_) => false,
-            })
+        request.messages.iter().any(|message| match &message.content {
+            MessageContent::Parts(parts) => parts
+                .iter()
+                .any(|part| matches!(part, ContentPart::File { file_id: Some(_), .. })),
+            MessageContent::Text(_) => false,
+        })
     }
 
     /// Whether the advisor server-side tool should be sent for this request.
@@ -379,12 +356,7 @@ impl AnthropicProvider {
         };
 
         let response = self.generate(request).await?;
-        let content = response
-            .content
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .to_uppercase();
+        let content = response.content.as_deref().unwrap_or("").trim().to_uppercase();
 
         Ok(content.contains("YES"))
     }
@@ -515,11 +487,7 @@ impl AnthropicProvider {
             .get("anthropic-organization-id")
             .and_then(|h| h.to_str().ok().map(|s| s.to_string()));
 
-        Ok(AnthropicHttpResponse {
-            response,
-            request_id,
-            organization_id,
-        })
+        Ok(AnthropicHttpResponse { response, request_id, organization_id })
     }
 }
 
@@ -529,12 +497,7 @@ fn code_execution_beta_name(tool_type: &str) -> Option<String> {
         return None;
     }
 
-    Some(format!(
-        "code-execution-{}-{}-{}",
-        &suffix[0..4],
-        &suffix[4..6],
-        &suffix[6..8]
-    ))
+    Some(format!("code-execution-{}-{}-{}", &suffix[0..4], &suffix[4..6], &suffix[6..8]))
 }
 
 fn uses_anthropic_compaction(context_management: &Value) -> bool {
@@ -565,11 +528,9 @@ fn uses_anthropic_context_edits(context_management: &Value) -> bool {
 }
 
 fn is_context_edit_item(item: &Value) -> bool {
-    item.get("type")
-        .and_then(Value::as_str)
-        .is_some_and(|edit_type| {
-            edit_type.starts_with("clear_tool_uses_") || edit_type.starts_with("clear_thinking_")
-        })
+    item.get("type").and_then(Value::as_str).is_some_and(|edit_type| {
+        edit_type.starts_with("clear_tool_uses_") || edit_type.starts_with("clear_thinking_")
+    })
 }
 
 struct AnthropicHttpResponse {
@@ -646,16 +607,11 @@ impl LLMProvider for AnthropicProvider {
         let resolved_model = self.resolved_request_model(&request).to_string();
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
 
-        let AnthropicHttpResponse {
-            response,
-            request_id,
-            organization_id,
-        } = self.send_request(&request, &anthropic_request).await?;
+        let AnthropicHttpResponse { response, request_id, organization_id } =
+            self.send_request(&request, &anthropic_request).await?;
 
-        let anthropic_response: Value = response
-            .json()
-            .await
-            .map_err(|e| format_parse_error("Anthropic", &e))?;
+        let anthropic_response: Value =
+            response.json().await.map_err(|e| format_parse_error("Anthropic", &e))?;
 
         let mut llm_response = response_parser::parse_response(anthropic_response, resolved_model)?;
         llm_response.request_id = request_id;
@@ -671,18 +627,10 @@ impl LLMProvider for AnthropicProvider {
             obj.insert("stream".to_string(), Value::Bool(true));
         }
 
-        let AnthropicHttpResponse {
-            response,
-            request_id,
-            organization_id,
-        } = self.send_request(&request, &anthropic_request).await?;
+        let AnthropicHttpResponse { response, request_id, organization_id } =
+            self.send_request(&request, &anthropic_request).await?;
 
-        Ok(stream_decoder::create_stream(
-            response,
-            resolved_model,
-            request_id,
-            organization_id,
-        ))
+        Ok(stream_decoder::create_stream(response, resolved_model, request_id, organization_id))
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -704,9 +652,7 @@ impl LLMClient for AnthropicProvider {
         Ok(LLMResponse {
             content: Some(response.content.unwrap_or_default()),
             model: request_model,
-            usage: response
-                .usage
-                .map(crate::providers::common::convert_usage_to_llm_types),
+            usage: response.usage.map(crate::providers::common::convert_usage_to_llm_types),
             reasoning: response.reasoning,
             reasoning_details: response.reasoning_details,
             request_id: response.request_id,
@@ -798,9 +744,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
+        let payload = provider.convert_to_anthropic_format(&request).expect("payload conversion");
         let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
 
         assert_eq!(payload["output_config"]["format"]["type"], "json_schema");
@@ -875,11 +819,7 @@ mod tests {
         };
 
         let betas = provider.effective_betas(&request).expect("betas");
-        assert!(
-            betas
-                .iter()
-                .any(|beta| beta == "context-management-2025-06-27")
-        );
+        assert!(betas.iter().any(|beta| beta == "context-management-2025-06-27"));
     }
 
     #[test]
@@ -900,11 +840,7 @@ mod tests {
         };
 
         let betas = provider.effective_betas(&request).expect("betas");
-        assert!(
-            betas
-                .iter()
-                .any(|beta| beta == "context-management-2025-06-27")
-        );
+        assert!(betas.iter().any(|beta| beta == "context-management-2025-06-27"));
         assert!(!betas.iter().any(|beta| beta == "compact-2026-01-12"));
     }
 
@@ -955,11 +891,7 @@ mod tests {
 
         let betas = provider.effective_betas(&request).expect("betas");
         assert!(betas.iter().any(|beta| beta == "compact-2026-01-12"));
-        assert!(
-            !betas
-                .iter()
-                .any(|beta| beta == "context-management-2025-06-27")
-        );
+        assert!(!betas.iter().any(|beta| beta == "context-management-2025-06-27"));
     }
 
     #[test]
@@ -988,11 +920,7 @@ mod tests {
 
         let betas = provider.effective_betas(&request).expect("betas");
         assert!(betas.iter().any(|beta| beta == "compact-2026-01-12"));
-        assert!(
-            betas
-                .iter()
-                .any(|beta| beta == "context-management-2025-06-27")
-        );
+        assert!(betas.iter().any(|beta| beta == "context-management-2025-06-27"));
     }
 
     #[test]
@@ -1021,9 +949,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
+        let payload = provider.convert_to_anthropic_format(&request).expect("payload conversion");
         let beta_header = provider
             .beta_header_for_request(&request, &payload, true, None)
             .expect("beta header");
@@ -1041,9 +967,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
+        let payload = provider.convert_to_anthropic_format(&request).expect("payload conversion");
         let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
 
         if let Some(header) = &beta_header {
@@ -1063,9 +987,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
+        let payload = provider.convert_to_anthropic_format(&request).expect("payload conversion");
         let beta_header = provider.beta_header_for_request(&request, &payload, false, None);
 
         assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
@@ -1088,9 +1010,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
+        let payload = provider.convert_to_anthropic_format(&request).expect("payload conversion");
         let beta_header = provider
             .beta_header_for_request(&request, &payload, false, None)
             .expect("beta header");
@@ -1110,9 +1030,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
+        let payload = provider.convert_to_anthropic_format(&request).expect("payload conversion");
 
         assert_eq!(payload["model"], models::CLAUDE_SONNET_4_6);
     }
@@ -1132,9 +1050,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .convert_to_anthropic_format(&request)
-            .expect("payload conversion");
+        let payload = provider.convert_to_anthropic_format(&request).expect("payload conversion");
         let beta_header = provider
             .beta_header_for_request(&request, &payload, true, None)
             .expect("beta header");

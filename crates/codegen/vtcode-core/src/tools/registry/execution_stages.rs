@@ -61,11 +61,9 @@ impl ToolRegistry {
         display_name: &str,
     ) -> Option<String> {
         if self.is_planning_active() && !self.is_planning_active_allowed(tool_name, args) {
-            Some(
-                crate::tools::error_messages::agent_execution::planning_workflow_denial_message(
-                    display_name,
-                ),
-            )
+            Some(crate::tools::error_messages::agent_execution::planning_workflow_denial_message(
+                display_name,
+            ))
         } else {
             None
         }

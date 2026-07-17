@@ -220,7 +220,7 @@ match result {
 
 ### Environment Filtering
 
-When using sandboxed execution (via `vtcode-core/src/sandboxing/child_spawn.rs`), sensitive environment variables are filtered:
+When using sandboxed execution (via `crates/codegen/vtcode-core/src/sandboxing/child_spawn.rs`), sensitive environment variables are filtered:
 
 - API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
 - Cloud credentials (AWS*\*, AZURE*\_, GOOGLE\_\_)
@@ -243,7 +243,7 @@ Process working directories are validated against workspace boundaries to preven
 
 ## PTY Session Integration
 
-The PTY system in `vtcode-core/src/tools/pty/` integrates with the process group utilities
+The PTY system in `crates/codegen/vtcode-core/src/tools/pty/` integrates with the process group utilities
 for robust process cleanup:
 
 ### Graceful Termination
@@ -308,7 +308,7 @@ This ensures that:
 ┌─────────────────────────────────────────────────┐
 │                   VT Code                        │
 ├─────────────────────────────────────────────────┤
-│  vtcode-core/src/tools/pty/                     │
+│  crates/codegen/vtcode-core/src/tools/pty/                     │
 │  ├── manager.rs       (PtyManager)              │
 │  ├── session.rs       (PtySessionHandle)        │
 │  │   └── Uses process_group for cleanup         │

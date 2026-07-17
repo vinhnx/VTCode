@@ -134,9 +134,7 @@ pub struct ErrorHandler {
 
 impl ErrorHandler {
     pub fn new(provider_name: &'static str) -> Self {
-        Self {
-            _provider_name: provider_name,
-        }
+        Self { _provider_name: provider_name }
     }
 
     /// Handle HTTP errors consistently across providers
@@ -158,10 +156,7 @@ impl ErrorHandler {
         if status == StatusCode::TOO_MANY_REQUESTS {
             LLMError::RateLimit { metadata: None }
         } else {
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
+            LLMError::Provider { message: formatted_error, metadata: None }
         }
     }
 
@@ -199,10 +194,7 @@ pub struct StreamProcessor {
 
 impl StreamProcessor {
     pub fn new(provider_name: &'static str, supports_reasoning: bool) -> Self {
-        Self {
-            provider_name,
-            supports_reasoning,
-        }
+        Self { provider_name, supports_reasoning }
     }
 
     /// Process SSE stream chunk consistently
@@ -329,10 +321,7 @@ impl RequestProcessor {
             return Err(error_handler.handle_http_error(status, &error_text).into());
         }
 
-        let response_text = response
-            .text()
-            .await
-            .context("Failed to read response body")?;
+        let response_text = response.text().await.context("Failed to read response body")?;
 
         serde_json::from_str(&response_text).context("Failed to parse JSON response")
     }
@@ -372,11 +361,7 @@ impl ModelResolver {
         default_model: &'static str,
         supported_models: &'static [&'static str],
     ) -> Self {
-        Self {
-            provider_name,
-            default_model,
-            supported_models,
-        }
+        Self { provider_name, default_model, supported_models }
     }
 
     /// Resolve model with fallback to default
@@ -436,13 +421,7 @@ mod tests {
             handler.handle_http_error(reqwest::StatusCode::UNAUTHORIZED, "Invalid API key");
         let rate_limited = handler.handle_http_error(reqwest::StatusCode::TOO_MANY_REQUESTS, "");
 
-        assert!(matches!(
-            unauthorized,
-            LLMError::Provider {
-                message: _,
-                metadata: _
-            }
-        ));
+        assert!(matches!(unauthorized, LLMError::Provider { message: _, metadata: _ }));
         assert!(matches!(rate_limited, LLMError::RateLimit { metadata: _ }));
     }
 

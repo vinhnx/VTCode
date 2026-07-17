@@ -93,9 +93,7 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
         return Ok(None);
     }
 
-    let project_root = resolve_project_root(cwd)
-        .await
-        .unwrap_or_else(|_| cwd.to_path_buf());
+    let project_root = resolve_project_root(cwd).await.unwrap_or_else(|_| cwd.to_path_buf());
     let home_dir = dirs::home_dir();
 
     read_project_doc_with_options(&ProjectDocOptions {
@@ -282,10 +280,7 @@ pub fn merge_project_docs_with_skills(
 fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {
     let contents = bundle.combined_text();
     let segments = bundle.segments;
-    let sources = segments
-        .iter()
-        .map(|segment| segment.source.path.clone())
-        .collect::<Vec<_>>();
+    let sources = segments.iter().map(|segment| segment.source.path.clone()).collect::<Vec<_>>();
 
     ProjectDocBundle {
         contents,
@@ -306,10 +301,7 @@ async fn resolve_project_root(cwd: &Path) -> Result<PathBuf> {
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
             Err(err) => {
                 return Err(err).with_context(|| {
-                    format!(
-                        "Failed to inspect potential git root {}",
-                        git_marker.display()
-                    )
+                    format!("Failed to inspect potential git root {}", git_marker.display())
                 });
             }
         }
@@ -337,9 +329,7 @@ mod tests {
     #[tokio::test]
     async fn returns_none_when_no_docs_present() {
         let tmp = tempdir().expect("failed to unwrap");
-        let result = read_project_doc(tmp.path(), 4096)
-            .await
-            .expect("failed to unwrap");
+        let result = read_project_doc(tmp.path(), 4096).await.expect("failed to unwrap");
         assert!(result.is_none());
     }
 
@@ -457,10 +447,7 @@ mod tests {
         )
         .expect("write doc");
 
-        let config = AgentConfig {
-            instruction_max_bytes: 16,
-            ..Default::default()
-        };
+        let config = AgentConfig { instruction_max_bytes: 16, ..Default::default() };
 
         let appendix = build_instruction_appendix(&config, repo.path())
             .await
@@ -526,19 +513,13 @@ mod tests {
     async fn renders_compact_instruction_appendix() {
         let repo = tempdir().expect("failed to unwrap");
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("failed to unwrap");
-        write_doc(
-            repo.path(),
-            "- Root summary\n\nFollow the repository-level guidance first.\n",
-        )
-        .expect("write doc");
+        write_doc(repo.path(), "- Root summary\n\nFollow the repository-level guidance first.\n")
+            .expect("write doc");
 
         let nested = repo.path().join("nested/sub");
         std::fs::create_dir_all(&nested).expect("failed to unwrap");
-        write_doc(
-            &nested,
-            "- Nested summary\n\nFollow the nested guidance last.\n",
-        )
-        .expect("write doc");
+        write_doc(&nested, "- Nested summary\n\nFollow the nested guidance last.\n")
+            .expect("write doc");
 
         let instructions = get_user_instructions(&AgentConfig::default(), &nested, None)
             .await

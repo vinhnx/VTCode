@@ -277,14 +277,10 @@ where
             } else if trimmed.eq_ignore_ascii_case("indentation") {
                 Ok(ReadMode::Indentation)
             } else {
-                Err(serde::de::Error::custom(format!(
-                    "invalid read mode: {trimmed}"
-                )))
+                Err(serde::de::Error::custom(format!("invalid read mode: {trimmed}")))
             }
         }
-        other => Err(serde::de::Error::custom(format!(
-            "invalid read mode type: {other}"
-        ))),
+        other => Err(serde::de::Error::custom(format!("invalid read mode type: {other}"))),
     }
 }
 
@@ -304,18 +300,14 @@ where
             } else if trimmed.eq_ignore_ascii_case("true") {
                 Ok(Some(IndentationArgs::default()))
             } else {
-                Err(serde::de::Error::custom(format!(
-                    "invalid indentation value: {trimmed}"
-                )))
+                Err(serde::de::Error::custom(format!("invalid indentation value: {trimmed}")))
             }
         }
         Value::Object(_) => {
             let args = IndentationArgs::deserialize(value).map_err(serde::de::Error::custom)?;
             Ok(Some(args))
         }
-        other => Err(serde::de::Error::custom(format!(
-            "invalid indentation type: {other}"
-        ))),
+        other => Err(serde::de::Error::custom(format!("invalid indentation type: {other}"))),
     }
 }
 
@@ -337,9 +329,7 @@ impl LineRecord {
     }
 
     fn is_comment(&self) -> bool {
-        COMMENT_PREFIXES
-            .iter()
-            .any(|prefix| self.raw.trim().starts_with(prefix))
+        COMMENT_PREFIXES.iter().any(|prefix| self.raw.trim().starts_with(prefix))
     }
 }
 
@@ -361,11 +351,24 @@ impl ReadFileHandler {
                 let sem = semaphore.clone();
                 let prog = progress.clone();
                 async move {
-                    let _permit = sem.acquire().await.ok();
-                    prog.file_started(&req.file_path).await;
-                    let result = self.read_single_batch_request(&req).await;
-                    prog.file_completed();
-                    result
+                    match sem.acquire().await {
+                        Ok(permit) => {
+                            let _permit = permit;
+                            prog.file_started(&req.file_path).await;
+                            let result = self.read_single_batch_request(&req).await;
+                            prog.file_completed();
+                            result
+                        }
+                        Err(e) => {
+                            prog.file_started(&req.file_path).await;
+                            prog.file_completed();
+                            BatchReadResult {
+                                file_path: req.file_path,
+                                ranges: Vec::new(),
+                                error: Some(format!("concurrency limit exceeded: {e}")),
+                            }
+                        }
+                    }
                 }
             })
             .buffer_unordered(args.max_concurrency)
@@ -545,10 +548,7 @@ impl ReadFileHandler {
             }
             ReadMode::Indentation => {
                 let indentation = indentation.unwrap_or_default();
-                (
-                    indentation::read_block(&path, offset, applied_limit, indentation).await?,
-                    false,
-                )
+                (indentation::read_block(&path, offset, applied_limit, indentation).await?, false)
             }
         };
         let lines_read = collected.len();
@@ -783,10 +783,8 @@ mod slice {
 
         loop {
             buffer.clear();
-            let bytes_read = reader
-                .read_until(b'\n', &mut buffer)
-                .await
-                .context("failed to read file")?;
+            let bytes_read =
+                reader.read_until(b'\n', &mut buffer).await.context("failed to read file")?;
 
             if bytes_read == 0 {
                 reached_eof = true;
@@ -819,10 +817,7 @@ mod slice {
             anyhow::bail!("offset exceeds file length");
         }
 
-        Ok(SliceReadResult {
-            lines: collected,
-            has_more: !reached_eof,
-        })
+        Ok(SliceReadResult { lines: collected, has_more: !reached_eof })
     }
 }
 
@@ -836,10 +831,7 @@ mod indentation {
         options: IndentationArgs,
     ) -> Result<Vec<String>> {
         let anchor_line = options.anchor_line.unwrap_or(offset);
-        anyhow::ensure!(
-            anchor_line > 0,
-            "anchor_line must be a 1-indexed line number"
-        );
+        anyhow::ensure!(anchor_line > 0, "anchor_line must be a 1-indexed line number");
 
         let guard_limit = options.max_lines.unwrap_or(limit);
         anyhow::ensure!(guard_limit > 0, "max_lines must be greater than zero");
@@ -962,10 +954,8 @@ mod indentation {
 
         loop {
             buffer.clear();
-            let bytes_read = reader
-                .read_until(b'\n', &mut buffer)
-                .await
-                .context("failed to read file")?;
+            let bytes_read =
+                reader.read_until(b'\n', &mut buffer).await.context("failed to read file")?;
 
             if bytes_read == 0 {
                 break;
@@ -982,12 +972,7 @@ mod indentation {
             let raw = String::from_utf8_lossy(&buffer).into_owned();
             let indent = measure_indent(&raw);
             let display = format_line(&buffer);
-            lines.push(LineRecord {
-                number,
-                raw,
-                display,
-                indent,
-            });
+            lines.push(LineRecord { number, raw, display, indent });
         }
 
         Ok(lines)
@@ -1352,10 +1337,7 @@ mod tests {
         writeln!(temp, "third")?;
 
         let result = read(temp.path(), 1, 2).await?;
-        assert_eq!(
-            result.lines,
-            vec!["first".to_string(), "second".to_string()]
-        );
+        assert_eq!(result.lines, vec!["first".to_string(), "second".to_string()]);
         assert!(result.has_more);
         Ok(())
     }
@@ -1367,10 +1349,7 @@ mod tests {
         writeln!(temp, "second")?;
 
         let result = read(temp.path(), 1, 2).await?;
-        assert_eq!(
-            result.lines,
-            vec!["first".to_string(), "second".to_string()]
-        );
+        assert_eq!(result.lines, vec!["first".to_string(), "second".to_string()]);
         assert!(!result.has_more);
         Ok(())
     }
@@ -1378,16 +1357,10 @@ mod tests {
     #[test]
     fn clamp_to_absolute_cap_marks_only_true_overages() {
         // A request above the ceiling is clamped and flagged.
-        assert_eq!(
-            ReadFileHandler::clamp_to_absolute_cap(1000, 400),
-            (400, true)
-        );
+        assert_eq!(ReadFileHandler::clamp_to_absolute_cap(1000, 400), (400, true));
         // A request exactly at the ceiling sits at the cap but is not "clamped"
         // (this is what keeps the pagination chain alive on follow-up pages).
-        assert_eq!(
-            ReadFileHandler::clamp_to_absolute_cap(400, 400),
-            (400, false)
-        );
+        assert_eq!(ReadFileHandler::clamp_to_absolute_cap(400, 400), (400, false));
         // A request below the ceiling is unchanged and not flagged.
         assert_eq!(ReadFileHandler::clamp_to_absolute_cap(50, 400), (50, false));
     }
@@ -1414,10 +1387,7 @@ mod tests {
         let outcome = handler.handle_detailed(args).await?;
 
         let cap = crate::tools::read_limits::read_limit_lines();
-        assert!(
-            outcome.capped_by_limit,
-            "request larger than the cap must be clamped"
-        );
+        assert!(outcome.capped_by_limit, "request larger than the cap must be clamped");
         assert_eq!(outcome.applied_limit, cap);
         assert!(outcome.has_more);
         assert!(outcome.lines_read <= cap);

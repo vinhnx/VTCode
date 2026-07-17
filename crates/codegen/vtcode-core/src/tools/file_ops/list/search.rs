@@ -12,18 +12,14 @@ impl FileOpsTool {
     /// Execute recursive file search
     pub(crate) async fn execute_recursive_search(&self, input: &ListInput) -> Result<Value> {
         let list_glob = compile_list_glob(input)?;
-        let pattern = input
-            .glob_pattern
-            .as_deref()
-            .or(input.name_pattern.as_deref())
-            .unwrap_or("*");
+        let pattern =
+            input.glob_pattern.as_deref().or(input.name_pattern.as_deref()).unwrap_or("*");
         let search_path = self.workspace_root.join(&input.path);
 
         // Check if path exists before walking
         if !search_path.exists() {
-            let suggestion = self
-                .missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any)
-                .await;
+            let suggestion =
+                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
             return Err(anyhow!(
                 "Path '{}' does not exist. Workspace root: {}{}",
                 input.path,
@@ -37,10 +33,7 @@ impl FileOpsTool {
         let mut count = 0;
         let mut matched_total = 0;
 
-        for entry in build_default_walker(&search_path)
-            .max_depth(Some(10))
-            .build()
-        {
+        for entry in build_default_walker(&search_path).max_depth(Some(10)).build() {
             let entry = entry.map_err(|e| anyhow!("Walk error: {e}"))?;
             let path = entry.path();
 
@@ -105,10 +98,7 @@ impl FileOpsTool {
             .ok_or_else(|| anyhow!("Error: Invalid 'list_files' arguments. When mode='find_name', must provide name_pattern (string). Example: {{\"path\": \".\", \"mode\": \"find_name\", \"name_pattern\": \"Cargo.toml\"}}"))?;
         let search_path = self.workspace_root.join(&input.path);
 
-        for entry in build_default_walker(&search_path)
-            .max_depth(Some(10))
-            .build()
-        {
+        for entry in build_default_walker(&search_path).max_depth(Some(10)).build() {
             let entry = entry.map_err(|e| anyhow!("Walk error: {e}"))?;
             let path = entry.path();
 
@@ -154,10 +144,7 @@ impl FileOpsTool {
 
         let search_root = self.workspace_root.join(&input.path);
         if self.should_exclude(&search_root).await {
-            return Err(anyhow!(
-                "Path '{}' is excluded by .vtcodegitignore",
-                input.path
-            ));
+            return Err(anyhow!("Path '{}' is excluded by .vtcodegitignore", input.path));
         }
 
         let search_input = GrepSearchInput {

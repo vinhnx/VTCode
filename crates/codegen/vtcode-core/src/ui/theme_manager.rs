@@ -27,11 +27,7 @@ impl ThemeManager {
         let git_config = Self::load_git_config(workspace_root);
         let file_colorizer = FileColorizer::new();
 
-        Self {
-            custom_config,
-            git_config,
-            file_colorizer,
-        }
+        Self { custom_config, git_config, file_colorizer }
     }
 
     /// Load custom theme configuration from .vtcode/theme.toml
@@ -122,12 +118,7 @@ mod tests {
         assert!(manager.custom_config.is_none());
         assert!(manager.git_config.is_none());
         // FileColorizer should always be initialized
-        assert_eq!(
-            manager
-                .file_colorizer
-                .style_for_path(Path::new("/tmp/test.rs")),
-            None
-        );
+        assert_eq!(manager.file_colorizer.style_for_path(Path::new("/tmp/test.rs")), None);
     }
 
     #[test]

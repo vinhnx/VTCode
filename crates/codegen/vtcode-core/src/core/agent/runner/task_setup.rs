@@ -47,8 +47,7 @@ impl AgentRunner {
         contexts: &[ContextItem],
     ) -> Result<TaskSetup> {
         // Align harness context with runner session/task for structured telemetry
-        self.tool_registry
-            .set_harness_session(self.session_id.clone());
+        self.tool_registry.set_harness_session(self.session_id.clone());
         self.tool_registry.set_harness_task(Some(task.id.clone()));
 
         let steering_receiver = self.steering_receiver.lock().take();
@@ -72,32 +71,21 @@ impl AgentRunner {
 
         self.runner_println(format_args!(
             "{} Executing {} task: {}",
-            crate::utils::colors::style("[AGENT]")
-                .magenta()
-                .bold()
-                .on_black(),
+            crate::utils::colors::style("[AGENT]").magenta().bold().on_black(),
             self.agent_type,
             task.title
         ));
 
         let run_started_at = Instant::now();
         let is_simple_task = Self::is_simple_task(task, contexts);
-        let prompt_bundle = self
-            .build_validated_runtime_prompt_bundle(is_simple_task)
-            .await?;
+        let prompt_bundle = self.build_validated_runtime_prompt_bundle(is_simple_task).await?;
 
         let review_like = super::continuation::is_review_like_task(task);
-        let full_auto_active = self
-            .tool_registry
-            .current_full_auto_allowlist()
-            .await
-            .is_some();
+        let full_auto_active = self.tool_registry.current_full_auto_allowlist().await.is_some();
 
         let mut conversation =
             crate::core::agent::conversation::conversation_from_messages(&self.bootstrap_messages);
-        conversation.extend(crate::core::agent::conversation::build_conversation(
-            task, contexts,
-        ));
+        conversation.extend(crate::core::agent::conversation::build_conversation(task, contexts));
 
         let conversation_messages =
             crate::core::agent::conversation::build_messages_from_conversation(&conversation);
@@ -141,10 +129,7 @@ impl AgentRunner {
                 error = %err,
                 "Tool registry initialization failed at task start"
             );
-            runtime
-                .state
-                .warnings
-                .push(format!("Tool registry init failed: {err}"));
+            runtime.state.warnings.push(format!("Tool registry init failed: {err}"));
         }
 
         let orchestration_enabled =

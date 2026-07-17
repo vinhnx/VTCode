@@ -114,34 +114,13 @@ mod tests {
 
     #[test]
     fn standard_ansi_colors() {
-        assert_eq!(
-            anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Black)),
-            Color::Black
-        );
-        assert_eq!(
-            anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Red)),
-            Color::Red
-        );
-        assert_eq!(
-            anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Green)),
-            Color::Green
-        );
-        assert_eq!(
-            anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Yellow)),
-            Color::Yellow
-        );
-        assert_eq!(
-            anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Blue)),
-            Color::Blue
-        );
-        assert_eq!(
-            anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Cyan)),
-            Color::Cyan
-        );
-        assert_eq!(
-            anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::White)),
-            Color::White
-        );
+        assert_eq!(anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Black)), Color::Black);
+        assert_eq!(anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Red)), Color::Red);
+        assert_eq!(anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Green)), Color::Green);
+        assert_eq!(anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Yellow)), Color::Yellow);
+        assert_eq!(anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Blue)), Color::Blue);
+        assert_eq!(anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::Cyan)), Color::Cyan);
+        assert_eq!(anstyle_to_ratatui_color(AnstyleColor::Ansi(AnsiColor::White)), Color::White);
     }
 
     #[test]

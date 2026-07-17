@@ -257,9 +257,8 @@ impl AgentRunner {
         // Re-plan from the current state using evaluator feedback.
         // Best-effort: if re-planning fails (e.g. mock provider in tests),
         // fall back to the original retry prompt without updated artifacts.
-        let revised_artifacts = self
-            .replan_from_failure(task, &evaluation, *revision_rounds_used)
-            .await;
+        let revised_artifacts =
+            self.replan_from_failure(task, &evaluation, *revision_rounds_used).await;
 
         if let Some(ref artifacts) = revised_artifacts {
             let prompt = format!(
@@ -348,10 +347,8 @@ impl AgentRunner {
         let mut md = String::from("# Feature List\n\n");
         for item in tracker_items {
             if let Some(desc) = item.get("description").and_then(|v| v.as_str()) {
-                let outcome = item
-                    .get("outcome")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("(unspecified)");
+                let outcome =
+                    item.get("outcome").and_then(|v| v.as_str()).unwrap_or("(unspecified)");
                 md.push_str(&format!("- [ ] {desc} — acceptance: {outcome}\n"));
             }
         }
@@ -506,10 +503,7 @@ where
         .or_else(|| trimmed.strip_prefix("```"))
         .map(str::trim)
         .unwrap_or(trimmed);
-    let trimmed = trimmed
-        .strip_suffix("```")
-        .map(str::trim)
-        .unwrap_or(trimmed);
+    let trimmed = trimmed.strip_suffix("```").map(str::trim).unwrap_or(trimmed);
     serde_json::from_str::<T>(trimmed).context("decode json payload")
 }
 
@@ -577,10 +571,8 @@ fn format_verification_results(results: &[VerificationResult]) -> String {
         .iter()
         .map(|result| {
             let status = if result.success { "PASS" } else { "FAIL" };
-            let exit_code = result
-                .exit_code
-                .map(|code| code.to_string())
-                .unwrap_or_else(|| "?".to_string());
+            let exit_code =
+                result.exit_code.map(|code| code.to_string()).unwrap_or_else(|| "?".to_string());
             if result.output.trim().is_empty() {
                 format!("- [{status}] {} (exit {exit_code})", result.command)
             } else {

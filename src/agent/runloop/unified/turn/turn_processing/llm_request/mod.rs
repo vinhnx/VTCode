@@ -117,11 +117,10 @@ pub(crate) async fn execute_llm_request(
         &turn_snapshot.provider_name,
     );
 
-    ctx.renderer
-        .set_reasoning_visible(resolve_reasoning_visibility(
-            ctx.vt_cfg,
-            turn_snapshot.capabilities.reasoning,
-        ));
+    ctx.renderer.set_reasoning_visible(resolve_reasoning_visibility(
+        ctx.vt_cfg,
+        turn_snapshot.capabilities.reasoning,
+    ));
     let mut use_streaming = turn_snapshot.capabilities.streaming;
     let initial_request = build_turn_request(
         ctx,
@@ -247,9 +246,7 @@ pub(crate) async fn execute_llm_request(
         // is enabled, but serialized tool results don't include it.
         if has_post_tool_context
             && turn_snapshot.provider_name == "DeepSeek"
-            && request
-                .reasoning_effort
-                .is_some_and(|e| e != ReasoningEffortLevel::None)
+            && request.reasoning_effort.is_some_and(|e| e != ReasoningEffortLevel::None)
         {
             request.reasoning_effort = Some(ReasoningEffortLevel::None);
         }
@@ -423,8 +420,7 @@ pub(crate) async fn execute_llm_request(
                 );
             }
             Err(_) => {
-                ctx.telemetry
-                    .record_llm_request(&active_model, attempt_elapsed, None);
+                ctx.telemetry.record_llm_request(&active_model, attempt_elapsed, None);
             }
         }
 

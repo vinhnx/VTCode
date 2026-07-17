@@ -91,7 +91,7 @@ Cargo workspace with ~30 crates. Rust stable, MSRV 1.88, edition 2024.
 - **`docs/`**: Documentation files
 - **`tests/`**: Integration and end-to-end tests
 - **`vtcode.toml`**: Configuration file (never hardcode values, always read from config)
-- **`vtcode-core/src/config/constants.rs`**: Constants definition
+- **`crates/codegen/vtcode-core/src/config/constants.rs`**: Constants definition
 - **`docs/models.json`**: Model IDs for providers
 
 ## Code Style
@@ -103,7 +103,7 @@ Cargo workspace with ~30 crates. Rust stable, MSRV 1.88, edition 2024.
 - **Error Handling**: Use `anyhow::Result<T>` with `.with_context()` for all fallible functions
 - **Early Returns**: Prefer early returns over nested if statements
 - **Variable Names**: Use descriptive variable names
-- **No hardcoded values**: Always read from `vtcode.toml` or `vtcode-core/src/config/constants.rs`
+- **No hardcoded values**: Always read from `vtcode.toml` or `crates/codegen/vtcode-core/src/config/constants.rs`
 - **No emojis in code**: Maintain professional code style
 
 ### Documentation
@@ -230,7 +230,7 @@ pub async fn example_function(path: &str) -> Result<()> {
 
 - Never hardcode values - always read from `vtcode.toml`
 - Validate configuration values at runtime
-- Use constants defined in `vtcode-core/src/config/constants.rs`
+- Use constants defined in `crates/codegen/vtcode-core/src/config/constants.rs`
 
 ### Security Practices
 

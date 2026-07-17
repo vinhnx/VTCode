@@ -48,10 +48,7 @@ impl PtyPreviewRenderer {
 }
 
 fn normalize_snapshot_text(text: &str) -> String {
-    let mut lines = text
-        .lines()
-        .map(|line| line.trim_end().to_string())
-        .collect::<Vec<_>>();
+    let mut lines = text.lines().map(|line| line.trim_end().to_string()).collect::<Vec<_>>();
 
     while lines.last().is_some_and(|line| line.trim().is_empty()) {
         let _ = lines.pop();

@@ -21,11 +21,7 @@ pub fn parse_diff_marker_path(line: &str) -> Option<String> {
     if path == "/dev/null" {
         return None;
     }
-    Some(
-        path.trim_start_matches("a/")
-            .trim_start_matches("b/")
-            .to_string(),
-    )
+    Some(path.trim_start_matches("a/").trim_start_matches("b/").to_string())
 }
 
 /// Convert file path to language hint based on extension.
@@ -183,12 +179,7 @@ pub fn parse_hunk_starts(line: &str) -> Option<(usize, usize)> {
     }
 
     let old_start = old_part.split(',').next()?.parse::<usize>().ok()?;
-    let new_start = new_part
-        .trim_start_matches('+')
-        .split(',')
-        .next()?
-        .parse::<usize>()
-        .ok()?;
+    let new_start = new_part.trim_start_matches('+').split(',').next()?.parse::<usize>().ok()?;
     Some((old_start, new_start))
 }
 
@@ -215,19 +206,13 @@ mod tests {
 
     #[test]
     fn parses_marker_path() {
-        assert_eq!(
-            parse_diff_marker_path("+++ b/src/main.rs").as_deref(),
-            Some("src/main.rs")
-        );
+        assert_eq!(parse_diff_marker_path("+++ b/src/main.rs").as_deref(), Some("src/main.rs"));
         assert_eq!(parse_diff_marker_path("--- /dev/null"), None);
     }
 
     #[test]
     fn infers_language_hint_from_extension() {
-        assert_eq!(
-            language_hint_from_path("src/main.RS").as_deref(),
-            Some("rs")
-        );
+        assert_eq!(language_hint_from_path("src/main.RS").as_deref(), Some("rs"));
         assert_eq!(language_hint_from_path("Makefile"), None);
     }
 

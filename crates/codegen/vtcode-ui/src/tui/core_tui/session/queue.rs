@@ -81,11 +81,7 @@ impl Session {
 
         if needs_rebuild {
             let lines = self.reflow_queue_lines(width);
-            self.queue_overlay_cache = Some(QueueOverlay {
-                width,
-                version,
-                lines,
-            });
+            self.queue_overlay_cache = Some(QueueOverlay { width, version, lines });
         }
 
         self.queue_overlay_cache.as_ref().and_then(|cache| {
@@ -112,10 +108,7 @@ impl Session {
             let slice_start = queue_lines.len().saturating_sub(queue_visible);
             let overlay = &queue_lines[slice_start..];
             for (target, source) in visible_lines[start..].iter_mut().zip(overlay.iter()) {
-                *target = TranscriptLine {
-                    line: source.clone(),
-                    explicit_links: Vec::new(),
-                };
+                *target = TranscriptLine { line: source.clone(), explicit_links: Vec::new() };
             }
         }
     }

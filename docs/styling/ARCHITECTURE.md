@@ -38,7 +38,7 @@ Visual diagrams and architectural details for the anstyle integration.
                    
                               ↓
          
-            vtcode-core/src/ui/tui/style.rs      
+            crates/codegen/vtcode-core/src/ui/tui/style.rs      
             convert_style() function             
          
                             ↓
@@ -347,7 +347,7 @@ User Input (config string)
 ## Testing Architecture
 
 ```
-Unit Tests (vtcode-core/src/ui/tui/)
+Unit Tests (crates/codegen/vtcode-core/src/ui/tui/)
  test_convert_style
     Bold color conversion
     Background color handling

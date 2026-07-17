@@ -1,8 +1,8 @@
 [package]
 name = "vtcode-mcp"
 version.workspace = true
-edition.workspace = true
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Model Context Protocol (MCP) client, connection pooling, and tool discovery for VT Code"
 license.workspace = true
@@ -42,10 +42,10 @@ tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thr
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.11" }
-vtcode-config = { path = "../vtcode-config", version = "0.135.11" }
-vtcode-llm = { path = "../vtcode-llm", version = "0.135.11" }
-vtcode-utility-tool-specs = { path = "../vtcode-utility-tool-specs", version = "0.135.11", features = ["mcp"] }
+vtcode-commons = { workspace = true }
+vtcode-config = { workspace = true }
+vtcode-llm = { workspace = true }
+vtcode-utility-tool-specs = { workspace = true, features = ["mcp"] }
 schemars = { workspace = true, optional = true }
 strsim = { workspace = true }
 

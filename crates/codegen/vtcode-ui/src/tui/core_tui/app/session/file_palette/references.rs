@@ -30,10 +30,7 @@ pub fn extract_file_reference(input: &str, cursor: usize) -> Option<(usize, usiz
     // @ must be at a whitespace boundary (token_start) or at start of input
     // This prevents mid-word @ like foo@bar from triggering
     let prefix_starts_token = token_start == 0
-        || input[..token_start]
-            .chars()
-            .next_back()
-            .is_none_or(char::is_whitespace);
+        || input[..token_start].chars().next_back().is_none_or(char::is_whitespace);
 
     if !prefix_starts_token {
         return None;

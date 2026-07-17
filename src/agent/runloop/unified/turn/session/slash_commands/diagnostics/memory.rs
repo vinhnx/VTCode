@@ -54,11 +54,7 @@ pub(super) async fn run_memory_modal(
     config_mode: bool,
 ) -> Result<SlashCommandControl> {
     loop {
-        let agent_config = ctx
-            .vt_cfg
-            .as_ref()
-            .map(|cfg| cfg.agent.clone())
-            .unwrap_or_default();
+        let agent_config = ctx.vt_cfg.as_ref().map(|cfg| cfg.agent.clone()).unwrap_or_default();
         let active_dir = ctx
             .context_manager
             .active_instruction_directory_snapshot()
@@ -99,11 +95,7 @@ pub(super) async fn render_memory_status_lines(
     ctx: &mut SlashCommandContext<'_>,
     include_config_hint: bool,
 ) -> Result<()> {
-    let agent_config = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent.clone())
-        .unwrap_or_default();
+    let agent_config = ctx.vt_cfg.as_ref().map(|cfg| cfg.agent.clone()).unwrap_or_default();
     let active_dir = ctx
         .context_manager
         .active_instruction_directory_snapshot()
@@ -118,8 +110,7 @@ pub(super) async fn render_memory_status_lines(
     let (agents, matched_rules) = instruction_memory_map(appendix.as_ref());
     let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
 
-    ctx.renderer
-        .line(MessageStyle::Info, "Instruction Memory")?;
+    ctx.renderer.line(MessageStyle::Info, "Instruction Memory")?;
     ctx.renderer.line(
         MessageStyle::Info,
         &format!("Loaded AGENTS.md sources: {}", format_path_list(&agents)),
@@ -137,8 +128,7 @@ pub(super) async fn render_memory_status_lines(
         ),
     )?;
     if let Some(warning) = lightweight_route.warning {
-        ctx.renderer
-            .line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
+        ctx.renderer.line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
     }
     if include_config_hint {
         ctx.renderer.line(
@@ -151,11 +141,7 @@ pub(super) async fn render_memory_status_lines(
 }
 
 pub(super) async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
-    let agent_config = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent.clone())
-        .unwrap_or_default();
+    let agent_config = ctx.vt_cfg.as_ref().map(|cfg| cfg.agent.clone()).unwrap_or_default();
     let cfg = agent_config.persistent_memory.clone();
     let ws = ctx.config.workspace.clone();
     let memory_status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
@@ -183,18 +169,14 @@ pub(super) async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>
     )?;
     ctx.renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Memory triage model: {}",
-            lightweight_route.configured_label
-        ),
+        &format!("Memory triage model: {}", lightweight_route.configured_label),
     )?;
     ctx.renderer.line(
         MessageStyle::Info,
         &format!("Effective route: {}", lightweight_route.effective_label),
     )?;
     if let Some(warning) = lightweight_route.warning {
-        ctx.renderer
-            .line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
+        ctx.renderer.line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
     }
 
     Ok(())
@@ -220,8 +202,7 @@ async fn handle_memory_action(
             Ok(())
         })
         .await?;
-        ctx.renderer
-            .line(MessageStyle::Info, "Updated the memory triage model.")?;
+        ctx.renderer.line(MessageStyle::Info, "Updated the memory triage model.")?;
         return Ok(None);
     }
 
@@ -237,8 +218,7 @@ async fn handle_memory_action(
                 Ok(())
             })
             .await?;
-            ctx.renderer
-                .line(MessageStyle::Info, "Toggled persistent memory.")?;
+            ctx.renderer.line(MessageStyle::Info, "Toggled persistent memory.")?;
         }
         "toggle_auto_write" => {
             let auto_write = ctx
@@ -251,8 +231,7 @@ async fn handle_memory_action(
                 Ok(())
             })
             .await?;
-            ctx.renderer
-                .line(MessageStyle::Info, "Toggled auto-write.")?;
+            ctx.renderer.line(MessageStyle::Info, "Toggled auto-write.")?;
         }
         "toggle_small_model" => {
             let enabled = ctx
@@ -265,8 +244,7 @@ async fn handle_memory_action(
                 Ok(())
             })
             .await?;
-            ctx.renderer
-                .line(MessageStyle::Info, "Toggled lightweight memory routing.")?;
+            ctx.renderer.line(MessageStyle::Info, "Toggled lightweight memory routing.")?;
         }
         "set_lines" => {
             let current = ctx
@@ -291,8 +269,7 @@ async fn handle_memory_action(
                 set_workspace_memory_line_limit(root, parsed)
             })
             .await?;
-            ctx.renderer
-                .line(MessageStyle::Info, "Updated startup line limit.")?;
+            ctx.renderer.line(MessageStyle::Info, "Updated startup line limit.")?;
         }
         "set_bytes" => {
             let current = ctx
@@ -317,8 +294,7 @@ async fn handle_memory_action(
                 set_workspace_memory_byte_limit(root, parsed)
             })
             .await?;
-            ctx.renderer
-                .line(MessageStyle::Info, "Updated startup byte limit.")?;
+            ctx.renderer.line(MessageStyle::Info, "Updated startup byte limit.")?;
         }
         "set_import_depth" => {
             let current = ctx
@@ -343,8 +319,7 @@ async fn handle_memory_action(
                 set_workspace_instruction_import_depth(root, parsed)
             })
             .await?;
-            ctx.renderer
-                .line(MessageStyle::Info, "Updated instruction import depth.")?;
+            ctx.renderer.line(MessageStyle::Info, "Updated instruction import depth.")?;
         }
         "set_directory_override" => {
             let placeholder = memory_status.directory.display().to_string();
@@ -363,17 +338,13 @@ async fn handle_memory_action(
                 return Ok(None);
             };
             persist_user_directory_override(ctx, Some(value.trim().to_string())).await?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Updated the user memory directory override.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Updated the user memory directory override.")?;
         }
         "clear_directory_override" => {
             persist_user_directory_override(ctx, None).await?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Cleared the user memory directory override.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Cleared the user memory directory override.")?;
         }
         "add_instruction_exclude" => {
             let Some(value) = prompt_required_text(
@@ -402,8 +373,7 @@ async fn handle_memory_action(
                 Ok(())
             })
             .await?;
-            ctx.renderer
-                .line(MessageStyle::Info, "Added instruction exclude.")?;
+            ctx.renderer.line(MessageStyle::Info, "Added instruction exclude.")?;
         }
         "remove_instruction_exclude" => {
             let Some(value) = prompt_required_text(
@@ -453,15 +423,11 @@ async fn handle_memory_action(
             drop(spinner);
             ctx.renderer.line(
                 MessageStyle::Info,
-                &format!(
-                    "Scaffolded memory files under {}.",
-                    status.directory.display()
-                ),
+                &format!("Scaffolded memory files under {}.", status.directory.display()),
             )?;
         }
         "cleanup" => {
-            ctx.renderer
-                .line(MessageStyle::Info, "Cleaning persistent memory...")?;
+            ctx.renderer.line(MessageStyle::Info, "Cleaning persistent memory...")?;
             let spinner = start_loading_status(
                 ctx.handle,
                 ctx.input_status_state,
@@ -482,10 +448,8 @@ async fn handle_memory_action(
             )?;
         }
         "rebuild" => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Rebuilding persistent memory summary...",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "Rebuilding persistent memory summary...")?;
             let spinner = start_loading_status(
                 ctx.handle,
                 ctx.input_status_state,
@@ -495,8 +459,7 @@ async fn handle_memory_action(
                 .await?
                 .context("Persistent memory is disabled.")?;
             drop(spinner);
-            ctx.renderer
-                .line(MessageStyle::Info, "Rebuilt memory summary and registry.")?;
+            ctx.renderer.line(MessageStyle::Info, "Rebuilt memory summary and registry.")?;
         }
         _ => bail!("Unknown memory action: {action_key}"),
     }

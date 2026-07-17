@@ -19,9 +19,7 @@ impl<'a> TurnProcessingContext<'a> {
         }
         let has_visible_text = !text.trim().is_empty();
         if !reasoning.is_empty()
-            || reasoning_details
-                .as_ref()
-                .is_some_and(|details| !details.is_empty())
+            || reasoning_details.as_ref().is_some_and(|details| !details.is_empty())
         {
             tracing::info!(
                 target: "vtcode.turn.metrics",
@@ -48,9 +46,8 @@ impl<'a> TurnProcessingContext<'a> {
             if !text.trim().is_empty() {
                 self.renderer.line(MessageStyle::Response, &text)?;
             }
-            let mut rendered_reasoning = detail_reasoning
-                .is_some()
-                .then(|| Vec::with_capacity(reasoning.len()));
+            let mut rendered_reasoning =
+                detail_reasoning.is_some().then(|| Vec::with_capacity(reasoning.len()));
 
             for segment in &reasoning {
                 if let Some(stage) = &segment.stage {
@@ -82,14 +79,12 @@ impl<'a> TurnProcessingContext<'a> {
                 let duplicates_content =
                     has_visible_text && reasoning_duplicates_content(&cleaned_detail, &text);
                 let duplicates_rendered =
-                    rendered_reasoning
-                        .as_ref()
-                        .is_some_and(|rendered_reasoning| {
-                            rendered_reasoning.iter().any(|existing: &String| {
-                                reasoning_duplicates_content(existing, &cleaned_detail)
-                                    || reasoning_duplicates_content(&cleaned_detail, existing)
-                            })
-                        });
+                    rendered_reasoning.as_ref().is_some_and(|rendered_reasoning| {
+                        rendered_reasoning.iter().any(|existing: &String| {
+                            reasoning_duplicates_content(existing, &cleaned_detail)
+                                || reasoning_duplicates_content(&cleaned_detail, existing)
+                        })
+                    });
                 if !cleaned_detail.is_empty() && !duplicates_content && !duplicates_rendered {
                     render_compact_reasoning_block(self.renderer, detail_text)?;
                 }
@@ -98,11 +93,9 @@ impl<'a> TurnProcessingContext<'a> {
         }
 
         let combined_reasoning = build_combined_reasoning(&reasoning, detail_reasoning.as_deref());
-        let include_reasoning = combined_reasoning
-            .as_deref()
-            .is_some_and(|combined_reasoning| {
-                !reasoning_duplicates_content(combined_reasoning, &text)
-            });
+        let include_reasoning = combined_reasoning.as_deref().is_some_and(|combined_reasoning| {
+            !reasoning_duplicates_content(combined_reasoning, &text)
+        });
         let msg = uni::Message::assistant(text).with_phase(phase);
         let mut msg_with_reasoning = if include_reasoning {
             msg.with_reasoning(combined_reasoning)
@@ -258,9 +251,7 @@ impl<'a> TurnProcessingContext<'a> {
         }
 
         if let Some(hooks) = self.lifecycle_hooks {
-            let outcome = hooks
-                .run_stop(&final_text, self.harness_state.stop_hook_active)
-                .await?;
+            let outcome = hooks.run_stop(&final_text, self.harness_state.stop_hook_active).await?;
             crate::agent::runloop::unified::turn::utils::render_hook_messages(
                 self.renderer,
                 &outcome.messages,
@@ -296,13 +287,9 @@ impl<'a> TurnProcessingContext<'a> {
 
         let start_item = ThreadItem {
             id: item_id.clone(),
-            details: ThreadItemDetails::Plan(PlanItem {
-                text: String::new(),
-            }),
+            details: ThreadItemDetails::Plan(PlanItem { text: String::new() }),
         };
-        let _ = emitter.emit(ThreadEvent::ItemStarted(ItemStartedEvent {
-            item: start_item,
-        }));
+        let _ = emitter.emit(ThreadEvent::ItemStarted(ItemStartedEvent { item: start_item }));
 
         let _ = emitter.emit(ThreadEvent::PlanDelta(PlanDeltaEvent {
             thread_id,
@@ -313,13 +300,10 @@ impl<'a> TurnProcessingContext<'a> {
 
         let completed_item = ThreadItem {
             id: item_id,
-            details: ThreadItemDetails::Plan(PlanItem {
-                text: plan_text.to_string(),
-            }),
+            details: ThreadItemDetails::Plan(PlanItem { text: plan_text.to_string() }),
         };
-        let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-            item: completed_item,
-        }));
+        let _ =
+            emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed_item }));
     }
 }
 

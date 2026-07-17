@@ -110,10 +110,7 @@ mod headless_pty {
 
     impl PtyManager {
         pub fn new(workspace_root: PathBuf, config: PtyConfig) -> Self {
-            Self {
-                workspace_root,
-                _config: config,
-            }
+            Self { workspace_root, _config: config }
         }
 
         pub async fn resolve_working_dir(&self, working_dir: Option<&str>) -> Result<PathBuf> {
@@ -131,10 +128,7 @@ mod headless_pty {
                     )
                 })?;
             let metadata = tokio::fs::metadata(&normalized).await.with_context(|| {
-                format!(
-                    "Working directory '{}' does not exist",
-                    normalized.display()
-                )
+                format!("Working directory '{}' does not exist", normalized.display())
             })?;
             if !metadata.is_dir() {
                 return Err(anyhow!(

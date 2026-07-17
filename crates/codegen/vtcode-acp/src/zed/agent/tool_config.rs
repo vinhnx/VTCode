@@ -15,13 +15,9 @@ use super::super::types::{RunTerminalMode, ToolRuntime};
 
 impl ZedAgent {
     pub(super) fn local_tools_available(&self, primary_agent: &str) -> bool {
-        self.acp_tool_registry
-            .definitions_for(&[], true)
-            .iter()
-            .any(|definition| {
-                self.primary_agents
-                    .allows_local_tool(primary_agent, definition.function_name())
-            })
+        self.acp_tool_registry.definitions_for(&[], true).iter().any(|definition| {
+            self.primary_agents.allows_local_tool(primary_agent, definition.function_name())
+        })
     }
 
     pub(super) fn tool_definitions(
@@ -76,11 +72,7 @@ impl ZedAgent {
         self.client_capabilities
             .lock()
             .ok()
-            .and_then(|guard| {
-                guard
-                    .as_ref()
-                    .map(|capabilities| capabilities.fs.read_text_file)
-            })
+            .and_then(|guard| guard.as_ref().map(|capabilities| capabilities.fs.read_text_file))
             .unwrap_or(false)
     }
 
@@ -235,10 +227,7 @@ impl ZedAgent {
         })?;
 
         if !normalized.is_absolute() {
-            return Err(Self::argument_message(
-                TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE,
-                argument,
-            ));
+            return Err(Self::argument_message(TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE, argument));
         }
 
         Ok(normalized)
@@ -254,24 +243,15 @@ impl ZedAgent {
         }
 
         let Some(value) = raw_value.as_u64() else {
-            return Err(Self::argument_message(
-                TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE,
-                key,
-            ));
+            return Err(Self::argument_message(TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE, key));
         };
 
         if value == 0 {
-            return Err(Self::argument_message(
-                TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE,
-                key,
-            ));
+            return Err(Self::argument_message(TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE, key));
         }
 
         if value > u32::MAX as u64 {
-            return Err(Self::argument_message(
-                TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE,
-                key,
-            ));
+            return Err(Self::argument_message(TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE, key));
         }
 
         Ok(Some(value as u32))

@@ -125,18 +125,10 @@ mod tests {
         let verification =
             generate_suggested_options(&verification_question).expect("verification options");
 
-        let outcome_labels = outcome
-            .iter()
-            .map(|opt| opt.label.clone())
-            .collect::<Vec<_>>();
-        let step_labels = steps
-            .iter()
-            .map(|opt| opt.label.clone())
-            .collect::<Vec<_>>();
-        let verification_labels = verification
-            .iter()
-            .map(|opt| opt.label.clone())
-            .collect::<Vec<_>>();
+        let outcome_labels = outcome.iter().map(|opt| opt.label.clone()).collect::<Vec<_>>();
+        let step_labels = steps.iter().map(|opt| opt.label.clone()).collect::<Vec<_>>();
+        let verification_labels =
+            verification.iter().map(|opt| opt.label.clone()).collect::<Vec<_>>();
 
         assert_ne!(outcome_labels, step_labels);
         assert_ne!(step_labels, verification_labels);
@@ -246,9 +238,7 @@ mod tests {
         }];
 
         let resolved = resolve_question_options(&questions);
-        let resolved_options = resolved[0]
-            .as_ref()
-            .expect("provided options should be preserved");
+        let resolved_options = resolved[0].as_ref().expect("provided options should be preserved");
 
         assert_eq!(resolved_options.len(), provided_options.len());
         for (resolved_option, provided_option) in resolved_options.iter().zip(provided_options) {
@@ -270,21 +260,10 @@ mod tests {
         };
 
         let options = generate_suggested_options(&question).expect("verification options");
-        let labels = options
-            .iter()
-            .map(|option| option.label.to_lowercase())
-            .collect::<Vec<_>>();
+        let labels = options.iter().map(|option| option.label.to_lowercase()).collect::<Vec<_>>();
 
-        assert!(
-            labels
-                .iter()
-                .any(|label| label.contains("command-based proof"))
-        );
-        assert!(
-            !labels
-                .iter()
-                .any(|label| label.contains("dependency-first slices"))
-        );
+        assert!(labels.iter().any(|label| label.contains("command-based proof")));
+        assert!(!labels.iter().any(|label| label.contains("dependency-first slices")));
     }
 
     #[test]
@@ -311,14 +290,9 @@ mod tests {
         assert_eq!(items.len(), 3);
         assert!(items[2].title.contains("Custom note"));
 
-        let selection = items[2]
-            .selection
-            .clone()
-            .expect("expected selection for other choice");
+        let selection = items[2].selection.clone().expect("expected selection for other choice");
         match selection {
-            InlineListSelection::RequestUserInputAnswer {
-                selected, other, ..
-            } => {
+            InlineListSelection::RequestUserInputAnswer { selected, other, .. } => {
                 assert!(selected.is_empty());
                 assert_eq!(other, Some(String::new()));
             }
@@ -365,10 +339,7 @@ mod tests {
         assert_eq!(normalized.current_step, 0);
         assert_eq!(normalized.title_override, None);
         assert_eq!(normalized.freeform_label.as_deref(), Some("Custom note"));
-        assert_eq!(
-            normalized.freeform_placeholder.as_deref(),
-            Some("Type your response...")
-        );
+        assert_eq!(normalized.freeform_placeholder.as_deref(), Some("Type your response..."));
     }
 
     #[test]
@@ -412,9 +383,7 @@ mod tests {
         assert_eq!(normalized["questions"][0]["header"], "Scope");
         assert_eq!(normalized["questions"][0]["question"], "Choose one");
         assert_eq!(
-            normalized["questions"][0]["options"]
-                .as_array()
-                .map(|options| options.len()),
+            normalized["questions"][0]["options"].as_array().map(|options| options.len()),
             Some(2)
         );
     }
@@ -431,14 +400,9 @@ mod tests {
             .expect("fallback should normalize shorthand");
         assert_eq!(normalized["questions"][0]["id"], "question_1");
         assert_eq!(normalized["questions"][0]["header"], "Scope");
+        assert_eq!(normalized["questions"][0]["question"], "Which direction should we take?");
         assert_eq!(
-            normalized["questions"][0]["question"],
-            "Which direction should we take?"
-        );
-        assert_eq!(
-            normalized["questions"][0]["options"]
-                .as_array()
-                .map(|options| options.len()),
+            normalized["questions"][0]["options"].as_array().map(|options| options.len()),
             Some(2)
         );
     }
@@ -497,10 +461,7 @@ mod tests {
         ];
 
         let sanitized = sanitize_provided_options(&options);
-        let labels = sanitized
-            .iter()
-            .map(|option| option.label.as_str())
-            .collect::<Vec<_>>();
+        let labels = sanitized.iter().map(|option| option.label.as_str()).collect::<Vec<_>>();
         assert_eq!(labels, vec!["A (Recommended)", "B"]);
     }
 }

@@ -27,18 +27,10 @@ pub async fn handle_session_store_command(command: SessionStoreCommand) -> Resul
                 println!("Removed legacy history/ and logs/ directories.");
             }
         }
-        SessionStoreCommand::Gc {
-            max_sessions,
-            max_age_days,
-        } => {
-            let removed = apply_retention(
-                &workspace,
-                RetentionPolicy {
-                    max_sessions,
-                    max_age_days,
-                },
-            )
-            .context("failed to apply retention")?;
+        SessionStoreCommand::Gc { max_sessions, max_age_days } => {
+            let removed =
+                apply_retention(&workspace, RetentionPolicy { max_sessions, max_age_days })
+                    .context("failed to apply retention")?;
             println!("Garbage-collected {removed} session(s).");
         }
         SessionStoreCommand::List { limit } => {

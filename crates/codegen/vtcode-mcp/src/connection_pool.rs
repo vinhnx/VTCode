@@ -125,21 +125,14 @@ impl McpConnectionPool {
             )
             .await
         {
-            return Err(McpPoolError::InitializationError(
-                config.name.clone(),
-                err.to_string(),
-            ));
+            return Err(McpPoolError::InitializationError(config.name.clone(), err.to_string()));
         }
 
         // Refresh tools
-        if let Err(err) = provider
-            .cached_tools_or_refresh(&allowlist_snapshot, tool_timeout_opt)
-            .await
+        if let Err(err) =
+            provider.cached_tools_or_refresh(&allowlist_snapshot, tool_timeout_opt).await
         {
-            warn!(
-                "Failed to fetch tools for provider '{}': {}",
-                config.name, err
-            );
+            warn!("Failed to fetch tools for provider '{}': {}", config.name, err);
         }
 
         info!("Successfully initialized MCP provider '{}'", config.name);
@@ -235,10 +228,7 @@ impl McpConnectionPool {
         for (name, provider) in providers {
             if !provider.is_healthy().await {
                 info!("Provider '{}' is unhealthy, attempting reconnect", name);
-                match provider
-                    .reconnect(startup_timeout, tool_timeout, allowlist)
-                    .await
-                {
+                match provider.reconnect(startup_timeout, tool_timeout, allowlist).await {
                     Ok(()) => {
                         info!("Successfully reconnected MCP provider '{}'", name);
                         reconnected.push(name);
@@ -338,12 +328,10 @@ impl PooledMcpManager {
         let args_ref = &arguments;
 
         // Execute the tool with correct signature
-        let result = provider
-            .call_tool(tool_name, args_ref, tool_timeout, allowlist)
-            .await
-            .map_err(|e| {
-                McpPoolError::ToolExecutionError(provider_name.to_string(), e.to_string())
-            })?;
+        let result =
+            provider.call_tool(tool_name, args_ref, tool_timeout, allowlist).await.map_err(
+                |e| McpPoolError::ToolExecutionError(provider_name.to_string(), e.to_string()),
+            )?;
 
         // Convert result to JSON value
         Ok(serde_json::to_value(&result).unwrap_or(serde_json::Value::Null))

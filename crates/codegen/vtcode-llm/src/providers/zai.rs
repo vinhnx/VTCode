@@ -66,11 +66,7 @@ impl OpenAiCompatSpec for ZaiSpec {
                 _ => Value::String("auto".to_string()),
             };
             payload.insert("tool_choice".to_string(), tool_choice_value);
-        } else if request
-            .tools
-            .as_ref()
-            .is_some_and(|tools| !tools.is_empty())
-        {
+        } else if request.tools.as_ref().is_some_and(|tools| !tools.is_empty()) {
             payload.insert("tool_choice".to_string(), Value::String("auto".to_string()));
         }
     }
@@ -82,18 +78,12 @@ impl OpenAiCompatSpec for ZaiSpec {
     ) -> Result<(), LLMError> {
         let has_preserved_reasoning = request.messages.iter().any(|message| {
             message.role == crate::provider::MessageRole::Assistant
-                && message
-                    .reasoning
-                    .as_ref()
-                    .is_some_and(|reasoning| !reasoning.is_empty())
+                && message.reasoning.as_ref().is_some_and(|reasoning| !reasoning.is_empty())
         });
 
         if let Some(effort) = request.reasoning_effort {
             if effort == vtcode_config::types::ReasoningEffortLevel::None {
-                payload.insert(
-                    "thinking".to_owned(),
-                    serde_json::json!({"type": "disabled"}),
-                );
+                payload.insert("thinking".to_owned(), serde_json::json!({"type": "disabled"}));
                 return Ok(());
             }
 
@@ -136,29 +126,20 @@ impl OpenAiCompatSpec for ZaiSpec {
             payload.insert("do_sample".to_owned(), Value::Bool(do_sample));
         }
 
-        if request.stream
-            && request
-                .tools
-                .as_ref()
-                .is_some_and(|tools| !tools.is_empty())
-        {
+        if request.stream && request.tools.as_ref().is_some_and(|tools| !tools.is_empty()) {
             payload.insert("tool_stream".to_string(), Value::Bool(true));
         }
 
         if request.output_format.is_some() {
-            payload.insert(
-                "response_format".to_owned(),
-                serde_json::json!({ "type": "json_object" }),
-            );
+            payload
+                .insert("response_format".to_owned(), serde_json::json!({ "type": "json_object" }));
         }
 
         Ok(())
     }
 
     fn apply_auth(core: &OpenAiCompatCore<Self>, builder: RequestBuilder) -> RequestBuilder {
-        builder
-            .bearer_auth(&core.api_key)
-            .header("Accept-Language", "en-US,en")
+        builder.bearer_auth(&core.api_key).header("Accept-Language", "en-US,en")
     }
 }
 
@@ -205,14 +186,8 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
-        let top_p = payload
-            .get("top_p")
-            .and_then(|v| v.as_f64())
-            .expect("top_p should be present");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
+        let top_p = payload.get("top_p").and_then(|v| v.as_f64()).expect("top_p should be present");
         assert!((top_p - 0.95).abs() < 1e-6);
     }
 
@@ -237,15 +212,9 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         assert_eq!(payload.get("stream").and_then(|v| v.as_bool()), Some(true));
-        assert_eq!(
-            payload.get("tool_stream").and_then(|v| v.as_bool()),
-            Some(true)
-        );
+        assert_eq!(payload.get("tool_stream").and_then(|v| v.as_bool()), Some(true));
     }
 
     #[test]
@@ -258,10 +227,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         assert_eq!(payload.get("stream").and_then(|v| v.as_bool()), Some(true));
         assert!(payload.get("tool_stream").is_none());
     }
@@ -283,14 +249,8 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
-        assert_eq!(
-            payload.get("do_sample").and_then(|v| v.as_bool()),
-            Some(false)
-        );
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
+        assert_eq!(payload.get("do_sample").and_then(|v| v.as_bool()), Some(false));
     }
 
     #[test]
@@ -303,15 +263,9 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         assert_eq!(
-            payload
-                .get("thinking")
-                .and_then(|v| v.get("type"))
-                .and_then(|v| v.as_str()),
+            payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
             Some("disabled")
         );
     }
@@ -326,21 +280,12 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         assert_eq!(
-            payload
-                .get("thinking")
-                .and_then(|v| v.get("type"))
-                .and_then(|v| v.as_str()),
+            payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
             Some("enabled")
         );
-        assert_eq!(
-            payload.get("thinking_effort").and_then(|v| v.as_str()),
-            Some("low")
-        );
+        assert_eq!(payload.get("thinking_effort").and_then(|v| v.as_str()), Some("low"));
     }
 
     #[test]
@@ -355,15 +300,9 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         assert_eq!(
-            payload
-                .get("thinking")
-                .and_then(|v| v.get("type"))
-                .and_then(|v| v.as_str()),
+            payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
             Some("enabled")
         );
         assert_eq!(
@@ -387,19 +326,13 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         let messages = payload
             .get("messages")
             .and_then(|v| v.as_array())
             .expect("messages should be serialized");
         let first = messages.first().expect("at least one message");
-        assert_eq!(
-            first.get("reasoning_content").and_then(|v| v.as_str()),
-            Some("chain")
-        );
+        assert_eq!(first.get("reasoning_content").and_then(|v| v.as_str()), Some("chain"));
     }
 
     #[test]
@@ -408,29 +341,21 @@ mod tests {
         let request = LLMRequest {
             model: models::zai::GLM_5_1.to_string(),
             messages: vec![Message::user("latest economic events".to_string())].into(),
-            tools: Some(Arc::new(vec![ToolDefinition::web_search(
-                serde_json::json!({
-                    "enable": true,
-                    "search_engine": "search-prime",
-                    "count": 5
-                }),
-            )])),
+            tools: Some(Arc::new(vec![ToolDefinition::web_search(serde_json::json!({
+                "enable": true,
+                "search_engine": "search-prime",
+                "count": 5
+            }))])),
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         let tools = payload
             .get("tools")
             .and_then(|v| v.as_array())
             .expect("tools should be serialized");
         let first = tools.first().expect("at least one tool");
-        assert_eq!(
-            first.get("type").and_then(|v| v.as_str()),
-            Some("web_search")
-        );
+        assert_eq!(first.get("type").and_then(|v| v.as_str()), Some("web_search"));
         assert_eq!(
             first
                 .get("web_search")
@@ -450,14 +375,8 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
-        assert_eq!(
-            payload.get("tool_choice").and_then(|v| v.as_str()),
-            Some("auto")
-        );
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
+        assert_eq!(payload.get("tool_choice").and_then(|v| v.as_str()), Some("auto"));
     }
 
     #[test]
@@ -470,14 +389,8 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
-        assert_eq!(
-            payload.get("tool_choice").and_then(|v| v.as_str()),
-            Some("auto")
-        );
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
+        assert_eq!(payload.get("tool_choice").and_then(|v| v.as_str()), Some("auto"));
     }
 
     #[test]
@@ -500,14 +413,8 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
-        assert_eq!(
-            payload.get("tool_choice").and_then(|v| v.as_str()),
-            Some("auto")
-        );
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
+        assert_eq!(payload.get("tool_choice").and_then(|v| v.as_str()), Some("auto"));
     }
 
     #[test]
@@ -525,10 +432,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         assert_eq!(
             payload
                 .get("response_format")
@@ -554,10 +458,7 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider
-            .core
-            .convert_request(&request)
-            .expect("payload should be valid");
+        let payload = provider.core.convert_request(&request).expect("payload should be valid");
         assert_eq!(
             payload
                 .get("response_format")
@@ -566,10 +467,7 @@ mod tests {
             Some("json_object")
         );
         assert_eq!(
-            payload
-                .get("thinking")
-                .and_then(|v| v.get("type"))
-                .and_then(|v| v.as_str()),
+            payload.get("thinking").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
             Some("disabled")
         );
     }

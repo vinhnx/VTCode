@@ -28,11 +28,7 @@ pub struct PermissionToolContext<'a> {
 impl<'a> PermissionToolContext<'a> {
     #[must_use]
     pub fn new(name: &'a str, kind: acp::ToolKind, action_label: &'a str) -> Self {
-        Self {
-            name,
-            kind,
-            action_label,
-        }
+        Self { name, kind, action_label }
     }
 }
 

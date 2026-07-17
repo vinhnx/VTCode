@@ -63,11 +63,7 @@ pub(crate) fn push_tree_prefix(styled: &mut String, palette: &ColorPalette) {
 }
 
 fn tool_recovery_hint(val: &Value) -> Option<&'static str> {
-    if !val
-        .get("loop_detected")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
+    if !val.get("loop_detected").and_then(Value::as_bool).unwrap_or(false) {
         return None;
     }
     if val.get("spool_path").and_then(Value::as_str).is_some() {
@@ -259,16 +255,12 @@ pub(crate) async fn render_tool_output(
         return Ok(());
     }
 
-    let output_mode = vt_config
-        .map(|cfg| cfg.ui.tool_output_mode)
-        .unwrap_or(ToolOutputMode::Compact);
+    let output_mode =
+        vt_config.map(|cfg| cfg.ui.tool_output_mode).unwrap_or(ToolOutputMode::Compact);
     let tail_limit = resolve_stdout_tail_limit(vt_config);
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
-    let disable_spool = val
-        .get("no_spool")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    let disable_spool = val.get("no_spool").and_then(Value::as_bool).unwrap_or(false);
 
     // PTY tools use "output" field instead of "stdout"
     let stream_tool_name = if is_git_diff_output { None } else { tool_name };
@@ -351,20 +343,13 @@ pub(crate) fn tracker_view_lines(val: &Value) -> Vec<String> {
     let title = view
         .and_then(|obj| obj.get("title"))
         .and_then(Value::as_str)
-        .or_else(|| {
-            val.get("checklist")
-                .and_then(|c| c.get("title"))
-                .and_then(Value::as_str)
-        })
+        .or_else(|| val.get("checklist").and_then(|c| c.get("title")).and_then(Value::as_str))
         .unwrap_or("Task tracker");
 
     let mut lines = Vec::new();
     lines.push(format!("• {title}"));
     lines.extend(summary_lines);
-    if let Some(view_lines) = view
-        .and_then(|obj| obj.get("lines"))
-        .and_then(Value::as_array)
-    {
+    if let Some(view_lines) = view.and_then(|obj| obj.get("lines")).and_then(Value::as_array) {
         for line in view_lines {
             if let Some(display) = line.get("display").and_then(Value::as_str) {
                 lines.push(display.to_string());
@@ -409,31 +394,17 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
     };
 
     let total = checklist.get("total").and_then(Value::as_u64).unwrap_or(0);
-    let completed = checklist
-        .get("completed")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let in_progress = checklist
-        .get("in_progress")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let pending = checklist
-        .get("pending")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let blocked = checklist
-        .get("blocked")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
+    let completed = checklist.get("completed").and_then(Value::as_u64).unwrap_or(0);
+    let in_progress = checklist.get("in_progress").and_then(Value::as_u64).unwrap_or(0);
+    let pending = checklist.get("pending").and_then(Value::as_u64).unwrap_or(0);
+    let blocked = checklist.get("blocked").and_then(Value::as_u64).unwrap_or(0);
 
     if total > 0 {
         let progress_percent = checklist
             .get("progress_percent")
             .and_then(Value::as_u64)
             .unwrap_or_else(|| (completed * 100) / total.max(1));
-        lines.push(format!(
-            "  Progress: {completed}/{total} complete ({progress_percent}%)"
-        ));
+        lines.push(format!("  Progress: {completed}/{total} complete ({progress_percent}%)"));
         lines.push(format!(
             "  Breakdown: {in_progress} in progress, {pending} pending, {blocked} blocked"
         ));
@@ -449,10 +420,8 @@ fn tracker_summary_lines(val: &Value) -> Vec<String> {
             })
             .map(|item| {
                 let index = item.get("index").and_then(Value::as_u64).unwrap_or(0);
-                let description = item
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .unwrap_or("Unnamed task");
+                let description =
+                    item.get("description").and_then(Value::as_str).unwrap_or("Unnamed task");
                 if index > 0 {
                     format!("#{index} {description}")
                 } else {
@@ -528,11 +497,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         .get("message")
         .and_then(|v| v.as_str())
         .filter(|msg| !msg.trim().is_empty())
-        .or_else(|| {
-            val.get("error")
-                .and_then(|v| v.as_str())
-                .filter(|msg| !msg.trim().is_empty())
-        })
+        .or_else(|| val.get("error").and_then(|v| v.as_str()).filter(|msg| !msg.trim().is_empty()))
     {
         renderer.line(MessageStyle::ToolError, &format!("Error: {error_msg}"))?;
     }
@@ -551,20 +516,14 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
             "FileSystemError" => "File system error",
             _ => error_type,
         };
-        renderer.line(
-            MessageStyle::ToolDetail,
-            &format!("Type: {type_description}"),
-        )?;
+        renderer.line(MessageStyle::ToolDetail, &format!("Type: {type_description}"))?;
     }
 
     if let Some(original) = val.get("original_error").and_then(|v| v.as_str())
         && !original.trim().is_empty()
     {
         let display_error = vtcode_commons::formatting::truncate_byte_budget(original, 197, "...");
-        renderer.line(
-            MessageStyle::ToolDetail,
-            &format!("Details: {display_error}"),
-        )?;
+        renderer.line(MessageStyle::ToolDetail, &format!("Details: {display_error}"))?;
     }
 
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
@@ -573,10 +532,8 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
 
     if let Some(line) = val.get("line").and_then(|v| v.as_u64()) {
         if let Some(col) = val.get("column").and_then(|v| v.as_u64()) {
-            renderer.line(
-                MessageStyle::ToolDetail,
-                &format!("Location: line {line}, column {col}"),
-            )?;
+            renderer
+                .line(MessageStyle::ToolDetail, &format!("Location: line {line}, column {col}"))?;
         } else {
             renderer.line(MessageStyle::ToolDetail, &format!("Location: line {line}"))?;
         }
@@ -611,22 +568,14 @@ pub(crate) fn collect_inline_output(
     while let Ok(command) = receiver.try_recv() {
         match command {
             vtcode_core::ui::InlineCommand::AppendLine { segments, .. } => {
-                lines.push(
-                    segments
-                        .into_iter()
-                        .map(|segment| segment.text)
-                        .collect::<String>(),
-                );
+                lines.push(segments.into_iter().map(|segment| segment.text).collect::<String>());
             }
-            vtcode_core::ui::InlineCommand::ReplaceLast {
-                lines: replacement_lines,
-                ..
-            } => {
-                lines.extend(replacement_lines.into_iter().map(|line| {
-                    line.into_iter()
-                        .map(|segment| segment.text)
-                        .collect::<String>()
-                }));
+            vtcode_core::ui::InlineCommand::ReplaceLast { lines: replacement_lines, .. } => {
+                lines.extend(
+                    replacement_lines.into_iter().map(|line| {
+                        line.into_iter().map(|segment| segment.text).collect::<String>()
+                    }),
+                );
             }
             _ => {}
         }
@@ -689,10 +638,7 @@ mod tests {
             "content": "content body"
         });
 
-        assert_eq!(
-            preferred_follow_up_rendered_body(&payload),
-            Some("stdout body")
-        );
+        assert_eq!(preferred_follow_up_rendered_body(&payload), Some("stdout body"));
     }
 
     #[test]
@@ -701,10 +647,7 @@ mod tests {
             "content": "content body"
         });
 
-        assert_eq!(
-            preferred_follow_up_rendered_body(&payload),
-            Some("content body")
-        );
+        assert_eq!(preferred_follow_up_rendered_body(&payload), Some("content body"));
     }
 
     #[tokio::test]
@@ -965,10 +908,7 @@ mod tests {
             .expect("spooled hint payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
-        assert_eq!(
-            inline_output.matches("Large output was spooled to").count(),
-            1
-        );
+        assert_eq!(inline_output.matches("Large output was spooled to").count(), 1);
         assert!(inline_output.contains("exec_command"));
         assert!(inline_output.contains("cat, sed, or rg"));
     }
@@ -978,10 +918,8 @@ mod tests {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
-        let content = (1..=100)
-            .map(|idx| format!("{idx}: line {idx}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content =
+            (1..=100).map(|idx| format!("{idx}: line {idx}")).collect::<Vec<_>>().join("\n");
         let payload = json!({
             "path": "src/main.rs",
             "content": content
@@ -1070,12 +1008,7 @@ mod tests {
             .expect("duplicate hint payload should render");
 
         let inline_output = collect_inline_output(&mut receiver);
-        assert_eq!(
-            inline_output
-                .matches("Loop detected; fallback is available.")
-                .count(),
-            1
-        );
+        assert_eq!(inline_output.matches("Loop detected; fallback is available.").count(), 1);
     }
 
     #[tokio::test]
@@ -1138,12 +1071,7 @@ mod tests {
         let inline_output = collect_inline_output(&mut receiver);
         assert!(inline_output.contains("Tool preflight validation failed: x"));
         assert!(inline_output.contains("Retry with fallback_tool_args."));
-        assert_eq!(
-            inline_output
-                .matches("Retry with fallback_tool_args.")
-                .count(),
-            1
-        );
+        assert_eq!(inline_output.matches("Retry with fallback_tool_args.").count(), 1);
         assert!(!inline_output.contains("\"error\""));
         assert!(!inline_output.contains("\"next_action\""));
     }
@@ -1198,11 +1126,7 @@ mod tests {
 
         let lines = tracker_summary_lines(&payload);
         assert!(lines.iter().any(|line| line == "  Tracker status: updated"));
-        assert!(
-            lines
-                .iter()
-                .any(|line| line == "  Progress: 1/4 complete (25%)")
-        );
+        assert!(lines.iter().any(|line| line == "  Progress: 1/4 complete (25%)"));
         assert!(
             lines
                 .iter()
@@ -1220,10 +1144,6 @@ mod tests {
         });
         let lines = tracker_summary_lines(&payload);
         assert!(lines.iter().any(|line| line == "  Tracker status: empty"));
-        assert!(
-            lines
-                .iter()
-                .any(|line| line == "  Update: No active checklist.")
-        );
+        assert!(lines.iter().any(|line| line == "  Update: No active checklist."));
     }
 }

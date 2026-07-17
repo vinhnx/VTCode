@@ -106,10 +106,7 @@ pub(super) fn build_timeline_export(
             timeline_rows_from_messages(&super::build_session_log_messages(messages)),
         )
     } else {
-        (
-            TIMELINE_SOURCE_THREAD_EVENTS.to_string(),
-            timeline_rows_from_thread_events(event_records),
-        )
+        (TIMELINE_SOURCE_THREAD_EVENTS.to_string(), timeline_rows_from_thread_events(event_records))
     };
     let overview = build_session_overview(
         provider,

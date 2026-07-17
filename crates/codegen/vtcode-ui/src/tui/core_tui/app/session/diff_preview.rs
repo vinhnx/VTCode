@@ -48,14 +48,7 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
         ]))
         .unwrap_or([Rect::ZERO; 3]);
 
-    render_file_header(
-        frame,
-        header,
-        preview,
-        &palette,
-        counts.additions,
-        counts.deletions,
-    );
+    render_file_header(frame, header, preview, &palette, counts.additions, counts.deletions);
     render_diff_content(frame, content, preview, &diff_bundle);
     render_controls(frame, controls, preview);
 }
@@ -158,16 +151,10 @@ fn render_diff_content(
     }
 
     if lines.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "(no changes)",
-            Style::default().fg(Color::DarkGray),
-        )));
+        lines.push(Line::from(Span::styled("(no changes)", Style::default().fg(Color::DarkGray))));
     }
 
-    frame.render_widget(
-        Paragraph::new(lines).block(Block::default().borders(Borders::NONE)),
-        area,
-    );
+    frame.render_widget(Paragraph::new(lines).block(Block::default().borders(Borders::NONE)), area);
 }
 
 fn header_action_label(mode: DiffPreviewMode) -> &'static str {
@@ -286,11 +273,8 @@ mod tests {
         );
 
         let lines = control_lines(&preview);
-        let first_line: String = lines[0]
-            .spans
-            .iter()
-            .map(|span| span.content.clone().into_owned())
-            .collect();
+        let first_line: String =
+            lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
         assert!(first_line.contains("Proceed"));
         assert!(first_line.contains("Reload"));
@@ -308,11 +292,8 @@ mod tests {
         );
 
         let lines = control_lines(&preview);
-        let first_line: String = lines[0]
-            .spans
-            .iter()
-            .map(|span| span.content.clone().into_owned())
-            .collect();
+        let first_line: String =
+            lines[0].spans.iter().map(|span| span.content.clone().into_owned()).collect();
 
         assert!(first_line.contains("Back"));
         assert!(!first_line.contains("Proceed"));
@@ -321,17 +302,8 @@ mod tests {
 
     #[test]
     fn conflict_header_uses_conflict_label() {
-        assert_eq!(
-            header_action_label(DiffPreviewMode::FileConflict),
-            "← Conflict "
-        );
-        assert_eq!(
-            header_action_label(DiffPreviewMode::EditApproval),
-            "← Edit "
-        );
-        assert_eq!(
-            header_action_label(DiffPreviewMode::ReadonlyReview),
-            "← Review "
-        );
+        assert_eq!(header_action_label(DiffPreviewMode::FileConflict), "← Conflict ");
+        assert_eq!(header_action_label(DiffPreviewMode::EditApproval), "← Edit ");
+        assert_eq!(header_action_label(DiffPreviewMode::ReadonlyReview), "← Review ");
     }
 }

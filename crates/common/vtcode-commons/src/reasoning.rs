@@ -123,10 +123,7 @@ mod tests {
 
     #[test]
     fn test_reasoning_effort_parse_and_allowed_values_include_max() {
-        assert_eq!(
-            ReasoningEffortLevel::parse("max"),
-            Some(ReasoningEffortLevel::Max)
-        );
+        assert_eq!(ReasoningEffortLevel::parse("max"), Some(ReasoningEffortLevel::Max));
         assert_eq!(ReasoningEffortLevel::Max.as_str(), "max");
         assert!(ReasoningEffortLevel::allowed_values().contains(&"max"));
     }

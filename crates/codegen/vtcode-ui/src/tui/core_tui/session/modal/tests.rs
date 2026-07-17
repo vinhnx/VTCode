@@ -55,11 +55,7 @@ fn sample_list_modal() -> ModalState {
     };
 
     if let Some(list) = modal.list.as_mut() {
-        let query = modal
-            .search
-            .as_ref()
-            .map(|state| state.query.clone())
-            .unwrap_or_default();
+        let query = modal.search.as_ref().map(|state| state.query.clone()).unwrap_or_default();
         list.apply_search(&query);
     }
 
@@ -139,13 +135,8 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
         },
     ];
 
-    let mut wizard = WizardModalState::new(
-        "Pick".to_owned(),
-        steps,
-        0,
-        None,
-        WizardModalMode::TabbedList,
-    );
+    let mut wizard =
+        WizardModalState::new("Pick".to_owned(), steps, 0, None, WizardModalMode::TabbedList);
 
     assert_eq!(wizard.current_step, 0);
 
@@ -180,13 +171,8 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
         freeform_default: None,
     }];
 
-    let mut wizard = WizardModalState::new(
-        "Pick".to_owned(),
-        steps,
-        0,
-        None,
-        WizardModalMode::TabbedList,
-    );
+    let mut wizard =
+        WizardModalState::new("Pick".to_owned(), steps, 0, None, WizardModalMode::TabbedList);
 
     let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
 
@@ -195,10 +181,7 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
             OverlaySubmission::Wizard(selections),
         ))) => {
             assert_eq!(selections.len(), 1);
-            assert!(matches!(
-                selections[0],
-                InlineListSelection::AskUserChoice { .. }
-            ));
+            assert!(matches!(selections[0], InlineListSelection::AskUserChoice { .. }));
         }
         other => panic!("Expected submit, got: {other:?}"),
     }
@@ -237,13 +220,8 @@ fn wizard_tabbed_list_mouse_click_submits_on_first_click() {
         freeform_default: None,
     }];
 
-    let mut wizard = WizardModalState::new(
-        "Pick".to_owned(),
-        steps,
-        0,
-        None,
-        WizardModalMode::TabbedList,
-    );
+    let mut wizard =
+        WizardModalState::new("Pick".to_owned(), steps, 0, None, WizardModalMode::TabbedList);
 
     let result = wizard.handle_mouse_click(1);
     match result {
@@ -295,13 +273,8 @@ fn wizard_tabbed_list_mouse_click_activates_custom_note_editor() {
         freeform_default: None,
     }];
 
-    let mut wizard = WizardModalState::new(
-        "Pick".to_owned(),
-        steps,
-        0,
-        None,
-        WizardModalMode::TabbedList,
-    );
+    let mut wizard =
+        WizardModalState::new("Pick".to_owned(), steps, 0, None, WizardModalMode::TabbedList);
 
     let result = wizard.handle_mouse_click(1);
     assert!(matches!(result, ModalListKeyResult::Redraw));
@@ -352,21 +325,12 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
         },
     ];
 
-    let mut wizard = WizardModalState::new(
-        "Pick".to_owned(),
-        steps,
-        0,
-        None,
-        WizardModalMode::MultiStep,
-    );
+    let mut wizard =
+        WizardModalState::new("Pick".to_owned(), steps, 0, None, WizardModalMode::MultiStep);
 
     let result = wizard.handle_key_event(
         &make_key_with_modifiers(KeyCode::Char('n'), KeyModifiers::CONTROL),
-        ModalKeyModifiers {
-            control: true,
-            alt: false,
-            command: false,
-        },
+        ModalKeyModifiers { control: true, alt: false, command: false },
     );
     assert!(matches!(result, ModalListKeyResult::Redraw));
     assert_eq!(wizard.current_step, 1);
@@ -406,13 +370,8 @@ fn wizard_inline_custom_note_sets_other_answer_and_submits_on_enter() {
         freeform_default: None,
     }];
 
-    let mut wizard = WizardModalState::new(
-        "Pick".to_owned(),
-        steps,
-        0,
-        None,
-        WizardModalMode::MultiStep,
-    );
+    let mut wizard =
+        WizardModalState::new("Pick".to_owned(), steps, 0, None, WizardModalMode::MultiStep);
 
     let result = wizard.handle_key_event(&make_key(KeyCode::Down), ModalKeyModifiers::default());
     assert!(matches!(result, ModalListKeyResult::Redraw));
@@ -597,13 +556,8 @@ fn wizard_multistep_numeric_select_submits() {
         freeform_default: None,
     }];
 
-    let mut wizard = WizardModalState::new(
-        "Pick".to_owned(),
-        steps,
-        0,
-        None,
-        WizardModalMode::MultiStep,
-    );
+    let mut wizard =
+        WizardModalState::new("Pick".to_owned(), steps, 0, None, WizardModalMode::MultiStep);
 
     let result =
         wizard.handle_key_event(&make_key(KeyCode::Char('2')), ModalKeyModifiers::default());
@@ -714,10 +668,7 @@ fn highlight_segments_marks_matching_spans() {
     assert_eq!(segments[0].style, Style::default());
     let second: &str = segments[1].content.as_ref();
     assert_eq!(second, "el");
-    assert_eq!(
-        segments[1].style,
-        Style::default().add_modifier(Modifier::BOLD)
-    );
+    assert_eq!(segments[1].style, Style::default().add_modifier(Modifier::BOLD));
     let third: &str = segments[2].content.as_ref();
     assert_eq!(third, "lo");
     assert_eq!(segments[2].style, Style::default());
@@ -839,30 +790,15 @@ fn list_modal_alt_d_does_not_toggle_density_for_config_actions() {
         is_help_modal: false,
     };
 
-    assert!(
-        !modal
-            .list
-            .as_ref()
-            .expect("config list should exist")
-            .compact_rows()
-    );
+    assert!(!modal.list.as_ref().expect("config list should exist").compact_rows());
 
     let result = modal.handle_list_key_event(
         &KeyEvent::new(KeyCode::Char('d'), KeyModifiers::ALT),
-        ModalKeyModifiers {
-            alt: true,
-            ..ModalKeyModifiers::default()
-        },
+        ModalKeyModifiers { alt: true, ..ModalKeyModifiers::default() },
     );
 
     assert!(matches!(result, ModalListKeyResult::HandledNoRedraw));
-    assert!(
-        !modal
-            .list
-            .as_ref()
-            .expect("config list should exist")
-            .compact_rows()
-    );
+    assert!(!modal.list.as_ref().expect("config list should exist").compact_rows());
 }
 
 #[test]
@@ -879,14 +815,8 @@ fn model_list_defaults_to_comfortable_density() {
         None,
     );
 
-    assert!(
-        !list.compact_rows(),
-        "model picker should default to comfortable row density"
-    );
-    assert!(
-        list.supports_density_toggle(),
-        "model picker density should remain adjustable"
-    );
+    assert!(!list.compact_rows(), "model picker should default to comfortable row density");
+    assert!(list.supports_density_toggle(), "model picker density should remain adjustable");
 }
 
 #[test]
@@ -925,10 +855,7 @@ fn list_modal_tab_moves_forward() {
             OverlaySelectionChange::List(InlineListSelection::Model(1))
         )))
     ));
-    let selection = modal
-        .list
-        .as_ref()
-        .and_then(|list| list.current_selection());
+    let selection = modal.list.as_ref().and_then(|list| list.current_selection());
     assert_eq!(selection, Some(InlineListSelection::Model(1)));
 }
 
@@ -947,10 +874,7 @@ fn list_modal_backtab_moves_backward() {
             OverlaySelectionChange::List(InlineListSelection::Model(0))
         )))
     ));
-    let selection = modal
-        .list
-        .as_ref()
-        .and_then(|list| list.current_selection());
+    let selection = modal.list.as_ref().and_then(|list| list.current_selection());
     assert_eq!(selection, Some(InlineListSelection::Model(0)));
 }
 
@@ -963,11 +887,7 @@ fn list_modal_control_navigation_moves_selection() {
     let ctrl_p = KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL);
     let result = modal.handle_list_key_event(
         &ctrl_p,
-        ModalKeyModifiers {
-            control: true,
-            alt: false,
-            command: false,
-        },
+        ModalKeyModifiers { control: true, alt: false, command: false },
     );
 
     assert!(matches!(
@@ -976,10 +896,7 @@ fn list_modal_control_navigation_moves_selection() {
             OverlaySelectionChange::List(InlineListSelection::Model(0))
         )))
     ));
-    let selection = modal
-        .list
-        .as_ref()
-        .and_then(|list| list.current_selection());
+    let selection = modal.list.as_ref().and_then(|list| list.current_selection());
     assert_eq!(selection, Some(InlineListSelection::Model(0)));
 }
 
@@ -1003,10 +920,7 @@ fn list_search_resets_selection_when_item_removed() {
 
     list.apply_search("general");
 
-    assert_eq!(
-        list.current_selection(),
-        Some(InlineListSelection::Model(0))
-    );
+    assert_eq!(list.current_selection(), Some(InlineListSelection::Model(0)));
 }
 
 #[test]
@@ -1024,10 +938,7 @@ fn list_modal_page_navigation_respects_viewport() {
         )))
     ));
 
-    let selection = modal
-        .list
-        .as_ref()
-        .and_then(|state| state.current_selection());
+    let selection = modal.list.as_ref().and_then(|state| state.current_selection());
     assert_eq!(selection, Some(InlineListSelection::Model(3)));
 
     let page_up = KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE);
@@ -1039,9 +950,6 @@ fn list_modal_page_navigation_respects_viewport() {
         )))
     ));
 
-    let selection = modal
-        .list
-        .as_ref()
-        .and_then(|state| state.current_selection());
+    let selection = modal.list.as_ref().and_then(|state| state.current_selection());
     assert_eq!(selection, Some(InlineListSelection::Model(0)));
 }

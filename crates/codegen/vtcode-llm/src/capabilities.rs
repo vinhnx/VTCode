@@ -51,10 +51,7 @@ mod tests {
 
         assert!(!basic.has_advanced_features());
 
-        let advanced = ProviderCapabilities {
-            structured_output: true,
-            ..basic
-        };
+        let advanced = ProviderCapabilities { structured_output: true, ..basic };
 
         assert!(advanced.has_advanced_features());
     }

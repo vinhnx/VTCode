@@ -44,10 +44,7 @@ impl ProviderConfig {
     /// Build HTTP client with provider-specific configuration
     pub fn build_http_client(&self) -> Result<HttpClient, LLMError> {
         use crate::http_client::HttpClientFactory;
-        Ok(HttpClientFactory::with_timeouts(
-            self.timeout,
-            Duration::from_secs(30),
-        ))
+        Ok(HttpClientFactory::with_timeouts(self.timeout, Duration::from_secs(30)))
     }
 }
 
@@ -104,10 +101,9 @@ pub mod request_builder {
         // Add provider-specific headers
         if let Some(custom_headers) = provider_headers {
             for (key, value) in custom_headers {
-                if let (Ok(name), Ok(val)) = (
-                    HeaderName::from_bytes(key.as_bytes()),
-                    HeaderValue::from_str(value),
-                ) {
+                if let (Ok(name), Ok(val)) =
+                    (HeaderName::from_bytes(key.as_bytes()), HeaderValue::from_str(value))
+                {
                     headers.insert(name, val);
                 }
             }

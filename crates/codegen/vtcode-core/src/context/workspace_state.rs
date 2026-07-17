@@ -295,10 +295,7 @@ impl WorkspaceState {
             let value_part = line[colon_pos + 1..].trim();
 
             // Remove quotes and commas
-            let mut cleaned = value_part
-                .trim_matches(',')
-                .trim_matches('"')
-                .trim_matches('\'');
+            let mut cleaned = value_part.trim_matches(',').trim_matches('"').trim_matches('\'');
 
             // Try to strip common unit suffixes
             for suffix in &["px", "rem", "em", "ms", "s", "pt"] {
@@ -450,9 +447,7 @@ impl WorkspaceState {
 
     /// Check if file was recently accessed
     pub fn was_recently_accessed(&self, path: &Path) -> bool {
-        self.recent_files
-            .iter()
-            .any(|activity| activity.path == path)
+        self.recent_files.iter().any(|activity| activity.path == path)
     }
 
     /// Get hot files (most edited)
@@ -468,27 +463,15 @@ mod tests {
     #[test]
     fn test_parse_relative_expression_half() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.parse_relative_expression("by half"),
-            Some(RelativeOp::Half)
-        );
-        assert_eq!(
-            state.parse_relative_expression("divide by 2"),
-            Some(RelativeOp::Half)
-        );
+        assert_eq!(state.parse_relative_expression("by half"), Some(RelativeOp::Half));
+        assert_eq!(state.parse_relative_expression("divide by 2"), Some(RelativeOp::Half));
     }
 
     #[test]
     fn test_parse_relative_expression_double() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.parse_relative_expression("double it"),
-            Some(RelativeOp::Double)
-        );
-        assert_eq!(
-            state.parse_relative_expression("twice as much"),
-            Some(RelativeOp::Double)
-        );
+        assert_eq!(state.parse_relative_expression("double it"), Some(RelativeOp::Double));
+        assert_eq!(state.parse_relative_expression("twice as much"), Some(RelativeOp::Double));
     }
 
     #[test]
@@ -549,14 +532,8 @@ mod tests {
     #[test]
     fn test_extract_config_value_json() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.extract_config_value(r#"  "timeout": 5000,"#),
-            Some(5000.0)
-        );
-        assert_eq!(
-            state.extract_config_value(r#"  "padding": "16px","#),
-            Some(16.0)
-        );
+        assert_eq!(state.extract_config_value(r#"  "timeout": 5000,"#), Some(5000.0));
+        assert_eq!(state.extract_config_value(r#"  "padding": "16px","#), Some(16.0));
     }
 
     #[test]
@@ -584,9 +561,6 @@ mod tests {
     fn test_extract_code_value_rust() {
         let state = WorkspaceState::new();
         assert_eq!(state.extract_code_value("let size = 42;"), Some(42.0));
-        assert_eq!(
-            state.extract_code_value("const MAX_SIZE: usize = 100;"),
-            Some(100.0)
-        );
+        assert_eq!(state.extract_code_value("const MAX_SIZE: usize = 100;"), Some(100.0));
     }
 }

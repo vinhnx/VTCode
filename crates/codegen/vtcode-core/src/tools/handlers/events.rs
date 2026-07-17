@@ -33,12 +33,7 @@ impl<'a> ToolEventCtx<'a> {
         call_id: &'a str,
         tracker: Option<&'a Arc<tokio::sync::Mutex<DiffTracker>>>,
     ) -> Self {
-        Self {
-            session,
-            turn,
-            call_id,
-            turn_diff_tracker: tracker,
-        }
+        Self { session, turn, call_id, turn_diff_tracker: tracker }
     }
 }
 
@@ -120,21 +115,12 @@ impl ToolEmitter {
         freeform: bool,
     ) -> Self {
         let parsed_cmd = parse_command(&command);
-        Self::Shell {
-            command,
-            cwd,
-            source,
-            parsed_cmd,
-            freeform,
-        }
+        Self::Shell { command, cwd, source, parsed_cmd, freeform }
     }
 
     /// Create emitter for apply_patch
     pub fn apply_patch(changes: HashMap<PathBuf, FileChange>, auto_approved: bool) -> Self {
-        Self::ApplyPatch {
-            changes,
-            auto_approved,
-        }
+        Self::ApplyPatch { changes, auto_approved }
     }
 
     /// Create emitter for command-session execution.
@@ -157,22 +143,14 @@ impl ToolEmitter {
 
     /// Create emitter for generic tools
     pub fn generic(tool_name: impl Into<CompactStr>) -> Self {
-        Self::Generic {
-            tool_name: tool_name.into(),
-        }
+        Self::Generic { tool_name: tool_name.into() }
     }
 
     /// Emit event for current stage
     pub async fn emit(&self, ctx: ToolEventCtx<'_>, stage: ToolEventStage) {
         match (self, &stage) {
             // Apply patch begin
-            (
-                Self::ApplyPatch {
-                    changes,
-                    auto_approved,
-                },
-                ToolEventStage::Begin,
-            ) => {
+            (Self::ApplyPatch { changes, auto_approved }, ToolEventStage::Begin) => {
                 // Update diff tracker
                 if let Some(tracker) = ctx.turn_diff_tracker {
                     let mut guard = tracker.lock().await;
@@ -207,8 +185,7 @@ impl ToolEmitter {
                 Self::ApplyPatch { .. },
                 ToolEventStage::Failure(ToolEventFailureKind::Message(msg)),
             ) => {
-                self.emit_patch_end(ctx, String::new(), msg.clone(), false)
-                    .await;
+                self.emit_patch_end(ctx, String::new(), msg.clone(), false).await;
             }
 
             // Shell/CommandSession begin
@@ -292,34 +269,24 @@ impl ToolEmitter {
     ) -> Result<String, ToolCallError> {
         match result {
             Ok(output) => {
-                self.emit(ctx, ToolEventStage::Success(output.clone()))
-                    .await;
+                self.emit(ctx, ToolEventStage::Success(output.clone())).await;
                 Ok(self.format_output_for_model(&output))
             }
             Err(ToolError::Rejected(msg)) => {
-                self.emit(
-                    ctx,
-                    ToolEventStage::Failure(ToolEventFailureKind::Message(msg.clone())),
-                )
-                .await;
+                self.emit(ctx, ToolEventStage::Failure(ToolEventFailureKind::Message(msg.clone())))
+                    .await;
                 Err(ToolCallError::Rejected(msg))
             }
             Err(ToolError::Timeout(ms)) => {
                 let msg = format!("Command timed out after {ms}ms");
-                self.emit(
-                    ctx,
-                    ToolEventStage::Failure(ToolEventFailureKind::Message(msg.clone())),
-                )
-                .await;
+                self.emit(ctx, ToolEventStage::Failure(ToolEventFailureKind::Message(msg.clone())))
+                    .await;
                 Err(ToolCallError::Timeout(ms))
             }
             Err(e) => {
                 let msg = e.to_string();
-                self.emit(
-                    ctx,
-                    ToolEventStage::Failure(ToolEventFailureKind::Error(msg.clone())),
-                )
-                .await;
+                self.emit(ctx, ToolEventStage::Failure(ToolEventFailureKind::Error(msg.clone())))
+                    .await;
                 Err(ToolCallError::Internal(e.into()))
             }
         }
@@ -486,10 +453,7 @@ mod tests {
             stderr: "Error!".to_string(),
             exit_code: 1,
         };
-        assert_eq!(
-            emitter.format_output_for_model(&output),
-            "Error!\n[exit code: 1]"
-        );
+        assert_eq!(emitter.format_output_for_model(&output), "Error!\n[exit code: 1]");
 
         // No output
         let output = ExecToolCallOutput::default();

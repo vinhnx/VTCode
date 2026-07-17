@@ -76,10 +76,7 @@ mod tests {
             registry.lookup(tools::READ_FILE),
             Some(ToolDescriptor::Acp(SupportedTool::ReadFile))
         );
-        assert_eq!(
-            registry.lookup(tools::CODE_SEARCH),
-            Some(ToolDescriptor::Local)
-        );
+        assert_eq!(registry.lookup(tools::CODE_SEARCH), Some(ToolDescriptor::Local));
         assert_eq!(registry.lookup("unknown_tool"), None);
     }
 }

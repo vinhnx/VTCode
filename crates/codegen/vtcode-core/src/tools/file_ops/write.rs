@@ -36,11 +36,7 @@ async fn write_text_file(path: &std::path::Path, content: &str) -> Result<()> {
 }
 
 async fn create_text_file(path: &std::path::Path, content: &str) -> Result<(), std::io::Error> {
-    let mut file = tokio::fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(path)
-        .await?;
+    let mut file = tokio::fs::OpenOptions::new().create_new(true).write(true).open(path).await?;
     file.write_all(content.as_bytes()).await?;
     file.flush().await
 }
@@ -64,10 +60,7 @@ impl FileOpsTool {
         let file_path = self.normalize_and_validate_user_path(&input.path).await?;
 
         if self.should_exclude(&file_path).await {
-            return Err(anyhow!(
-                "Error: Path '{}' is excluded by .vtcodegitignore",
-                input.path
-            ));
+            return Err(anyhow!("Error: Path '{}' is excluded by .vtcodegitignore", input.path));
         }
 
         let content_size = input.content.len();
@@ -148,20 +141,14 @@ impl FileOpsTool {
 
         if let Some(conflict) = self
             .edited_file_monitor
-            .detect_conflict(
-                &file_path,
-                intended_content.clone(),
-                override_snapshot.clone(),
-            )
+            .detect_conflict(&file_path, intended_content.clone(), override_snapshot.clone())
             .await?
         {
             return Ok(conflict.to_tool_output(&self.workspace_root));
         }
 
         let final_written_content = match effective_mode {
-            "append" => intended_content
-                .clone()
-                .unwrap_or_else(|| input.content.clone()),
+            "append" => intended_content.clone().unwrap_or_else(|| input.content.clone()),
             _ => input.content.clone(),
         };
 
@@ -223,8 +210,7 @@ impl FileOpsTool {
         }
 
         // Log write operation
-        self.log_write_operation(&file_path, content_size, false)
-            .await?;
+        self.log_write_operation(&file_path, content_size, false).await?;
         if let Err(err) = self
             .edited_file_monitor
             .record_agent_write_text(&file_path, &final_written_content)
@@ -239,9 +225,7 @@ impl FileOpsTool {
         if diff_preview.is_none() {
             let existing_snapshot = existing_content.as_deref();
             let total_len = if effective_mode == "append" {
-                existing_snapshot
-                    .map(|content| content.len())
-                    .unwrap_or_default()
+                existing_snapshot.map(|content| content.len()).unwrap_or_default()
                     + input.content.len()
             } else {
                 input.content.len()

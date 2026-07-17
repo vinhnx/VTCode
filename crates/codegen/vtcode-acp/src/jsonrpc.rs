@@ -210,20 +210,12 @@ impl JsonRpcResponse {
 impl JsonRpcError {
     /// Create a new error
     pub fn new(code: i32, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: None,
-        }
+        Self { code, message: message.into(), data: None }
     }
 
     /// Create error with additional data
     pub fn with_data(code: i32, message: impl Into<String>, data: Value) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: Some(data),
-        }
+        Self { code, message: message.into(), data: Some(data) }
     }
 
     /// Create a parse error
@@ -241,10 +233,7 @@ impl JsonRpcError {
     /// Create a method not found error
     #[cold]
     pub fn method_not_found(method: impl Into<String>) -> Self {
-        Self::new(
-            error_codes::METHOD_NOT_FOUND,
-            format!("Method not found: {}", method.into()),
-        )
+        Self::new(error_codes::METHOD_NOT_FOUND, format!("Method not found: {}", method.into()))
     }
 
     /// Create an invalid params error

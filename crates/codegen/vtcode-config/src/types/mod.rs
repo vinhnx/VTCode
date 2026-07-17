@@ -546,32 +546,17 @@ mod tests {
 
     #[test]
     fn test_reasoning_effort_parse_and_allowed_values_include_max() {
-        assert_eq!(
-            ReasoningEffortLevel::parse("max"),
-            Some(ReasoningEffortLevel::Max)
-        );
+        assert_eq!(ReasoningEffortLevel::parse("max"), Some(ReasoningEffortLevel::Max));
         assert_eq!(ReasoningEffortLevel::Max.as_str(), "max");
         assert!(ReasoningEffortLevel::allowed_values().contains(&"max"));
     }
 
     #[test]
     fn shell_prompt_profile_parses_aliases() {
-        assert_eq!(
-            ShellPromptProfile::parse("auto"),
-            Some(ShellPromptProfile::Auto)
-        );
-        assert_eq!(
-            ShellPromptProfile::parse("unix-like"),
-            Some(ShellPromptProfile::UnixLike)
-        );
-        assert_eq!(
-            ShellPromptProfile::parse("posix"),
-            Some(ShellPromptProfile::UnixLike)
-        );
-        assert_eq!(
-            ShellPromptProfile::parse("PowerShell"),
-            Some(ShellPromptProfile::PowerShell)
-        );
+        assert_eq!(ShellPromptProfile::parse("auto"), Some(ShellPromptProfile::Auto));
+        assert_eq!(ShellPromptProfile::parse("unix-like"), Some(ShellPromptProfile::UnixLike));
+        assert_eq!(ShellPromptProfile::parse("posix"), Some(ShellPromptProfile::UnixLike));
+        assert_eq!(ShellPromptProfile::parse("PowerShell"), Some(ShellPromptProfile::PowerShell));
         assert_eq!(ShellPromptProfile::parse("unknown"), None);
     }
 

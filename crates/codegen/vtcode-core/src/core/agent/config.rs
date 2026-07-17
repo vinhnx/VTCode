@@ -31,10 +31,7 @@ pub fn resolve_runtime_model_selection(args: &Cli, config: &VTCodeConfig) -> Run
     } else if let Some(model) = args.model.clone() {
         (model, ModelSelectionSource::CliOverride)
     } else {
-        (
-            config.agent.default_model.clone(),
-            ModelSelectionSource::WorkspaceConfig,
-        )
+        (config.agent.default_model.clone(), ModelSelectionSource::WorkspaceConfig)
     };
 
     let provider = resolve_provider(
@@ -44,11 +41,7 @@ pub fn resolve_runtime_model_selection(args: &Cli, config: &VTCodeConfig) -> Run
         model_source,
     );
 
-    RuntimeModelSelection {
-        model,
-        provider,
-        model_source,
-    }
+    RuntimeModelSelection { model, provider, model_source }
 }
 
 /// Build a fully resolved [`AgentConfig`] from CLI arguments, workspace config,
@@ -75,11 +68,7 @@ pub fn build_runtime_agent_config(
         &workspace,
         config.agent.checkpointing.storage_dir.as_deref(),
     );
-    let RuntimeModelSelection {
-        model,
-        provider,
-        model_source,
-    } = selection;
+    let RuntimeModelSelection { model, provider, model_source } = selection;
     let api_key_env = api_key_env_override
         .unwrap_or_else(|| resolve_api_key_env(&provider, &config.agent.api_key_env));
 
@@ -188,10 +177,7 @@ mod tests {
         let selection = resolve_runtime_model_selection(&args, &config);
 
         assert_eq!(selection.provider, "zai");
-        assert_eq!(
-            selection.model_source,
-            ModelSelectionSource::WorkspaceConfig
-        );
+        assert_eq!(selection.model_source, ModelSelectionSource::WorkspaceConfig);
     }
 
     #[test]
@@ -282,17 +268,15 @@ mod tests {
     #[test]
     fn provider_label_uses_custom_provider_display_name() {
         let mut config = VTCodeConfig::default();
-        config
-            .custom_providers
-            .push(vtcode_config::core::CustomProviderConfig {
-                name: "mycorp".to_string(),
-                display_name: "MyCorporateName".to_string(),
-                base_url: "https://llm.example/v1".to_string(),
-                api_key_env: "MYCORP_API_KEY".to_string(),
-                auth: None,
-                model: "gpt-5-mini".to_string(),
-                models: Vec::new(),
-            });
+        config.custom_providers.push(vtcode_config::core::CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorporateName".to_string(),
+            base_url: "https://llm.example/v1".to_string(),
+            api_key_env: "MYCORP_API_KEY".to_string(),
+            auth: None,
+            model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
+        });
 
         assert_eq!(provider_label("mycorp", Some(&config)), "MyCorporateName");
     }

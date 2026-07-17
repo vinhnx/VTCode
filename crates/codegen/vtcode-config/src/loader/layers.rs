@@ -201,10 +201,7 @@ impl ConfigLayerStack {
     }
 
     fn ordered_enabled_layers(&self) -> Vec<&ConfigLayerEntry> {
-        self.ordered_layers()
-            .into_iter()
-            .filter(|layer| layer.is_enabled())
-            .collect()
+        self.ordered_layers().into_iter().filter(|layer| layer.is_enabled()).collect()
     }
 
     /// Get all layers in the stack.

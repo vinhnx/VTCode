@@ -84,10 +84,8 @@ mod tests {
         writeln!(temp_file, "This is test file content").unwrap();
         temp_file.flush().unwrap();
 
-        let input = format!(
-            "Look at this file: @{}",
-            file_path.file_name().unwrap().to_string_lossy()
-        );
+        let input =
+            format!("Look at this file: @{}", file_path.file_name().unwrap().to_string_lossy());
 
         let result = include_file_content(&input, temp_dir.path()).await.unwrap();
 
@@ -128,10 +126,8 @@ mod tests {
         writeln!(temp_file, "Content with spaces in filename").unwrap();
         temp_file.flush().unwrap();
 
-        let input = format!(
-            "Look at this file: @\"{}\"",
-            file_path.file_name().unwrap().to_string_lossy()
-        );
+        let input =
+            format!("Look at this file: @\"{}\"", file_path.file_name().unwrap().to_string_lossy());
 
         let result = include_file_content(&input, temp_dir.path()).await.unwrap();
 

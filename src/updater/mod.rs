@@ -39,10 +39,7 @@ impl Updater {
             UpdateConfig::default()
         });
 
-        Ok(Self {
-            current_version,
-            config,
-        })
+        Ok(Self { current_version, config })
     }
 
     pub(crate) fn current_version(&self) -> &Version {
@@ -58,10 +55,7 @@ impl Updater {
     }
 
     pub(crate) async fn check_for_updates(&mut self) -> Result<Option<UpdateInfo>> {
-        debug!(
-            "Checking for VT Code updates (channel: {})...",
-            self.config.channel
-        );
+        debug!("Checking for VT Code updates (channel: {})...", self.config.channel);
 
         if let Some(pinned_version) = self.config.pinned_version() {
             if self.config.should_auto_unpin() {
@@ -91,10 +85,7 @@ impl Updater {
                 debug!("Pinned version is still latest, keeping pin");
                 return Ok(None);
             }
-            debug!(
-                "Version pinned to {}, skipping update check",
-                pinned_version
-            );
+            debug!("Version pinned to {}, skipping update check", pinned_version);
             return Ok(None);
         }
 
@@ -105,10 +96,7 @@ impl Updater {
         )
         .await?;
 
-        if latest
-            .as_ref()
-            .is_some_and(|info| info.version > self.current_version)
-        {
+        if latest.as_ref().is_some_and(|info| info.version > self.current_version) {
             if let Some(latest) = latest.as_ref() {
                 info!(
                     "New version available: {} (current: {})",
@@ -129,10 +117,7 @@ impl Updater {
         }
 
         if let Some(pinned_version) = self.config.pinned_version() {
-            debug!(
-                "Version pinned to {}, suppressing startup update prompt",
-                pinned_version
-            );
+            debug!("Version pinned to {}, suppressing startup update prompt", pinned_version);
             return Ok(StartupUpdateCheck::default());
         }
 
@@ -245,10 +230,7 @@ impl Updater {
 
     pub(crate) fn update_guidance(&self) -> UpdateGuidance {
         let source = install_source::detect_install_source();
-        UpdateGuidance {
-            source,
-            action: source.update_action(),
-        }
+        UpdateGuidance { source, action: source.update_action() }
     }
 
     pub(crate) async fn list_versions(&self, limit: usize) -> Result<Vec<VersionInfo>> {
@@ -370,10 +352,7 @@ mod tests {
             .iter()
             .find(|asset| asset.contains(target) && asset.contains(&identifier));
 
-        assert!(
-            selected.is_none(),
-            "Should not select x86_64 assets when target is aarch64"
-        );
+        assert!(selected.is_none(), "Should not select x86_64 assets when target is aarch64");
     }
 
     #[test]
@@ -414,10 +393,7 @@ mod tests {
     fn startup_update_check_respects_disabled_interval() {
         let updater = Updater {
             current_version: Version::parse("0.111.0").expect("version"),
-            config: UpdateConfig {
-                check_interval_hours: 0,
-                ..UpdateConfig::default()
-            },
+            config: UpdateConfig { check_interval_hours: 0, ..UpdateConfig::default() },
         };
 
         let check = updater.startup_update_check().expect("startup check");

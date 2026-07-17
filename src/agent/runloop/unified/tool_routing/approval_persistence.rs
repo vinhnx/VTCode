@@ -63,9 +63,8 @@ pub(super) async fn persisted_shell_approval(
     tool_args: Option<&Value>,
 ) -> Option<(Vec<String>, String)> {
     let (command_words, scope_signature) =
-        extract_shell_approval_command_prefix_words(normalized_tool_name, tool_args).zip(
-            extract_shell_approval_scope_signature(normalized_tool_name, tool_args),
-        )?;
+        extract_shell_approval_command_prefix_words(normalized_tool_name, tool_args)
+            .zip(extract_shell_approval_scope_signature(normalized_tool_name, tool_args))?;
 
     if tool_registry
         .find_persisted_shell_approval_prefix(&command_words, &scope_signature)
@@ -106,10 +105,7 @@ pub(super) async fn persist_shell_approval_prefix_rule(
         .iter()
         .any(|existing| existing == &rendered_rule)
     {
-        config
-            .commands
-            .approval_prefixes
-            .push(rendered_rule.clone());
+        config.commands.approval_prefixes.push(rendered_rule.clone());
         manager
             .save_config(&config)
             .context("Failed to persist shell approval prefix")?;

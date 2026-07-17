@@ -57,10 +57,7 @@ fn low_signal_family_for_code_search_distinguishes_query_and_filters() {
         json!({"query": "Widget", "path": "src", "file_types": ["python"], "result_types": ["definition"]}),
         json!({"query": "Widget", "path": "src", "file_types": ["rust"], "result_types": ["usage"]}),
     ] {
-        assert_ne!(
-            base_key,
-            low_signal_family_key(tool_names::CODE_SEARCH, &changed)
-        );
+        assert_ne!(base_key, low_signal_family_key(tool_names::CODE_SEARCH, &changed));
     }
 }
 
@@ -72,10 +69,7 @@ fn spool_chunk_read_path_detects_spooled_read_calls() {
         "limit": 40
     });
     let path = spool_chunk_read_path(tool_names::READ_FILE, &args);
-    assert_eq!(
-        path,
-        Some(".vtcode/context/tool_outputs/command_session_123.txt")
-    );
+    assert_eq!(path, Some(".vtcode/context/tool_outputs/command_session_123.txt"));
 }
 
 #[test]
@@ -183,10 +177,7 @@ fn shell_run_signature_normalizes_run_pty_command_and_args() {
         "args": ["-p", "vtcode-core"]
     });
     let signature = shell_run_signature(tool_names::RUN_PTY_CMD, &args);
-    assert_eq!(
-        signature,
-        Some("command_session::cargo check -p vtcode-core".to_string())
-    );
+    assert_eq!(signature, Some("command_session::cargo check -p vtcode-core".to_string()));
 }
 
 #[test]
@@ -196,10 +187,7 @@ fn shell_run_signature_handles_command_session_run_action() {
         "command": ["cargo", "check", "-p", "vtcode-core"]
     });
     let signature = shell_run_signature(tool_names::UNIFIED_EXEC, &args);
-    assert_eq!(
-        signature,
-        Some("command_session::cargo check -p vtcode-core".to_string())
-    );
+    assert_eq!(signature, Some("command_session::cargo check -p vtcode-core".to_string()));
 }
 
 #[test]
@@ -234,11 +222,7 @@ fn shell_run_signature_ignores_non_run_command_session_action() {
 
 #[test]
 fn tool_budget_exhausted_directive_demands_synthesis() {
-    let exhaustion = ToolBudgetExhaustion {
-        used: 32,
-        max: 32,
-        remaining: 0,
-    };
+    let exhaustion = ToolBudgetExhaustion { used: 32, max: 32, remaining: 0 };
     let directive = exhaustion.synthesis_directive_message();
     assert!(directive.contains("32/32"));
     assert!(directive.contains("Synthesize your final answer now"));

@@ -87,10 +87,7 @@ pub(crate) fn build_messages(
                         cache_control: None,
                     });
                 }
-                messages.push(AnthropicMessage {
-                    role: "assistant".to_string(),
-                    content: blocks,
-                });
+                messages.push(AnthropicMessage { role: "assistant".to_string(), content: blocks });
             }
             MessageRole::Tool => {
                 if let Some(tool_call_id) = &msg.tool_call_id
@@ -147,40 +144,38 @@ pub(crate) fn build_messages(
 
     // Rolling-anchor placement: identify qualifying user messages and place
     // breakpoints on the last two (primary + safety net anchor).
-    if prompt_cache_settings.cache_user_messages {
-        if let Some(cc) = messages_cache_control.as_ref() {
-            let qualifying: Vec<usize> = messages
-                .iter()
-                .enumerate()
-                .filter(|(_, msg)| {
-                    msg.role == "user" && msg.content.iter().any(|block| {
+    if prompt_cache_settings.cache_user_messages
+        && let Some(cc) = messages_cache_control.as_ref()
+    {
+        let qualifying: Vec<usize> = messages
+            .iter()
+            .enumerate()
+            .filter(|(_, msg)| {
+                msg.role == "user"
+                    && msg.content.iter().any(|block| {
                         matches!(
                             block,
                             AnthropicContentBlock::Text { text, .. }
                                 if text.len() >= prompt_cache_settings.min_message_length_for_cache
                         )
                     })
-                })
-                .map(|(idx, _)| idx)
-                .collect();
+            })
+            .map(|(idx, _)| idx)
+            .collect();
 
-            // Place breakpoints on the last two qualifying messages (rolling anchors).
-            // The second anchor is a safety net: if the primary misses, it still
-            // covers everything up to the older message.
-            let anchor_count = qualifying.len().min(2);
-            for &idx in qualifying.iter().rev().take(anchor_count) {
-                if *breakpoints_remaining == 0 {
-                    break;
-                }
-                if let Some(AnthropicContentBlock::Text { cache_control, .. }) =
-                    messages[idx].content.iter_mut().find(|block| {
-                        matches!(block, AnthropicContentBlock::Text { text, .. }
-                        if text.len() >= prompt_cache_settings.min_message_length_for_cache)
-                    })
-                {
-                    *cache_control = Some(cc.clone());
-                    *breakpoints_remaining -= 1;
-                }
+        let anchor_count = qualifying.len().min(2);
+        for &idx in qualifying.iter().rev().take(anchor_count) {
+            if *breakpoints_remaining == 0 {
+                break;
+            }
+            if let Some(AnthropicContentBlock::Text { cache_control, .. }) =
+                messages[idx].content.iter_mut().find(|block| {
+                    matches!(block, AnthropicContentBlock::Text { text, .. }
+                    if text.len() >= prompt_cache_settings.min_message_length_for_cache)
+                })
+            {
+                *cache_control = Some(cc.clone());
+                *breakpoints_remaining -= 1;
             }
         }
     }
@@ -192,10 +187,7 @@ pub(crate) fn build_messages(
             "Anthropic",
             "No convertible messages for Anthropic request",
         );
-        return Err(LLMError::InvalidRequest {
-            message: formatted_error,
-            metadata: None,
-        });
+        return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
 
     Ok(messages)
@@ -225,16 +217,10 @@ fn build_advisor_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
         for block in stored {
             match block.get("type").and_then(|t| t.as_str()) {
                 Some("server_tool_use") => {
-                    let id = block
-                        .get("id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string();
-                    let name = block
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string();
+                    let id =
+                        block.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let name =
+                        block.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                     let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
                     blocks.push(AnthropicContentBlock::ServerToolUse { id, name, input });
                 }
@@ -245,10 +231,7 @@ fn build_advisor_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
                         .unwrap_or_default()
                         .to_string();
                     let content = block.get("content").cloned().unwrap_or_else(|| json!({}));
-                    blocks.push(AnthropicContentBlock::AdvisorToolResult {
-                        tool_use_id,
-                        content,
-                    });
+                    blocks.push(AnthropicContentBlock::AdvisorToolResult { tool_use_id, content });
                 }
                 _ => {}
             }
@@ -267,11 +250,8 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
             };
 
             if normalized.get("type").and_then(|t| t.as_str()) == Some("thinking") {
-                let thinking = normalized
-                    .get("thinking")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let thinking =
+                    normalized.get("thinking").and_then(|t| t.as_str()).unwrap_or("").to_string();
                 let signature = normalized
                     .get("signature")
                     .and_then(|t| t.as_str())
@@ -286,15 +266,9 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
                     });
                 }
             } else if normalized.get("type").and_then(|t| t.as_str()) == Some("redacted_thinking") {
-                let data = normalized
-                    .get("data")
-                    .and_then(|d| d.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                blocks.push(AnthropicContentBlock::RedactedThinking {
-                    data,
-                    cache_control: None,
-                });
+                let data =
+                    normalized.get("data").and_then(|d| d.as_str()).unwrap_or("").to_string();
+                blocks.push(AnthropicContentBlock::RedactedThinking { data, cache_control: None });
             }
         }
     }
@@ -343,9 +317,7 @@ fn content_blocks_from_message_content(
                             cache_control: control,
                         });
                     }
-                    ContentPart::Image {
-                        data, mime_type, ..
-                    } => {
+                    ContentPart::Image { data, mime_type, .. } => {
                         blocks.push(AnthropicContentBlock::Image {
                             source: ImageSource {
                                 source_type: "base64".to_owned(),
@@ -355,12 +327,7 @@ fn content_blocks_from_message_content(
                             cache_control: None,
                         });
                     }
-                    ContentPart::File {
-                        filename,
-                        file_id,
-                        file_url,
-                        ..
-                    } => {
+                    ContentPart::File { filename, file_id, file_url, .. } => {
                         if allow_container_uploads && let Some(file_id) = file_id {
                             blocks.push(AnthropicContentBlock::ContainerUpload {
                                 file_id: file_id.clone(),
@@ -394,14 +361,12 @@ fn build_tool_use_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
         for call in tool_calls {
             if let Some(ref func) = call.function {
                 let args: Value = call.parsed_arguments().unwrap_or_else(|_| json!({}));
-                blocks.push(AnthropicContentBlock::ToolUse(Box::new(
-                    AnthropicToolUseBlock {
-                        id: call.id.clone(),
-                        name: func.name.clone(),
-                        input: args,
-                        cache_control: None,
-                    },
-                )));
+                blocks.push(AnthropicContentBlock::ToolUse(Box::new(AnthropicToolUseBlock {
+                    id: call.id.clone(),
+                    name: func.name.clone(),
+                    input: args,
+                    cache_control: None,
+                })));
             }
         }
     }
@@ -491,13 +456,7 @@ mod tests {
             .iter()
             .map(|msg| {
                 msg.content.iter().any(|block| {
-                    matches!(
-                        block,
-                        AnthropicContentBlock::Text {
-                            cache_control: Some(_),
-                            ..
-                        }
-                    )
+                    matches!(block, AnthropicContentBlock::Text { cache_control: Some(_), .. })
                 })
             })
             .collect()
@@ -622,11 +581,7 @@ mod tests {
         let blocks = build_reasoning_blocks(&message);
         assert_eq!(blocks.len(), 1);
         match &blocks[0] {
-            AnthropicContentBlock::Thinking {
-                thinking,
-                signature,
-                ..
-            } => {
+            AnthropicContentBlock::Thinking { thinking, signature, .. } => {
                 assert_eq!(thinking, "trace");
                 assert_eq!(signature.as_deref(), Some("sig_123"));
             }
@@ -643,11 +598,7 @@ mod tests {
         let blocks = build_reasoning_blocks(&message);
         assert_eq!(blocks.len(), 1);
         match &blocks[0] {
-            AnthropicContentBlock::Thinking {
-                thinking,
-                signature,
-                ..
-            } => {
+            AnthropicContentBlock::Thinking { thinking, signature, .. } => {
                 assert!(thinking.is_empty());
                 assert_eq!(signature.as_deref(), Some("sig_omitted"));
             }
@@ -726,9 +677,8 @@ mod tests {
 
     #[test]
     fn build_advisor_blocks_skips_non_advisor_details() {
-        let message = Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(
-            r#"{"type":"thinking","thinking":"trace"}"#
-        )]));
+        let message = Message::assistant(String::new())
+            .with_reasoning_details(Some(vec![json!(r#"{"type":"thinking","thinking":"trace"}"#)]));
         assert!(build_advisor_blocks(&message).is_empty());
     }
 }

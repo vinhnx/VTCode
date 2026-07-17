@@ -33,14 +33,10 @@ fn ctrl_c_break_outcome(
     };
 
     if first_requested {
-        return Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-            first_outcome,
-        )));
+        return Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(first_outcome)));
     }
     if second_requested {
-        return Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-            second_outcome,
-        )));
+        return Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(second_outcome)));
     }
     None
 }

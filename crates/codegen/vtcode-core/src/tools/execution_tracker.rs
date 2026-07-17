@@ -151,9 +151,7 @@ impl ExecutionTracker {
             .history
             .iter()
             .filter(|rec| self.get_tool_name(rec.tool_id) == Some(tool_name))
-            .fold((0u64, 0u64), |(sum, count), rec| {
-                (sum + rec.duration_ms, count + 1)
-            });
+            .fold((0u64, 0u64), |(sum, count), rec| (sum + rec.duration_ms, count + 1));
 
         if count == 0 {
             return None;

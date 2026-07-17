@@ -224,10 +224,7 @@ comment = "Never allow recursive delete"
         let file = parser.parse_toml(content).unwrap();
         assert_eq!(file.rules.len(), 2);
         assert_eq!(file.rules[0].decision, Decision::Allow);
-        assert_eq!(
-            file.rules[1].comment,
-            Some("Never allow recursive delete".to_string())
-        );
+        assert_eq!(file.rules[1].comment, Some("Never allow recursive delete".to_string()));
     }
 
     #[test]

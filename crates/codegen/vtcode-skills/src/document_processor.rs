@@ -187,11 +187,7 @@ impl DocumentProcessor {
         }
 
         let doc_type = DocumentType::from_path(document_path);
-        info!(
-            "Processing document: {} (type: {:?})",
-            document_path.display(),
-            doc_type
-        );
+        info!("Processing document: {} (type: {:?})", document_path.display(), doc_type);
 
         match doc_type {
             DocumentType::Pdf => self.process_pdf(document_path).await,
@@ -277,10 +273,7 @@ impl DocumentProcessor {
             pages: vec![PageImage {
                 page_number: 1,
                 image_path: image_path.to_path_buf(),
-                dimensions: ImageDimensions {
-                    width: 0,
-                    height: 0,
-                }, // Would detect actual dimensions
+                dimensions: ImageDimensions { width: 0, height: 0 }, // Would detect actual dimensions
                 text_content: None,
             }],
             extracted_text: None,
@@ -333,10 +326,7 @@ impl DocumentProcessor {
     pub fn cleanup(&self) -> Result<()> {
         if self.temp_dir.exists() {
             std::fs::remove_dir_all(&self.temp_dir)?;
-            debug!(
-                "Cleaned up temporary directory: {}",
-                self.temp_dir.display()
-            );
+            debug!("Cleaned up temporary directory: {}", self.temp_dir.display());
         }
         Ok(())
     }
@@ -355,26 +345,11 @@ mod tests {
 
     #[test]
     fn test_document_type_detection() {
-        assert_eq!(
-            DocumentType::from_path(Path::new("test.pdf")),
-            DocumentType::Pdf
-        );
-        assert_eq!(
-            DocumentType::from_path(Path::new("test.docx")),
-            DocumentType::Docx
-        );
-        assert_eq!(
-            DocumentType::from_path(Path::new("test.xlsx")),
-            DocumentType::Xlsx
-        );
-        assert_eq!(
-            DocumentType::from_path(Path::new("test.png")),
-            DocumentType::Image
-        );
-        assert_eq!(
-            DocumentType::from_path(Path::new("test.unknown")),
-            DocumentType::Unknown
-        );
+        assert_eq!(DocumentType::from_path(Path::new("test.pdf")), DocumentType::Pdf);
+        assert_eq!(DocumentType::from_path(Path::new("test.docx")), DocumentType::Docx);
+        assert_eq!(DocumentType::from_path(Path::new("test.xlsx")), DocumentType::Xlsx);
+        assert_eq!(DocumentType::from_path(Path::new("test.png")), DocumentType::Image);
+        assert_eq!(DocumentType::from_path(Path::new("test.unknown")), DocumentType::Unknown);
     }
 
     #[test]
@@ -389,9 +364,7 @@ mod tests {
         let config = DocumentProcessorConfig::default();
         let processor = DocumentProcessor::new(config).unwrap();
 
-        let result = processor
-            .process_document(Path::new("/nonexistent/document.pdf"))
-            .await;
+        let result = processor.process_document(Path::new("/nonexistent/document.pdf")).await;
         result.unwrap_err();
     }
 }

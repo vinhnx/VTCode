@@ -66,9 +66,6 @@ mod tests {
         )
         .expect("section bounds");
 
-        assert_eq!(
-            &prompt[bounds.0..bounds.1],
-            "[Harness Limits]\n- a\n## Environment\n- b\n"
-        );
+        assert_eq!(&prompt[bounds.0..bounds.1], "[Harness Limits]\n- a\n## Environment\n- b\n");
     }
 }

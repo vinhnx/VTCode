@@ -39,10 +39,7 @@ fn check_script_delegates_ast_grep_to_vtcode_command() {
         .arg("scripts/check.sh")
         .arg("ast-grep")
         .env("PATH", current_path)
-        .env(
-            "VTCODE_CHECK_SCRIPT_VTCODE_BIN",
-            fake_bin.path().join("vtcode"),
-        );
+        .env("VTCODE_CHECK_SCRIPT_VTCODE_BIN", fake_bin.path().join("vtcode"));
 
     command.assert().success();
 
@@ -52,8 +49,5 @@ fn check_script_delegates_ast_grep_to_vtcode_command() {
     let cwd = fs::read_to_string(fake_bin.path().join("vtcode-cwd.log")).expect("read cwd log");
     // `getcwd` may report a different path case than `CARGO_MANIFEST_DIR` on a
     // case-insensitive filesystem (e.g. macOS APFS), so compare case-insensitively.
-    assert_eq!(
-        cwd.trim().to_lowercase(),
-        workspace.display().to_string().to_lowercase()
-    );
+    assert_eq!(cwd.trim().to_lowercase(), workspace.display().to_string().to_lowercase());
 }

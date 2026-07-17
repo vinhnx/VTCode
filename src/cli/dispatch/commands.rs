@@ -85,10 +85,7 @@ pub(crate) async fn dispatch_command(
             )
             .await?;
         }
-        Commands::Ask {
-            prompt,
-            output_format,
-        } => {
+        Commands::Ask { prompt, output_format } => {
             handle_ask_single_command(
                 core_cfg.clone(),
                 Some(cfg.clone()),
@@ -124,11 +121,8 @@ pub(crate) async fn dispatch_command(
                 .await?;
         }
         Commands::Review(review) => {
-            let files = review
-                .files
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>();
+            let files =
+                review.files.iter().map(|path| path.display().to_string()).collect::<Vec<_>>();
             let spec = vtcode_core::review::build_review_spec(
                 review.last_diff,
                 review.target.clone(),
@@ -182,10 +176,7 @@ pub(crate) async fn dispatch_command(
         Commands::Config { output, global } => {
             config::handle_config_command(output.as_deref(), global).await?;
         }
-        Commands::Login {
-            provider,
-            device_code,
-        } => {
+        Commands::Login { provider, device_code } => {
             crate::cli::auth::handle_login_command(Some(cfg), &provider, device_code).await?;
         }
         Commands::Logout { provider } => {
@@ -194,19 +185,10 @@ pub(crate) async fn dispatch_command(
         Commands::Auth { provider } => {
             crate::cli::auth::handle_show_auth_command(Some(cfg), provider.as_deref()).await?;
         }
-        Commands::InitProject {
-            name,
-            force,
-            migrate,
-        } => {
+        Commands::InitProject { name, force, migrate } => {
             init_project::handle_init_project_command(name, force, migrate).await?;
         }
-        Commands::Benchmark {
-            task_file,
-            task,
-            output,
-            max_tasks,
-        } => {
+        Commands::Benchmark { task_file, task, output, max_tasks } => {
             let options = benchmark::BenchmarkCommandOptions {
                 task_file,
                 inline_task: task,
@@ -304,9 +286,7 @@ mod tests {
             "--name",
             vtcode_core::config::constants::tools::CODE_SEARCH,
         ]);
-        let startup = StartupContext::from_cli_args(&args)
-            .await
-            .expect("startup context");
+        let startup = StartupContext::from_cli_args(&args).await.expect("startup context");
         let command = args.command.clone().expect("schema command");
 
         assert_eq!(startup.config.tools.profile, ToolProfile::AdvancedVtCode);

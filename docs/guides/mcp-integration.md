@@ -3,7 +3,7 @@
 This guide outlines how VT Code connects to external MCP (Model Context Protocol) servers, how
 allowlists control tool access, and how to troubleshoot common configuration issues. The
 configuration surface documented below maps directly to the serde structures in
-`vtcode-config/src/mcp.rs`, so the examples here stay aligned with the loader that powers the
+`crates/codegen/vtcode-config/src/mcp.rs`, so the examples here stay aligned with the loader that powers the
 CLI and the reusable `vtcode-config` crate. For the canonical protocol behaviour and the latest
 server/client expectations, consult the upstream MCP reference index at
 `https://modelcontextprotocol.io/llms.txt`. That index links to the full architecture, transport,

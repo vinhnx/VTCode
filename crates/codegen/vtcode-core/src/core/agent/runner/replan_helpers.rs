@@ -18,10 +18,7 @@ impl AgentRunner {
     /// workflow state. Extracted to avoid repeating construction in
     /// `apply_required_tracker_updates` and `replan_from_failure`.
     fn tracker_tool(&self) -> TaskTrackerTool {
-        TaskTrackerTool::new(
-            self._workspace.clone(),
-            self.tool_registry.planning_workflow_state(),
-        )
+        TaskTrackerTool::new(self._workspace.clone(), self.tool_registry.planning_workflow_state())
     }
 
     /// Re-plan from the current state after an evaluator rejection.
@@ -48,14 +45,11 @@ impl AgentRunner {
 
         // Apply evaluator's required tracker updates to the tracker tool.
         if !evaluation.required_tracker_updates.is_empty() {
-            self.apply_required_tracker_updates(&evaluation.required_tracker_updates)
-                .await;
+            self.apply_required_tracker_updates(&evaluation.required_tracker_updates).await;
         }
 
         // Attempt LLM-based structured replan.
-        let replan = self
-            .request_replan_response(task, evaluation, revision_round)
-            .await;
+        let replan = self.request_replan_response(task, evaluation, revision_round).await;
 
         if let Some(ref replan) = replan {
             self.apply_replan_response(replan).await;
@@ -130,9 +124,7 @@ impl AgentRunner {
             let trimmed = addendum.trim();
             if !trimmed.is_empty() {
                 let contract_path = harness_artifacts::current_contract_path(&self._workspace);
-                let existing = tokio::fs::read_to_string(&contract_path)
-                    .await
-                    .unwrap_or_default();
+                let existing = tokio::fs::read_to_string(&contract_path).await.unwrap_or_default();
                 let updated = format!("{existing}\n\n--- Replan Addendum ---\n{trimmed}\n");
                 if let Err(e) = harness_artifacts::write_contract(&self._workspace, &updated).await
                 {

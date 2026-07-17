@@ -443,10 +443,7 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_opens_after_threshold() {
-        let config = CircuitBreakerConfig {
-            failure_threshold: 3,
-            ..Default::default()
-        };
+        let config = CircuitBreakerConfig { failure_threshold: 3, ..Default::default() };
         let breaker = McpCircuitBreaker::with_config(config);
 
         // Record failures up to threshold

@@ -1,8 +1,8 @@
 [package]
 name = "vtcode-indexer"
 version.workspace = true
-edition.workspace = true
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Workspace file indexer, fuzzy search, and markdown-backed storage for VT Code"
 license.workspace = true
@@ -34,7 +34,7 @@ serde_json = { workspace = true }
 serde-saphyr = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.135.11" }
+vtcode-commons = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

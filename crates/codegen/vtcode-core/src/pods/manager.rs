@@ -107,10 +107,7 @@ pub struct PodManager {
 impl PodManager {
     /// Create a new `PodManager` using the default store and SSH transport.
     pub fn new() -> Result<Self> {
-        Ok(Self::with_transport(
-            PodsStore::default_store()?,
-            Arc::new(SshTransport),
-        ))
+        Ok(Self::with_transport(PodsStore::default_store()?, Arc::new(SshTransport)))
     }
 
     /// Create a `PodManager` with an explicit store and transport (useful for testing).
@@ -151,10 +148,7 @@ impl PodManager {
         let catalog = self.load_catalog().await?;
         let pod = self.resolve_active_pod(&mut state, &request).await?;
         let profile = self.resolve_profile(&catalog, &pod, &request)?;
-        let gpu_count = request
-            .requested_gpu_count
-            .unwrap_or(profile.gpu_count)
-            .max(1);
+        let gpu_count = request.requested_gpu_count.unwrap_or(profile.gpu_count).max(1);
 
         if gpu_count > pod.gpu_count() {
             return Err(anyhow!(
@@ -171,11 +165,8 @@ impl PodManager {
         let run_path = format!("/tmp/model_run_{sanitized_name}.sh");
         let wrapper_path = format!("/tmp/model_wrapper_{sanitized_name}.sh");
         let log_path = format!("~/{DEFAULT_LOG_DIR}/{sanitized_name}.log");
-        let vllm_args = render_args(
-            &profile.vllm_args,
-            request.memory,
-            request.context.as_deref(),
-        )?;
+        let vllm_args =
+            render_args(&profile.vllm_args, request.memory, request.context.as_deref())?;
         let run_script = render_run_script(
             &profile,
             &request.model,
@@ -187,12 +178,8 @@ impl PodManager {
         );
         let wrapper_script = render_wrapper_script(&run_path, &log_path);
 
-        self.transport
-            .write_file(&pod.ssh, &run_path, &run_script)
-            .await?;
-        self.transport
-            .write_file(&pod.ssh, &wrapper_path, &wrapper_script)
-            .await?;
+        self.transport.write_file(&pod.ssh, &run_path, &run_script).await?;
+        self.transport.write_file(&pod.ssh, &wrapper_path, &wrapper_script).await?;
 
         let chmod = self
             .transport
@@ -205,10 +192,7 @@ impl PodManager {
         let launch_command = format!(
             "mkdir -p ~/{DEFAULT_LOG_DIR} && find ~/{DEFAULT_LOG_DIR} -name '*.log.old' -mtime +90 -delete 2>/dev/null; setsid {wrapper_path} >/dev/null 2>&1 < /dev/null & echo $!"
         );
-        let launch = self
-            .transport
-            .exec_capture(&pod.ssh, &launch_command)
-            .await?;
+        let launch = self.transport.exec_capture(&pod.ssh, &launch_command).await?;
         if !launch.success {
             return Err(anyhow!("failed to launch remote model: {}", launch.stderr));
         }
@@ -223,18 +207,11 @@ impl PodManager {
         };
 
         let mut updated_pod = pod.clone();
-        updated_pod
-            .models
-            .insert(request.name.clone(), entry.clone());
+        updated_pod.models.insert(request.name.clone(), entry.clone());
         state.active_pod = Some(updated_pod.clone());
         self.persist_state(&state).await?;
 
-        Ok(PodStartResult {
-            pod: updated_pod,
-            entry,
-            profile,
-            launch_command,
-        })
+        Ok(PodStartResult { pod: updated_pod, entry, profile, launch_command })
     }
 
     /// Stop a running model by name, sending `SIGTERM` followed by `SIGKILL`.
@@ -248,17 +225,10 @@ impl PodManager {
             return Ok(None);
         };
 
-        let command = format!(
-            "pkill -TERM -P {} || true; kill {} || true",
-            entry.pid, entry.pid
-        );
+        let command = format!("pkill -TERM -P {} || true; kill {} || true", entry.pid, entry.pid);
         let output = self.transport.exec_capture(&pod.ssh, &command).await?;
         if !output.success {
-            return Err(anyhow!(
-                "failed to stop model '{}': {}",
-                name,
-                output.stderr
-            ));
+            return Err(anyhow!("failed to stop model '{}': {}", name, output.stderr));
         }
 
         self.persist_state(&state).await?;
@@ -272,11 +242,7 @@ impl PodManager {
             return Ok(0);
         };
 
-        let pids = pod
-            .models
-            .values()
-            .map(|entry| entry.pid.to_string())
-            .collect::<Vec<_>>();
+        let pids = pod.models.values().map(|entry| entry.pid.to_string()).collect::<Vec<_>>();
 
         if pids.is_empty() {
             return Ok(0);
@@ -317,10 +283,7 @@ impl PodManager {
             });
         }
 
-        Ok(PodStatusReport {
-            pod_name: pod.name.clone(),
-            entries,
-        })
+        Ok(PodStatusReport { pod_name: pod.name.clone(), entries })
     }
 
     /// Stream the log output of a running model to the terminal via SSH.
@@ -380,10 +343,7 @@ impl PodManager {
         request: &PodStartRequest,
     ) -> Result<PodState> {
         let mut pod = state.active_pod.clone().unwrap_or_else(|| PodState {
-            name: request
-                .pod_name
-                .clone()
-                .unwrap_or_else(|| "active-pod".to_string()),
+            name: request.pod_name.clone().unwrap_or_else(|| "active-pod".to_string()),
             ssh: request.ssh.clone().unwrap_or_default(),
             models_path: request.models_path.clone(),
             gpus: Vec::new(),
@@ -404,9 +364,7 @@ impl PodManager {
         }
 
         if pod.ssh.is_empty() {
-            return Err(anyhow!(
-                "pod ssh command is required; pass --ssh or reuse the active pod"
-            ));
+            return Err(anyhow!("pod ssh command is required; pass --ssh or reuse the active pod"));
         }
         if pod.gpus.is_empty() {
             return Err(anyhow!(
@@ -493,33 +451,21 @@ impl PodManager {
         name: &str,
         entry: &RunningModel,
     ) -> Result<PodHealth> {
-        let process = self
-            .transport
-            .exec_capture(&pod.ssh, &format!("ps -p {}", entry.pid))
-            .await?;
+        let process =
+            self.transport.exec_capture(&pod.ssh, &format!("ps -p {}", entry.pid)).await?;
         let health = self
             .transport
-            .exec_capture(
-                &pod.ssh,
-                &format!("curl -s -f http://localhost:{}/health", entry.port),
-            )
+            .exec_capture(&pod.ssh, &format!("curl -s -f http://localhost:{}/health", entry.port))
             .await?;
         let log_tail = self
             .transport
             .exec_capture(
                 &pod.ssh,
-                &format!(
-                    "tail -n 20 ~/{DEFAULT_LOG_DIR}/{}.log",
-                    sanitize_component(name)
-                ),
+                &format!("tail -n 20 ~/{DEFAULT_LOG_DIR}/{}.log", sanitize_component(name)),
             )
             .await?;
 
-        Ok(classify_status(
-            process.success,
-            health.success,
-            &log_tail.stdout,
-        ))
+        Ok(classify_status(process.success, health.success, &log_tail.stdout))
     }
 }
 
@@ -559,13 +505,8 @@ fn render_run_script(
         let _ = writeln!(script, "export MODELS_PATH={}", shell_quote(models_path));
     }
 
-    let command = render_template(
-        &profile.command_template,
-        model,
-        name,
-        port,
-        &join_args(vllm_args),
-    );
+    let command =
+        render_template(&profile.command_template, model, name, port, &join_args(vllm_args));
     let _ = writeln!(script, "exec {command}");
     script
 }
@@ -595,10 +536,7 @@ fn render_template(template: &str, model: &str, name: &str, port: u16, vllm_args
 }
 
 fn join_args(args: &[String]) -> String {
-    args.iter()
-        .map(|value| shell_quote(value))
-        .collect::<Vec<_>>()
-        .join(" ")
+    args.iter().map(|value| shell_quote(value)).collect::<Vec<_>>().join(" ")
 }
 
 fn shell_quote(value: &str) -> String {
@@ -761,15 +699,11 @@ mod tests {
     impl PodTransport for MockTransport {
         async fn exec_capture(&self, _ssh_target: &str, command: &str) -> Result<CommandOutput> {
             self.commands.lock().push(command.to_string());
-            Ok(self
-                .responses
-                .lock()
-                .pop_front()
-                .unwrap_or_else(|| CommandOutput {
-                    success: true,
-                    stdout: "12345\n".to_string(),
-                    stderr: String::new(),
-                }))
+            Ok(self.responses.lock().pop_front().unwrap_or_else(|| CommandOutput {
+                success: true,
+                stdout: "12345\n".to_string(),
+                stderr: String::new(),
+            }))
         }
 
         async fn write_file(
@@ -778,9 +712,7 @@ mod tests {
             remote_path: &str,
             contents: &str,
         ) -> Result<()> {
-            self.writes
-                .lock()
-                .push((remote_path.to_string(), contents.to_string()));
+            self.writes.lock().push((remote_path.to_string(), contents.to_string()));
             Ok(())
         }
 
@@ -799,11 +731,7 @@ mod tests {
     #[test]
     fn classify_status_detects_failure_patterns() {
         assert_eq!(
-            classify_status(
-                true,
-                false,
-                "RuntimeError: Engine core initialization failed"
-            ),
+            classify_status(true, false, "RuntimeError: Engine core initialization failed"),
             PodHealth::Crashed
         );
         assert_eq!(classify_status(false, false, ""), PodHealth::Dead);
@@ -817,14 +745,8 @@ mod tests {
             ssh: "ssh root@example.com".to_string(),
             models_path: None,
             gpus: vec![
-                PodGpu {
-                    id: 0,
-                    name: "A100".to_string(),
-                },
-                PodGpu {
-                    id: 1,
-                    name: "A100".to_string(),
-                },
+                PodGpu { id: 0, name: "A100".to_string() },
+                PodGpu { id: 1, name: "A100".to_string() },
             ],
             models: BTreeMap::from([(
                 "existing".to_string(),
@@ -854,10 +776,7 @@ mod tests {
                 name: "gpu-box".to_string(),
                 ssh: "ssh root@example.com".to_string(),
                 models_path: Some("/models".to_string()),
-                gpus: vec![PodGpu {
-                    id: 0,
-                    name: "A100".to_string(),
-                }],
+                gpus: vec![PodGpu { id: 0, name: "A100".to_string() }],
                 models: BTreeMap::new(),
             }),
         };
@@ -920,9 +839,6 @@ mod tests {
         )
         .expect("render args");
 
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["--gpu-memory-utilization", "0.90"])
-        );
+        assert!(args.windows(2).any(|pair| pair == ["--gpu-memory-utilization", "0.90"]));
     }
 }

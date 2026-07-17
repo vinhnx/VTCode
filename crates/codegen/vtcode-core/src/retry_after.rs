@@ -27,18 +27,12 @@ mod tests {
 
     #[test]
     fn retry_after_header_accepts_integer_seconds() {
-        assert_eq!(
-            parse_retry_after_header(" 7 "),
-            Some(Duration::from_secs(7))
-        );
+        assert_eq!(parse_retry_after_header(" 7 "), Some(Duration::from_secs(7)));
     }
 
     #[test]
     fn retry_after_header_accepts_fractional_seconds() {
-        assert_eq!(
-            parse_retry_after_header("0.5"),
-            Some(Duration::from_millis(500))
-        );
+        assert_eq!(parse_retry_after_header("0.5"), Some(Duration::from_millis(500)));
     }
 
     #[test]

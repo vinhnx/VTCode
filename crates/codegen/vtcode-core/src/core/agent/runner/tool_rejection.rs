@@ -55,14 +55,7 @@ pub(super) fn reject_invalid_args(
 ) {
     let detail = format!("Invalid arguments for tool '{tool_name}': {err}");
     error!(agent = %agent_prefix, tool = %tool_name, error = %err, "{log_msg}");
-    reject_tool_call(
-        runtime,
-        event_recorder,
-        tool_name,
-        args,
-        tool_call_id,
-        &detail,
-    );
+    reject_tool_call(runtime, event_recorder, tool_name, args, tool_call_id, &detail);
     runtime.state.push_tool_error(
         tool_call_id.to_string(),
         tool_name,
@@ -96,14 +89,7 @@ pub(super) fn reject_denied_tool(
         &serde_json::Value::String(detail.clone()),
         is_gemini,
     );
-    reject_tool_call(
-        runtime,
-        event_recorder,
-        tool_name,
-        args,
-        tool_call_id,
-        &detail,
-    );
+    reject_tool_call(runtime, event_recorder, tool_name, args, tool_call_id, &detail);
 }
 
 /// Emit failed tool output events for completed invocations.

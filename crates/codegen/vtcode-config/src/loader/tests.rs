@@ -28,10 +28,7 @@ profile = "advanced_vtcode"
 "#,
     )
     .expect("tool profile should parse from the tools table");
-    assert_eq!(
-        config.tools.profile,
-        crate::core::ToolProfile::AdvancedVtCode
-    );
+    assert_eq!(config.tools.profile, crate::core::ToolProfile::AdvancedVtCode);
 
     let serialised = toml::to_string(&config).expect("configuration should serialise");
     assert!(serialised.contains("[tools]"));
@@ -53,11 +50,8 @@ fn test_layered_config_loading() {
 
     // 2. Workspace config
     let workspace_config_path = workspace_root.join("vtcode.toml");
-    fs::write(
-        &workspace_config_path,
-        "agent.default_model = \"claude-haiku-4-5\"",
-    )
-    .expect("failed to write workspace config");
+    fs::write(&workspace_config_path, "agent.default_model = \"claude-haiku-4-5\"")
+        .expect("failed to write workspace config");
 
     let static_paths = StaticWorkspacePaths::new(workspace_root, workspace_root.join(".vtcode"));
     let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
@@ -74,10 +68,7 @@ fn test_layered_config_loading() {
         // User + Workspace
         assert_eq!(layers.len(), 2);
         assert!(matches!(layers[0].source, ConfigLayerSource::User { .. }));
-        assert!(matches!(
-            layers[1].source,
-            ConfigLayerSource::Workspace { .. }
-        ));
+        assert!(matches!(layers[1].source, ConfigLayerSource::Workspace { .. }));
     });
 }
 
@@ -131,10 +122,7 @@ fn test_config_builder_overrides() {
     defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
         let manager = ConfigBuilder::new()
             .workspace(workspace_root.to_path_buf())
-            .cli_override(
-                "agent.provider".to_string(),
-                toml::Value::String("gemini".to_string()),
-            )
+            .cli_override("agent.provider".to_string(), toml::Value::String("gemini".to_string()))
             .cli_override(
                 "agent.default_model".to_string(),
                 toml::Value::String("gemini-1.5-pro".to_string()),
@@ -145,18 +133,12 @@ fn test_config_builder_overrides() {
 
         assert_eq!(manager.config().agent.provider, "gemini");
         assert_eq!(manager.config().agent.default_model, "gemini-1.5-pro");
-        assert_eq!(
-            manager.config().tools.profile,
-            crate::core::ToolProfile::AdvancedVtCode
-        );
+        assert_eq!(manager.config().tools.profile, crate::core::ToolProfile::AdvancedVtCode);
 
         let layers = manager.layer_stack().layers();
         // Workspace + Runtime
         assert_eq!(layers.len(), 2);
-        assert!(matches!(
-            layers[0].source,
-            ConfigLayerSource::Workspace { .. }
-        ));
+        assert!(matches!(layers[0].source, ConfigLayerSource::Workspace { .. }));
         assert!(matches!(layers[1].source, ConfigLayerSource::Runtime));
     });
 }
@@ -164,11 +146,7 @@ fn test_config_builder_overrides() {
 #[test]
 fn test_insert_dotted_key() {
     let mut table = toml::Table::new();
-    ConfigBuilder::insert_dotted_key(
-        &mut table,
-        "a.b.c",
-        toml::Value::String("value".to_string()),
-    );
+    ConfigBuilder::insert_dotted_key(&mut table, "a.b.c", toml::Value::String("value".to_string()));
 
     let a = table.get("a").unwrap().as_table().unwrap();
     let b = a.get("b").unwrap().as_table().unwrap();
@@ -200,20 +178,11 @@ fn test_merge_toml_values() {
     merge_toml_values(&mut base, &overlay);
 
     let agent = base.get("agent").unwrap().as_table().unwrap();
-    assert_eq!(
-        agent.get("provider").unwrap().as_str().unwrap(),
-        "anthropic"
-    );
-    assert_eq!(
-        agent.get("default_model").unwrap().as_str().unwrap(),
-        "claude-3"
-    );
+    assert_eq!(agent.get("provider").unwrap().as_str().unwrap(), "anthropic");
+    assert_eq!(agent.get("default_model").unwrap().as_str().unwrap(), "claude-3");
 
     let tools = base.get("tools").unwrap().as_table().unwrap();
-    assert_eq!(
-        tools.get("default_policy").unwrap().as_str().unwrap(),
-        "prompt"
-    );
+    assert_eq!(tools.get("default_policy").unwrap().as_str().unwrap(), "prompt");
 }
 
 #[test]
@@ -256,9 +225,7 @@ fn test_merge_toml_values_with_origins_tracks_winning_layer() {
 #[serial]
 fn syntax_highlighting_defaults_are_valid() {
     let config = SyntaxHighlightingConfig::default();
-    config
-        .validate()
-        .expect("default syntax highlighting config should be valid");
+    config.validate().expect("default syntax highlighting config should be valid");
     // Default is empty — all syntect grammars enabled
     assert!(
         config.enabled_languages.is_empty(),
@@ -282,19 +249,13 @@ fn vtcode_config_validation_fails_for_invalid_highlight_timeout() {
 #[test]
 fn load_from_file_rejects_invalid_syntax_highlighting() {
     let mut temp_file = NamedTempFile::new().expect("failed to create temp file");
-    writeln!(
-        temp_file,
-        "[syntax_highlighting]\nhighlight_timeout_ms = 0\n"
-    )
-    .expect("failed to write temp config");
+    writeln!(temp_file, "[syntax_highlighting]\nhighlight_timeout_ms = 0\n")
+        .expect("failed to write temp config");
 
     let result = ConfigManager::load_from_file(temp_file.path());
     assert!(result.is_err(), "expected validation error");
     let error = format!("{:?}", result.err().unwrap());
-    assert!(
-        error.contains("validate"),
-        "expected validation context in error, got: {error}"
-    );
+    assert!(error.contains("validate"), "expected validation context in error, got: {error}");
 }
 
 #[test]
@@ -318,10 +279,7 @@ fn ide_context_fields_round_trip_through_toml() {
     assert!(!parsed.ide_context.inject_into_prompt);
     assert!(!parsed.ide_context.show_in_tui);
     assert!(!parsed.ide_context.include_selection_text);
-    assert_eq!(
-        parsed.ide_context.provider_mode,
-        IdeContextProviderMode::Zed
-    );
+    assert_eq!(parsed.ide_context.provider_mode, IdeContextProviderMode::Zed);
     assert!(!parsed.ide_context.providers.vscode_compatible.enabled);
     assert!(parsed.ide_context.providers.zed.enabled);
     assert!(!parsed.ide_context.providers.generic.enabled);
@@ -343,9 +301,7 @@ fn custom_providers_fields_round_trip_through_toml() {
     let serialized = toml::to_string(&config).expect("serialize config");
     let parsed: VTCodeConfig = toml::from_str(&serialized).expect("parse config");
 
-    parsed
-        .validate()
-        .expect("custom provider config should validate");
+    parsed.validate().expect("custom provider config should validate");
     assert_eq!(parsed.custom_providers.len(), 1);
 
     let provider = &parsed.custom_providers[0];
@@ -354,10 +310,7 @@ fn custom_providers_fields_round_trip_through_toml() {
     assert_eq!(provider.base_url, "https://llm.corp.example/v1");
     assert_eq!(provider.api_key_env, "MYCORP_API_KEY");
     assert_eq!(provider.model, "gpt-5-mini");
-    assert_eq!(
-        provider.models,
-        vec!["gpt-5-mini".to_string(), "gpt-5-large".to_string()]
-    );
+    assert_eq!(provider.models, vec!["gpt-5-mini".to_string(), "gpt-5-large".to_string()]);
 }
 
 #[test]
@@ -450,18 +403,12 @@ default_policy = "deny"
         saved_content.contains("# This is a test comment"),
         "top-level comment should be preserved"
     );
-    assert!(
-        saved_content.contains("# Provider comment"),
-        "inline comment should be preserved"
-    );
+    assert!(saved_content.contains("# Provider comment"), "inline comment should be preserved");
     assert!(
         saved_content.contains("# Tools section comment"),
         "section comment should be preserved"
     );
-    assert!(
-        saved_content.contains("gpt-5"),
-        "modified value should be present"
-    );
+    assert!(saved_content.contains("gpt-5"), "modified value should be present");
 }
 
 #[test]
@@ -489,9 +436,7 @@ fn config_defaults_provider_overrides_paths_and_theme() {
         let manager = ConfigManager::load_from_workspace(workspace_root)
             .expect("failed to load workspace config");
 
-        let resolved_path = manager
-            .config_path()
-            .expect("config path should be resolved");
+        let resolved_path = manager.config_path().expect("config path should be resolved");
         let resolved_canonical =
             fs::canonicalize(resolved_path).expect("resolved config path should canonicalize");
         let expected_canonical =
@@ -499,10 +444,7 @@ fn config_defaults_provider_overrides_paths_and_theme() {
         assert_eq!(resolved_canonical, expected_canonical);
 
         assert_eq!(SyntaxHighlightingDefaults::theme(), "custom-theme");
-        assert_eq!(
-            SyntaxHighlightingDefaults::enabled_languages(),
-            vec!["zig".to_string()]
-        );
+        assert_eq!(SyntaxHighlightingDefaults::enabled_languages(), vec!["zig".to_string()]);
     });
 }
 
@@ -523,10 +465,7 @@ show_sidebar = false
 
     // Load config
     let mut manager = ConfigManager::load_from_workspace(workspace).expect("failed to load config");
-    assert_eq!(
-        manager.config().ui.display_mode,
-        crate::UiDisplayMode::Minimal
-    );
+    assert_eq!(manager.config().ui.display_mode, crate::UiDisplayMode::Minimal);
 
     // Modify config (simulating /config palette changes)
     let mut modified_config = manager.config().clone();
@@ -534,9 +473,7 @@ show_sidebar = false
     modified_config.ui.show_sidebar = true;
 
     // Save config
-    manager
-        .save_config(&modified_config)
-        .expect("failed to save config");
+    manager.save_config(&modified_config).expect("failed to save config");
 
     // Verify disk file was updated
     let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
@@ -582,9 +519,7 @@ fn save_config_writes_sparse_model_theme_and_permission_values() {
     modified_config.agent.theme = "ansi".to_string();
     modified_config.permissions.allow = vec!["read_file".to_string()];
 
-    manager
-        .save_config(&modified_config)
-        .expect("failed to save config");
+    manager.save_config(&modified_config).expect("failed to save config");
 
     let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
     assert!(
@@ -608,10 +543,7 @@ fn save_config_writes_sparse_model_theme_and_permission_values() {
     let reloaded = ConfigManager::load_from_workspace(workspace).expect("failed to reload config");
     assert_eq!(reloaded.config().agent.default_model, "gpt-5.4");
     assert_eq!(reloaded.config().agent.theme, "ansi");
-    assert_eq!(
-        reloaded.config().permissions.allow,
-        vec!["read_file".to_string()]
-    );
+    assert_eq!(reloaded.config().permissions.allow, vec!["read_file".to_string()]);
 }
 
 #[test]

@@ -94,10 +94,7 @@ pub fn sanitize_debug_component(value: &str, fallback: &str) -> String {
 
 pub fn build_command_debug_session_id(mode_hint: &str) -> String {
     let mode = sanitize_debug_component(mode_hint, "cmd");
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
     format!("cmd-{mode}-{timestamp}-{}", std::process::id())
 }
 
@@ -204,27 +201,17 @@ fn rotate_debug_log_if_needed(log_file: &Path, session_id: &str, max_size_mb: u6
         return Ok(());
     }
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
     let normalized_session_id = sanitize_debug_component(session_id, "session");
     let rotated_name = format!(
         "{DEBUG_LOG_FILE_PREFIX}{normalized_session_id}-rotated-{}-{}.log",
         timestamp,
         std::process::id()
     );
-    let rotated_path = log_file
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(rotated_name);
+    let rotated_path = log_file.parent().unwrap_or_else(|| Path::new(".")).join(rotated_name);
 
     fs::rename(log_file, &rotated_path).with_context(|| {
-        format!(
-            "Failed to rotate debug log {} -> {}",
-            log_file.display(),
-            rotated_path.display()
-        )
+        format!("Failed to rotate debug log {} -> {}", log_file.display(), rotated_path.display())
     })?;
     Ok(())
 }

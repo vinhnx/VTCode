@@ -25,10 +25,7 @@ pub async fn read_input_file_any_path<P: AsRef<Path>>(file_path: P) -> Result<Fi
         .with_context(|| format!("Failed to stat input file: {}", path.display()))?;
 
     if !metadata.is_file() {
-        return Err(anyhow::anyhow!(
-            "Input path is not a file: {}",
-            path.display()
-        ));
+        return Err(anyhow::anyhow!("Input path is not a file: {}", path.display()));
     }
 
     if metadata.len() > MAX_INPUT_FILE_BYTES {
@@ -88,10 +85,7 @@ mod tests {
 
     #[test]
     fn decoded_base64_size_supports_data_url_prefix() {
-        assert_eq!(
-            decoded_base64_size("data:application/pdf;base64,aGVsbG8=").unwrap(),
-            5
-        );
+        assert_eq!(decoded_base64_size("data:application/pdf;base64,aGVsbG8=").unwrap(), 5);
     }
 
     #[test]

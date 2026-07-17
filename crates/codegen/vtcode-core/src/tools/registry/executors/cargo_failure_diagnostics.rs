@@ -174,12 +174,8 @@ fn cargo_panic_location_and_message(output: &str) -> (Option<String>, Option<u64
             continue;
         };
 
-        let source_file = captures
-            .get(1)
-            .map(|value| value.as_str().trim().to_string());
-        let source_line = captures
-            .get(2)
-            .and_then(|value| value.as_str().parse::<u64>().ok());
+        let source_file = captures.get(1).map(|value| value.as_str().trim().to_string());
+        let source_line = captures.get(2).and_then(|value| value.as_str().parse::<u64>().ok());
         let panic_message = lines.iter().skip(index + 1).find_map(|candidate| {
             let trimmed = candidate.trim();
             if trimmed.is_empty() {

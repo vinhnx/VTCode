@@ -10,11 +10,8 @@ impl AgentRunner {
     pub(super) fn is_simple_task(task: &Task, contexts: &[ContextItem]) -> bool {
         let title_chars = task.title.chars().count();
         let description_chars = task.description.chars().count();
-        let instructions_chars = task
-            .instructions
-            .as_ref()
-            .map(|text| text.chars().count())
-            .unwrap_or(0);
+        let instructions_chars =
+            task.instructions.as_ref().map(|text| text.chars().count()).unwrap_or(0);
         let total_chars = title_chars + description_chars + instructions_chars;
 
         let title_words = task.title.split_whitespace().count();

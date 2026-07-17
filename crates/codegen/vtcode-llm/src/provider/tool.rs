@@ -118,10 +118,7 @@ pub struct GrammarDefinition {
 
 impl Default for GrammarDefinition {
     fn default() -> Self {
-        Self {
-            syntax: "lark".into(),
-            definition: String::new(),
-        }
+        Self { syntax: "lark".into(), definition: String::new() }
     }
 }
 
@@ -522,10 +519,7 @@ impl ToolDefinition {
     fn validate_hosted_tool_config(&self) -> Result<(), String> {
         match self.hosted_tool_config.as_ref() {
             Some(Value::Object(_)) => Ok(()),
-            Some(_) => Err(format!(
-                "{} tool configuration must be a JSON object",
-                self.tool_type
-            )),
+            Some(_) => Err(format!("{} tool configuration must be a JSON object", self.tool_type)),
             None => Err(format!("{} tool missing configuration", self.tool_type)),
         }
     }
@@ -536,14 +530,10 @@ impl ToolDefinition {
     ) -> Result<Option<&Map<String, Value>>, String> {
         match self.web_search.as_ref() {
             Some(Value::Object(config)) => Ok(Some(config)),
-            Some(_) => Err(format!(
-                "{} tool configuration must be a JSON object",
-                self.tool_type
-            )),
-            None if required => Err(format!(
-                "{} tool missing web_search configuration",
-                self.tool_type
-            )),
+            Some(_) => Err(format!("{} tool configuration must be a JSON object", self.tool_type)),
+            None if required => {
+                Err(format!("{} tool missing web_search configuration", self.tool_type))
+            }
             None => Ok(None),
         }
     }

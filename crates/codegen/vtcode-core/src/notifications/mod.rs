@@ -209,10 +209,7 @@ struct RepeatEntry {
 
 impl RepeatEntry {
     fn new(now: Instant) -> Self {
-        Self {
-            window_start: now,
-            sent_in_window: 0,
-        }
+        Self { window_start: now, sent_in_window: 0 }
     }
 }
 
@@ -351,15 +348,10 @@ impl NotificationManager {
         let mut state = self.repeat_state.lock();
 
         if state.entries.len() > 1024 {
-            state
-                .entries
-                .retain(|_, entry| now.duration_since(entry.window_start) < window);
+            state.entries.retain(|_, entry| now.duration_since(entry.window_start) < window);
         }
 
-        let entry = state
-            .entries
-            .entry(fingerprint)
-            .or_insert_with(|| RepeatEntry::new(now));
+        let entry = state.entries.entry(fingerprint).or_insert_with(|| RepeatEntry::new(now));
 
         if now.duration_since(entry.window_start) >= window {
             *entry = RepeatEntry::new(now);
@@ -449,11 +441,7 @@ impl NotificationManager {
     }
 
     fn normalize_message(&self, message: &str) -> String {
-        message
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .to_ascii_lowercase()
+        message.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
     }
 
     /// Format a notification message based on the event
@@ -467,39 +455,23 @@ impl NotificationManager {
                     format!("{title}: {message}")
                 }
             }
-            NotificationEvent::CommandFailure {
-                command,
-                error,
-                exit_code,
-            } => {
-                let exit_code_str = exit_code
-                    .map(|code| format!(" (exit code: {code})"))
-                    .unwrap_or_default();
+            NotificationEvent::CommandFailure { command, error, exit_code } => {
+                let exit_code_str =
+                    exit_code.map(|code| format!(" (exit code: {code})")).unwrap_or_default();
                 format!("Command failed: {command}{exit_code_str} - Error: {error}")
             }
-            NotificationEvent::ToolFailure {
-                tool_name,
-                error,
-                details,
-            } => {
-                let details_str = details
-                    .as_ref()
-                    .map(|d| format!(" - Details: {d}"))
-                    .unwrap_or_default();
+            NotificationEvent::ToolFailure { tool_name, error, details } => {
+                let details_str =
+                    details.as_ref().map(|d| format!(" - Details: {d}")).unwrap_or_default();
                 format!("Tool '{tool_name}' failed: {error}{details_str}")
             }
             NotificationEvent::ToolSuccess { tool_name, details } => {
-                let details_str = details
-                    .as_ref()
-                    .map(|d| format!(" - {d}"))
-                    .unwrap_or_default();
+                let details_str = details.as_ref().map(|d| format!(" - {d}")).unwrap_or_default();
                 format!("Tool '{tool_name}' completed{details_str}")
             }
             NotificationEvent::Error { message, context } => {
-                let context_str = context
-                    .as_ref()
-                    .map(|ctx| format!(" [{ctx}]"))
-                    .unwrap_or_default();
+                let context_str =
+                    context.as_ref().map(|ctx| format!(" [{ctx}]")).unwrap_or_default();
                 format!("Error occurred{context_str}: {message}")
             }
             NotificationEvent::PolicyApprovalRequest { action, details } => {
@@ -514,31 +486,21 @@ impl NotificationManager {
             NotificationEvent::IdlePrompt { title, message } => {
                 format!("{title}: {message}")
             }
-            NotificationEvent::Completion {
-                task,
-                status,
-                details,
-            } => {
+            NotificationEvent::Completion { task, status, details } => {
                 let status_str = match status {
                     CompletionStatus::Success => "completed successfully",
                     CompletionStatus::PartialSuccess => "partially completed",
                     CompletionStatus::Failure => "failed",
                     CompletionStatus::Cancelled => "was cancelled",
                 };
-                let details_str = details
-                    .as_ref()
-                    .map(|d| format!(" - {d}"))
-                    .unwrap_or_default();
+                let details_str = details.as_ref().map(|d| format!(" - {d}")).unwrap_or_default();
                 if task == "turn" {
                     format!("Agent turn ended: {status_str}{details_str}")
                 } else {
                     format!("Task '{task}' {status_str}{details_str}")
                 }
             }
-            NotificationEvent::Request {
-                request_type,
-                details,
-            } => {
+            NotificationEvent::Request { request_type, details } => {
                 format!("New {request_type} request: {details}")
             }
         }
@@ -676,16 +638,12 @@ impl NotificationManager {
         event: &NotificationEvent,
     ) -> Option<(NotificationHookType, String, String)> {
         match event {
-            NotificationEvent::PermissionPrompt { title, message } => Some((
-                NotificationHookType::PermissionPrompt,
-                title.clone(),
-                message.clone(),
-            )),
-            NotificationEvent::IdlePrompt { title, message } => Some((
-                NotificationHookType::IdlePrompt,
-                title.clone(),
-                message.clone(),
-            )),
+            NotificationEvent::PermissionPrompt { title, message } => {
+                Some((NotificationHookType::PermissionPrompt, title.clone(), message.clone()))
+            }
+            NotificationEvent::IdlePrompt { title, message } => {
+                Some((NotificationHookType::IdlePrompt, title.clone(), message.clone()))
+            }
             _ => None,
         }
     }
@@ -731,9 +689,7 @@ pub fn set_global_notification_hook_engine(engine: Option<LifecycleHookEngine>) 
 }
 
 fn get_global_notification_hook_engine() -> Option<LifecycleHookEngine> {
-    GLOBAL_NOTIFICATION_HOOK_ENGINE
-        .get()
-        .and_then(|slot| slot.read().clone())
+    GLOBAL_NOTIFICATION_HOOK_ENGINE.get().and_then(|slot| slot.read().clone())
 }
 
 /// Ensure the global manager is initialized, then apply updated configuration.
@@ -963,9 +919,7 @@ mod tests {
         };
         let manager = NotificationManager::with_config(config);
 
-        let result = manager
-            .send_message("Session started", &manager.get_config_sync())
-            .await;
+        let result = manager.send_message("Session started", &manager.get_config_sync()).await;
 
         result.unwrap();
     }
@@ -1086,14 +1040,8 @@ mod tests {
             details: None,
         };
 
-        assert!(matches!(
-            manager.repeat_decision(&event, &config),
-            RepeatDecision::Deliver
-        ));
-        assert!(matches!(
-            manager.repeat_decision(&event, &config),
-            RepeatDecision::Suppress
-        ));
+        assert!(matches!(manager.repeat_decision(&event, &config), RepeatDecision::Deliver));
+        assert!(matches!(manager.repeat_decision(&event, &config), RepeatDecision::Suppress));
     }
 
     #[test]
@@ -1104,10 +1052,7 @@ mod tests {
             message: "Session started".to_string(),
         };
 
-        assert_eq!(
-            manager.format_notification_message(&event),
-            "VT Code: Session started"
-        );
+        assert_eq!(manager.format_notification_message(&event), "VT Code: Session started");
     }
 
     #[cfg(target_os = "macos")]

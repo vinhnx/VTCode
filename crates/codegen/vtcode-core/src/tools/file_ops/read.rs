@@ -69,13 +69,8 @@ fn is_new_read_request(args: &Value) -> bool {
 fn looks_like_patch_payload(args: &Value) -> bool {
     use crate::tools::editing::looks_like_vte_patch;
 
-    args.get("patch")
-        .and_then(Value::as_str)
-        .is_some_and(looks_like_vte_patch)
-        || args
-            .get("input")
-            .and_then(Value::as_str)
-            .is_some_and(looks_like_vte_patch)
+    args.get("patch").and_then(Value::as_str).is_some_and(looks_like_vte_patch)
+        || args.get("input").and_then(Value::as_str).is_some_and(looks_like_vte_patch)
         || args.as_str().is_some_and(looks_like_vte_patch)
 }
 
@@ -85,10 +80,7 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
         for alias in ["path", "filepath", "target_path", "file"] {
             obj.remove(alias);
         }
-        obj.insert(
-            "file_path".to_string(),
-            json!(canonical_path.to_string_lossy()),
-        );
+        obj.insert("file_path".to_string(), json!(canonical_path.to_string_lossy()));
 
         if let Some(mode_value) = obj.get("mode").cloned() {
             let normalized_mode = match mode_value {
@@ -227,11 +219,7 @@ fn apply_spool_chunk_defaults(handler_args_json: &mut Value, raw_args: &Value) -
     let mut limit = SPOOL_CHUNK_DEFAULT_LIMIT_LINES;
 
     if let Some(obj) = handler_args_json.as_object_mut() {
-        offset = obj
-            .get("offset")
-            .and_then(parse_usize_value)
-            .unwrap_or(1)
-            .max(1);
+        offset = obj.get("offset").and_then(parse_usize_value).unwrap_or(1).max(1);
 
         let requested_limit = if has_explicit_limit(raw_args) {
             raw_args
@@ -279,9 +267,7 @@ fn pty_session_id_from_tool_output_path(path: &Path) -> Option<String> {
     let session_id = file_name.strip_suffix(".txt")?;
     if session_id.starts_with("run-")
         && session_id.len() > "run-".len()
-        && session_id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && session_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
         Some(session_id.to_string())
     } else {
@@ -299,10 +285,7 @@ fn build_history_cache_key(
     let size = metadata.len();
 
     let mode = args.get("mode").and_then(Value::as_str).unwrap_or("legacy");
-    let indentation = args
-        .get("indentation")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let indentation = args.get("indentation").and_then(Value::as_str).unwrap_or("");
     let offset = args
         .get("offset")
         .or_else(|| args.get("o"))
@@ -363,8 +346,7 @@ impl FileOpsTool {
             && let Some(content) = response.get("content").and_then(Value::as_str)
             && let Some(size_bytes) = response_size_bytes(response)
         {
-            self.track_exact_text_snapshot(path, content, size_bytes)
-                .await;
+            self.track_exact_text_snapshot(path, content, size_bytes).await;
             return;
         }
 
@@ -408,9 +390,7 @@ impl FileOpsTool {
                 continue;
             }
 
-            let canonical = self
-                .normalize_and_validate_candidate(candidate_path, path_str)
-                .await?;
+            let canonical = self.normalize_and_validate_candidate(candidate_path, path_str).await?;
 
             if self.should_exclude(&canonical).await {
                 continue;
@@ -454,8 +434,7 @@ impl FileOpsTool {
                 && let Some(cached) = FILE_CACHE.get_file(key).await
             {
                 perf.tag("cache", "hit");
-                self.track_cached_read_snapshot(&canonical, &args, &cached)
-                    .await;
+                self.track_cached_read_snapshot(&canonical, &args, &cached).await;
                 return Ok(cached);
             }
             perf.tag("cache", if cache_key.is_some() { "miss" } else { "skip" });
@@ -665,15 +644,12 @@ impl FileOpsTool {
                 }
             }
 
-            let content_kind = metadata
-                .get("content_kind")
-                .and_then(Value::as_str)
-                .unwrap_or("text");
+            let content_kind =
+                metadata.get("content_kind").and_then(Value::as_str).unwrap_or("text");
             let full_legacy_text_read = !use_paging && !truncated && content_kind == "text";
             let response = builder.build_json();
             if full_legacy_text_read {
-                self.track_exact_text_snapshot(&canonical, &content, size_bytes)
-                    .await;
+                self.track_exact_text_snapshot(&canonical, &content, size_bytes).await;
             } else {
                 self.track_read_snapshot(&canonical).await;
             }
@@ -709,9 +685,8 @@ impl FileOpsTool {
             .parent()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| ".".to_string());
-        let suggestion = self
-            .missing_path_suggestion_suffix(path_str, PathSuggestionKind::File)
-            .await;
+        let suggestion =
+            self.missing_path_suggestion_suffix(path_str, PathSuggestionKind::File).await;
         Err(anyhow!(
             "Error: File not found: {}. Tried paths: {}.{} Use `exec_command.cmd` with `find {}` to discover available files.",
             path_str,
@@ -737,26 +712,18 @@ mod read_tests {
 
     #[test]
     fn history_jsonl_detection() {
-        assert!(is_history_jsonl(Path::new(
-            "/tmp/.vtcode/history/test.jsonl"
-        )));
-        assert!(!is_history_jsonl(Path::new(
-            "/tmp/.vtcode/history/test.txt"
-        )));
+        assert!(is_history_jsonl(Path::new("/tmp/.vtcode/history/test.jsonl")));
+        assert!(!is_history_jsonl(Path::new("/tmp/.vtcode/history/test.txt")));
         assert!(!is_history_jsonl(Path::new("/tmp/history/test.jsonl")));
     }
 
     #[test]
     fn tool_output_spool_path_detection() {
-        assert!(is_tool_output_spool_path(Path::new(
-            ".vtcode/context/tool_outputs/run-123.txt"
-        )));
+        assert!(is_tool_output_spool_path(Path::new(".vtcode/context/tool_outputs/run-123.txt")));
         assert!(is_tool_output_spool_path(Path::new(
             "/tmp/work/.vtcode/context/tool_outputs/run-123.txt"
         )));
-        assert!(!is_tool_output_spool_path(Path::new(
-            ".vtcode/history/session.jsonl"
-        )));
+        assert!(!is_tool_output_spool_path(Path::new(".vtcode/history/session.jsonl")));
     }
 
     #[test]
@@ -1058,10 +1025,7 @@ mod read_tests {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path().to_path_buf();
         let test_file = workspace_root.join("big_legacy.txt");
-        let content = (1..=1000)
-            .map(|i| format!("line{i}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content = (1..=1000).map(|i| format!("line{i}")).collect::<Vec<_>>().join("\n");
         fs::write(&test_file, content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1115,10 +1079,7 @@ mod read_tests {
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops = FileOpsTool::new(workspace_root, grep_manager);
 
-        let result = file_ops
-            .read_file(json!({ "path": "note.txt" }))
-            .await
-            .unwrap();
+        let result = file_ops.read_file(json!({ "path": "note.txt" })).await.unwrap();
 
         assert_eq!(result["content"].as_str(), Some("hello\n"));
     }
@@ -1130,11 +1091,8 @@ mod read_tests {
         let test_file = workspace_root.join("test_file.txt");
 
         // Create test content with 50 lines
-        let test_content = (1..=50)
-            .map(|i| format!("line-{i}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-            + "\n";
+        let test_content =
+            (1..=50).map(|i| format!("line-{i}")).collect::<Vec<_>>().join("\n") + "\n";
         fs::write(&test_file, test_content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1160,9 +1118,7 @@ mod read_tests {
         #[allow(clippy::cast_sign_loss)]
         let expected_max_tokens = max_tokens as u64; // safe: max_tokens is positive literal
         assert_eq!(
-            result["metadata"]["data"]["applied_max_tokens"]
-                .as_u64()
-                .unwrap(),
+            result["metadata"]["data"]["applied_max_tokens"].as_u64().unwrap(),
             expected_max_tokens,
         );
     }
@@ -1261,10 +1217,7 @@ mod read_tests {
         let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
         fs::create_dir_all(&spool_dir).unwrap();
         let spool_file = spool_dir.join("command_session_123.txt");
-        let spool_content = (1..=120)
-            .map(|i| format!("line{i}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let spool_content = (1..=120).map(|i| format!("line{i}")).collect::<Vec<_>>().join("\n");
         fs::write(&spool_file, spool_content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1300,10 +1253,7 @@ mod read_tests {
         let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
         fs::create_dir_all(&spool_dir).unwrap();
         let spool_file = spool_dir.join("command_session_999.txt");
-        let spool_content = (1..=5)
-            .map(|i| format!("line{i}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let spool_content = (1..=5).map(|i| format!("line{i}")).collect::<Vec<_>>().join("\n");
         fs::write(&spool_file, spool_content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1360,10 +1310,7 @@ mod read_tests {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path().to_path_buf();
         let test_file = workspace_root.join("big.txt");
-        let content = (1..=1000)
-            .map(|i| format!("line{i}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content = (1..=1000).map(|i| format!("line{i}")).collect::<Vec<_>>().join("\n");
         fs::write(&test_file, content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1399,20 +1346,14 @@ mod read_tests {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path().to_path_buf();
         let test_file = workspace_root.join("big.txt");
-        let content = (1..=1000)
-            .map(|i| format!("line{i}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content = (1..=1000).map(|i| format!("line{i}")).collect::<Vec<_>>().join("\n");
         fs::write(&test_file, content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops = FileOpsTool::new(workspace_root, grep_manager);
 
         // Page 1: clamps the oversized request to the cap.
-        let page1 = file_ops
-            .read_file(json!({ "path": "big.txt", "limit": 2000 }))
-            .await
-            .unwrap();
+        let page1 = file_ops.read_file(json!({ "path": "big.txt", "limit": 2000 })).await.unwrap();
         assert_eq!(page1["capped_by_limit"], true);
         assert_eq!(page1["has_more"], true);
         assert_eq!(page1["next_read_args"]["offset"], 401);
@@ -1455,10 +1396,7 @@ mod read_tests {
         let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
         fs::create_dir_all(&spool_dir).unwrap();
         let spool_file = spool_dir.join("command_session_456.txt");
-        let spool_content = (1..=120)
-            .map(|i| format!("line{i}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let spool_content = (1..=120).map(|i| format!("line{i}")).collect::<Vec<_>>().join("\n");
         fs::write(&spool_file, spool_content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
@@ -1474,16 +1412,10 @@ mod read_tests {
             .unwrap();
 
         assert_eq!(result["success"], true);
-        assert_eq!(
-            result["path"],
-            ".vtcode/context/tool_outputs/command_session_456.txt"
-        );
+        assert_eq!(result["path"], ".vtcode/context/tool_outputs/command_session_456.txt");
         assert_eq!(result["spool_chunked"], true);
         assert_eq!(result["lines_returned"], 40);
-        assert_eq!(
-            result["content"].as_str().unwrap().lines().next(),
-            Some("line81")
-        );
+        assert_eq!(result["content"].as_str().unwrap().lines().next(), Some("line81"));
         assert!(result.get("has_more").is_none());
         assert!(result.get("next_read_args").is_none());
     }

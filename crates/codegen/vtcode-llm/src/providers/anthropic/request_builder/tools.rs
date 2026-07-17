@@ -132,10 +132,7 @@ fn anthropic_web_search_options(tool: &ToolDefinition) -> Result<Map<String, Val
             Ok(config.clone())
         }
         Some(_) => Err(LLMError::Provider {
-            message: format!(
-                "{} tool configuration must be a JSON object",
-                tool.tool_type
-            ),
+            message: format!("{} tool configuration must be a JSON object", tool.tool_type),
             metadata: None,
         }),
         None => Ok(Map::new()),
@@ -146,10 +143,8 @@ pub(crate) fn build_tool_choice(
     request: &LLMRequest,
     thinking_val: &Option<ThinkingConfig>,
 ) -> Option<Value> {
-    let mut final_tool_choice = request
-        .tool_choice
-        .as_ref()
-        .map(|tc| tc.to_provider_format("anthropic"));
+    let mut final_tool_choice =
+        request.tool_choice.as_ref().map(|tc| tc.to_provider_format("anthropic"));
 
     if thinking_val.is_some()
         && let Some(ref choice) = final_tool_choice

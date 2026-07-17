@@ -32,17 +32,12 @@ pub(crate) async fn handle_trigger_prompt_suggestions(
     )
     .await;
     if suggestions.is_empty() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "No prompt suggestions are available yet.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "No prompt suggestions are available yet.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
-    let items = suggestions
-        .iter()
-        .map(prompt_suggestion_item)
-        .collect::<Vec<_>>();
+    let items = suggestions.iter().map(prompt_suggestion_item).collect::<Vec<_>>();
     let selected = items.first().and_then(|item| item.selection.clone());
     ctx.handle.show_list_modal(
         "Prompt suggestions".to_string(),
@@ -102,46 +97,44 @@ pub(crate) async fn handle_show_jobs_panel(
 
     let jobs = collect_background_jobs(ctx.tool_registry);
     if jobs.is_empty() {
-        ctx.renderer
-            .line(MessageStyle::Info, "No active background jobs.")?;
+        ctx.renderer.line(MessageStyle::Info, "No active background jobs.")?;
         return Ok(SlashCommandControl::Continue);
     }
 
     let items = jobs.iter().map(background_job_item).collect::<Vec<_>>();
     let selected = items.first().and_then(|item| item.selection.clone());
-    ctx.handle
-        .show_transient(TransientRequest::List(ListOverlayRequest {
-            title: "Jobs".to_string(),
-            lines: vec![
+    ctx.handle.show_transient(TransientRequest::List(ListOverlayRequest {
+        title: "Jobs".to_string(),
+        lines: vec![
             "Active/background command sessions.".to_string(),
             "Enter or Ctrl+R focuses the selected job output. Ctrl+P previews. Ctrl+X interrupts."
                 .to_string(),
         ],
-            footer_hint: Some(
-                "ctrl-r focus output · ctrl-p preview snapshot · ctrl-x interrupt selected job"
-                    .to_string(),
-            ),
-            items,
-            selected: selected.clone(),
-            search: Some(InlineListSearchConfig {
-                label: "Search jobs".to_string(),
-                placeholder: Some("command, cwd, status".to_string()),
-            }),
-            hotkeys: vec![
-                TransientHotkey {
-                    key: TransientHotkeyKey::CtrlChar('r'),
-                    action: TransientHotkeyAction::FocusJobOutput,
-                },
-                TransientHotkey {
-                    key: TransientHotkeyKey::CtrlChar('p'),
-                    action: TransientHotkeyAction::PreviewJobSnapshot,
-                },
-                TransientHotkey {
-                    key: TransientHotkeyKey::CtrlChar('x'),
-                    action: TransientHotkeyAction::InterruptJob,
-                },
-            ],
-        }));
+        footer_hint: Some(
+            "ctrl-r focus output · ctrl-p preview snapshot · ctrl-x interrupt selected job"
+                .to_string(),
+        ),
+        items,
+        selected: selected.clone(),
+        search: Some(InlineListSearchConfig {
+            label: "Search jobs".to_string(),
+            placeholder: Some("command, cwd, status".to_string()),
+        }),
+        hotkeys: vec![
+            TransientHotkey {
+                key: TransientHotkeyKey::CtrlChar('r'),
+                action: TransientHotkeyAction::FocusJobOutput,
+            },
+            TransientHotkey {
+                key: TransientHotkeyKey::CtrlChar('p'),
+                action: TransientHotkeyAction::PreviewJobSnapshot,
+            },
+            TransientHotkey {
+                key: TransientHotkeyKey::CtrlChar('x'),
+                action: TransientHotkeyAction::InterruptJob,
+            },
+        ],
+    }));
 
     let Some(action) = wait_for_jobs_modal_action(
         ctx.handle,
@@ -235,10 +228,7 @@ async fn wait_for_jobs_modal_action(
                     TransientHotkeyAction::InterruptJob => JobModalActionKind::Interrupt,
                     _ => continue,
                 };
-                return Some(JobModalAction {
-                    kind,
-                    selection: current_selection.clone(),
-                });
+                return Some(JobModalAction { kind, selection: current_selection.clone() });
             }
             vtcode_ui::tui::app::InlineEvent::Transient(TransientEvent::Cancelled)
             | vtcode_ui::tui::app::InlineEvent::Cancel
@@ -260,26 +250,17 @@ fn focus_job_output(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Result<(
     let snapshot = match ctx.tool_registry.pty_manager().snapshot_session(job_id) {
         Ok(snapshot) => snapshot,
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to inspect job {job_id}: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to inspect job {job_id}: {err}"))?;
             return Ok(());
         }
     };
     let output = read_job_output(ctx, job_id);
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!("Focused job {}: {}", snapshot.id, snapshot.command),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Focused job {}: {}", snapshot.id, snapshot.command))?;
     ctx.renderer.line(
         MessageStyle::Output,
-        &format!(
-            "Working dir: {}",
-            snapshot
-                .working_dir
-                .unwrap_or_else(|| "unknown".to_string())
-        ),
+        &format!("Working dir: {}", snapshot.working_dir.unwrap_or_else(|| "unknown".to_string())),
     )?;
     for line in truncate_job_output(&output).lines() {
         ctx.renderer.line(MessageStyle::Output, line)?;
@@ -291,10 +272,8 @@ fn preview_job_snapshot(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Resu
     let snapshot = match ctx.tool_registry.pty_manager().snapshot_session(job_id) {
         Ok(snapshot) => snapshot,
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to inspect job {job_id}: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to inspect job {job_id}: {err}"))?;
             return Ok(());
         }
     };
@@ -306,9 +285,7 @@ fn preview_job_snapshot(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Resu
             format!("Command: {}", snapshot.command),
             format!(
                 "Working dir: {}",
-                snapshot
-                    .working_dir
-                    .unwrap_or_else(|| "unknown".to_string())
+                snapshot.working_dir.unwrap_or_else(|| "unknown".to_string())
             ),
             format!("Preview:\n{}", truncate_job_output(&output)),
         ],
@@ -318,19 +295,13 @@ fn preview_job_snapshot(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Resu
 }
 
 fn interrupt_job(ctx: &mut SlashCommandContext<'_>, job_id: &str) -> Result<()> {
-    match ctx
-        .tool_registry
-        .pty_manager()
-        .send_input_to_session(job_id, &[3], false)
-    {
-        Ok(_) => ctx.renderer.line(
-            MessageStyle::Info,
-            &format!("Sent interrupt to job {job_id}."),
-        )?,
-        Err(err) => ctx.renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to interrupt job {job_id}: {err}"),
-        )?,
+    match ctx.tool_registry.pty_manager().send_input_to_session(job_id, &[3], false) {
+        Ok(_) => ctx
+            .renderer
+            .line(MessageStyle::Info, &format!("Sent interrupt to job {job_id}."))?,
+        Err(err) => ctx
+            .renderer
+            .line(MessageStyle::Error, &format!("Failed to interrupt job {job_id}: {err}"))?,
     }
     Ok(())
 }
@@ -411,10 +382,7 @@ mod tests {
         let (command_tx, _command_rx) = mpsc::unbounded_channel();
         let handle = InlineHandle::new_for_tests(command_tx);
         let (event_tx, event_rx) = mpsc::unbounded_channel();
-        let mut session = InlineSession {
-            handle: handle.clone(),
-            events: event_rx,
-        };
+        let mut session = InlineSession { handle: handle.clone(), events: event_rx };
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
 
@@ -426,9 +394,9 @@ mod tests {
             )))
             .expect("selection change");
         event_tx
-            .send(InlineEvent::Transient(TransientEvent::Submitted(
-                TransientSubmission::Hotkey(TransientHotkeyAction::InterruptJob),
-            )))
+            .send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Hotkey(
+                TransientHotkeyAction::InterruptJob,
+            ))))
             .expect("hotkey submission");
 
         let action = wait_for_jobs_modal_action(
@@ -436,9 +404,7 @@ mod tests {
             &mut session,
             &ctrl_c_state,
             &ctrl_c_notify,
-            Some(InlineListSelection::ConfigAction(
-                "job:session-1".to_string(),
-            )),
+            Some(InlineListSelection::ConfigAction("job:session-1".to_string())),
         )
         .await
         .expect("job action");
@@ -446,9 +412,7 @@ mod tests {
         assert_eq!(action.kind, JobModalActionKind::Interrupt);
         assert_eq!(
             action.selection,
-            Some(InlineListSelection::ConfigAction(
-                "job:session-2".to_string()
-            ))
+            Some(InlineListSelection::ConfigAction("job:session-2".to_string()))
         );
     }
 }

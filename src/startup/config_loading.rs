@@ -18,10 +18,7 @@ pub(super) struct LoadedStartupConfig {
 }
 
 pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfig> {
-    let workspace_override = args
-        .workspace_path
-        .clone()
-        .or_else(|| args.workspace.clone());
+    let workspace_override = args.workspace_path.clone().or_else(|| args.workspace.clone());
 
     let workspace = resolve_workspace_path(workspace_override)
         .context("Failed to resolve workspace directory")?;
@@ -52,16 +49,12 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     }
 
     if let Some(ref model) = args.model {
-        builder = builder.cli_override(
-            "agent.default_model".to_owned(),
-            toml::Value::String(model.clone()),
-        );
+        builder = builder
+            .cli_override("agent.default_model".to_owned(), toml::Value::String(model.clone()));
     }
     if let Some(ref provider) = args.provider {
-        builder = builder.cli_override(
-            "agent.provider".to_owned(),
-            toml::Value::String(provider.clone()),
-        );
+        builder = builder
+            .cli_override("agent.provider".to_owned(), toml::Value::String(provider.clone()));
     }
 
     let manager = builder.build().context("Failed to load configuration")?;
@@ -98,9 +91,7 @@ pub(crate) fn has_explicit_default_primary_agent(config: &toml::Value) -> bool {
 }
 
 fn has_top_level_config_key(config: &toml::Value, key: &str) -> bool {
-    config
-        .as_table()
-        .is_some_and(|table| table.contains_key(key))
+    config.as_table().is_some_and(|table| table.contains_key(key))
 }
 
 #[cfg(test)]
@@ -135,9 +126,7 @@ enable_tracing = true
             config_path.to_str().expect("config path"),
         ]);
 
-        let loaded = load_startup_config(&args)
-            .await
-            .expect("startup config should load");
+        let loaded = load_startup_config(&args).await.expect("startup config should load");
 
         assert!(loaded.config.debug.enable_tracing);
     }

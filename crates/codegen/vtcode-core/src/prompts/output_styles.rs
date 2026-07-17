@@ -63,11 +63,7 @@ impl OutputStyleApplier {
 
     pub async fn get_available_styles(&self) -> Vec<String> {
         let guard = self.manager.read().await;
-        guard
-            .list_styles()
-            .into_iter()
-            .map(|(name, _)| name.to_string())
-            .collect()
+        guard.list_styles().into_iter().map(|(name, _)| name.to_string()).collect()
     }
 }
 

@@ -159,10 +159,7 @@ mod tests {
         enforce_history_limits(&mut history);
 
         assert!(history.len() <= output_limits::DEFAULT_MESSAGE_LIMIT);
-        assert_eq!(
-            history.first().map(|m| m.role),
-            Some(uni::MessageRole::System)
-        );
+        assert_eq!(history.first().map(|m| m.role), Some(uni::MessageRole::System));
     }
 
     #[test]

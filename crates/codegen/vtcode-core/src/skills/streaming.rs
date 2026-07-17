@@ -462,10 +462,7 @@ impl StreamingSkillExecutor {
                 let json_str = &json_buffer[brace_start..end];
 
                 if let Ok(value) = serde_json::from_str::<Value>(json_str) {
-                    events.push(StreamEvent::JsonObject {
-                        value,
-                        raw: json_str.to_string(),
-                    });
+                    events.push(StreamEvent::JsonObject { value, raw: json_str.to_string() });
 
                     // Remove processed JSON from buffer
                     json_buffer.drain(..end);

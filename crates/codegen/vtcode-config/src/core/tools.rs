@@ -461,10 +461,7 @@ mod tests {
             .expect_err("unintended spelling should fail")
             .to_string();
 
-        assert!(
-            error.contains("unknown variant `advanced_vt_code`"),
-            "{error}"
-        );
+        assert!(error.contains("unknown variant `advanced_vt_code`"), "{error}");
         assert!(error.contains("`advanced_vtcode`"), "{error}");
     }
 
@@ -508,10 +505,7 @@ mod tests {
 
     #[test]
     fn tools_config_reports_tool_loop_limit() {
-        let config = ToolsConfig {
-            max_tool_loops: 2,
-            ..Default::default()
-        };
+        let config = ToolsConfig { max_tool_loops: 2, ..Default::default() };
 
         assert!(!config.tool_loop_limit_reached(1));
         assert!(config.tool_loop_limit_reached(2));
@@ -525,32 +519,17 @@ mod tests {
 
     #[test]
     fn tool_call_delay_for_rate_uses_per_second_interval() {
-        assert_eq!(
-            tool_call_delay_for_rate(Some(4)),
-            Some(Duration::from_millis(250))
-        );
+        assert_eq!(tool_call_delay_for_rate(Some(4)), Some(Duration::from_millis(250)));
     }
 
     #[test]
     fn default_tool_policies_only_seed_current_public_surface() {
         let config = ToolsConfig::default();
 
-        assert_eq!(
-            config.policies.get(tools::EXEC_COMMAND),
-            Some(&ToolPolicy::Allow)
-        );
-        assert_eq!(
-            config.policies.get(tools::WRITE_STDIN),
-            Some(&ToolPolicy::Allow)
-        );
-        assert_eq!(
-            config.policies.get(tools::CODE_SEARCH),
-            Some(&ToolPolicy::Allow)
-        );
-        assert_eq!(
-            config.policies.get(tools::APPLY_PATCH),
-            Some(&ToolPolicy::Prompt)
-        );
+        assert_eq!(config.policies.get(tools::EXEC_COMMAND), Some(&ToolPolicy::Allow));
+        assert_eq!(config.policies.get(tools::WRITE_STDIN), Some(&ToolPolicy::Allow));
+        assert_eq!(config.policies.get(tools::CODE_SEARCH), Some(&ToolPolicy::Allow));
+        assert_eq!(config.policies.get(tools::APPLY_PATCH), Some(&ToolPolicy::Prompt));
         for legacy_tool in [
             tools::UNIFIED_EXEC,
             tools::UNIFIED_SEARCH,
@@ -745,11 +724,8 @@ session_max_requests = 5
         // A future TOML change that moves a wildcard into a web-relevant
         // category will be picked up here.
         let allowed = WebFetchConfig::default().allowed_domains;
-        let wildcards: Vec<&str> = allowed
-            .iter()
-            .map(|s| s.as_str())
-            .filter(|s| s.starts_with("*."))
-            .collect();
+        let wildcards: Vec<&str> =
+            allowed.iter().map(|s| s.as_str()).filter(|s| s.starts_with("*.")).collect();
         assert!(
             wildcards.is_empty(),
             "expected no wildcards in web_fetch defaults (dev_infra/auth are excluded); got {wildcards:?}"

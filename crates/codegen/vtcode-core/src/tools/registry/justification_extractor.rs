@@ -72,11 +72,7 @@ impl JustificationExtractor {
             return None;
         }
 
-        Some(ToolJustification::new(
-            tool_name,
-            combined_reasoning,
-            risk_level,
-        ))
+        Some(ToolJustification::new(tool_name, combined_reasoning, risk_level))
     }
 
     /// Suggest justification based on tool name and context
@@ -124,10 +120,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn create_test_decision(reasoning: &str) -> Decision {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         Decision {
             id: "test-1".to_string(),

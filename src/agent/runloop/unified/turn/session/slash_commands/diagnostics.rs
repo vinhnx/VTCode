@@ -234,19 +234,14 @@ pub(crate) async fn handle_apply_checkup_optimization(
 ) -> Result<SlashCommandControl> {
     let mut manager = ConfigManager::load_from_workspace(&ctx.config.workspace)
         .context("Failed to load the workspace config manager")?;
-    let mut cfg = ctx
-        .vt_cfg
-        .clone()
-        .context("No active VT Code configuration to optimize")?;
+    let mut cfg = ctx.vt_cfg.clone().context("No active VT Code configuration to optimize")?;
 
     let description = apply_checkup_remediation_to_config(&id, &mut cfg)?;
     manager.save_config(&cfg)?;
     *ctx.vt_cfg = Some(cfg);
 
-    ctx.renderer.line(
-        MessageStyle::Status,
-        &format!("[OK] {description} Configuration saved."),
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Status, &format!("[OK] {description} Configuration saved."))?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
 
     // Re-run the checkup so the updated state is visible immediately.
@@ -274,10 +269,7 @@ async fn run_checkup(ctx: &mut SlashCommandContext<'_>, quick: bool) -> Result<(
 pub(crate) async fn handle_start_terminal_setup(
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
-    let vt_cfg = ctx
-        .vt_cfg
-        .as_ref()
-        .context("VT Code configuration not available")?;
+    let vt_cfg = ctx.vt_cfg.as_ref().context("VT Code configuration not available")?;
     vtcode_core::terminal_setup::run_terminal_setup_wizard(ctx.renderer, vt_cfg).await?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
@@ -315,9 +307,7 @@ fn show_checkup_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             subtitle: Some("Close without running the checkup".to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                CHECKUP_ACTION_BACK.to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_BACK.to_string())),
             search_value: Some("back close cancel".to_string()),
         },
     ];
@@ -343,9 +333,7 @@ fn show_checkup_actions_modal(ctx: &mut SlashCommandContext<'_>) {
             "Use Enter to run an action, Esc to close.".to_string(),
         ],
         items,
-        Some(InlineListSelection::ConfigAction(format!(
-            "{CHECKUP_ACTION_PREFIX}full"
-        ))),
+        Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_PREFIX}full"))),
         None,
     );
 }
@@ -378,10 +366,8 @@ mod tests {
     #[test]
     fn reports_all_three_when_unoptimized() {
         let cfg = cfg_with_hooks();
-        let ids: Vec<&str> = compute_checkup_remediations(&Some(cfg))
-            .iter()
-            .map(|r| r.id)
-            .collect();
+        let ids: Vec<&str> =
+            compute_checkup_remediations(&Some(cfg)).iter().map(|r| r.id).collect();
         assert!(ids.contains(&"enable_auto_mode"));
         assert!(ids.contains(&"disable_slow_hooks"));
         assert!(ids.contains(&"preapprove_readonly"));

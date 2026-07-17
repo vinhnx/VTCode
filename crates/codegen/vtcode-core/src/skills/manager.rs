@@ -27,10 +27,7 @@ struct CachedEntry<T> {
 
 impl<T> CachedEntry<T> {
     fn new(value: T) -> Self {
-        Self {
-            value,
-            timestamp: SystemTime::now(),
-        }
+        Self { value, timestamp: SystemTime::now() }
     }
 
     fn is_expired(&self, ttl: Duration) -> bool {
@@ -79,10 +76,7 @@ fn evict_cache<K, V>(
 
     // If still at capacity, remove oldest entry by timestamp (LRU)
     if cache.len() >= max_size {
-        let oldest_key = cache
-            .iter()
-            .min_by_key(|(_, v)| get_timestamp(v))
-            .map(|(k, _)| k.clone());
+        let oldest_key = cache.iter().min_by_key(|(_, v)| get_timestamp(v)).map(|(k, _)| k.clone());
         if let Some(key) = oldest_key {
             cache.remove(&key);
         }
@@ -296,17 +290,13 @@ impl SkillsManager {
     pub fn resolve_skill_by_name(&self, cwd: &Path, skill_name: &str) -> Result<SkillMetadata> {
         let outcome = self.skills_for_cwd(cwd);
         let available: Vec<String> = outcome.skills.iter().map(|s| s.name.clone()).collect();
-        outcome
-            .skills
-            .into_iter()
-            .find(|s| s.name == skill_name)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Skill '{}' not found. Available skills: [{}]",
-                    skill_name,
-                    available.join(", ")
-                )
-            })
+        outcome.skills.into_iter().find(|s| s.name == skill_name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Skill '{}' not found. Available skills: [{}]",
+                skill_name,
+                available.join(", ")
+            )
+        })
     }
 
     /// Load skills by name from a list of skill names (e.g. from
@@ -466,10 +456,7 @@ mod tests {
 
         let first = manager.skills_metadata_lightweight_hermetic(workspace.path());
         assert!(
-            first
-                .skills
-                .iter()
-                .any(|skill| skill.name == "clear-cache-skill"),
+            first.skills.iter().any(|skill| skill.name == "clear-cache-skill"),
             "expected first discovery to find test skill",
         );
 
@@ -477,10 +464,7 @@ mod tests {
 
         let second = manager.skills_metadata_lightweight_hermetic(workspace.path());
         assert!(
-            second
-                .skills
-                .iter()
-                .any(|skill| skill.name == "clear-cache-skill"),
+            second.skills.iter().any(|skill| skill.name == "clear-cache-skill"),
             "expected cached discovery to preserve removed skill before clear_cache",
         );
 
@@ -488,10 +472,7 @@ mod tests {
 
         let third = manager.skills_metadata_lightweight_hermetic(workspace.path());
         assert!(
-            !third
-                .skills
-                .iter()
-                .any(|skill| skill.name == "clear-cache-skill"),
+            !third.skills.iter().any(|skill| skill.name == "clear-cache-skill"),
             "expected clear_cache to flush lightweight discovery cache",
         );
     }
@@ -613,11 +594,6 @@ mod tests {
         .unwrap();
 
         let outcome = manager.skills_for_cwd(workspace.path());
-        assert!(
-            outcome
-                .skills
-                .iter()
-                .all(|skill| skill.name != "bundled-skill")
-        );
+        assert!(outcome.skills.iter().all(|skill| skill.name != "bundled-skill"));
     }
 }

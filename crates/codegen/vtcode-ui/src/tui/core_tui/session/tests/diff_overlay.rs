@@ -22,9 +22,9 @@ fn diff_overlay_edit_approval_keys_remain_unchanged() {
     let apply = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         apply,
-        Some(app_types::InlineEvent::Transient(
-            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffApply)
-        ))
+        Some(app_types::InlineEvent::Transient(app_types::TransientEvent::Submitted(
+            app_types::TransientSubmission::DiffApply
+        )))
     ));
 
     show_diff_overlay(&mut session, app_types::DiffPreviewMode::EditApproval);
@@ -35,9 +35,9 @@ fn diff_overlay_edit_approval_keys_remain_unchanged() {
     let reject = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         reject,
-        Some(app_types::InlineEvent::Transient(
-            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffReject)
-        ))
+        Some(app_types::InlineEvent::Transient(app_types::TransientEvent::Submitted(
+            app_types::TransientSubmission::DiffReject
+        )))
     ));
 }
 
@@ -49,27 +49,27 @@ fn diff_overlay_conflict_mode_maps_enter_reload_and_escape() {
     let proceed = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         proceed,
-        Some(app_types::InlineEvent::Transient(
-            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffProceed)
-        ))
+        Some(app_types::InlineEvent::Transient(app_types::TransientEvent::Submitted(
+            app_types::TransientSubmission::DiffProceed
+        )))
     ));
 
     show_diff_overlay(&mut session, app_types::DiffPreviewMode::FileConflict);
     let reload = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
     assert!(matches!(
         reload,
-        Some(app_types::InlineEvent::Transient(
-            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffReload)
-        ))
+        Some(app_types::InlineEvent::Transient(app_types::TransientEvent::Submitted(
+            app_types::TransientSubmission::DiffReload
+        )))
     ));
 
     show_diff_overlay(&mut session, app_types::DiffPreviewMode::FileConflict);
     let abort = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         abort,
-        Some(app_types::InlineEvent::Transient(
-            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffAbort)
-        ))
+        Some(app_types::InlineEvent::Transient(app_types::TransientEvent::Submitted(
+            app_types::TransientSubmission::DiffAbort
+        )))
     ));
 }
 
@@ -95,18 +95,18 @@ fn diff_overlay_readonly_review_maps_enter_and_escape_to_back() {
     let enter = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         enter,
-        Some(app_types::InlineEvent::Transient(
-            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffAbort)
-        ))
+        Some(app_types::InlineEvent::Transient(app_types::TransientEvent::Submitted(
+            app_types::TransientSubmission::DiffAbort
+        )))
     ));
 
     show_diff_overlay(&mut session, app_types::DiffPreviewMode::ReadonlyReview);
     let escape = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(matches!(
         escape,
-        Some(app_types::InlineEvent::Transient(
-            app_types::TransientEvent::Submitted(app_types::TransientSubmission::DiffAbort)
-        ))
+        Some(app_types::InlineEvent::Transient(app_types::TransientEvent::Submitted(
+            app_types::TransientSubmission::DiffAbort
+        )))
     ));
 }
 
@@ -139,12 +139,7 @@ fn diff_preview_suspends_task_panel_and_restores_it_on_close() {
 
     show_diff_overlay(&mut session, app_types::DiffPreviewMode::ReadonlyReview);
     assert!(!session.core.input_enabled());
-    assert!(
-        !session
-            .core
-            .build_input_widget_data(VIEW_WIDTH, 1)
-            .cursor_should_be_visible
-    );
+    assert!(!session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
 
     terminal
         .draw(|frame| session.render(frame))
@@ -156,12 +151,7 @@ fn diff_preview_suspends_task_panel_and_restores_it_on_close() {
 
     session.close_diff_overlay();
     assert!(session.core.input_enabled());
-    assert!(
-        session
-            .core
-            .build_input_widget_data(VIEW_WIDTH, 1)
-            .cursor_should_be_visible
-    );
+    assert!(session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
 
     let lines = rendered_app_session_lines(&mut session, 30);
     assert!(

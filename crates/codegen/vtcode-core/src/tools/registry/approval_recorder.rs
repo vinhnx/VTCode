@@ -18,9 +18,7 @@ impl ApprovalRecorder {
     /// Create a new approval recorder
     pub fn new(cache_dir: PathBuf) -> Self {
         let manager = JustificationManager::new(cache_dir);
-        Self {
-            manager: Arc::new(RwLock::new(manager)),
-        }
+        Self { manager: Arc::new(RwLock::new(manager)) }
     }
 }
 
@@ -168,24 +166,15 @@ mod tests {
         let recorder = ApprovalRecorder::new(temp_dir.path().to_path_buf());
 
         // Not enough approvals initially
-        assert!(
-            recorder
-                .get_auto_approval_suggestion("read_file", "Read File")
-                .await
-                .is_none()
-        );
+        assert!(recorder.get_auto_approval_suggestion("read_file", "Read File").await.is_none());
 
         // Add 5 approvals
         for _ in 0..5 {
-            let _ = recorder
-                .record_approval("read_file", Some("Read File"), true, None)
-                .await;
+            let _ = recorder.record_approval("read_file", Some("Read File"), true, None).await;
         }
 
         // Now we should get a suggestion
-        let suggestion = recorder
-            .get_auto_approval_suggestion("read_file", "Read File")
-            .await;
+        let suggestion = recorder.get_auto_approval_suggestion("read_file", "Read File").await;
         assert!(suggestion.is_some());
         assert!(suggestion.unwrap().contains("100%"));
     }
@@ -200,9 +189,7 @@ mod tests {
 
         // Add 3 approvals (minimum threshold)
         for _ in 0..3 {
-            let _ = recorder
-                .record_approval("run_command", Some("Run Command"), true, None)
-                .await;
+            let _ = recorder.record_approval("run_command", Some("Run Command"), true, None).await;
         }
 
         // Now should auto-approve
@@ -249,10 +236,7 @@ mod tests {
 
         let writer = ApprovalRecorder::new(temp_dir.path().to_path_buf());
         for _ in 0..3 {
-            writer
-                .record_approval(key, Some("find src"), true, None)
-                .await
-                .unwrap();
+            writer.record_approval(key, Some("find src"), true, None).await.unwrap();
         }
 
         // Without the disk refresh in should_auto_approve, the reader's

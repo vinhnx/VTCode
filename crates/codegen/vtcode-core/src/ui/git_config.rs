@@ -193,9 +193,7 @@ impl GitColorConfig {
             )
         })?;
 
-        Some(crate::utils::style_helpers::style_from_color_name(
-            color_name,
-        ))
+        Some(crate::utils::style_helpers::style_from_color_name(color_name))
     }
 }
 

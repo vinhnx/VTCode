@@ -118,12 +118,7 @@ impl DefuddleTool {
         let (body, truncated) = match fetch_markdown(&url, timeout_secs, max_bytes).await {
             Ok(t) => t,
             Err(e) => {
-                return Ok(defuddle_fetch_error_response(
-                    &url,
-                    max_bytes,
-                    timeout_secs,
-                    &e,
-                ));
+                return Ok(defuddle_fetch_error_response(&url, max_bytes, timeout_secs, &e));
             }
         };
 
@@ -178,10 +173,7 @@ fn defuddle_fetch_error_response(
         };
         ("http_error", action)
     } else {
-        (
-            "unknown_error",
-            "defuddle.md request failed. Use web_fetch on a known URL as a fallback.",
-        )
+        ("unknown_error", "defuddle.md request failed. Use web_fetch on a known URL as a fallback.")
     };
     json!({
         "error": format!("defuddle_fetch failed for '{}': {}", url, message),
@@ -226,9 +218,7 @@ fn validate_target_url(url: &str) -> Result<()> {
     // hosts so a malicious URL can't turn defuddle into an SSRF relay.
     // Mirrors the `web_fetch` check via the shared `is_private_host` helper.
     if is_private_host(host) {
-        return Err(anyhow!(
-            "defuddle_fetch: refusing to fetch private/local host '{host}'"
-        ));
+        return Err(anyhow!("defuddle_fetch: refusing to fetch private/local host '{host}'"));
     }
     Ok(())
 }
@@ -269,10 +259,7 @@ async fn fetch_markdown(url: &str, timeout_secs: u64, max_bytes: usize) -> Resul
         return Err(anyhow!("defuddle.md returned HTTP {status}"));
     }
 
-    let body = response
-        .text()
-        .await
-        .context("defuddle_fetch: failed to read response body")?;
+    let body = response.text().await.context("defuddle_fetch: failed to read response body")?;
 
     if body.len() > max_bytes {
         // Truncate to a hard cap so a giant page never blows up the agent.
@@ -347,9 +334,7 @@ mod tests {
     #[test]
     fn missing_url_is_rejected() {
         let tool = DefuddleTool::new();
-        let result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(tool.run(json!({})));
+        let result = tokio::runtime::Runtime::new().unwrap().block_on(tool.run(json!({})));
         assert!(result.is_err());
     }
 
@@ -508,10 +493,7 @@ mod tests {
         );
         assert_eq!(response["error_type"], "http_error");
         assert!(
-            response["next_action"]
-                .as_str()
-                .unwrap_or("")
-                .contains("web_fetch"),
+            response["next_action"].as_str().unwrap_or("").contains("web_fetch"),
             "next_action should fall back to web_fetch; got: {}",
             response["next_action"]
         );

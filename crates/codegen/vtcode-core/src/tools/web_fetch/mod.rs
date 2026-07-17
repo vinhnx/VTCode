@@ -91,11 +91,7 @@ fn fetched_content_from_bytes(bytes: &[u8], max_bytes: usize) -> Result<FetchedW
     let content = std::str::from_utf8(&bytes[..end])
         .context("Response body is not valid UTF-8")?
         .to_string();
-    Ok(FetchedWebContent {
-        content,
-        truncated_by_max_bytes,
-        source_size_bytes,
-    })
+    Ok(FetchedWebContent { content, truncated_by_max_bytes, source_size_bytes })
 }
 
 /// Returns the path to the ephemeral temp directory for web_fetch artifacts.
@@ -304,10 +300,7 @@ impl WebFetchTool {
         let response = client.get(url).send().await?;
 
         if !response.status().is_success() {
-            return Err(anyhow!(
-                "HTTP request failed with status: {}",
-                response.status()
-            ));
+            return Err(anyhow!("HTTP request failed with status: {}", response.status()));
         }
 
         let content_type = response
@@ -478,11 +471,7 @@ impl WebFetchTool {
         // Content-Type headers may include parameters (e.g., "text/html; charset=utf-8").
         // Extract just the media type (everything before the first ';') for matching.
         let content_type_lower = content_type.to_lowercase();
-        let media_type = content_type_lower
-            .split(';')
-            .next()
-            .unwrap_or(&content_type_lower)
-            .trim();
+        let media_type = content_type_lower.split(';').next().unwrap_or(&content_type_lower).trim();
 
         if allowed_types.contains(&media_type) {
             Ok(())
@@ -498,20 +487,15 @@ impl WebFetchTool {
             "Invalid arguments for web_fetch tool. Provide 'url' (and optionally 'prompt').",
         )?;
 
-        let max_bytes = args
-            .max_bytes
-            .map(|v| v.min(MAX_ALLOWED_BYTES))
-            .unwrap_or(MAX_CONTENT_SIZE);
+        let max_bytes =
+            args.max_bytes.map(|v| v.min(MAX_ALLOWED_BYTES)).unwrap_or(MAX_CONTENT_SIZE);
         let timeout_secs = args
             .timeout_secs
             .map(|v| v.min(MAX_ALLOWED_TIMEOUT_SECS))
             .unwrap_or(DEFAULT_TIMEOUT_SECS);
 
         // Fetch the URL content with detailed error handling
-        let fetched = match self
-            .fetch_url_content(&args.url, max_bytes, timeout_secs)
-            .await
-        {
+        let fetched = match self.fetch_url_content(&args.url, max_bytes, timeout_secs).await {
             Ok(fetched) => fetched,
             Err(e) => {
                 // Categorize the error so the agent loop can react. We used to
@@ -519,12 +503,7 @@ impl WebFetchTool {
                 // turn_578 reporting "github.com, npmjs.com, and crates.io are
                 // all blocked" when the actual errors were 403/404 from the
                 // upstream services.
-                return Ok(web_fetch_error_response(
-                    &args.url,
-                    max_bytes,
-                    timeout_secs,
-                    &e,
-                ));
+                return Ok(web_fetch_error_response(&args.url, max_bytes, timeout_secs, &e));
             }
         };
         let content = fetched.content;
@@ -582,10 +561,8 @@ impl WebFetchTool {
 
         // Add overflow indicator if preview was truncated
         if truncated {
-            response["overflow"] = json!(format!(
-                "[+{} more characters]",
-                content_length - preview_limit
-            ));
+            response["overflow"] =
+                json!(format!("[+{} more characters]", content_length - preview_limit));
         }
 
         if fetched.truncated_by_max_bytes {
@@ -624,9 +601,7 @@ impl WebFetchTool {
 /// - Port numbers, paths, and query strings
 fn extract_domain(url: &str) -> Result<String> {
     let parsed = Url::parse(url).with_context(|| format!("Failed to parse URL: {url}"))?;
-    let host = parsed
-        .host_str()
-        .ok_or_else(|| anyhow!("URL has no host: {url}"))?;
+    let host = parsed.host_str().ok_or_else(|| anyhow!("URL has no host: {url}"))?;
     if host.is_empty() {
         bail!("URL has empty host: {url}");
     }
@@ -643,10 +618,7 @@ fn extract_domain(url: &str) -> Result<String> {
 /// returns IPv6 hosts like `[::1]`; we strip the brackets before
 /// parsing).
 pub(super) fn is_private_host(host: &str) -> bool {
-    let trimmed = host
-        .strip_prefix('[')
-        .and_then(|s| s.strip_suffix(']'))
-        .unwrap_or(host);
+    let trimmed = host.strip_prefix('[').and_then(|s| s.strip_suffix(']')).unwrap_or(host);
     // Try IPv4 / IPv6 parsing first.
     if let Ok(ip) = trimmed.parse::<IpAddr>() {
         return match ip {
@@ -736,10 +708,8 @@ fn is_private_ipv6(v6: std::net::Ipv6Addr) -> bool {
 
 fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
     let normalized_domain = domain.trim_end_matches('.').to_ascii_lowercase();
-    let normalized_allowed = allowed
-        .trim_start_matches('.')
-        .trim_end_matches('.')
-        .to_ascii_lowercase();
+    let normalized_allowed =
+        allowed.trim_start_matches('.').trim_end_matches('.').to_ascii_lowercase();
 
     // Wildcard entries like `*.example.com` match the apex and any
     // subdomain. The `*` must be a complete leading label, not a partial
@@ -1439,10 +1409,7 @@ mod tests {
         let err = tool
             .validate_url("https://github.com/vinhnx")
             .expect_err("whitelist mode must reject domains not in the user allow list");
-        assert!(
-            err.to_string().contains("whitelist"),
-            "unexpected error: {err}"
-        );
+        assert!(err.to_string().contains("whitelist"), "unexpected error: {err}");
     }
 
     #[test]
@@ -1450,16 +1417,10 @@ mod tests {
         // Apex + subdomains under a wildcard.
         assert!(domain_matches_allowed("example.com", "*.example.com"));
         assert!(domain_matches_allowed("api.example.com", "*.example.com"));
-        assert!(domain_matches_allowed(
-            "deep.nested.api.example.com",
-            "*.example.com"
-        ));
+        assert!(domain_matches_allowed("deep.nested.api.example.com", "*.example.com"));
         // Negative matches — wildcard must not be a substring match.
         assert!(!domain_matches_allowed("evilexample.com", "*.example.com"));
-        assert!(!domain_matches_allowed(
-            "example.com.evil.tld",
-            "*.example.com"
-        ));
+        assert!(!domain_matches_allowed("example.com.evil.tld", "*.example.com"));
         // Apex match is also accepted.
         assert!(domain_matches_allowed("example.com", "example.com"));
         assert!(domain_matches_allowed("api.example.com", "example.com"));
@@ -1591,10 +1552,7 @@ mod tests {
         assert_eq!(response["error_type"], "http_error");
         assert_eq!(response["http_status"], 404);
         let action = response["next_action"].as_str().unwrap_or("");
-        assert!(
-            action.contains("does not exist"),
-            "next_action was: {action}"
-        );
+        assert!(action.contains("does not exist"), "next_action was: {action}");
     }
 
     /// 5xx responses are transient — the hint should nudge the agent to
@@ -1606,10 +1564,7 @@ mod tests {
         assert_eq!(response["error_type"], "http_error");
         assert_eq!(response["http_status"], 503);
         let action = response["next_action"].as_str().unwrap_or("");
-        assert!(
-            action.contains("retry") || action.contains("search"),
-            "got: {action}"
-        );
+        assert!(action.contains("retry") || action.contains("search"), "got: {action}");
     }
 
     /// Network-level errors (timeout, DNS, TLS) should be classified
@@ -1642,10 +1597,7 @@ mod tests {
         for err in &samples {
             let response = web_fetch_error_response("https://example.com", 262144, 30, err);
             let action = response["next_action"].as_str().unwrap_or("");
-            assert!(
-                !action.is_empty(),
-                "next_action must be non-empty; got response {response}"
-            );
+            assert!(!action.is_empty(), "next_action must be non-empty; got response {response}");
         }
     }
 

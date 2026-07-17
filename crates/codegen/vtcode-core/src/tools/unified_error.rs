@@ -317,14 +317,8 @@ mod tests {
 
     #[test]
     fn test_error_classification() {
-        assert_eq!(
-            classify(&anyhow::anyhow!("Connection timeout")),
-            UnifiedErrorKind::Timeout
-        );
-        assert_eq!(
-            classify(&anyhow::anyhow!("Rate limit exceeded")),
-            UnifiedErrorKind::RateLimit
-        );
+        assert_eq!(classify(&anyhow::anyhow!("Connection timeout")), UnifiedErrorKind::Timeout);
+        assert_eq!(classify(&anyhow::anyhow!("Rate limit exceeded")), UnifiedErrorKind::RateLimit);
         assert_eq!(
             classify(&anyhow::anyhow!("Permission denied")),
             UnifiedErrorKind::PermissionDenied

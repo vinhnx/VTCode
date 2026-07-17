@@ -74,9 +74,7 @@ pub(crate) async fn apply_turn_outcome(
                 ctx.workspace,
                 ctx.session_id,
                 "blocked",
-                reason
-                    .as_deref()
-                    .unwrap_or("Turn blocked due to repeated failing behavior."),
+                reason.as_deref().unwrap_or("Turn blocked due to repeated failing behavior."),
                 &existing_harness_artifact_paths(ctx.workspace),
             ) {
                 Ok(artifacts) => {
@@ -106,11 +104,8 @@ pub(crate) async fn apply_turn_outcome(
         }
         TurnLoopResult::Completed => {
             if let Some(manager) = ctx.checkpoint_manager {
-                let conversation_snapshot: Vec<SessionMessage> = ctx
-                    .conversation_history
-                    .iter()
-                    .map(SessionMessage::from)
-                    .collect();
+                let conversation_snapshot: Vec<SessionMessage> =
+                    ctx.conversation_history.iter().map(SessionMessage::from).collect();
                 let turn_number = *ctx.next_checkpoint_turn;
                 match manager
                     .create_snapshot(
@@ -178,10 +173,7 @@ mod tests {
         let mut lines = Vec::new();
         while let Ok(command) = receiver.try_recv() {
             if let InlineCommand::AppendLine { segments, .. } = command {
-                let line = segments
-                    .into_iter()
-                    .map(|segment| segment.text)
-                    .collect::<String>();
+                let line = segments.into_iter().map(|segment| segment.text).collect::<String>();
                 if !line.trim().is_empty() {
                     lines.push(line);
                 }
@@ -194,10 +186,7 @@ mod tests {
     fn format_turn_elapsed_label_mixed_adaptive() {
         assert_eq!(format_turn_elapsed_label(Duration::from_secs(59)), "59s");
         assert_eq!(format_turn_elapsed_label(Duration::from_secs(90)), "1m 30s");
-        assert_eq!(
-            format_turn_elapsed_label(Duration::from_secs(3600)),
-            "1h 0m"
-        );
+        assert_eq!(format_turn_elapsed_label(Duration::from_secs(3600)), "1h 0m");
     }
 
     #[tokio::test]

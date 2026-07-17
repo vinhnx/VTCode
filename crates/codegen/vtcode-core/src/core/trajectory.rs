@@ -61,10 +61,7 @@ impl TrajectoryLogger {
 
     /// Create a disabled trajectory logger that discards all records.
     pub fn disabled() -> Self {
-        Self {
-            enabled: false,
-            writer: None,
-        }
+        Self { enabled: false, writer: None }
     }
 
     /// Write a serializable record to the trajectory log.
@@ -179,11 +176,7 @@ struct FileEntry {
 
 fn prune_trajectory_logs_best_effort(dir: &Path, limits: TrajectoryRetention) {
     if let Err(err) = prune_trajectory_logs(dir, limits) {
-        tracing::debug!(
-            "Failed to prune trajectory logs in {}: {}",
-            dir.display(),
-            err
-        );
+        tracing::debug!("Failed to prune trajectory logs in {}: {}", dir.display(), err);
     }
 }
 
@@ -221,15 +214,12 @@ fn prune_trajectory_logs(dir: &Path, limits: TrajectoryRetention) -> anyhow::Res
     let age_cutoff = if limits.max_age_days == 0 {
         now
     } else {
-        now.checked_sub(Duration::from_secs(
-            limits.max_age_days.saturating_mul(SECONDS_PER_DAY),
-        ))
-        .unwrap_or(UNIX_EPOCH)
+        now.checked_sub(Duration::from_secs(limits.max_age_days.saturating_mul(SECONDS_PER_DAY)))
+            .unwrap_or(UNIX_EPOCH)
     };
 
-    let (expired, mut retained): (Vec<_>, Vec<_>) = entries
-        .into_iter()
-        .partition(|entry| entry.modified <= age_cutoff);
+    let (expired, mut retained): (Vec<_>, Vec<_>) =
+        entries.into_iter().partition(|entry| entry.modified <= age_cutoff);
     remove_files(expired);
 
     retained.sort_by(|a, b| b.modified.cmp(&a.modified));
@@ -263,11 +253,7 @@ fn prune_trajectory_logs(dir: &Path, limits: TrajectoryRetention) -> anyhow::Res
 fn remove_files(entries: Vec<FileEntry>) {
     for entry in entries {
         if let Err(err) = fs::remove_file(&entry.path) {
-            tracing::debug!(
-                "Failed to remove trajectory log {}: {}",
-                entry.path.display(),
-                err
-            );
+            tracing::debug!("Failed to remove trajectory log {}: {}", entry.path.display(), err);
         }
     }
 }
@@ -282,12 +268,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let logger = TrajectoryLogger::new(temp_dir.path());
 
-        logger.log_route(
-            1,
-            "gemini-3-flash-preview",
-            "standard",
-            "test user input for logging",
-        );
+        logger.log_route(1, "gemini-3-flash-preview", "standard", "test user input for logging");
         logger.flush().await;
 
         let log_path = temp_dir.path().join(".vtcode/logs/trajectory.jsonl");

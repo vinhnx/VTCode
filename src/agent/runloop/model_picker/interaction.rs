@@ -55,11 +55,8 @@ pub(super) fn select_model_with_ratatui_list(
             let Some(option) = options.get(*option_index) else {
                 continue;
             };
-            let description = format!(
-                "{} • {}",
-                provider.label(),
-                static_model_subtitle(option, "", "")
-            );
+            let description =
+                format!("{} • {}", provider.label(), static_model_subtitle(option, "", ""));
             choices.push(ModelSelectionChoice {
                 entry: SelectionEntry::new(
                     option.display.to_string(),
@@ -74,10 +71,7 @@ pub(super) fn select_model_with_ratatui_list(
                 if let Some(error) = dynamic_models.error_for(provider) {
                     choices.push(ModelSelectionChoice {
                         entry: SelectionEntry::new(
-                            format!(
-                                "{} server not running - Setup instructions",
-                                provider.label()
-                            ),
+                            format!("{} server not running - Setup instructions", provider.label()),
                             Some(format!(
                                 "{error}\n{}",
                                 provider.local_install_instructions().unwrap_or("")
@@ -118,9 +112,7 @@ pub(super) fn select_model_with_ratatui_list(
                 choices.push(ModelSelectionChoice {
                     entry: SelectionEntry::new(
                         format!("{} cache notice", provider.label()),
-                        Some(format!(
-                            "{warning} Select 'Refresh local models' to re-query."
-                        )),
+                        Some(format!("{warning} Select 'Refresh local models' to re-query.")),
                     ),
                     outcome: ModelSelectionChoiceOutcome::Refresh,
                 });
@@ -138,19 +130,14 @@ pub(super) fn select_model_with_ratatui_list(
 
     for selection in custom_providers {
         let description = if selection.model_id.trim().is_empty() {
-            format!(
-                "{} • Configure a model in vtcode.toml",
-                selection.provider_label
-            )
+            format!("{} • Configure a model in vtcode.toml", selection.provider_label)
         } else {
             format!("{} • {}", selection.provider_label, selection.model_id)
         };
         choices.push(ModelSelectionChoice {
             entry: SelectionEntry::new(
                 selection.provider_label.clone(),
-                Some(format!(
-                    "{description}\nConfigured custom OpenAI-compatible endpoint"
-                )),
+                Some(format!("{description}\nConfigured custom OpenAI-compatible endpoint")),
             ),
             outcome: ModelSelectionChoiceOutcome::Predefined(selection.clone()),
         });
@@ -172,11 +159,8 @@ pub(super) fn select_model_with_ratatui_list(
         outcome: ModelSelectionChoiceOutcome::Manual,
     });
 
-    let entries: Vec<SelectionEntry> = choices
-        .iter()
-        .map(|choice| &choice.entry)
-        .cloned()
-        .collect();
+    let entries: Vec<SelectionEntry> =
+        choices.iter().map(|choice| &choice.entry).cloned().collect();
 
     let instructions =
         "Provider, model id, reasoning, tools, and input modalities are shown in each entry."

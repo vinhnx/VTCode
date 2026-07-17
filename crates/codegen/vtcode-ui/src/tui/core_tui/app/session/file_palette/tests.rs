@@ -83,10 +83,7 @@ fn test_valid_file_path_with_at() {
 fn test_valid_at_path_in_text() {
     let input = "check @./src/components/Button.tsx";
     let result = extract_file_reference(input, 34);
-    assert_eq!(
-        result,
-        Some((6, 34, "./src/components/Button.tsx".to_owned()))
-    );
+    assert_eq!(result, Some((6, 34, "./src/components/Button.tsx".to_owned())));
 }
 
 #[test]
@@ -185,12 +182,7 @@ fn test_enter_dir_and_go_up() {
     assert_eq!(palette.breadcrumb(), "/a/b");
 
     // The leaf file is now visible.
-    assert!(
-        palette
-            .list_entries()
-            .iter()
-            .any(|e| e.relative_path == "a/b/c.rs")
-    );
+    assert!(palette.list_entries().iter().any(|e| e.relative_path == "a/b/c.rs"));
 
     // Ascending walks back up the tree (the final enter was on a file, so the
     // directory is unchanged).
@@ -364,67 +356,27 @@ fn test_security_filters_sensitive_files() {
     palette.load_files(files);
 
     // Only non-sensitive files should be loaded into the index.
-    assert!(
-        palette
-            .all_files
-            .iter()
-            .all(|f| !f.relative_path.contains(".env"))
-    );
-    assert!(
-        palette
-            .all_files
-            .iter()
-            .all(|f| !f.relative_path.contains(".git"))
-    );
-    assert!(
-        palette
-            .all_files
-            .iter()
-            .all(|f| !f.relative_path.contains(".DS_Store"))
-    );
-    assert!(
-        palette
-            .all_files
-            .iter()
-            .all(|f| !f.relative_path.starts_with('.'))
-    );
+    assert!(palette.all_files.iter().all(|f| !f.relative_path.contains(".env")));
+    assert!(palette.all_files.iter().all(|f| !f.relative_path.contains(".git")));
+    assert!(palette.all_files.iter().all(|f| !f.relative_path.contains(".DS_Store")));
+    assert!(palette.all_files.iter().all(|f| !f.relative_path.starts_with('.')));
 }
 
 #[test]
 fn test_should_exclude_file() {
-    assert!(FilePalette::should_exclude_file(Path::new(
-        "/workspace/.env"
-    )));
-    assert!(FilePalette::should_exclude_file(Path::new(
-        "/workspace/.env.local"
-    )));
-    assert!(FilePalette::should_exclude_file(Path::new(
-        "/workspace/.env.production"
-    )));
+    assert!(FilePalette::should_exclude_file(Path::new("/workspace/.env")));
+    assert!(FilePalette::should_exclude_file(Path::new("/workspace/.env.local")));
+    assert!(FilePalette::should_exclude_file(Path::new("/workspace/.env.production")));
 
-    assert!(FilePalette::should_exclude_file(Path::new(
-        "/workspace/.git/config"
-    )));
-    assert!(FilePalette::should_exclude_file(Path::new(
-        "/workspace/project/.git/HEAD"
-    )));
+    assert!(FilePalette::should_exclude_file(Path::new("/workspace/.git/config")));
+    assert!(FilePalette::should_exclude_file(Path::new("/workspace/project/.git/HEAD")));
 
-    assert!(FilePalette::should_exclude_file(Path::new(
-        "/workspace/.hidden"
-    )));
-    assert!(FilePalette::should_exclude_file(Path::new(
-        "/workspace/.DS_Store"
-    )));
+    assert!(FilePalette::should_exclude_file(Path::new("/workspace/.hidden")));
+    assert!(FilePalette::should_exclude_file(Path::new("/workspace/.DS_Store")));
 
-    assert!(!FilePalette::should_exclude_file(Path::new(
-        "/workspace/src/main.rs"
-    )));
-    assert!(!FilePalette::should_exclude_file(Path::new(
-        "/workspace/README.md"
-    )));
-    assert!(!FilePalette::should_exclude_file(Path::new(
-        "/workspace/environment.txt"
-    )));
+    assert!(!FilePalette::should_exclude_file(Path::new("/workspace/src/main.rs")));
+    assert!(!FilePalette::should_exclude_file(Path::new("/workspace/README.md")));
+    assert!(!FilePalette::should_exclude_file(Path::new("/workspace/environment.txt")));
 }
 
 #[test]
@@ -441,9 +393,7 @@ fn test_simple_fuzzy_match() {
 fn test_current_at_token_tracks_tokens_with_second_at() {
     let input = "npx -y @kaeawc/auto-mobile@latest";
     let token_start = input.find("@kaeawc").expect("scoped npm package present");
-    let version_at = input
-        .rfind("@latest")
-        .expect("version suffix present in scoped npm package");
+    let version_at = input.rfind("@latest").expect("version suffix present in scoped npm package");
     let test_cases = vec![
         (token_start, "Cursor at leading @"),
         (token_start + 8, "Cursor inside scoped package name"),
@@ -463,9 +413,7 @@ fn test_current_at_token_tracks_tokens_with_second_at() {
 #[test]
 fn test_current_at_token_allows_file_queries_with_second_at() {
     let input = "@icons/icon@2x.png";
-    let version_at = input
-        .rfind("@2x")
-        .expect("second @ in file token should be present");
+    let version_at = input.rfind("@2x").expect("second @ in file token should be present");
     let test_cases = vec![
         (0, "Cursor at leading @"),
         (8, "Cursor before second @"),

@@ -99,13 +99,7 @@ impl HuggingFaceProvider {
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::huggingface::DEFAULT_MODEL);
-        Self::with_model_internal(
-            api_key_value,
-            model_value,
-            base_url,
-            timeouts,
-            model_behavior,
-        )
+        Self::with_model_internal(api_key_value, model_value, base_url, timeouts, model_behavior)
     }
 
     fn normalize_model_id(&self, model: &str) -> Result<String, LLMError> {
@@ -123,11 +117,7 @@ impl HuggingFaceProvider {
             if let Some((base, provider)) = model.rsplit_once(':')
                 && provider.eq_ignore_ascii_case("fastest")
             {
-                return Ok(format!(
-                    "{}:{}",
-                    base,
-                    models::huggingface::STEP_3_5_FLASH_PROVIDER
-                ));
+                return Ok(format!("{}:{}", base, models::huggingface::STEP_3_5_FLASH_PROVIDER));
             }
         }
 
@@ -169,16 +159,11 @@ impl HuggingFaceProvider {
         for message in request.messages.iter() {
             message
                 .validate_for_provider(PROVIDER_KEY)
-                .map_err(|e| LLMError::InvalidRequest {
-                    message: e,
-                    metadata: None,
-                })?;
+                .map_err(|e| LLMError::InvalidRequest { message: e, metadata: None })?;
 
             let mut message_map = Map::with_capacity(4);
-            message_map.insert(
-                "role".to_owned(),
-                Value::String(message.role.as_generic_str().to_owned()),
-            );
+            message_map
+                .insert("role".to_owned(), Value::String(message.role.as_generic_str().to_owned()));
 
             if let Some(interleaved_content) =
                 assistant_interleaved_history_text(message, &request.model)
@@ -254,10 +239,7 @@ impl HuggingFaceProvider {
             }
 
             if let Some(tool_call_id) = &message.tool_call_id {
-                message_map.insert(
-                    "tool_call_id".to_owned(),
-                    Value::String(tool_call_id.clone()),
-                );
+                message_map.insert("tool_call_id".to_owned(), Value::String(tool_call_id.clone()));
             }
 
             if message.role == MessageRole::Assistant
@@ -267,10 +249,8 @@ impl HuggingFaceProvider {
             {
                 let normalized_details = normalize_reasoning_detail_objects(reasoning_details);
                 if !normalized_details.is_empty() {
-                    message_map.insert(
-                        "reasoning_details".to_owned(),
-                        Value::Array(normalized_details),
-                    );
+                    message_map
+                        .insert("reasoning_details".to_owned(), Value::Array(normalized_details));
                 }
             }
 
@@ -285,10 +265,7 @@ impl HuggingFaceProvider {
         let is_glm = self.is_glm_model(&request.model);
 
         if let Some(system) = &request.system_prompt {
-            let has_system = messages
-                .first()
-                .and_then(|m| m.get("role"))
-                .and_then(|r| r.as_str())
+            let has_system = messages.first().and_then(|m| m.get("role")).and_then(|r| r.as_str())
                 == Some("system");
             if !has_system {
                 messages.insert(
@@ -413,19 +390,14 @@ impl HuggingFaceProvider {
                         crate::provider::ContentPart::Text { text } => {
                             json!({ "type": "input_text", "text": text })
                         }
-                        crate::provider::ContentPart::Image {
-                            data, mime_type, ..
-                        } => {
+                        crate::provider::ContentPart::Image { data, mime_type, .. } => {
                             json!({
                                 "type": "input_image",
                                 "image_url": format!("data:{};base64,{}", mime_type, data)
                             })
                         }
                         crate::provider::ContentPart::File {
-                            filename,
-                            file_id,
-                            file_url,
-                            ..
+                            filename, file_id, file_url, ..
                         } => {
                             let fallback = filename
                                 .clone()
@@ -729,10 +701,8 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
                 .or_else(|| usage_value.get("completion_tokens"))
                 .and_then(|ct| ct.as_u64())
                 .unwrap_or(0) as u32,
-            total_tokens: usage_value
-                .get("total_tokens")
-                .and_then(|tt| tt.as_u64())
-                .unwrap_or(0) as u32,
+            total_tokens: usage_value.get("total_tokens").and_then(|tt| tt.as_u64()).unwrap_or(0)
+                as u32,
             cached_prompt_tokens: None,
             cache_creation_tokens: None,
             cache_read_tokens: None,
@@ -772,11 +742,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
             }
         });
 
-        Some(crate::provider::ToolCall::function(
-            call_id.to_string(),
-            name.to_string(),
-            serialized,
-        ))
+        Some(crate::provider::ToolCall::function(call_id.to_string(), name.to_string(), serialized))
     }
 
     async fn parse_response(
@@ -792,10 +758,8 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
             return Err(self.format_error(status, &body));
         }
 
-        let json: Value = response
-            .json()
-            .await
-            .map_err(|err| format_parse_error(PROVIDER_NAME, &err))?;
+        let json: Value =
+            response.json().await.map_err(|err| format_parse_error(PROVIDER_NAME, &err))?;
 
         if use_responses_api {
             if json.get("output").is_some() {
@@ -813,10 +777,7 @@ Enable that provider in your HuggingFace Inference Providers settings, or switch
     }
 
     pub fn available_models() -> Vec<String> {
-        models::huggingface::SUPPORTED_MODELS
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+        models::huggingface::SUPPORTED_MODELS.iter().map(|s| s.to_string()).collect()
     }
 
     fn get_endpoint(&self, use_responses_api: bool) -> String {
@@ -908,8 +869,7 @@ impl LLMProvider for HuggingFaceProvider {
             .await
             .map_err(|err| format_network_error(PROVIDER_NAME, &err))?;
 
-        self.parse_response(response, model, use_responses_api)
-            .await
+        self.parse_response(response, model, use_responses_api).await
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -1217,18 +1177,12 @@ mod tests {
         let normalized = provider
             .normalize_model_id("stepfun-ai/Step-3.5-Flash")
             .expect("normalization should succeed");
-        assert_eq!(
-            normalized,
-            "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string()
-        );
+        assert_eq!(normalized, "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string());
 
         let normalized_legacy = provider
             .normalize_model_id("stepfun-ai/Step-3.5-Flash:fastest")
             .expect("legacy suffix normalization should succeed");
-        assert_eq!(
-            normalized_legacy,
-            "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string()
-        );
+        assert_eq!(normalized_legacy, "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string());
     }
 
     #[test]
@@ -1240,9 +1194,7 @@ mod tests {
         let request = LLMRequest {
             model: "Qwen/Qwen3-Coder-480B-A35B-Instruct".to_string(),
             messages: vec![Message::user("apply a patch".to_string())].into(),
-            tools: Some(Arc::new(vec![ToolDefinition::apply_patch(
-                "Apply patches".to_string(),
-            )])),
+            tools: Some(Arc::new(vec![ToolDefinition::apply_patch("Apply patches".to_string())])),
             ..Default::default()
         };
 

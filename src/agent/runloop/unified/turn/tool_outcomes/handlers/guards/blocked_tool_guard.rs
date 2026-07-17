@@ -106,7 +106,5 @@ pub(crate) fn enforce_blocked_tool_call_guard(
     );
     push_guard_failure_messages(ctx, tool_call_id, tool_name, error_content, &block_reason);
 
-    Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-        reason: Some(block_reason),
-    }))
+    Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(block_reason) }))
 }

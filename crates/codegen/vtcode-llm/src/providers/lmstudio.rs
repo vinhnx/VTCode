@@ -56,11 +56,8 @@ fn server_root_from_api_base(api_base: &str) -> String {
 /// Uses OpenAI-compatible `/v1/models` endpoint by default.
 /// Set `LMSTUDIO_USE_NATIVE_API=true` to use native REST API at `/api/v0/models`.
 pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
-    let resolved_base_url = override_base_url(
-        urls::LMSTUDIO_API_BASE,
-        base_url,
-        Some(env_vars::LMSTUDIO_BASE_URL),
-    );
+    let resolved_base_url =
+        override_base_url(urls::LMSTUDIO_API_BASE, base_url, Some(env_vars::LMSTUDIO_BASE_URL));
 
     let use_native_api = std::env::var("LMSTUDIO_USE_NATIVE_API")
         .ok()
@@ -111,11 +108,7 @@ pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<Strin
         .map_err(|e| anyhow::anyhow!("Failed to parse LM Studio models response: {e}"))?;
 
     // Extract model IDs
-    let model_ids: Vec<String> = models_response
-        .data
-        .into_iter()
-        .map(|model| model.id)
-        .collect();
+    let model_ids: Vec<String> = models_response.data.into_iter().map(|model| model.id).collect();
 
     Ok(model_ids)
 }
@@ -127,11 +120,7 @@ pub struct LmStudioProvider {
 
 impl LmStudioProvider {
     fn resolve_base_url(base_url: Option<String>) -> String {
-        override_base_url(
-            urls::LMSTUDIO_API_BASE,
-            base_url,
-            Some(env_vars::LMSTUDIO_BASE_URL),
-        )
+        override_base_url(urls::LMSTUDIO_API_BASE, base_url, Some(env_vars::LMSTUDIO_BASE_URL))
     }
 
     fn build_inner(
@@ -181,10 +170,7 @@ impl LmStudioProvider {
             base_url,
             timeouts,
         ));
-        Self {
-            inner,
-            model_id: model,
-        }
+        Self { inner, model_id: model }
     }
 
     pub fn from_config(
@@ -215,15 +201,8 @@ impl LmStudioProvider {
         prompt_cache: Option<PromptCachingConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
-        let (inner, model_id) = Self::build_inner(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            None,
-            None,
-            model_behavior,
-        );
+        let (inner, model_id) =
+            Self::build_inner(api_key, model, base_url, prompt_cache, None, None, model_behavior);
         Self { inner, model_id }
     }
 
@@ -295,20 +274,14 @@ impl LLMProvider for LmStudioProvider {
         if request.messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("LM Studio", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 
         // Validate messages against provider's requirements
         for message in request.messages.iter() {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("LM Studio", &err);
-                return Err(LLMError::InvalidRequest {
-                    message: formatted,
-                    metadata: None,
-                });
+                return Err(LLMError::InvalidRequest { message: formatted, metadata: None });
             }
         }
 

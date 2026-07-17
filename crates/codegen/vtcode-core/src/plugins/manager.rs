@@ -40,10 +40,8 @@ impl PluginManager {
         let runtime = Arc::new(PluginRuntime::new(config.clone(), base_dir.join("runtime")));
         let cache = Arc::new(RwLock::new(PluginCache::new(base_dir.join("cache"))));
 
-        let loader = Arc::new(PluginLoader::new(
-            base_dir.join("installed"),
-            runtime.as_ref().clone(),
-        ));
+        let loader =
+            Arc::new(PluginLoader::new(base_dir.join("installed"), runtime.as_ref().clone()));
 
         Ok(Self {
             runtime,
@@ -188,10 +186,7 @@ impl PluginManager {
 
         for root in roots {
             if !root.exists() {
-                debug!(
-                    "workspace root does not exist, skipping: {}",
-                    root.display()
-                );
+                debug!("workspace root does not exist, skipping: {}", root.display());
                 continue;
             }
 
@@ -210,9 +205,8 @@ impl PluginManager {
                             continue;
                         }
 
-                        if let Err(e) = self
-                            .cache_plugin(&plugin_info.name, &plugin_info.path)
-                            .await
+                        if let Err(e) =
+                            self.cache_plugin(&plugin_info.name, &plugin_info.path).await
                         {
                             errors.push(format!(
                                 "failed to cache plugin '{}': {e}",
@@ -230,10 +224,7 @@ impl PluginManager {
             }
         }
 
-        Ok(RefreshResult::Success {
-            refreshed_count,
-            errors,
-        })
+        Ok(RefreshResult::Success { refreshed_count, errors })
     }
 
     /// Scan a workspace root for non-curated plugins (marketplace.json files).
@@ -252,11 +243,7 @@ impl PluginManager {
             let entries = match tokio::fs::read_dir(&plugin_root).await {
                 Ok(entries) => entries,
                 Err(e) => {
-                    warn!(
-                        "Failed to read plugin root {}: {}",
-                        plugin_root.display(),
-                        e
-                    );
+                    warn!("Failed to read plugin root {}: {}", plugin_root.display(), e);
                     continue;
                 }
             };
@@ -295,19 +282,11 @@ impl PluginManager {
 
     /// Load a plugin manifest from a marketplace.json or plugin.json path.
     async fn load_plugin_manifest(&self, manifest_path: &Path) -> Result<DiscoveredPluginInfo> {
-        let content = tokio::fs::read_to_string(manifest_path)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to read plugin manifest at {}",
-                    manifest_path.display()
-                )
-            })?;
+        let content = tokio::fs::read_to_string(manifest_path).await.with_context(|| {
+            format!("failed to read plugin manifest at {}", manifest_path.display())
+        })?;
         let manifest: PluginManifest = serde_json::from_str(&content).with_context(|| {
-            format!(
-                "failed to parse plugin manifest at {}",
-                manifest_path.display()
-            )
+            format!("failed to parse plugin manifest at {}", manifest_path.display())
         })?;
 
         Ok(DiscoveredPluginInfo {

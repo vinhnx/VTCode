@@ -77,9 +77,7 @@ pub struct MemoryTelemetry<Event> {
 impl<Event> MemoryTelemetry<Event> {
     /// Creates a new memory-backed telemetry sink.
     pub fn new() -> Self {
-        Self {
-            events: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self { events: Arc::new(Mutex::new(Vec::new())) }
     }
 
     /// Returns the recorded events, draining the internal buffer.
@@ -119,9 +117,7 @@ pub struct MemoryErrorReporter {
 impl MemoryErrorReporter {
     /// Creates a new memory-backed error reporter.
     pub fn new() -> Self {
-        Self {
-            messages: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self { messages: Arc::new(Mutex::new(Vec::new())) }
     }
 
     /// Returns the captured error messages, draining the buffer.
@@ -159,10 +155,7 @@ mod tests {
         assert_eq!(paths.workspace_root(), Path::new("/tmp/work"));
         assert_eq!(paths.config_dir(), PathBuf::from("/tmp/work/config"));
         assert_eq!(paths.cache_dir(), Some(PathBuf::from("/tmp/work/cache")));
-        assert_eq!(
-            paths.telemetry_dir(),
-            Some(PathBuf::from("/tmp/work/telemetry"))
-        );
+        assert_eq!(paths.telemetry_dir(), Some(PathBuf::from("/tmp/work/telemetry")));
     }
 
     #[test]

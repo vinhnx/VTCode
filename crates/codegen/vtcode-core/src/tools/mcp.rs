@@ -148,9 +148,7 @@ mod tests {
 
     #[test]
     fn build_mcp_registration_exposes_native_cgp_factory() {
-        let client = Arc::new(McpClient::new(
-            vtcode_config::mcp::McpClientConfig::default(),
-        ));
+        let client = Arc::new(McpClient::new(vtcode_config::mcp::McpClientConfig::default()));
         let tool = McpToolInfo {
             name: "search-docs".to_string(),
             description: "Search docs".to_string(),
@@ -168,11 +166,8 @@ mod tests {
         let native_factory = registration
             .native_cgp_factory()
             .expect("MCP registration should expose native CGP factory");
-        let wrapped = native_factory(
-            &registration,
-            PathBuf::from("/tmp/test"),
-            CgpRuntimeMode::Interactive,
-        );
+        let wrapped =
+            native_factory(&registration, PathBuf::from("/tmp/test"), CgpRuntimeMode::Interactive);
 
         assert_eq!(wrapped.name(), "mcp::context7::search-docs");
         assert_eq!(wrapped.description(), "Search docs\nHint: provider hint");

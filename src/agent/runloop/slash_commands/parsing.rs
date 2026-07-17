@@ -141,10 +141,7 @@ pub(super) fn parse_compact_command(args: &str) -> Result<CompactConversationCom
         }
     }
 
-    Ok(CompactConversationCommand::Run {
-        options,
-        native_only,
-    })
+    Ok(CompactConversationCommand::Run { options, native_only })
 }
 
 pub(super) fn parse_session_log_export_format(
@@ -291,10 +288,7 @@ mod tests {
     fn compact_defaults_to_automatic_run() {
         assert_eq!(
             parse_compact_command("").expect("compact command"),
-            CompactConversationCommand::Run {
-                options: Default::default(),
-                native_only: false,
-            }
+            CompactConversationCommand::Run { options: Default::default(), native_only: false }
         );
     }
 

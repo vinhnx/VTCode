@@ -46,9 +46,7 @@ pub fn current_evaluation_path(workspace_root: &Path) -> PathBuf {
 /// before implementation begins. This follows the long-running harness pattern
 /// where "vague user stories become testable contracts."
 pub fn current_sprint_contract_path(workspace_root: &Path) -> PathBuf {
-    workspace_root
-        .join(TASKS_DIR)
-        .join(CURRENT_SPRINT_CONTRACT_FILE)
+    workspace_root.join(TASKS_DIR).join(CURRENT_SPRINT_CONTRACT_FILE)
 }
 
 /// Return the path to the current outcome verification artifact file.
@@ -58,9 +56,7 @@ pub fn current_sprint_contract_path(workspace_root: &Path) -> PathBuf {
 /// outcomes, not claims" -- the agent cannot declare success without showing
 /// actual verification output.
 pub fn current_outcome_verification_path(workspace_root: &Path) -> PathBuf {
-    workspace_root
-        .join(TASKS_DIR)
-        .join(CURRENT_OUTCOME_VERIFICATION_FILE)
+    workspace_root.join(TASKS_DIR).join(CURRENT_OUTCOME_VERIFICATION_FILE)
 }
 
 /// Return the paths of all harness artifacts that currently exist on disk.
@@ -116,10 +112,7 @@ pub async fn write_contract(workspace_root: &Path, content: &str) -> Result<Path
 
 /// Read a short summary of the sprint contract artifact, or `None` if unavailable.
 pub fn read_sprint_contract_summary(workspace_root: &Path) -> Option<String> {
-    read_markdown_summary(
-        &current_sprint_contract_path(workspace_root),
-        "SprintContract",
-    )
+    read_markdown_summary(&current_sprint_contract_path(workspace_root), "SprintContract")
 }
 
 /// Write the sprint contract artifact content to disk and return the path.
@@ -134,10 +127,7 @@ pub async fn write_sprint_contract(workspace_root: &Path, content: &str) -> Resu
 
 /// Read a short summary of the outcome verification artifact, or `None` if unavailable.
 pub fn read_outcome_verification_summary(workspace_root: &Path) -> Option<String> {
-    read_markdown_summary(
-        &current_outcome_verification_path(workspace_root),
-        "OutcomeVerification",
-    )
+    read_markdown_summary(&current_outcome_verification_path(workspace_root), "OutcomeVerification")
 }
 
 /// Return the path to the current feature list artifact file.
@@ -149,9 +139,7 @@ pub fn read_outcome_verification_summary(workspace_root: &Path) -> Option<String
 /// harness pattern: "the planner can achieve replanning by modifying external
 /// files: feature_list, sprint_contract, known_issues, next_actions."
 pub fn current_feature_list_path(workspace_root: &Path) -> PathBuf {
-    workspace_root
-        .join(TASKS_DIR)
-        .join(CURRENT_FEATURE_LIST_FILE)
+    workspace_root.join(TASKS_DIR).join(CURRENT_FEATURE_LIST_FILE)
 }
 
 /// Read a short summary of the feature list artifact, or `None` if unavailable.
@@ -219,12 +207,9 @@ mod tests {
     async fn writes_and_summarizes_spec_and_evaluation_artifacts() {
         let temp = tempdir().expect("tempdir");
 
-        write_spec(
-            temp.path(),
-            "# Spec\n\nBuild a stronger exec harness.\n\nKeep it resumable.\n",
-        )
-        .await
-        .expect("write spec");
+        write_spec(temp.path(), "# Spec\n\nBuild a stronger exec harness.\n\nKeep it resumable.\n")
+            .await
+            .expect("write spec");
         write_contract(
             temp.path(),
             "# Contract\n\n- Deliver the requested change.\n- Verify with cargo check.\n",
@@ -328,21 +313,11 @@ mod tests {
         let temp = tempdir().expect("tempdir");
 
         write_spec(temp.path(), "# Spec\ncontent\n").await.unwrap();
-        write_contract(temp.path(), "# Contract\ncontent\n")
-            .await
-            .unwrap();
-        write_evaluation(temp.path(), "# Evaluation\ncontent\n")
-            .await
-            .unwrap();
-        write_sprint_contract(temp.path(), "# Sprint\ncontent\n")
-            .await
-            .unwrap();
-        write_outcome_verification(temp.path(), "# Outcome\ncontent\n")
-            .await
-            .unwrap();
-        write_feature_list(temp.path(), "# Features\ncontent\n")
-            .await
-            .unwrap();
+        write_contract(temp.path(), "# Contract\ncontent\n").await.unwrap();
+        write_evaluation(temp.path(), "# Evaluation\ncontent\n").await.unwrap();
+        write_sprint_contract(temp.path(), "# Sprint\ncontent\n").await.unwrap();
+        write_outcome_verification(temp.path(), "# Outcome\ncontent\n").await.unwrap();
+        write_feature_list(temp.path(), "# Features\ncontent\n").await.unwrap();
 
         let paths = existing_harness_artifact_paths(temp.path());
         assert_eq!(paths.len(), 6);

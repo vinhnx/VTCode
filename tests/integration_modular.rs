@@ -31,10 +31,7 @@ fn test_gemini_module_integration() {
 fn test_config_module_integration() {
     // Test that we can create and use configurations
     let config = VTCodeConfig::default();
-    assert_eq!(
-        config.agent.provider,
-        vtcode_core::config::constants::defaults::DEFAULT_PROVIDER
-    );
+    assert_eq!(config.agent.provider, vtcode_core::config::constants::defaults::DEFAULT_PROVIDER);
     assert_eq!(config.tools.default_policy, ToolPolicy::Prompt);
 
     // Test that we can load configuration from an isolated workspace with no

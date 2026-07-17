@@ -28,9 +28,7 @@ async fn create_file_succeeds_for_new_path() {
 
     let created_path = temp_dir.path().join("src/lib.rs");
     assert!(created_path.exists(), "file should be created on disk");
-    let contents = tokio::fs::read_to_string(created_path)
-        .await
-        .expect("should read file content");
+    let contents = tokio::fs::read_to_string(created_path).await.expect("should read file content");
     assert_eq!(contents, "fn main() {}\n");
 }
 

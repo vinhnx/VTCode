@@ -233,10 +233,8 @@ impl FileCache {
 
     /// Update cache policy from configuration
     pub fn apply_read_cache_config(&self, config: &FileReadCacheConfig) {
-        self.max_size_bytes
-            .store(config.max_size_bytes, Ordering::Relaxed);
-        self.ttl_millis
-            .store(config.ttl_secs.saturating_mul(1000), Ordering::Relaxed);
+        self.max_size_bytes.store(config.max_size_bytes, Ordering::Relaxed);
+        self.ttl_millis.store(config.ttl_secs.saturating_mul(1000), Ordering::Relaxed);
     }
 }
 

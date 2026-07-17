@@ -80,14 +80,7 @@ async fn send_content_block_start(
     index: u32,
     content_block: AnthropicContentBlock,
 ) -> bool {
-    send_stream_event(
-        tx,
-        AnthropicStreamEvent::ContentBlockStart {
-            index,
-            content_block,
-        },
-    )
-    .await
+    send_stream_event(tx, AnthropicStreamEvent::ContentBlockStart { index, content_block }).await
 }
 
 async fn send_content_block_delta(
@@ -142,17 +135,12 @@ pub async fn messages_handler(
                 content: vec![],
                 stop_reason: None,
                 stop_sequence: None,
-                usage: AnthropicUsage {
-                    input_tokens: 0,
-                    output_tokens: 0,
-                },
+                usage: AnthropicUsage { input_tokens: 0, output_tokens: 0 },
             };
 
             if !send_stream_event(
                 &tx,
-                AnthropicStreamEvent::MessageStart {
-                    message: initial_response,
-                },
+                AnthropicStreamEvent::MessageStart { message: initial_response },
             )
             .await
             {
@@ -564,9 +552,7 @@ mod tests {
                         citations: None,
                         cache_control: None,
                     },
-                    AnthropicContentBlock::ContainerUpload {
-                        file_id: "file_abc123".to_string(),
-                    },
+                    AnthropicContentBlock::ContainerUpload { file_id: "file_abc123".to_string() },
                 ]),
             }],
             system: None,
@@ -670,9 +656,7 @@ mod tests {
             stop_sequences: None,
             tools: None,
             tool_choice: None,
-            thinking: Some(ThinkingConfig::Adaptive {
-                display: Some(ThinkingDisplay::Summarized),
-            }),
+            thinking: Some(ThinkingConfig::Adaptive { display: Some(ThinkingDisplay::Summarized) }),
             betas: None,
             context_management: None,
             output_config: Some(AnthropicOutputConfig {
@@ -686,25 +670,14 @@ mod tests {
         };
 
         let llm_request = convert_anthropic_to_llm_request(request);
-        let overrides = llm_request
-            .anthropic_request_overrides
-            .expect("anthropic overrides");
-        assert_eq!(
-            overrides.thinking_mode,
-            AnthropicThinkingModeOverride::Adaptive
-        );
-        assert_eq!(
-            overrides.thinking_display,
-            AnthropicThinkingDisplayOverride::Summarized
-        );
+        let overrides = llm_request.anthropic_request_overrides.expect("anthropic overrides");
+        assert_eq!(overrides.thinking_mode, AnthropicThinkingModeOverride::Adaptive);
+        assert_eq!(overrides.thinking_display, AnthropicThinkingDisplayOverride::Summarized);
         assert_eq!(
             overrides.effort,
             AnthropicOptionalStringOverride::Explicit("medium".to_string())
         );
-        assert_eq!(
-            overrides.task_budget_tokens,
-            AnthropicOptionalU32Override::Explicit(64_000)
-        );
+        assert_eq!(overrides.task_budget_tokens, AnthropicOptionalU32Override::Explicit(64_000));
     }
 
     #[test]
@@ -734,17 +707,9 @@ mod tests {
         };
 
         let llm_request = convert_anthropic_to_llm_request(request);
-        let overrides = llm_request
-            .anthropic_request_overrides
-            .expect("anthropic overrides");
-        assert_eq!(
-            overrides.thinking_mode,
-            AnthropicThinkingModeOverride::ManualBudget(4096)
-        );
-        assert_eq!(
-            overrides.thinking_display,
-            AnthropicThinkingDisplayOverride::Omitted
-        );
+        let overrides = llm_request.anthropic_request_overrides.expect("anthropic overrides");
+        assert_eq!(overrides.thinking_mode, AnthropicThinkingModeOverride::ManualBudget(4096));
+        assert_eq!(overrides.thinking_display, AnthropicThinkingDisplayOverride::Omitted);
     }
 
     #[test]
@@ -839,10 +804,8 @@ mod tests {
 
     #[test]
     fn anthropic_content_block_thinking_uses_anthropic_wire_field() {
-        let block = AnthropicContentBlock::Thinking {
-            thinking: "plan".to_string(),
-            signature: None,
-        };
+        let block =
+            AnthropicContentBlock::Thinking { thinking: "plan".to_string(), signature: None };
 
         let serialized = serde_json::to_value(block).expect("serialize thinking block");
         assert_eq!(serialized["type"], "thinking");
@@ -852,9 +815,7 @@ mod tests {
 
     #[test]
     fn anthropic_content_delta_thinking_uses_anthropic_wire_field() {
-        let delta = AnthropicContentDelta::ThinkingDelta {
-            thinking: "draft".to_string(),
-        };
+        let delta = AnthropicContentDelta::ThinkingDelta { thinking: "draft".to_string() };
 
         let serialized = serde_json::to_value(delta).expect("serialize thinking delta");
         assert_eq!(serialized["type"], "thinking_delta");

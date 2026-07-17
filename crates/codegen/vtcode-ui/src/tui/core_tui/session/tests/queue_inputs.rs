@@ -12,19 +12,13 @@ fn shift_enter_inserts_newline() {
     let result = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT));
     assert!(result.is_none());
     assert_eq!(session.input_manager.content(), "queued\n");
-    assert_eq!(
-        session.input_manager.cursor(),
-        session.input_manager.content().len()
-    );
+    assert_eq!(session.input_manager.cursor(), session.input_manager.content().len());
 }
 
 #[test]
 fn paste_preserves_all_newlines() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    let pasted = (0..15)
-        .map(|i| format!("line {i}"))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let pasted = (0..15).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
     let (tx, _rx) = mpsc::unbounded_channel();
 
     session.handle_event(CrosstermEvent::Paste(pasted.clone()), &tx, None);
@@ -40,22 +34,14 @@ fn pasted_message_displays_full_content() {
     let pasted_lines: Vec<String> = (1..=line_total).map(|idx| format!("paste-{idx}")).collect();
     let pasted_text = pasted_lines.join("\n");
 
-    session.append_pasted_message(
-        InlineMessageKind::User,
-        pasted_text.clone(),
-        pasted_lines.len(),
-    );
+    session.append_pasted_message(InlineMessageKind::User, pasted_text.clone(), pasted_lines.len());
 
     let user_line = session
         .lines
         .iter()
         .find(|line| line.kind == InlineMessageKind::User)
         .expect("user line should exist");
-    let combined: String = user_line
-        .segments
-        .iter()
-        .map(|segment| segment.text.as_str())
-        .collect();
+    let combined: String = user_line.segments.iter().map(|segment| segment.text.as_str()).collect();
     assert!(combined.contains("paste-1"));
     assert!(session.collapsed_pastes.is_empty());
 }
@@ -76,30 +62,18 @@ fn pasted_message_collapses_large_json_for_tool() {
 
     assert_eq!(session.collapsed_pastes.len(), 1);
     let collapsed_index = session.collapsed_pastes[0].line_index;
-    let preview_line = session
-        .lines
-        .get(collapsed_index)
-        .expect("collapsed line exists");
-    let preview_text: String = preview_line
-        .segments
-        .iter()
-        .map(|segment| segment.text.as_str())
-        .collect();
+    let preview_line = session.lines.get(collapsed_index).expect("collapsed line exists");
+    let preview_text: String =
+        preview_line.segments.iter().map(|segment| segment.text.as_str()).collect();
     assert!(preview_text.contains("showing last"));
     assert!(preview_text.contains("\"end\": true"));
 
     assert!(session.expand_collapsed_paste_at_line_index(collapsed_index));
     assert!(session.collapsed_pastes.is_empty());
 
-    let expanded_line = session
-        .lines
-        .get(collapsed_index)
-        .expect("expanded line exists");
-    let expanded_text: String = expanded_line
-        .segments
-        .iter()
-        .map(|segment| segment.text.as_str())
-        .collect();
+    let expanded_line = session.lines.get(collapsed_index).expect("expanded line exists");
+    let expanded_text: String =
+        expanded_line.segments.iter().map(|segment| segment.text.as_str()).collect();
     assert!(expanded_text.contains("\"key0\": \"value0\""));
     assert!(expanded_text.contains("\"end\": true"));
 }
@@ -137,10 +111,7 @@ fn input_compact_preview_keeps_text_after_large_paste_visible() {
     assert!(rendered.contains("before"));
     assert!(rendered.contains("[Pasted Content"));
     assert!(rendered.contains("after"));
-    assert_eq!(
-        session.input_manager.content(),
-        format!("before{pasted_text} after")
-    );
+    assert_eq!(session.input_manager.content(), format!("before{pasted_text} after"));
 }
 
 #[test]
@@ -164,10 +135,7 @@ fn shift_enter_after_large_paste_inserts_newline() {
         session.input_manager.content(),
         format!("hello {pasted_text} and what are you talking about??\n")
     );
-    assert_eq!(
-        session.input_manager.cursor(),
-        session.input_manager.content().len()
-    );
+    assert_eq!(session.input_manager.cursor(), session.input_manager.content().len());
 
     let data = session.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
     let rendered = text_content(&data.text);
@@ -298,10 +266,7 @@ fn alt_up_edits_latest_queued_input() {
     with_terminal_env(None, Some("xterm-256color"), || {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-        set_queued_inputs(
-            &mut session,
-            vec!["first".to_string(), "second".to_string()],
-        );
+        set_queued_inputs(&mut session, vec!["first".to_string(), "second".to_string()]);
 
         let event = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
         assert!(matches!(event, Some(InlineEvent::EditQueue)));
@@ -311,42 +276,31 @@ fn alt_up_edits_latest_queued_input() {
 
 #[test]
 fn shift_left_edits_latest_queued_input_in_tmux() {
-    with_terminal_env(
-        Some("/tmp/tmux-1000/default,123,0"),
-        Some("tmux-256color"),
-        || {
-            let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    with_terminal_env(Some("/tmp/tmux-1000/default,123,0"), Some("tmux-256color"), || {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
-            set_queued_inputs(
-                &mut session,
-                vec!["first".to_string(), "second".to_string()],
-            );
+        set_queued_inputs(&mut session, vec!["first".to_string(), "second".to_string()]);
 
-            let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
-            assert!(matches!(event, Some(InlineEvent::EditQueue)));
-            assert_eq!(session.input_manager.content(), "second");
-        },
-    );
+        let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+        assert!(matches!(event, Some(InlineEvent::EditQueue)));
+        assert_eq!(session.input_manager.content(), "second");
+    });
 }
 
 #[test]
 fn app_session_shift_left_edits_latest_queued_input_in_tmux() {
-    with_terminal_env(
-        Some("/tmp/tmux-1000/default,123,0"),
-        Some("tmux-256color"),
-        || {
-            let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    with_terminal_env(Some("/tmp/tmux-1000/default,123,0"), Some("tmux-256color"), || {
+        let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
 
-            set_app_session_queued_inputs(
-                &mut session,
-                vec!["first".to_string(), "second".to_string()],
-            );
+        set_app_session_queued_inputs(
+            &mut session,
+            vec!["first".to_string(), "second".to_string()],
+        );
 
-            let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
-            assert!(matches!(event, Some(app_types::InlineEvent::EditQueue)));
-            assert_eq!(session.core.input_manager.content(), "second");
-        },
-    );
+        let event = session.process_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+        assert!(matches!(event, Some(app_types::InlineEvent::EditQueue)));
+        assert_eq!(session.core.input_manager.content(), "second");
+    });
 }
 
 #[test]
@@ -401,22 +355,18 @@ fn queued_inputs_overlay_bottom_rows() {
 
 #[test]
 fn queued_inputs_overlay_shows_shift_left_hint_in_tmux() {
-    with_terminal_env(
-        Some("/tmp/tmux-1000/default,123,0"),
-        Some("tmux-256color"),
-        || {
-            let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-            set_queued_inputs(
-                &mut session,
-                vec![
-                    "first queued message".to_string(),
-                    "second queued message".to_string(),
-                ],
-            );
+    with_terminal_env(Some("/tmp/tmux-1000/default,123,0"), Some("tmux-256color"), || {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        set_queued_inputs(
+            &mut session,
+            vec![
+                "first queued message".to_string(),
+                "second queued message".to_string(),
+            ],
+        );
 
-            assert_footer_contains(&mut session, 10, &tmux_queue_edit_hint());
-        },
-    );
+        assert_footer_contains(&mut session, 10, &tmux_queue_edit_hint());
+    });
 }
 
 #[test]
@@ -439,21 +389,15 @@ fn running_activity_not_overlaid_above_queue_lines() {
     let rendered: Vec<String> = visible.iter().map(|line| line_text(&line.line)).collect();
 
     assert!(
-        !rendered
-            .iter()
-            .any(|line| line.contains("Running command: test")),
+        !rendered.iter().any(|line| line.contains("Running command: test")),
         "running status should not be overlaid in transcript"
     );
     assert!(
-        rendered
-            .iter()
-            .any(|line| line.contains("\u{21B3} second queued message")),
+        rendered.iter().any(|line| line.contains("\u{21B3} second queued message")),
         "latest queued message should remain visible"
     );
     assert!(
-        rendered
-            .iter()
-            .any(|line| line.contains("\u{21B3} first queued message")),
+        rendered.iter().any(|line| line.contains("\u{21B3} first queued message")),
         "older queued message should remain visible"
     );
 }
@@ -471,9 +415,7 @@ fn running_activity_not_overlaid_without_queue() {
     let rendered: Vec<String> = visible.iter().map(|line| line_text(&line.line)).collect();
 
     assert!(
-        !rendered
-            .iter()
-            .any(|line| line.contains("Running tool: grep")),
+        !rendered.iter().any(|line| line.contains("Running tool: grep")),
         "running status should render only in bottom input status row"
     );
 }
@@ -495,10 +437,7 @@ fn apply_suggested_prompt_appends_to_existing_input() {
 
     session.apply_suggested_prompt("Review the latest diff.".to_string());
 
-    assert_eq!(
-        session.input_manager.content(),
-        "Initial draft\n\nReview the latest diff."
-    );
+    assert_eq!(session.input_manager.content(), "Initial draft\n\nReview the latest diff.");
     assert!(session.suggested_prompt_state.active);
 }
 
@@ -549,10 +488,7 @@ fn tab_accepts_inline_prompt_suggestion_with_trailing_space_prefix() {
     let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert!(event.is_none());
-    assert_eq!(
-        session.input_manager.content(),
-        "Review the current.diff and summarize it"
-    );
+    assert_eq!(session.input_manager.content(), "Review the current.diff and summarize it");
     assert!(session.inline_prompt_suggestion.suggestion.is_none());
 }
 
@@ -627,10 +563,7 @@ fn restore_input_draft_command_preserves_attachments_in_order() {
     )));
 
     assert_eq!(session.input_manager.content(), "keep searching in docs/");
-    assert_eq!(
-        session.input_manager.attachments(),
-        &[first_attachment, second_attachment]
-    );
+    assert_eq!(session.input_manager.attachments(), &[first_attachment, second_attachment]);
 }
 
 #[test]
@@ -639,21 +572,13 @@ fn app_restore_input_draft_command_preserves_attachments_in_order() {
     let first_attachment = ContentPart::image("first-image", "image/png");
     let second_attachment = ContentPart::image("second-image", "image/png");
 
-    session.handle_command(app_types::InlineCommand::RestoreInputDraft(
-        SubmittedInput::new(
-            "keep searching in docs/",
-            vec![first_attachment.clone(), second_attachment.clone()],
-        ),
-    ));
+    session.handle_command(app_types::InlineCommand::RestoreInputDraft(SubmittedInput::new(
+        "keep searching in docs/",
+        vec![first_attachment.clone(), second_attachment.clone()],
+    )));
 
-    assert_eq!(
-        session.core.input_manager.content(),
-        "keep searching in docs/"
-    );
-    assert_eq!(
-        session.core.input_manager.attachments(),
-        &[first_attachment, second_attachment]
-    );
+    assert_eq!(session.core.input_manager.content(), "keep searching in docs/");
+    assert_eq!(session.core.input_manager.attachments(), &[first_attachment, second_attachment]);
 }
 
 #[test]
@@ -676,9 +601,7 @@ fn busy_tab_shows_mode_switch_notice() {
 
     let transcript = visible_transcript(&mut session);
     assert!(
-        transcript
-            .iter()
-            .any(|line| line.contains("Mode switching is disabled")),
+        transcript.iter().any(|line| line.contains("Mode switching is disabled")),
         "expected a mode-switch busy notice, got: {transcript:?}"
     );
 }

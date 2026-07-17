@@ -26,10 +26,7 @@ fn does_not_suppress_diff_recap_when_user_asked_for_analysis() {
         ),
     ];
 
-    assert!(!should_suppress_redundant_diff_recap(
-        &history,
-        "The diff shows one behavior change."
-    ));
+    assert!(!should_suppress_redundant_diff_recap(&history, "The diff shows one behavior change."));
 }
 
 #[test]
@@ -81,9 +78,7 @@ fn push_assistant_message_preserves_reasoning_details_when_merging() {
     assert_eq!(history[0].content.as_text(), "new");
     assert_eq!(
         history[0].reasoning_details,
-        Some(vec![
-            serde_json::json!({"type":"reasoning.text","text":"trace"})
-        ])
+        Some(vec![serde_json::json!({"type":"reasoning.text","text":"trace"})])
     );
 }
 

@@ -34,10 +34,7 @@ impl TrustManager {
 
     pub fn update_trust(&mut self, file_path: String, mode: TrustMode) {
         let timestamp = chrono::Utc::now().to_rfc3339();
-        let setting = TrustSetting {
-            mode,
-            updated_at: timestamp,
-        };
+        let setting = TrustSetting { mode, updated_at: timestamp };
 
         match mode {
             TrustMode::AutoTrust | TrustMode::Always => {

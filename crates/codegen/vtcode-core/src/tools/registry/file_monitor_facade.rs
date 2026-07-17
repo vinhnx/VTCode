@@ -6,7 +6,6 @@ use super::ToolRegistry;
 
 impl ToolRegistry {
     pub fn apply_permissions_config(&self, permissions: &PermissionsConfig) {
-        self.edited_file_monitor
-            .apply_permissions_config(permissions);
+        self.edited_file_monitor.apply_permissions_config(permissions);
     }
 }

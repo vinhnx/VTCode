@@ -28,7 +28,7 @@ PushKeyboardEnhancementFlags / PopKeyboardEnhancementFlags
 
 ### Core Configuration
 
-#### vtcode-config/src/root.rs
+#### crates/codegen/vtcode-config/src/root.rs
 - **Status**: ✓ Already present
 - **Details**: Contains `KeyboardProtocolConfig` struct with fields:
   - `enabled`: Master toggle for keyboard protocol
@@ -37,7 +37,7 @@ PushKeyboardEnhancementFlags / PopKeyboardEnhancementFlags
 - **Defaults**: Enabled by default, using "default" mode
 - **Environment overrides**: `VTCODE_KEYBOARD_PROTOCOL_ENABLED`, `VTCODE_KEYBOARD_PROTOCOL_MODE`
 
-#### vtcode-core/src/config/mod.rs
+#### crates/codegen/vtcode-core/src/config/mod.rs
 - **Status**: ✓ Already present
 - **Details**: 
   - Exports `KeyboardProtocolConfig`
@@ -46,7 +46,7 @@ PushKeyboardEnhancementFlags / PopKeyboardEnhancementFlags
 
 ### TUI Layer - Modern Implementation
 
-#### vtcode-core/src/ui/tui/modern_tui.rs
+#### crates/codegen/vtcode-core/src/ui/tui/modern_tui.rs
 - **Status**: ✓ Restored
 - **Changes**:
   - Added imports for keyboard protocol types
@@ -56,7 +56,7 @@ PushKeyboardEnhancementFlags / PopKeyboardEnhancementFlags
   - Updated `exit()` to pop keyboard flags if configured
   - Updated `suspend()` to pop keyboard flags if configured
 
-#### vtcode-core/src/ui/tui/modern_integration.rs
+#### crates/codegen/vtcode-core/src/ui/tui/modern_integration.rs
 - **Status**: ✓ Restored
 - **Changes**:
   - Added `keyboard_protocol: KeyboardProtocolConfig` field to `ModernTuiConfig`
@@ -66,7 +66,7 @@ PushKeyboardEnhancementFlags / PopKeyboardEnhancementFlags
 
 ### TUI Layer - Runner Implementation
 
-#### vtcode-core/src/ui/tui/runner.rs
+#### crates/codegen/vtcode-core/src/ui/tui/runner.rs
 - **Status**: ✓ Restored
 - **Changes**:
   - Added `keyboard_protocol: KeyboardProtocolConfig` field to `TuiOptions`
@@ -82,7 +82,7 @@ PushKeyboardEnhancementFlags / PopKeyboardEnhancementFlags
 
 ### Public API Layer
 
-#### vtcode-core/src/ui/tui.rs
+#### crates/codegen/vtcode-core/src/ui/tui.rs
 - **Status**: ✓ Updated
 - **Changes**:
   - Added `keyboard_protocol: KeyboardProtocolConfig` parameter to `spawn_session_with_prompts()`
@@ -100,13 +100,13 @@ PushKeyboardEnhancementFlags / PopKeyboardEnhancementFlags
 
 ### Documentation & Comments
 
-#### vtcode-core/src/ui/tui/alternate_screen.rs
+#### crates/codegen/vtcode-core/src/ui/tui/alternate_screen.rs
 - **Status**: ✓ Comments already present
 - **Details**: 
   - Documentation correctly mentions keyboard enhancement flags in lifecycle comments
   - Actual protocol implementation happens at higher TUI layer (modern_tui.rs, runner.rs)
 
-#### vtcode-core/src/ui/tui/panic_hook.rs
+#### crates/codegen/vtcode-core/src/ui/tui/panic_hook.rs
 - **Status**: ✓ Already present
 - **Details**:
   - Properly imports and uses `PopKeyboardEnhancementFlags` in terminal restoration
@@ -179,7 +179,7 @@ Terminals that don't support the protocol will safely ignore the ANSI escape seq
 ## Testing
 
 The restoration includes:
-- Unit tests in `vtcode-core/src/config/mod.rs` for `keyboard_protocol_to_flags()`
+- Unit tests in `crates/codegen/vtcode-core/src/config/mod.rs` for `keyboard_protocol_to_flags()`
 - Tests for all mode conversions (default, full, minimal, custom)
 - Tests for disabled protocol
 - Tests for invalid mode handling

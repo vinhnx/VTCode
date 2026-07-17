@@ -52,7 +52,5 @@ pub fn default_for(provider: &str) -> Option<&'static str> {
 
 /// Validate if a model is supported by a provider
 pub fn is_valid(provider: &str, model: &str) -> bool {
-    supported_for(provider)
-        .map(|list| list.contains(&model))
-        .unwrap_or(false)
+    supported_for(provider).map(|list| list.contains(&model)).unwrap_or(false)
 }

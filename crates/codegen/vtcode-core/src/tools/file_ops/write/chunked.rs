@@ -22,10 +22,7 @@ impl FileOpsTool {
             "timestamp": chrono::Utc::now().to_rfc3339()
         });
 
-        info!(
-            "File write operation: {}",
-            serde_json::to_string(&log_entry)?
-        );
+        info!("File write operation: {}", serde_json::to_string(&log_entry)?);
         Ok(())
     }
 }

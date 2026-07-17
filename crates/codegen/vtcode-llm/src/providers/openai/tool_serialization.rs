@@ -190,8 +190,7 @@ fn sanitize_openai_schema_node(value: Value, strip_any_of: bool) -> Value {
             }
 
             if map.get("type").and_then(Value::as_str) == Some("object") {
-                map.entry("properties".to_string())
-                    .or_insert_with(|| json!({}));
+                map.entry("properties".to_string()).or_insert_with(|| json!({}));
             }
 
             Value::Object(map)
@@ -339,29 +338,20 @@ fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Val
                 environment.insert("network_policy".to_string(), network_policy);
             }
 
-            let file_ids: Vec<String> = config
-                .file_ids
-                .iter()
-                .filter_map(|value| trim_non_empty_owned(value))
-                .collect();
+            let file_ids: Vec<String> =
+                config.file_ids.iter().filter_map(|value| trim_non_empty_owned(value)).collect();
             if !file_ids.is_empty() {
                 environment.insert("file_ids".to_string(), json!(file_ids));
             }
 
-            let skills: Vec<Value> = config
-                .skills
-                .iter()
-                .filter_map(serialize_hosted_skill)
-                .collect();
+            let skills: Vec<Value> =
+                config.skills.iter().filter_map(serialize_hosted_skill).collect();
             if !skills.is_empty() {
                 environment.insert("skills".to_string(), Value::Array(skills));
             }
         }
         OpenAIHostedShellEnvironment::ContainerReference => {
-            let container_id = config
-                .container_id
-                .as_deref()
-                .and_then(trim_non_empty_owned)?;
+            let container_id = config.container_id.as_deref().and_then(trim_non_empty_owned)?;
             environment.insert("container_id".to_string(), json!(container_id));
         }
     }

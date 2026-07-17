@@ -133,11 +133,9 @@ pub fn builtin_tool_behavior(tool_name: &str) -> Option<ToolBehavior> {
 
 fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
     match tool {
-        tools::CODE_SEARCH => Some(ToolBehavior::function(
-            ToolMutationModel::ReadOnly,
-            true,
-            false,
-        )),
+        tools::CODE_SEARCH => {
+            Some(ToolBehavior::function(ToolMutationModel::ReadOnly, true, false))
+        }
         tools::UNIFIED_EXEC => Some(ToolBehavior::function(
             ToolMutationModel::ByArgs(command_session_intent),
             false,
@@ -148,21 +146,17 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
             false,
             true,
         )),
-        tools::WRITE_STDIN => Some(ToolBehavior::function(
-            ToolMutationModel::ByArgs(write_stdin_intent),
-            false,
-            true,
-        )),
+        tools::WRITE_STDIN => {
+            Some(ToolBehavior::function(ToolMutationModel::ByArgs(write_stdin_intent), false, true))
+        }
         tools::UNIFIED_FILE => Some(ToolBehavior::function(
             ToolMutationModel::ByArgs(file_operation_intent),
             false,
             false,
         )),
-        tools::APPLY_PATCH => Some(ToolBehavior::apply_patch(
-            ToolMutationModel::Mutating,
-            false,
-            true,
-        )),
+        tools::APPLY_PATCH => {
+            Some(ToolBehavior::apply_patch(ToolMutationModel::Mutating, false, true))
+        }
         tools::REQUEST_USER_INPUT
         | tools::MEMORY
         | tools::START_PLANNING
@@ -185,22 +179,18 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
             false,
             false,
         )),
-        tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => Some(ToolBehavior::function(
-            ToolMutationModel::ReadOnly,
-            true,
-            false,
-        )),
-        tools::WEB_FETCH | tools::FETCH_URL | tools::WEB_SEARCH | tools::DEFUDDLE_FETCH => Some(
-            ToolBehavior::function(ToolMutationModel::ReadOnly, false, false),
-        ),
-        tools::WRITE_FILE | tools::EDIT_FILE | tools::DELETE_FILE | tools::CREATE_FILE => Some(
-            ToolBehavior::function(ToolMutationModel::Mutating, false, true),
-        ),
-        tools::MCP_CONNECT_SERVER | tools::MCP_DISCONNECT_SERVER => Some(ToolBehavior::function(
-            ToolMutationModel::Mutating,
-            false,
-            false,
-        )),
+        tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
+            Some(ToolBehavior::function(ToolMutationModel::ReadOnly, true, false))
+        }
+        tools::WEB_FETCH | tools::FETCH_URL | tools::WEB_SEARCH | tools::DEFUDDLE_FETCH => {
+            Some(ToolBehavior::function(ToolMutationModel::ReadOnly, false, false))
+        }
+        tools::WRITE_FILE | tools::EDIT_FILE | tools::DELETE_FILE | tools::CREATE_FILE => {
+            Some(ToolBehavior::function(ToolMutationModel::Mutating, false, true))
+        }
+        tools::MCP_CONNECT_SERVER | tools::MCP_DISCONNECT_SERVER => {
+            Some(ToolBehavior::function(ToolMutationModel::Mutating, false, false))
+        }
         tools::RUN_PTY_CMD
         | tools::SEND_PTY_INPUT
         | tools::CREATE_PTY_SESSION
@@ -208,11 +198,7 @@ fn builtin_tool_behavior_canonical(tool: &str) -> Option<ToolBehavior> {
         | tools::LIST_PTY_SESSIONS
         | tools::CLOSE_PTY_SESSION
         | tools::EXECUTE_CODE
-        | tools::SHELL => Some(ToolBehavior::function(
-            ToolMutationModel::Mutating,
-            false,
-            true,
-        )),
+        | tools::SHELL => Some(ToolBehavior::function(ToolMutationModel::Mutating, false, true)),
         _ => None,
     }
 }
@@ -336,10 +322,9 @@ pub fn is_command_run_tool(tool_name: &str) -> bool {
 pub fn is_command_run_tool_call(tool_name: &str, args: &Value) -> bool {
     match tool_name {
         tools::RUN_PTY_CMD | tools::CREATE_PTY_SESSION | tools::SHELL | "bash" => true,
-        tools::EXEC_COMMAND => crate::tools::command_args::command_text(args)
-            .ok()
-            .flatten()
-            .is_some(),
+        tools::EXEC_COMMAND => {
+            crate::tools::command_args::command_text(args).ok().flatten().is_some()
+        }
         tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | "exec" | "container.exec" => {
             command_session_action_is(args, "run")
         }
@@ -432,11 +417,7 @@ fn write_stdin_intent(args: &Value) -> ToolIntent {
 }
 
 fn memory_tool_intent(args: &Value) -> ToolIntent {
-    let command = args
-        .get("command")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .unwrap_or_default();
+    let command = args.get("command").and_then(Value::as_str).map(str::trim).unwrap_or_default();
     if command.eq_ignore_ascii_case("view") {
         ToolIntent::read_only()
     } else {
@@ -664,10 +645,8 @@ mod tests {
 
     #[test]
     fn command_session_poll_is_retry_safe() {
-        let intent = classify_tool_intent(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "poll", "session_id": 1}),
-        );
+        let intent =
+            classify_tool_intent(tools::UNIFIED_EXEC, &json!({"action": "poll", "session_id": 1}));
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
@@ -852,15 +831,9 @@ mod tests {
 
     #[test]
     fn parallel_safe_calls_reject_control_and_exec_paths() {
-        assert!(is_parallel_safe_call(
-            tools::READ_FILE,
-            &json!({"path": "README.md"})
-        ));
+        assert!(is_parallel_safe_call(tools::READ_FILE, &json!({"path": "README.md"})));
         assert!(!is_parallel_safe_call(tools::LIST_PTY_SESSIONS, &json!({})));
-        assert!(!is_parallel_safe_call(
-            tools::REQUEST_USER_INPUT,
-            &json!({"questions": []})
-        ));
+        assert!(!is_parallel_safe_call(tools::REQUEST_USER_INPUT, &json!({"questions": []})));
         assert!(!is_parallel_safe_call(
             tools::UNIFIED_EXEC,
             &json!({"action": "inspect", "session_id": "run-1"})
@@ -888,10 +861,8 @@ mod tests {
 
     #[test]
     fn write_stdin_empty_chars_is_read_only_and_retry_safe() {
-        let intent = classify_tool_intent(
-            tools::WRITE_STDIN,
-            &json!({"session_id": "abc123", "chars": ""}),
-        );
+        let intent =
+            classify_tool_intent(tools::WRITE_STDIN, &json!({"session_id": "abc123", "chars": ""}));
 
         assert!(!intent.mutating);
         assert!(!intent.destructive);
@@ -1035,10 +1006,7 @@ mod tests {
             tools::GREP_FILE,
             &json!({"pattern": "needle", "path": "."})
         ));
-        assert!(!is_edited_file_conflict_guarded_call(
-            tools::LIST_FILES,
-            &json!({"path": "."})
-        ));
+        assert!(!is_edited_file_conflict_guarded_call(tools::LIST_FILES, &json!({"path": "."})));
         assert!(!is_edited_file_conflict_guarded_call(
             tools::UNIFIED_FILE,
             &json!({"action": "read", "path": "README.md"})
@@ -1071,10 +1039,7 @@ mod tests {
             "exec",
             "container.exec",
         ] {
-            assert_eq!(
-                canonical_command_session_tool_name(alias),
-                Some(tools::UNIFIED_EXEC)
-            );
+            assert_eq!(canonical_command_session_tool_name(alias), Some(tools::UNIFIED_EXEC));
         }
     }
 
@@ -1112,18 +1077,12 @@ mod tests {
 
     #[test]
     fn is_command_run_tool_call_only_accepts_run_actions() {
-        assert!(is_command_run_tool_call(
-            tools::RUN_PTY_CMD,
-            &json!({"command": "cargo check"})
-        ));
+        assert!(is_command_run_tool_call(tools::RUN_PTY_CMD, &json!({"command": "cargo check"})));
         assert!(is_command_run_tool_call(
             tools::UNIFIED_EXEC,
             &json!({"action": "run", "command": "cargo check"})
         ));
-        assert!(is_command_run_tool_call(
-            tools::EXEC_COMMAND,
-            &json!({"cmd": "cargo check"})
-        ));
+        assert!(is_command_run_tool_call(tools::EXEC_COMMAND, &json!({"cmd": "cargo check"})));
         assert!(!is_command_run_tool_call(
             tools::UNIFIED_EXEC,
             &json!({"action": "poll", "session_id": "run-1"})

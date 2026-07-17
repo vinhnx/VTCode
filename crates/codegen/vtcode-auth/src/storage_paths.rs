@@ -49,12 +49,9 @@ pub(crate) fn legacy_auth_storage_path() -> Result<PathBuf> {
 }
 
 pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
-    let parent = path.parent().ok_or_else(|| {
-        anyhow!(
-            "private file path {} has no parent directory",
-            path.display()
-        )
-    })?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow!("private file path {} has no parent directory", path.display()))?;
     let mut temp = Builder::new()
         .prefix(".tmp.")
         .tempfile_in(parent)

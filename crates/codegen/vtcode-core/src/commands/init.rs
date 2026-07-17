@@ -65,15 +65,12 @@ impl CandidateAccumulator {
 
         let label = label.into();
         let description = description.into();
-        let entry = self
-            .values
-            .entry(normalized.to_owned())
-            .or_insert_with(|| SignalCandidate {
-                value: normalized.to_owned(),
-                label,
-                description,
-                score: 0,
-            });
+        let entry = self.values.entry(normalized.to_owned()).or_insert_with(|| SignalCandidate {
+            value: normalized.to_owned(),
+            label,
+            description,
+            score: 0,
+        });
 
         entry.score += score;
     }
@@ -81,10 +78,7 @@ impl CandidateAccumulator {
     fn into_sorted(self) -> Vec<SignalCandidate> {
         let mut values: Vec<_> = self.values.into_values().collect();
         values.sort_by(|left, right| {
-            right
-                .score
-                .cmp(&left.score)
-                .then_with(|| left.value.cmp(&right.value))
+            right.score.cmp(&left.score).then_with(|| left.value.cmp(&right.value))
         });
         values
     }
@@ -255,11 +249,7 @@ impl GuidedInitAnswer {
         }
 
         if let Some(selected) = selected.map(str::trim).filter(|value| !value.is_empty()) {
-            return Some(Self {
-                key,
-                selected: selected.to_owned(),
-                custom: None,
-            });
+            return Some(Self { key, selected: selected.to_owned(), custom: None });
         }
 
         custom_selected.then(|| Self {
@@ -321,12 +311,7 @@ impl GuidedInitPlan {
 
 /// Compatibility wrapper retained for older call sites.
 pub async fn handle_init_command(_registry: &mut ToolRegistry, workspace: &Path) -> Result<()> {
-    println!(
-        "{}",
-        style("Initializing project with AGENTS.md...")
-            .cyan()
-            .bold()
-    );
+    println!("{}", style("Initializing project with AGENTS.md...").cyan().bold());
     println!("{}", style("1. Analyzing project structure...").dim());
     let plan = prepare_guided_init(workspace, true)?;
     println!("{}", style("2. Rendering AGENTS.md content...").dim());
@@ -380,22 +365,13 @@ pub fn render_agents_md(plan: &GuidedInitPlan, answers: &GuidedInitAnswers) -> R
 
     let mut content = String::new();
     content.push_str("# AGENTS.md\n\n");
-    content.push_str(&build_quick_start_section(
-        analysis,
-        verification_command.as_deref(),
-    ));
-    content.push_str(&build_architecture_section(
-        analysis,
-        orientation_doc.as_deref(),
-    ));
+    content.push_str(&build_quick_start_section(analysis, verification_command.as_deref()));
+    content.push_str(&build_architecture_section(analysis, orientation_doc.as_deref()));
     if let Some(section) = build_important_instructions_section(critical_instruction.as_deref()) {
         content.push_str(&section);
     }
     content.push_str(&build_code_style_section(analysis));
-    content.push_str(&build_testing_section(
-        analysis,
-        verification_command.as_deref(),
-    ));
+    content.push_str(&build_testing_section(analysis, verification_command.as_deref()));
     content.push_str(&build_performance_section());
     if let Some(section) = build_pr_guidelines_section(analysis) {
         content.push_str(&section);
@@ -634,10 +610,9 @@ fn extract_cargo_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
     if !deps.is_empty() {
         deps.sort();
         deps.dedup();
-        analysis.dependencies.insert(
-            "Rust (Cargo)".to_owned(),
-            deps.into_iter().take(8).collect(),
-        );
+        analysis
+            .dependencies
+            .insert("Rust (Cargo)".to_owned(), deps.into_iter().take(8).collect());
     }
 }
 
@@ -668,10 +643,9 @@ fn extract_package_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
     if !deps.is_empty() {
         deps.sort();
         deps.dedup();
-        analysis.dependencies.insert(
-            "JavaScript/TypeScript".to_owned(),
-            deps.into_iter().take(8).collect(),
-        );
+        analysis
+            .dependencies
+            .insert("JavaScript/TypeScript".to_owned(), deps.into_iter().take(8).collect());
     }
 }
 
@@ -691,9 +665,7 @@ fn detect_package_manager(workspace: &Path) -> Option<PackageManager> {
 
 fn analyze_git_history(workspace: &Path, analysis: &mut ProjectAnalysis) {
     if !workspace.join(".git").exists() {
-        analysis
-            .commit_patterns
-            .push("No version control detected".to_owned());
+        analysis.commit_patterns.push("No version control detected".to_owned());
         return;
     }
 
@@ -705,9 +677,7 @@ fn analyze_git_history(workspace: &Path, analysis: &mut ProjectAnalysis) {
         .output();
 
     let Ok(output) = output else {
-        analysis
-            .commit_patterns
-            .push("Standard commit messages".to_owned());
+        analysis.commit_patterns.push("Standard commit messages".to_owned());
         return;
     };
 
@@ -734,13 +704,9 @@ fn analyze_git_history(workspace: &Path, analysis: &mut ProjectAnalysis) {
     }
 
     if total > 0 && conventional * 100 / total > 50 {
-        analysis
-            .commit_patterns
-            .push("Conventional Commits".to_owned());
+        analysis.commit_patterns.push("Conventional Commits".to_owned());
     } else {
-        analysis
-            .commit_patterns
-            .push("Standard commit messages".to_owned());
+        analysis.commit_patterns.push("Standard commit messages".to_owned());
     }
 }
 
@@ -753,19 +719,14 @@ fn analyze_project_characteristics(analysis: &mut ProjectAnalysis) {
     analysis.documentation_files = unique_preserving_order(&analysis.documentation_files);
 
     analysis.is_library = analysis.build_systems.iter().any(|system| {
-        matches!(
-            system.as_str(),
-            "Cargo" | "npm/yarn/pnpm" | "pip/poetry" | "Go Modules"
-        )
+        matches!(system.as_str(), "Cargo" | "npm/yarn/pnpm" | "pip/poetry" | "Go Modules")
     });
     analysis.is_application = analysis
         .source_dirs
         .iter()
         .any(|dir| matches!(dir.as_str(), "src" | "app" | "cmd"));
-    analysis.has_ci_cd = analysis
-        .config_files
-        .iter()
-        .any(|path| path.starts_with(".github/workflows/"));
+    analysis.has_ci_cd =
+        analysis.config_files.iter().any(|path| path.starts_with(".github/workflows/"));
     analysis.has_docker = analysis.config_files.iter().any(|path| {
         matches!(
             path.as_str(),
@@ -819,17 +780,8 @@ fn build_verification_candidates(
         );
     }
 
-    if analysis
-        .build_systems
-        .iter()
-        .any(|system| system == "Cargo")
-    {
-        candidates.add(
-            "cargo check",
-            "cargo check",
-            "Run a fast Rust compile check.",
-            2,
-        );
+    if analysis.build_systems.iter().any(|system| system == "Cargo") {
+        candidates.add("cargo check", "cargo check", "Run a fast Rust compile check.", 2);
         candidates.add(
             "cargo nextest run",
             "cargo nextest run",
@@ -838,17 +790,8 @@ fn build_verification_candidates(
         );
     }
 
-    if analysis
-        .build_systems
-        .iter()
-        .any(|system| system == "Go Modules")
-    {
-        candidates.add(
-            "go test ./...",
-            "go test ./...",
-            "Run the Go test suite.",
-            4,
-        );
+    if analysis.build_systems.iter().any(|system| system == "Go Modules") {
+        candidates.add("go test ./...", "go test ./...", "Run the Go test suite.", 4);
     }
 
     if let Some(command) = package_manager {
@@ -882,18 +825,8 @@ fn build_verification_candidates(
                 "Run the repository quality gate script.",
                 3,
             ),
-            (
-                "cargo nextest run",
-                "cargo nextest run",
-                "Run the Rust test suite with nextest.",
-                4,
-            ),
-            (
-                "cargo check",
-                "cargo check",
-                "Run a fast Rust compile check.",
-                2,
-            ),
+            ("cargo nextest run", "cargo nextest run", "Run the Rust test suite with nextest.", 4),
+            ("cargo check", "cargo check", "Run a fast Rust compile check.", 2),
             ("cargo test", "cargo test", "Run the Rust test suite.", 3),
             (
                 "cargo clippy --workspace --all-targets -- -D warnings",
@@ -901,12 +834,7 @@ fn build_verification_candidates(
                 "Run the strict Rust linter.",
                 4,
             ),
-            (
-                "go test ./...",
-                "go test ./...",
-                "Run the Go test suite.",
-                3,
-            ),
+            ("go test ./...", "go test ./...", "Run the Go test suite.", 3),
         ] {
             if content.contains(command) {
                 candidates.add(command, label, description, score);
@@ -944,31 +872,11 @@ fn build_orientation_candidates(
     let mut candidates = CandidateAccumulator::default();
 
     for (path, description, score) in [
-        (
-            "README.md",
-            "Start here for repository overview and local setup.",
-            4,
-        ),
-        (
-            "docs/ARCHITECTURE.md",
-            "Use this for system design and architecture context.",
-            5,
-        ),
-        (
-            "docs/modules/vtcode_docs_map.md",
-            "Use this to map VT Code modules and docs quickly.",
-            5,
-        ),
-        (
-            "docs/README.md",
-            "Use this to browse project documentation.",
-            3,
-        ),
-        (
-            "CONTRIBUTING.md",
-            "Use this for contribution workflow and repo expectations.",
-            2,
-        ),
+        ("README.md", "Start here for repository overview and local setup.", 4),
+        ("docs/ARCHITECTURE.md", "Use this for system design and architecture context.", 5),
+        ("docs/modules/vtcode_docs_map.md", "Use this to map VT Code modules and docs quickly.", 5),
+        ("docs/README.md", "Use this to browse project documentation.", 3),
+        ("CONTRIBUTING.md", "Use this for contribution workflow and repo expectations.", 2),
     ] {
         if analysis.documentation_files.iter().any(|file| file == path) {
             candidates.add(path, path, description, score);
@@ -982,16 +890,8 @@ fn build_orientation_candidates(
                 "Use this to map VT Code modules and docs quickly.",
                 4,
             ),
-            (
-                "docs/ARCHITECTURE.md",
-                "Use this for system design and architecture context.",
-                2,
-            ),
-            (
-                "README.md",
-                "Start here for repository overview and local setup.",
-                1,
-            ),
+            ("docs/ARCHITECTURE.md", "Use this for system design and architecture context.", 2),
+            ("README.md", "Start here for repository overview and local setup.", 1),
         ] {
             if content.contains(path) {
                 candidates.add(path, path, description, score);
@@ -1126,9 +1026,7 @@ impl ProjectAnalysis {
 }
 
 fn normalize_grounding_value(value: Option<String>) -> Option<String> {
-    value
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
+    value.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
 }
 
 fn build_guided_questions(analysis: &ProjectAnalysis) -> Vec<GuidedInitQuestion> {
@@ -1155,9 +1053,7 @@ fn build_guided_questions(analysis: &ProjectAnalysis) -> Vec<GuidedInitQuestion>
         );
         questions.push(GuidedInitQuestion {
             key: GuidedInitQuestionKey::VerificationCommand,
-            header: GuidedInitQuestionKey::VerificationCommand
-                .header()
-                .to_owned(),
+            header: GuidedInitQuestionKey::VerificationCommand.header().to_owned(),
             prompt: "Which command should agents run by default before claiming the work is done?"
                 .to_owned(),
             options,
@@ -1216,9 +1112,7 @@ fn build_guided_questions(analysis: &ProjectAnalysis) -> Vec<GuidedInitQuestion>
         );
         questions.push(GuidedInitQuestion {
             key: GuidedInitQuestionKey::CriticalInstruction,
-            header: GuidedInitQuestionKey::CriticalInstruction
-                .header()
-                .to_owned(),
+            header: GuidedInitQuestionKey::CriticalInstruction.header().to_owned(),
             prompt: "Is there one repo-wide instruction agents should always follow?".to_owned(),
             options,
             allow_custom: true,
@@ -1247,10 +1141,7 @@ fn build_guided_options(
 ) -> Vec<GuidedInitQuestionOption> {
     let mut options = Vec::new();
 
-    if let Some(value) = grounded_value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
+    if let Some(value) = grounded_value.map(str::trim).filter(|value| !value.is_empty()) {
         options.push(GuidedInitQuestionOption {
             value: value.to_owned(),
             label: value.to_owned(),
@@ -1260,10 +1151,7 @@ fn build_guided_options(
     }
 
     for (index, candidate) in candidates.iter().take(max_candidates).enumerate() {
-        if options
-            .iter()
-            .any(|existing| existing.value == candidate.value)
-        {
+        if options.iter().any(|existing| existing.value == candidate.value) {
             continue;
         }
         options.push(GuidedInitQuestionOption {
@@ -1275,9 +1163,7 @@ fn build_guided_options(
     }
 
     if let Some(option) = trailing
-        && options
-            .iter()
-            .all(|existing| existing.value != option.value)
+        && options.iter().all(|existing| existing.value != option.value)
     {
         options.push(option);
     }
@@ -1317,10 +1203,7 @@ fn resolve_orientation_doc(
         answers.answer(GuidedInitQuestionKey::OrientationDoc),
         analysis.grounded_orientation_doc.clone(),
         analysis.selected_orientation_doc.clone(),
-        analysis
-            .orientation_candidates
-            .first()
-            .map(|candidate| candidate.value.clone()),
+        analysis.orientation_candidates.first().map(|candidate| candidate.value.clone()),
     )
 }
 
@@ -1393,11 +1276,7 @@ fn build_quick_start_section(
         ));
     }
 
-    if analysis
-        .build_systems
-        .iter()
-        .any(|system| system == "Cargo")
-    {
+    if analysis.build_systems.iter().any(|system| system == "Cargo") {
         lines.push("Build with `cargo check` (preferred) or `cargo build --release`.".to_owned());
         lines.push(
             "Format via `cargo fmt` and lint with `cargo clippy` before committing.".to_owned(),
@@ -1408,9 +1287,7 @@ fn build_quick_start_section(
     }
 
     if let Some(package_manager) = analysis.package_manager.map(PackageManager::command) {
-        lines.push(format!(
-            "Install JavaScript dependencies with `{package_manager} install`."
-        ));
+        lines.push(format!("Install JavaScript dependencies with `{package_manager} install`."));
     }
 
     if analysis.scripts.iter().any(|script| script == "run.sh") {
@@ -1444,18 +1321,11 @@ fn build_architecture_section(analysis: &ProjectAnalysis, orientation_doc: Optio
     lines.push(format!("Repository: {}.", analysis.project_name));
 
     if !analysis.languages.is_empty() {
-        lines.push(format!(
-            "Primary languages: {}.",
-            analysis.languages.join(", ")
-        ));
+        lines.push(format!("Primary languages: {}.", analysis.languages.join(", ")));
     }
 
     if !analysis.source_dirs.is_empty() {
-        let dirs = analysis
-            .source_dirs
-            .iter()
-            .map(|dir| format!("`{dir}/`"))
-            .collect::<Vec<_>>();
+        let dirs = analysis.source_dirs.iter().map(|dir| format!("`{dir}/`")).collect::<Vec<_>>();
         lines.push(format!("Key source directories: {}.", dirs.join(", ")));
     }
 
@@ -1536,11 +1406,7 @@ fn build_testing_section(analysis: &ProjectAnalysis, verification_command: Optio
         lines.push(format!("Default verification command: `{command}`."));
     }
 
-    if analysis
-        .build_systems
-        .iter()
-        .any(|system| system == "Cargo")
-    {
+    if analysis.build_systems.iter().any(|system| system == "Cargo") {
         lines.push(
             "Rust suite: `cargo nextest run` for speed, or `cargo test` for targeted fallback."
                 .to_owned(),
@@ -1557,11 +1423,7 @@ fn build_testing_section(analysis: &ProjectAnalysis, verification_command: Optio
         ));
     }
 
-    if analysis
-        .build_systems
-        .iter()
-        .any(|system| system == "Go Modules")
-    {
+    if analysis.build_systems.iter().any(|system| system == "Go Modules") {
         lines.push("Run `go test ./...` for Go coverage.".to_owned());
     }
 
@@ -1595,11 +1457,7 @@ fn build_performance_section() -> String {
 fn build_pr_guidelines_section(analysis: &ProjectAnalysis) -> Option<String> {
     let mut lines = Vec::new();
 
-    if analysis
-        .commit_patterns
-        .iter()
-        .any(|pattern| pattern == "Conventional Commits")
-    {
+    if analysis.commit_patterns.iter().any(|pattern| pattern == "Conventional Commits") {
         lines.push(
             "Use Conventional Commits (`type(scope): subject`) with short, descriptive summaries."
                 .to_owned(),
@@ -1627,10 +1485,8 @@ fn build_additional_guidance_section(
     }
 
     if !analysis.documentation_files.is_empty() {
-        lines.push(format!(
-            "Repository docs spotted: {}.",
-            analysis.documentation_files.join(", ")
-        ));
+        lines
+            .push(format!("Repository docs spotted: {}.", analysis.documentation_files.join(", ")));
     }
 
     if !analysis.dependencies.is_empty() {
@@ -1643,10 +1499,7 @@ fn build_additional_guidance_section(
     }
 
     if analysis.scripts.iter().any(|script| script == "run.sh")
-        && analysis
-            .scripts
-            .iter()
-            .any(|script| script == "run-debug.sh")
+        && analysis.scripts.iter().any(|script| script == "run-debug.sh")
     {
         lines.push(
             "Use `./run.sh` for release runs and `./run-debug.sh` for debug sessions.".to_owned(),
@@ -1702,11 +1555,7 @@ mod tests {
     #[test]
     fn no_questions_when_clear_signals_exist() {
         let workspace = TempDir::new().expect("workspace");
-        write_file(
-            &workspace,
-            "Cargo.toml",
-            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
-        );
+        write_file(&workspace, "Cargo.toml", "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n");
         write_file(&workspace, "README.md", "# Demo\n");
         write_file(&workspace, "scripts/check.sh", "#!/bin/sh\ncargo check\n");
 
@@ -1719,21 +1568,13 @@ mod tests {
     #[test]
     fn emits_verification_question_when_multiple_strong_candidates_exist() {
         let workspace = TempDir::new().expect("workspace");
-        write_file(
-            &workspace,
-            "Cargo.toml",
-            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
-        );
+        write_file(&workspace, "Cargo.toml", "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n");
         write_file(
             &workspace,
             "README.md",
             "Run ./scripts/check.sh for the full gate.\nUse cargo nextest run during local work.\n",
         );
-        write_file(
-            &workspace,
-            "scripts/check.sh",
-            "#!/bin/sh\ncargo nextest run\n",
-        );
+        write_file(&workspace, "scripts/check.sh", "#!/bin/sh\ncargo nextest run\n");
         write_file(
             &workspace,
             ".github/workflows/ci.yml",
@@ -1752,17 +1593,9 @@ mod tests {
     #[test]
     fn emits_orientation_question_when_multiple_docs_are_plausible() {
         let workspace = TempDir::new().expect("workspace");
-        write_file(
-            &workspace,
-            "README.md",
-            "See docs/ARCHITECTURE.md for design.\n",
-        );
+        write_file(&workspace, "README.md", "See docs/ARCHITECTURE.md for design.\n");
         write_file(&workspace, "docs/ARCHITECTURE.md", "# Architecture\n");
-        write_file(
-            &workspace,
-            "docs/modules/vtcode_docs_map.md",
-            "# Docs Map\nUse this first.\n",
-        );
+        write_file(&workspace, "docs/modules/vtcode_docs_map.md", "# Docs Map\nUse this first.\n");
 
         let plan = prepare_guided_init(workspace.path(), false).expect("plan");
 
@@ -1776,11 +1609,7 @@ mod tests {
     #[test]
     fn chosen_answers_override_heuristics() {
         let workspace = TempDir::new().expect("workspace");
-        write_file(
-            &workspace,
-            "Cargo.toml",
-            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
-        );
+        write_file(&workspace, "Cargo.toml", "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n");
         write_file(&workspace, "README.md", "# Demo\n");
         let plan = prepare_guided_init(workspace.path(), false).expect("plan");
 
@@ -1879,20 +1708,16 @@ mod tests {
     #[test]
     fn grounding_conflict_reopens_verification_choice() {
         let workspace = TempDir::new().expect("workspace");
-        write_file(
-            &workspace,
-            "Cargo.toml",
-            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
-        );
+        write_file(&workspace, "Cargo.toml", "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n");
         write_file(&workspace, "README.md", "# Demo\n");
         write_file(&workspace, "scripts/check.sh", "#!/bin/sh\ncargo check\n");
 
-        let plan = prepare_guided_init(workspace.path(), false)
-            .expect("plan")
-            .with_grounding(GuidedInitGrounding {
+        let plan = prepare_guided_init(workspace.path(), false).expect("plan").with_grounding(
+            GuidedInitGrounding {
                 verification_command: Some("cargo nextest run".to_owned()),
                 ..GuidedInitGrounding::default()
-            });
+            },
+        );
 
         assert!(
             plan.questions
@@ -1906,15 +1731,15 @@ mod tests {
         let workspace = TempDir::new().expect("workspace");
         write_file(&workspace, "README.md", "# Demo\n");
 
-        let plan = prepare_guided_init(workspace.path(), false)
-            .expect("plan")
-            .with_grounding(GuidedInitGrounding {
+        let plan = prepare_guided_init(workspace.path(), false).expect("plan").with_grounding(
+            GuidedInitGrounding {
                 project_summary: Some(
                     "Terminal-first coding agent for repository work.".to_owned(),
                 ),
                 verification_command: Some("cargo nextest run".to_owned()),
                 ..GuidedInitGrounding::default()
-            });
+            },
+        );
 
         let rendered = render_agents_md(&plan, &GuidedInitAnswers::default()).expect("rendered");
         assert!(rendered.contains("Terminal-first coding agent for repository work."));

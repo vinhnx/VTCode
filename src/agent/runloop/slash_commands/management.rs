@@ -11,52 +11,43 @@ pub(super) fn handle_mcp_command(
     renderer: &mut AnsiRenderer,
 ) -> Result<SlashCommandOutcome> {
     if args.is_empty() {
-        return Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::Interactive,
-        });
+        return Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::Interactive });
     }
 
     let tokens = match shell_split(args) {
         Ok(tokens) => tokens,
         Err(err) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to parse arguments: {err}"),
-            )?;
+            renderer.line(MessageStyle::Error, &format!("Failed to parse arguments: {err}"))?;
             return Ok(SlashCommandOutcome::Handled);
         }
     };
 
     if tokens.is_empty() {
-        return Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::Interactive,
-        });
+        return Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::Interactive });
     }
 
     let subcommand = tokens[0].to_ascii_lowercase();
     match subcommand.as_str() {
-        "status" | "overview" => Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::Overview,
-        }),
-        "list" | "providers" => Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::ListProviders,
-        }),
-        "tools" => Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::ListTools,
-        }),
-        "refresh" | "reload" => Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::RefreshTools,
-        }),
+        "status" | "overview" => {
+            Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::Overview })
+        }
+        "list" | "providers" => {
+            Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::ListProviders })
+        }
+        "tools" => Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::ListTools }),
+        "refresh" | "reload" => {
+            Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::RefreshTools })
+        }
         "config" => {
             if tokens.len() > 1 {
                 let mode = tokens[1].to_ascii_lowercase();
                 match mode.as_str() {
-                    "edit" | "--edit" => Ok(SlashCommandOutcome::ManageMcp {
-                        action: McpCommandAction::EditConfig,
-                    }),
-                    "show" | "list" | "status" => Ok(SlashCommandOutcome::ManageMcp {
-                        action: McpCommandAction::ShowConfig,
-                    }),
+                    "edit" | "--edit" => {
+                        Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::EditConfig })
+                    }
+                    "show" | "list" | "status" => {
+                        Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::ShowConfig })
+                    }
                     other if other.starts_with("--") => {
                         if other == "--edit" {
                             Ok(SlashCommandOutcome::ManageMcp {
@@ -73,20 +64,14 @@ pub(super) fn handle_mcp_command(
                     }
                 }
             } else {
-                Ok(SlashCommandOutcome::ManageMcp {
-                    action: McpCommandAction::ShowConfig,
-                })
+                Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::ShowConfig })
             }
         }
-        "edit" => Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::EditConfig,
-        }),
-        "repair" | "fix" => Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::Repair,
-        }),
-        "diagnose" | "diagnostics" | "health" => Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::Diagnose,
-        }),
+        "edit" => Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::EditConfig }),
+        "repair" | "fix" => Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::Repair }),
+        "diagnose" | "diagnostics" | "health" => {
+            Ok(SlashCommandOutcome::ManageMcp { action: McpCommandAction::Diagnose })
+        }
         "login" => {
             if tokens.len() < 2 {
                 render_mcp_usage(renderer)?;
@@ -139,10 +124,7 @@ pub(super) fn handle_local_command(
     let tokens = match shell_split(trimmed) {
         Ok(tokens) => tokens,
         Err(err) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to parse arguments: {err}"),
-            )?;
+            renderer.line(MessageStyle::Error, &format!("Failed to parse arguments: {err}"))?;
             render_local_usage(renderer)?;
             return Ok(SlashCommandOutcome::Handled);
         }
@@ -202,21 +184,15 @@ pub(super) fn handle_local_command(
                 if tokens.len() > 1 {
                     let action_str = tokens[1].to_ascii_lowercase();
                     let action = match action_str.as_str() {
-                        "status" => LocalServerAction::Status {
-                            provider: Some(canonical.clone()),
-                        },
-                        "start" => LocalServerAction::Start {
-                            provider: Some(canonical.clone()),
-                        },
-                        "stop" => LocalServerAction::Stop {
-                            provider: Some(canonical.clone()),
-                        },
-                        "configure" | "config" => LocalServerAction::Configure {
-                            provider: Some(canonical.clone()),
-                        },
-                        "troubleshoot" | "diagnose" | "fix" => LocalServerAction::Troubleshoot {
-                            provider: Some(canonical.clone()),
-                        },
+                        "status" => LocalServerAction::Status { provider: Some(canonical.clone()) },
+                        "start" => LocalServerAction::Start { provider: Some(canonical.clone()) },
+                        "stop" => LocalServerAction::Stop { provider: Some(canonical.clone()) },
+                        "configure" | "config" => {
+                            LocalServerAction::Configure { provider: Some(canonical.clone()) }
+                        }
+                        "troubleshoot" | "diagnose" | "fix" => {
+                            LocalServerAction::Troubleshoot { provider: Some(canonical.clone()) }
+                        }
                         _ => {
                             render_local_usage(renderer)?;
                             return Ok(SlashCommandOutcome::Handled);

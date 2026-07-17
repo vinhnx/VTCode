@@ -2,22 +2,14 @@ use super::*;
 use tempfile::tempdir;
 
 fn utc(y: i32, m: u32, d: u32, hh: u32, mm: u32, ss: u32) -> DateTime<Utc> {
-    Utc.with_ymd_and_hms(y, m, d, hh, mm, ss)
-        .single()
-        .expect("valid timestamp")
+    Utc.with_ymd_and_hms(y, m, d, hh, mm, ss).single().expect("valid timestamp")
 }
 
 #[test]
 fn cron5_supports_vixie_or_semantics() {
     let cron = Cron5::parse("0 9 15 * 1").expect("cron");
-    let monday = Local
-        .with_ymd_and_hms(2026, 3, 30, 9, 0, 0)
-        .single()
-        .expect("monday");
-    let dom = Local
-        .with_ymd_and_hms(2026, 4, 15, 9, 0, 0)
-        .single()
-        .expect("dom");
+    let monday = Local.with_ymd_and_hms(2026, 3, 30, 9, 0, 0).single().expect("monday");
+    let dom = Local.with_ymd_and_hms(2026, 4, 15, 9, 0, 0).single().expect("dom");
     assert!(cron.parsed().expect("parsed").matches(monday));
     assert!(cron.parsed().expect("parsed").matches(dom));
 }
@@ -32,20 +24,14 @@ fn cron5_rejects_extended_syntax() {
 #[test]
 fn cron5_finds_next_matching_minute() {
     let cron = Cron5::parse("*/15 * * * *").expect("cron");
-    let start = Local
-        .with_ymd_and_hms(2026, 3, 28, 10, 7, 13)
-        .single()
-        .expect("start");
+    let start = Local.with_ymd_and_hms(2026, 3, 28, 10, 7, 13).single().expect("start");
     let next = cron.next_after(start).expect("next").expect("some");
     assert_eq!(next.minute(), 15);
 }
 
 #[test]
 fn reminder_language_detects_at_time() {
-    let now = Local
-        .with_ymd_and_hms(2026, 3, 28, 13, 0, 0)
-        .single()
-        .expect("now");
+    let now = Local.with_ymd_and_hms(2026, 3, 28, 13, 0, 0).single().expect("now");
     let command =
         parse_session_language_command("remind me at 3pm to push the release branch", now)
             .expect("command")
@@ -60,10 +46,7 @@ fn reminder_language_detects_at_time() {
 
 #[test]
 fn reminder_language_detects_relative_time() {
-    let now = Local
-        .with_ymd_and_hms(2026, 3, 28, 13, 0, 0)
-        .single()
-        .expect("now");
+    let now = Local.with_ymd_and_hms(2026, 3, 28, 13, 0, 0).single().expect("now");
     let command = parse_session_language_command(
         "in 45 minutes, check whether the integration tests passed",
         now,
@@ -73,10 +56,7 @@ fn reminder_language_detects_relative_time() {
     match command {
         SessionLanguageCommand::CreateOneShotPrompt { prompt, run_at } => {
             assert_eq!(prompt, "check whether the integration tests passed");
-            assert_eq!(
-                run_at,
-                (now + ChronoDuration::minutes(45)).with_timezone(&Utc)
-            );
+            assert_eq!(run_at, (now + ChronoDuration::minutes(45)).with_timezone(&Utc));
         }
         other => panic!("unexpected command: {other:?}"),
     }
@@ -110,22 +90,14 @@ fn session_scheduler_jitter_is_stable_for_task_id() {
         id: "abcd1234".to_string(),
         name: "test".to_string(),
         schedule: ScheduleSpec::FixedInterval(FixedInterval { seconds: 600 }),
-        action: ScheduledTaskAction::Prompt {
-            prompt: "check".to_string(),
-        },
+        action: ScheduledTaskAction::Prompt { prompt: "check".to_string() },
         workspace: None,
         created_at: utc(2026, 3, 28, 0, 0, 0),
         expires_at: None,
     };
     let base = utc(2026, 3, 28, 1, 0, 0);
-    let first = definition
-        .schedule
-        .jittered_fire_at(&definition.id, base)
-        .expect("jitter");
-    let second = definition
-        .schedule
-        .jittered_fire_at(&definition.id, base)
-        .expect("jitter");
+    let first = definition.schedule.jittered_fire_at(&definition.id, base).expect("jitter");
+    let second = definition.schedule.jittered_fire_at(&definition.id, base).expect("jitter");
     assert_eq!(first, second);
 }
 
@@ -145,12 +117,8 @@ fn durable_store_creates_and_lists_tasks() {
     });
     let definition = ScheduledTaskDefinition::new(
         Some("daily".to_string()),
-        ScheduleSpec::OneShot(OneShot {
-            at: utc(2026, 3, 29, 9, 0, 0),
-        }),
-        ScheduledTaskAction::Reminder {
-            message: "check release".to_string(),
-        },
+        ScheduleSpec::OneShot(OneShot { at: utc(2026, 3, 29, 9, 0, 0) }),
+        ScheduledTaskAction::Reminder { message: "check release".to_string() },
         None,
         utc(2026, 3, 28, 0, 0, 0),
         None,
@@ -226,12 +194,8 @@ async fn scheduler_daemon_executes_due_prompt_task() {
     let now = Utc::now();
     let definition = ScheduledTaskDefinition::new(
         Some("hello".to_string()),
-        ScheduleSpec::OneShot(OneShot {
-            at: now - ChronoDuration::minutes(1),
-        }),
-        ScheduledTaskAction::Prompt {
-            prompt: "say hello".to_string(),
-        },
+        ScheduleSpec::OneShot(OneShot { at: now - ChronoDuration::minutes(1) }),
+        ScheduledTaskAction::Prompt { prompt: "say hello".to_string() },
         Some(workspace),
         now - ChronoDuration::minutes(2),
         None,
@@ -248,10 +212,7 @@ async fn scheduler_daemon_executes_due_prompt_task() {
     let executed = daemon.run_due_tasks_once().await.expect("run");
     assert_eq!(executed, 1);
 
-    let record = store
-        .load_record(&summary.id)
-        .expect("load")
-        .expect("record");
+    let record = store.load_record(&summary.id).expect("load").expect("record");
     assert!(record.runtime.last_run_at.is_some());
     assert!(record.runtime.next_run_at.is_none());
     assert_eq!(
@@ -273,12 +234,8 @@ async fn scheduler_daemon_records_prompt_spawn_failures() {
     let now = Utc::now();
     let definition = ScheduledTaskDefinition::new(
         Some("broken".to_string()),
-        ScheduleSpec::OneShot(OneShot {
-            at: now - ChronoDuration::minutes(1),
-        }),
-        ScheduledTaskAction::Prompt {
-            prompt: "say hello".to_string(),
-        },
+        ScheduleSpec::OneShot(OneShot { at: now - ChronoDuration::minutes(1) }),
+        ScheduledTaskAction::Prompt { prompt: "say hello".to_string() },
         Some(missing_workspace),
         now - ChronoDuration::minutes(2),
         None,
@@ -295,45 +252,24 @@ async fn scheduler_daemon_records_prompt_spawn_failures() {
     let executed = daemon.run_due_tasks_once().await.expect("run");
     assert_eq!(executed, 1);
 
-    let record = store
-        .load_record(&summary.id)
-        .expect("load")
-        .expect("record");
+    let record = store.load_record(&summary.id).expect("load").expect("record");
     assert!(record.runtime.last_run_at.is_some());
     assert!(record.runtime.next_run_at.is_none());
-    assert!(matches!(
-        record.runtime.last_status,
-        Some(TaskRunStatus::Failed { .. })
-    ));
+    assert!(matches!(record.runtime.last_status, Some(TaskRunStatus::Failed { .. })));
 }
 
 #[test]
 fn durable_task_overdue_detection_requires_due_unrun_task() {
     let now = utc(2026, 3, 29, 0, 30, 0);
-    assert!(durable_task_is_overdue(
-        Some(utc(2026, 3, 29, 0, 22, 47)),
-        None,
-        false,
-        now
-    ));
-    assert!(!durable_task_is_overdue(
-        Some(utc(2026, 3, 29, 0, 40, 0)),
-        None,
-        false,
-        now
-    ));
+    assert!(durable_task_is_overdue(Some(utc(2026, 3, 29, 0, 22, 47)), None, false, now));
+    assert!(!durable_task_is_overdue(Some(utc(2026, 3, 29, 0, 40, 0)), None, false, now));
     assert!(!durable_task_is_overdue(
         Some(utc(2026, 3, 29, 0, 22, 47)),
         Some(utc(2026, 3, 29, 0, 22, 47)),
         false,
         now
     ));
-    assert!(!durable_task_is_overdue(
-        Some(utc(2026, 3, 29, 0, 22, 47)),
-        None,
-        true,
-        now
-    ));
+    assert!(!durable_task_is_overdue(Some(utc(2026, 3, 29, 0, 22, 47)), None, true, now));
 }
 
 #[test]

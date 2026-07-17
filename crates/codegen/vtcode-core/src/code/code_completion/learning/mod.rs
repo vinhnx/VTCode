@@ -28,10 +28,8 @@ impl LearningSystem {
 
     /// Process user feedback to improve future suggestions
     pub fn process_feedback(&mut self, suggestion_text: &str, accepted: bool, context: &str) {
-        self.feedback_processor
-            .process(suggestion_text, accepted, context);
-        self.learning_data
-            .update_from_feedback(suggestion_text, accepted);
+        self.feedback_processor.process(suggestion_text, accepted, context);
+        self.learning_data.update_from_feedback(suggestion_text, accepted);
     }
 
     /// Get learning insights for a given context

@@ -204,18 +204,14 @@ pub(super) async fn handle_steering_messages(
             break Ok(false);
         }
 
-        if pending
-            .iter()
-            .any(|message| matches!(message, SteeringMessage::SteerStop))
-        {
+        if pending.iter().any(|message| matches!(message, SteeringMessage::SteerStop)) {
             cancel_for_steering_stop(tool_registry, result).await;
             display_status(renderer, "Stop requested by steering signal.")?;
             break Ok(true);
         }
 
-        if let Some(pause_index) = pending
-            .iter()
-            .position(|message| matches!(message, SteeringMessage::Pause))
+        if let Some(pause_index) =
+            pending.iter().position(|message| matches!(message, SteeringMessage::Pause))
         {
             for message in pending.drain(..pause_index) {
                 if let SteeringMessage::FollowUpInput(input) = message {
@@ -360,10 +356,8 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
         return Ok(false);
     }
 
-    let Some(last_user_msg) = working_history
-        .iter()
-        .rev()
-        .find(|msg| msg.role == uni::MessageRole::User)
+    let Some(last_user_msg) =
+        working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User)
     else {
         return Ok(false);
     };
@@ -434,10 +428,7 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
                 //   user(intent) → assistant(tool_use: finish_planning) → user(tool_result)
                 // Without this the tool_result is orphaned and the LLM generates
                 // confused repeated output when called on the next turn.
-                working_history.push(uni::Message::assistant_with_tools(
-                    String::new(),
-                    vec![call],
-                ));
+                working_history.push(uni::Message::assistant_with_tools(String::new(), vec![call]));
                 push_tool_response(
                     working_history,
                     build_step_finish_planning_call_id(step_count),
@@ -463,10 +454,7 @@ pub(super) async fn maybe_handle_planning_exit_trigger(
                 return Ok(true);
             }
 
-            display_status(
-                ctx.renderer,
-                PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS,
-            )?;
+            display_status(ctx.renderer, PLANNING_WORKFLOW_EXIT_SWITCHED_CONTINUE_STATUS)?;
             Ok(false)
         }
         Err(err) => {
@@ -486,10 +474,8 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
         return Ok(false);
     }
 
-    let Some(last_user_msg) = working_history
-        .iter()
-        .rev()
-        .find(|msg| msg.role == uni::MessageRole::User)
+    let Some(last_user_msg) =
+        working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User)
     else {
         return Ok(false);
     };
@@ -695,18 +681,9 @@ mod tests {
 
     #[test]
     fn detects_bare_implement_trigger() {
-        assert_eq!(
-            detect_planning_intent("implement", false),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("/implement", false),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("implement.", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("implement", false), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("/implement", false), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("implement.", false), PlanningIntent::ExitAndImplement);
     }
 
     #[test]
@@ -723,29 +700,14 @@ mod tests {
 
     #[test]
     fn detects_direct_confirmation_aliases_as_execute_intent() {
-        assert_eq!(
-            detect_planning_intent("yes", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("yes", false), PlanningIntent::ExitAndImplement);
         // "continue" is NOT a direct exit trigger — it is ambiguous.
         // It only works as a short confirmation when the assistant
         // recently prompted for implementation.
-        assert_eq!(
-            detect_planning_intent("continue", false),
-            PlanningIntent::None
-        );
-        assert_eq!(
-            detect_planning_intent("go", false),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("start", false),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("yes!", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("continue", false), PlanningIntent::None);
+        assert_eq!(detect_planning_intent("go", false), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("start", false), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("yes!", false), PlanningIntent::ExitAndImplement);
     }
 
     #[test]
@@ -771,46 +733,23 @@ mod tests {
     #[test]
     fn detects_explicit_planning_requests() {
         assert!(detect_enter_planning_intent("make a plan for this"));
-        assert!(detect_enter_planning_intent(
-            "before implementing, create a plan"
-        ));
-        assert!(detect_enter_planning_intent(
-            "outline the implementation plan"
-        ));
+        assert!(detect_enter_planning_intent("before implementing, create a plan"));
+        assert!(detect_enter_planning_intent("outline the implementation plan"));
     }
 
     #[test]
     fn does_not_start_planning_for_generic_research_requests() {
-        assert!(!detect_enter_planning_intent(
-            "explore and tell me about the core agent loop"
-        ));
-        assert!(!detect_enter_planning_intent(
-            "review the runloop and summarize the behavior"
-        ));
+        assert!(!detect_enter_planning_intent("explore and tell me about the core agent loop"));
+        assert!(!detect_enter_planning_intent("review the runloop and summarize the behavior"));
     }
 
     #[test]
     fn confirmation_words_trigger_with_implementation_prompt_context() {
-        assert_eq!(
-            detect_planning_intent("yes", true),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("continue", true),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("go", true),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("start", true),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("begin", true),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("yes", true), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("continue", true), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("go", true), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("start", true), PlanningIntent::ExitAndImplement);
+        assert_eq!(detect_planning_intent("begin", true), PlanningIntent::ExitAndImplement);
     }
 
     #[test]
@@ -819,10 +758,7 @@ mod tests {
             detect_planning_intent("yes", false),
             PlanningIntent::ExitAndImplement // "yes" is a direct command
         );
-        assert_eq!(
-            detect_planning_intent("continue", false),
-            PlanningIntent::None
-        );
+        assert_eq!(detect_planning_intent("continue", false), PlanningIntent::None);
     }
 
     #[test]
@@ -830,10 +766,7 @@ mod tests {
         // When the assistant asks about staying in planning, "yes" should
         // not trigger exit - but "yes" is still a direct command, so it
         // will trigger ExitAndImplement. This is expected behavior.
-        assert_eq!(
-            detect_planning_intent("yes", false),
-            PlanningIntent::ExitAndImplement
-        );
+        assert_eq!(detect_planning_intent("yes", false), PlanningIntent::ExitAndImplement);
     }
 
     #[test]
@@ -892,10 +825,7 @@ mod tests {
 
     #[test]
     fn resolve_safety_tool_call_limits_maps_zero_turn_budget_to_unbounded_limits() {
-        assert_eq!(
-            resolve_safety_tool_call_limits(0, 50, false),
-            (usize::MAX, usize::MAX)
-        );
+        assert_eq!(resolve_safety_tool_call_limits(0, 50, false), (usize::MAX, usize::MAX));
     }
 
     #[test]
@@ -905,10 +835,7 @@ mod tests {
 
     #[test]
     fn resolve_safety_tool_call_limits_keeps_planning_workflow_session_unbounded() {
-        assert_eq!(
-            resolve_safety_tool_call_limits(48, 40, true),
-            (48, usize::MAX)
-        );
+        assert_eq!(resolve_safety_tool_call_limits(48, 40, true), (48, usize::MAX));
     }
 
     #[test]
@@ -986,9 +913,7 @@ mod tests {
         sender.send(SteeringMessage::Pause).expect("pause");
         sender.send(SteeringMessage::Resume).expect("resume");
         sender
-            .send(SteeringMessage::FollowUpInput(
-                "use the queued note".to_string(),
-            ))
+            .send(SteeringMessage::FollowUpInput("use the queued note".to_string()))
             .expect("follow-up");
         backing.set_steering_receiver(receiver);
 

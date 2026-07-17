@@ -16,9 +16,7 @@ struct TestDefaults {
 
 impl std::fmt::Debug for TestDefaults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TestDefaults")
-            .field("home_dir", &self.home_dir)
-            .finish()
+        f.debug_struct("TestDefaults").field("home_dir", &self.home_dir).finish()
     }
 }
 
@@ -81,10 +79,7 @@ human_in_the_loop = false
     // Since we can't easily mock environment variables in a test,
     // we'll directly test the bootstrap function with our temp directory
     let created_files = defaults::provider::with_config_defaults_provider_for_test(
-        Arc::new(TestDefaults::new(
-            defaults::current_config_defaults(),
-            home_dir.to_path_buf(),
-        )),
+        Arc::new(TestDefaults::new(defaults::current_config_defaults(), home_dir.to_path_buf())),
         || {
             VTCodeConfig::bootstrap_project_with_options(
                 &workspace_dir,

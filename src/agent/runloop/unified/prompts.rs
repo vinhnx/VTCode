@@ -81,14 +81,7 @@ pub(crate) async fn read_system_prompt(
     let token_estimate = prompt.len().div_ceil(4) as u64;
     let over_budget = report.token_estimate > max_tokens;
     let trimmed_sections = report.trimmed_sections.clone();
-    (
-        prompt,
-        SystemPromptReport {
-            token_estimate,
-            over_budget,
-            trimmed_sections,
-        },
-    )
+    (prompt, SystemPromptReport { token_estimate, over_budget, trimmed_sections })
 }
 
 fn budget_addendum(addendum: &str, remaining_budget_tokens: u64) -> String {
@@ -194,10 +187,7 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.system_prompt_mode = SystemPromptMode::Minimal;
 
-        assert_eq!(
-            fallback_base_system_prompt(Some(&config)),
-            minimal_system_prompt()
-        );
+        assert_eq!(fallback_base_system_prompt(Some(&config)), minimal_system_prompt());
     }
 
     #[test]
@@ -205,10 +195,7 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.system_prompt_mode = SystemPromptMode::Lightweight;
 
-        assert_eq!(
-            fallback_base_system_prompt(Some(&config)),
-            default_lightweight_prompt()
-        );
+        assert_eq!(fallback_base_system_prompt(Some(&config)), default_lightweight_prompt());
     }
 
     #[test]
@@ -216,10 +203,7 @@ mod tests {
         let mut config = VTCodeConfig::default();
         config.agent.system_prompt_mode = SystemPromptMode::Specialized;
 
-        assert_eq!(
-            fallback_base_system_prompt(Some(&config)),
-            specialized_system_prompt()
-        );
+        assert_eq!(fallback_base_system_prompt(Some(&config)), specialized_system_prompt());
     }
 
     #[tokio::test]
@@ -229,11 +213,7 @@ mod tests {
         let (prompt, _report) = read_system_prompt(
             workspace.path(),
             None,
-            &[(
-                "explorer".to_string(),
-                "Read-only repo explorer".to_string(),
-                true,
-            )],
+            &[("explorer".to_string(), "Read-only repo explorer".to_string(), true)],
         )
         .await;
 
@@ -261,16 +241,8 @@ mod tests {
     async fn test_read_system_prompt_lists_small_subagent_list_in_full() {
         let workspace = tempfile::TempDir::new().expect("workspace");
         let subagents = vec![
-            (
-                "explorer".to_string(),
-                "Read-only repo explorer".to_string(),
-                true,
-            ),
-            (
-                "builder".to_string(),
-                "Write-capable implementation agent".to_string(),
-                false,
-            ),
+            ("explorer".to_string(), "Read-only repo explorer".to_string(), true),
+            ("builder".to_string(), "Write-capable implementation agent".to_string(), false),
         ];
 
         let (prompt, _report) = read_system_prompt(workspace.path(), None, &subagents).await;

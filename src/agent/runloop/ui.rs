@@ -67,10 +67,7 @@ async fn gather_inline_status_details(
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            McpStatusSummary::Enabled {
-                active_providers,
-                configured,
-            }
+            McpStatusSummary::Enabled { active_providers, configured }
         } else {
             McpStatusSummary::Disabled
         }
@@ -78,10 +75,7 @@ async fn gather_inline_status_details(
         McpStatusSummary::Unknown
     };
 
-    Ok(InlineStatusDetails {
-        workspace_trust,
-        mcp_status,
-    })
+    Ok(InlineStatusDetails { workspace_trust, mcp_status })
 }
 
 #[derive(Debug, Default)]
@@ -119,28 +113,20 @@ fn extract_workspace_header_signals(root: &toml::Value) -> WorkspaceHeaderSignal
                 .and_then(toml::Value::as_bool)
         });
 
-    let optimization_label = root
-        .get("optimization")
-        .and_then(toml::Value::as_table)
-        .and_then(|table| {
-            let enabled = table
-                .get("enabled")
-                .and_then(toml::Value::as_bool)
-                .unwrap_or(true);
+    let optimization_label =
+        root.get("optimization").and_then(toml::Value::as_table).and_then(|table| {
+            let enabled = table.get("enabled").and_then(toml::Value::as_bool).unwrap_or(true);
             if !enabled {
                 return None;
             }
 
-            let strategy = table
-                .get("strategy")
-                .and_then(toml::Value::as_str)
-                .or_else(|| {
-                    table
-                        .get("agent_execution")
-                        .and_then(toml::Value::as_table)
-                        .and_then(|agent_execution| agent_execution.get("strategy"))
-                        .and_then(toml::Value::as_str)
-                });
+            let strategy = table.get("strategy").and_then(toml::Value::as_str).or_else(|| {
+                table
+                    .get("agent_execution")
+                    .and_then(toml::Value::as_table)
+                    .and_then(|agent_execution| agent_execution.get("strategy"))
+                    .and_then(toml::Value::as_str)
+            });
 
             Some(match strategy {
                 Some(raw) => format!("Optimization: {}", format_strategy_label(raw)),
@@ -154,11 +140,7 @@ fn extract_workspace_header_signals(root: &toml::Value) -> WorkspaceHeaderSignal
         .and_then(|table| table.get("hint"))
         .and_then(toml::Value::as_str)
         .and_then(non_empty_trimmed)
-        .or_else(|| {
-            root.get("hint")
-                .and_then(toml::Value::as_str)
-                .and_then(non_empty_trimmed)
-        })
+        .or_else(|| root.get("hint").and_then(toml::Value::as_str).and_then(non_empty_trimmed))
         .or_else(|| first_non_empty_array_entry(root.get("tips")))
         .or_else(|| first_non_empty_array_entry(root.get("hints")))
         .or_else(|| {
@@ -179,19 +161,13 @@ fn extract_workspace_header_signals(root: &toml::Value) -> WorkspaceHeaderSignal
         })
         .map(|tip| truncate_header_text(&tip, 64));
 
-    WorkspaceHeaderSignals {
-        memory_enabled,
-        optimization_label,
-        custom_hint,
-    }
+    WorkspaceHeaderSignals { memory_enabled, optimization_label, custom_hint }
 }
 
 fn first_non_empty_array_entry(value: Option<&toml::Value>) -> Option<String> {
-    value.and_then(toml::Value::as_array).and_then(|items| {
-        items
-            .iter()
-            .find_map(|item| item.as_str().and_then(non_empty_trimmed))
-    })
+    value
+        .and_then(toml::Value::as_array)
+        .and_then(|items| items.iter().find_map(|item| item.as_str().and_then(non_empty_trimmed)))
 }
 
 fn non_empty_trimmed(value: &str) -> Option<String> {
@@ -264,10 +240,7 @@ pub(crate) fn build_search_tools_badge(workspace: &Path) -> InlineHeaderStatusBa
         InlineHeaderStatusTone::Warning
     };
 
-    InlineHeaderStatusBadge {
-        text: status.header_summary(),
-        tone,
-    }
+    InlineHeaderStatusBadge { text: status.header_summary(), tone }
 }
 
 pub(crate) async fn build_inline_header_context(
@@ -279,10 +252,8 @@ pub(crate) async fn build_inline_header_context(
     context_window_size: usize,
     reasoning_label: String,
 ) -> Result<InlineHeaderContext> {
-    let InlineStatusDetails {
-        workspace_trust,
-        mcp_status,
-    } = gather_inline_status_details(config, session_bootstrap).await?;
+    let InlineStatusDetails { workspace_trust, mcp_status } =
+        gather_inline_status_details(config, session_bootstrap).await?;
     let workspace_signals = parse_workspace_header_signals(&config.workspace);
 
     // Check if we're running in the home directory and add a warning if so
@@ -299,29 +270,17 @@ pub(crate) async fn build_inline_header_context(
 
     let version = env!("CARGO_PKG_VERSION").to_string();
     let provider_value = if provider_label.trim().is_empty() {
-        format!(
-            "{}{}",
-            ui::HEADER_PROVIDER_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        )
+        format!("{}{}", ui::HEADER_PROVIDER_PREFIX, ui::HEADER_UNKNOWN_PLACEHOLDER)
     } else {
         format!("{}{}", ui::HEADER_PROVIDER_PREFIX, provider_label.trim())
     };
     let model_value = if model_label.trim().is_empty() {
-        format!(
-            "{}{}",
-            ui::HEADER_MODEL_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        )
+        format!("{}{}", ui::HEADER_MODEL_PREFIX, ui::HEADER_UNKNOWN_PLACEHOLDER)
     } else {
         format!("{}{}", ui::HEADER_MODEL_PREFIX, model_label.trim())
     };
     let reasoning = if reasoning_label.trim().is_empty() {
-        format!(
-            "{}{}",
-            ui::HEADER_REASONING_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        )
+        format!("{}{}", ui::HEADER_REASONING_PREFIX, ui::HEADER_UNKNOWN_PLACEHOLDER)
     } else {
         format!("{}{}", ui::HEADER_REASONING_PREFIX, reasoning_label.trim())
     };
@@ -340,11 +299,7 @@ pub(crate) async fn build_inline_header_context(
         }
         None => match workspace_trust {
             Some(level) => format!("{}{}", ui::HEADER_TRUST_PREFIX, level),
-            None => format!(
-                "{}{}",
-                ui::HEADER_TRUST_PREFIX,
-                ui::HEADER_UNKNOWN_PLACEHOLDER
-            ),
+            None => format!("{}{}", ui::HEADER_TRUST_PREFIX, ui::HEADER_UNKNOWN_PLACEHOLDER),
         },
     };
 
@@ -352,16 +307,9 @@ pub(crate) async fn build_inline_header_context(
         McpStatusSummary::Error(message) => {
             format!("{}error - {}", ui::HEADER_MCP_PREFIX, message)
         }
-        McpStatusSummary::Enabled {
-            active_providers,
-            configured,
-        } => {
+        McpStatusSummary::Enabled { active_providers, configured } => {
             if !active_providers.is_empty() {
-                format!(
-                    "{}enabled ({})",
-                    ui::HEADER_MCP_PREFIX,
-                    active_providers.join(", ")
-                )
+                format!("{}enabled ({})", ui::HEADER_MCP_PREFIX, active_providers.join(", "))
             } else if configured {
                 format!("{}enabled (no providers)", ui::HEADER_MCP_PREFIX)
             } else {
@@ -369,18 +317,14 @@ pub(crate) async fn build_inline_header_context(
             }
         }
         McpStatusSummary::Disabled => format!("{}disabled", ui::HEADER_MCP_PREFIX),
-        McpStatusSummary::Unknown => format!(
-            "{}{}",
-            ui::HEADER_MCP_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        ),
+        McpStatusSummary::Unknown => {
+            format!("{}{}", ui::HEADER_MCP_PREFIX, ui::HEADER_UNKNOWN_PLACEHOLDER)
+        }
     };
 
-    let memory_enabled = workspace_signals.memory_enabled.unwrap_or_else(|| {
-        vt_cfg
-            .map(VTCodeConfig::persistent_memory_enabled)
-            .unwrap_or(false)
-    });
+    let memory_enabled = workspace_signals
+        .memory_enabled
+        .unwrap_or_else(|| vt_cfg.map(VTCodeConfig::persistent_memory_enabled).unwrap_or(false));
     let persistent_memory = memory_enabled.then_some(InlineHeaderStatusBadge {
         text: "Memory: On".to_string(),
         tone: InlineHeaderStatusTone::Ready,
@@ -484,11 +428,7 @@ fn build_subagent_badge_style(color_spec: Option<&str>) -> InlineTextStyle {
                 .filter(|_| parsed_bg.is_some())
                 .or_else(|| background.map(contrasting_badge_text_color))
                 .or(Some(AnsiColor::White.into()));
-            InlineTextStyle {
-                color: foreground,
-                bg_color: background,
-                effects,
-            }
+            InlineTextStyle { color: foreground, bg_color: background, effects }
         }
         None => InlineTextStyle {
             color: Some(AnsiColor::White.into()),
@@ -586,20 +526,14 @@ mod tests {
     #[test]
     fn subagent_badge_style_promotes_single_color_to_background() {
         let style = build_subagent_badge_style(Some("#4f8fd8"));
-        assert_eq!(
-            style.bg_color,
-            Some(AnsiColorEnum::Rgb(RgbColor(0x4F, 0x8F, 0xD8)))
-        );
+        assert_eq!(style.bg_color, Some(AnsiColorEnum::Rgb(RgbColor(0x4F, 0x8F, 0xD8))));
         assert_eq!(style.color, Some(AnsiColor::White.into()));
     }
 
     #[test]
     fn subagent_badge_style_preserves_explicit_foreground_and_background() {
         let style = build_subagent_badge_style(Some("white #4f8fd8"));
-        assert_eq!(
-            style.bg_color,
-            Some(AnsiColorEnum::Rgb(RgbColor(0x4F, 0x8F, 0xD8)))
-        );
+        assert_eq!(style.bg_color, Some(AnsiColorEnum::Rgb(RgbColor(0x4F, 0x8F, 0xD8))));
         assert_eq!(style.color, Some(AnsiColor::White.into()));
     }
 
@@ -622,14 +556,8 @@ usage_tips = ["Keep requests focused"]
 
         let signals = extract_workspace_header_signals(&config);
         assert_eq!(signals.memory_enabled, Some(true));
-        assert_eq!(
-            signals.optimization_label.as_deref(),
-            Some("Optimization: Actor-Critic")
-        );
-        assert_eq!(
-            signals.custom_hint.as_deref(),
-            Some("Keep requests focused")
-        );
+        assert_eq!(signals.optimization_label.as_deref(), Some("Optimization: Actor-Critic"));
+        assert_eq!(signals.custom_hint.as_deref(), Some("Keep requests focused"));
     }
 
     #[test]

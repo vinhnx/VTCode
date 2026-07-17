@@ -14,9 +14,7 @@ use vtcode_bash_runner::{
 
 fn find_python() -> Option<String> {
     for candidate in ["python3", "python"] {
-        if let Ok(output) = std::process::Command::new(candidate)
-            .arg("--version")
-            .output()
+        if let Ok(output) = std::process::Command::new(candidate).arg("--version").output()
             && output.status.success()
         {
             return Some(candidate.to_string());
@@ -30,10 +28,7 @@ fn shell_command(script: &str) -> (String, Vec<String>) {
         let cmd = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
         (cmd, vec!["/C".to_string(), script.to_string()])
     } else {
-        (
-            "/bin/sh".to_string(),
-            vec!["-c".to_string(), script.to_string()],
-        )
+        ("/bin/sh".to_string(), vec!["-c".to_string(), script.to_string()])
     }
 }
 
@@ -47,10 +42,7 @@ async fn test_pipe_process_echo() -> anyhow::Result<()> {
     let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
     let text = String::from_utf8_lossy(&output);
 
-    assert!(
-        text.contains("hello"),
-        "expected 'hello' in output: {text:?}"
-    );
+    assert!(text.contains("hello"), "expected 'hello' in output: {text:?}");
     assert_eq!(code, 0, "expected exit code 0");
 
     Ok(())
@@ -77,10 +69,7 @@ async fn test_pipe_process_round_trips_stdin() -> anyhow::Result<()> {
     let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
     let text = String::from_utf8_lossy(&output);
 
-    assert!(
-        text.contains("roundtrip"),
-        "expected pipe process to echo stdin: {text:?}"
-    );
+    assert!(text.contains("roundtrip"), "expected pipe process to echo stdin: {text:?}");
     assert_eq!(code, 0, "expected python to exit cleanly");
 
     Ok(())
@@ -107,9 +96,7 @@ async fn test_pipe_process_no_stdin() -> anyhow::Result<()> {
 async fn test_pipe_spawn_options() -> anyhow::Result<()> {
     let (program, args) = shell_command("echo options_test");
 
-    let opts = PipeSpawnOptions::new(program, ".")
-        .args(args)
-        .stdin_mode(PipeStdinMode::Null);
+    let opts = PipeSpawnOptions::new(program, ".").args(args).stdin_mode(PipeStdinMode::Null);
 
     let spawned = spawn_pipe_process_with_options(opts).await?;
 
@@ -127,15 +114,9 @@ async fn test_process_handle_terminate() -> anyhow::Result<()> {
     // Spawn a long-running process and terminate it
     let (program, args) = if cfg!(windows) {
         let cmd = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-        (
-            cmd,
-            vec!["/C".to_string(), "ping -n 100 127.0.0.1".to_string()],
-        )
+        (cmd, vec!["/C".to_string(), "ping -n 100 127.0.0.1".to_string()])
     } else {
-        (
-            "/bin/sh".to_string(),
-            vec!["-c".to_string(), "sleep 100".to_string()],
-        )
+        ("/bin/sh".to_string(), vec!["-c".to_string(), "sleep 100".to_string()])
     };
 
     let env: HashMap<String, String> = std::env::vars().collect();
@@ -219,10 +200,7 @@ async fn test_pipe_drains_stderr() -> anyhow::Result<()> {
     let (output, code) = collect_output_until_exit(spawned.output_rx, spawned.exit_rx, 5_000).await;
     let text = String::from_utf8_lossy(&output);
 
-    assert!(
-        text.contains("stderr_output"),
-        "expected stderr to be captured: {text:?}"
-    );
+    assert!(text.contains("stderr_output"), "expected stderr to be captured: {text:?}");
     assert_eq!(code, 0);
 
     Ok(())

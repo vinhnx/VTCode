@@ -105,14 +105,10 @@ impl SkillManager {
     /// * `code` - The skill implementation code
     pub async fn save_skill(&self, skill: Skill) -> Result<()> {
         // Create skills directory
-        ensure_dir_exists(&self.skills_dir)
-            .await
-            .context(ERR_CREATE_SKILLS_DIR)?;
+        ensure_dir_exists(&self.skills_dir).await.context(ERR_CREATE_SKILLS_DIR)?;
 
         let skill_dir = self.skills_dir.join(&skill.metadata.name);
-        ensure_dir_exists(&skill_dir)
-            .await
-            .context(ERR_CREATE_SKILL_DIR)?;
+        ensure_dir_exists(&skill_dir).await.context(ERR_CREATE_SKILL_DIR)?;
 
         // Save code file
         let code_filename = match skill.metadata.language.as_str() {
@@ -164,29 +160,12 @@ impl SkillManager {
             .unwrap_or(false)
         {
             (skill_dir.join("skill.py"), "python3", skill_dir)
-        } else if tokio::fs::try_exists(skill_dir.join("skill.js"))
-            .await
-            .unwrap_or(false)
-        {
+        } else if tokio::fs::try_exists(skill_dir.join("skill.js")).await.unwrap_or(false) {
             (skill_dir.join("skill.js"), "javascript", skill_dir)
-        } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.py"))
-            .await
-            .unwrap_or(false)
-        {
-            (
-                legacy_skill_dir.join("skill.py"),
-                "python3",
-                legacy_skill_dir,
-            )
-        } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.js"))
-            .await
-            .unwrap_or(false)
-        {
-            (
-                legacy_skill_dir.join("skill.js"),
-                "javascript",
-                legacy_skill_dir,
-            )
+        } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.py")).await.unwrap_or(false) {
+            (legacy_skill_dir.join("skill.py"), "python3", legacy_skill_dir)
+        } else if tokio::fs::try_exists(legacy_skill_dir.join("skill.js")).await.unwrap_or(false) {
+            (legacy_skill_dir.join("skill.js"), "javascript", legacy_skill_dir)
         } else {
             return Err(anyhow!("skill '{name}' not found"));
         };
@@ -242,10 +221,7 @@ impl SkillManager {
             .filter(|skill| {
                 skill.name.to_lowercase().contains(&query_lower)
                     || skill.description.to_lowercase().contains(&query_lower)
-                    || skill
-                        .tags
-                        .iter()
-                        .any(|tag| tag.to_lowercase().contains(&query_lower))
+                    || skill.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
             })
             .collect())
     }
@@ -255,16 +231,9 @@ impl SkillManager {
         let skill_dir = self.skills_dir.join(name);
         let legacy_skill_dir = self.legacy_skills_dir.join(name);
         if tokio::fs::try_exists(&skill_dir).await.unwrap_or(false) {
-            tokio::fs::remove_dir_all(&skill_dir)
-                .await
-                .context(ERR_DELETE_SKILL)?;
-        } else if tokio::fs::try_exists(&legacy_skill_dir)
-            .await
-            .unwrap_or(false)
-        {
-            tokio::fs::remove_dir_all(&legacy_skill_dir)
-                .await
-                .context(ERR_DELETE_SKILL)?;
+            tokio::fs::remove_dir_all(&skill_dir).await.context(ERR_DELETE_SKILL)?;
+        } else if tokio::fs::try_exists(&legacy_skill_dir).await.unwrap_or(false) {
+            tokio::fs::remove_dir_all(&legacy_skill_dir).await.context(ERR_DELETE_SKILL)?;
         } else {
             return Err(anyhow!("skill '{name}' not found"));
         }
@@ -291,10 +260,7 @@ impl SkillManager {
         content.push_str(
             "Use `read_file` on individual skill directories for full documentation.\n\n",
         );
-        if skills
-            .iter()
-            .any(|entry| matches!(entry.origin, SkillOrigin::Legacy))
-        {
+        if skills.iter().any(|entry| matches!(entry.origin, SkillOrigin::Legacy)) {
             content.push_str(
                 "Legacy skills from `.vtcode/skills/` are included but deprecated. Move them to `.agents/skills/`.\n\n",
             );
@@ -344,9 +310,7 @@ impl SkillManager {
         content.push_str("*Generated automatically. Do not edit manually.*\n");
 
         // Ensure directory exists
-        ensure_dir_exists(&self.skills_dir)
-            .await
-            .context(ERR_CREATE_SKILLS_DIR)?;
+        ensure_dir_exists(&self.skills_dir).await.context(ERR_CREATE_SKILLS_DIR)?;
 
         let index_path = self.skills_dir.join("INDEX.md");
         write_file_with_context(&index_path, &content, "skills index")
@@ -371,16 +335,11 @@ impl SkillManager {
         let mut entries = Vec::new();
         let mut seen = hashbrown::HashSet::new();
 
-        let primary = self
-            .read_skills_from_dir(&self.skills_dir)
-            .await
-            .context(ERR_READ_SKILLS_DIR)?;
+        let primary =
+            self.read_skills_from_dir(&self.skills_dir).await.context(ERR_READ_SKILLS_DIR)?;
         for metadata in primary {
             seen.insert(metadata.name.clone());
-            entries.push(SkillEntry {
-                metadata,
-                origin: SkillOrigin::Primary,
-            });
+            entries.push(SkillEntry { metadata, origin: SkillOrigin::Primary });
         }
 
         let legacy = self
@@ -391,10 +350,7 @@ impl SkillManager {
             if seen.contains(&metadata.name) {
                 continue;
             }
-            entries.push(SkillEntry {
-                metadata,
-                origin: SkillOrigin::Legacy,
-            });
+            entries.push(SkillEntry { metadata, origin: SkillOrigin::Legacy });
         }
 
         Ok(entries)
@@ -407,9 +363,7 @@ impl SkillManager {
 
         // Pre-allocate skills vector - typically 10-20 skills per directory
         let mut skills = Vec::with_capacity(16);
-        let mut dir_entries = tokio::fs::read_dir(dir)
-            .await
-            .context(ERR_READ_SKILLS_DIR)?;
+        let mut dir_entries = tokio::fs::read_dir(dir).await.context(ERR_READ_SKILLS_DIR)?;
 
         while let Some(entry) = dir_entries.next_entry().await.context(ERR_READ_DIR_ENTRY)? {
             let path = entry.path();

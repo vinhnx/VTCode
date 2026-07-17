@@ -361,11 +361,8 @@ mod tests {
         );
         let base_risk = ToolRiskScorer::calculate_risk(&base);
 
-        let mcp = ToolRiskContext::new(
-            "mcp_tool".to_string(),
-            ToolSource::Mcp,
-            WorkspaceTrust::Trusted,
-        );
+        let mcp =
+            ToolRiskContext::new("mcp_tool".to_string(), ToolSource::Mcp, WorkspaceTrust::Trusted);
         let mcp_risk = ToolRiskScorer::calculate_risk(&mcp);
 
         // MCP tool should have higher risk
@@ -374,13 +371,7 @@ mod tests {
 
     #[test]
     fn test_requires_justification() {
-        assert!(ToolRiskScorer::requires_justification(
-            RiskLevel::High,
-            RiskLevel::High
-        ));
-        assert!(!ToolRiskScorer::requires_justification(
-            RiskLevel::Medium,
-            RiskLevel::High
-        ));
+        assert!(ToolRiskScorer::requires_justification(RiskLevel::High, RiskLevel::High));
+        assert!(!ToolRiskScorer::requires_justification(RiskLevel::Medium, RiskLevel::High));
     }
 }

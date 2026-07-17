@@ -38,10 +38,8 @@ impl McpToolManager {
                 tool_catalog.mark_pending_refresh("mcp_background_refresh");
 
                 // Calculate which tools are newly added by comparing with last known tools
-                let current_tool_keys: Vec<String> = new_mcp_tools
-                    .iter()
-                    .map(|t| format!("{}-{}", t.provider, t.name))
-                    .collect();
+                let current_tool_keys: Vec<String> =
+                    new_mcp_tools.iter().map(|t| format!("{}-{}", t.provider, t.name)).collect();
 
                 // Update the last known tools silently (don't print discovery messages)
                 *last_known_mcp_tools = current_tool_keys;
@@ -81,10 +79,8 @@ impl McpToolManager {
         tool_catalog.mark_pending_refresh("mcp_background_refresh");
 
         // Calculate which tools are newly added by comparing with last known tools
-        let initial_tool_keys: Vec<String> = mcp_tools
-            .iter()
-            .map(|t| format!("{}-{}", t.provider, t.name))
-            .collect();
+        let initial_tool_keys: Vec<String> =
+            mcp_tools.iter().map(|t| format!("{}-{}", t.provider, t.name)).collect();
 
         // Store the initial tool names to track changes later (silently)
         *last_known_mcp_tools = initial_tool_keys;

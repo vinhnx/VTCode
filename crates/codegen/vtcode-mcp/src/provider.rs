@@ -176,11 +176,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpToolInfo>> {
-        Ok(self
-            .list_tools_shared(allowlist, timeout)
-            .await?
-            .as_ref()
-            .clone())
+        Ok(self.list_tools_shared(allowlist, timeout).await?.as_ref().clone())
     }
 
     async fn list_tools_shared(
@@ -206,11 +202,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpToolInfo>> {
-        Ok(self
-            .refresh_tools_shared(allowlist, timeout)
-            .await?
-            .as_ref()
-            .clone())
+        Ok(self.refresh_tools_shared(allowlist, timeout).await?.as_ref().clone())
     }
 
     async fn refresh_tools_shared(
@@ -268,11 +260,7 @@ impl McpProvider {
         let params = CallToolRequestParams::new(tool_name.to_string()).with_arguments(arguments);
         let client = self.client.load_full();
         async move { client.call_tool(params, timeout).await }
-            .instrument(mcp_tool_call_span(
-                &self.name,
-                tool_name,
-                &self.config.transport,
-            ))
+            .instrument(mcp_tool_call_span(&self.name, tool_name, &self.config.transport))
             .await
     }
 
@@ -324,11 +312,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpResourceInfo>> {
-        Ok(self
-            .list_resources_shared(allowlist, timeout)
-            .await?
-            .as_ref()
-            .clone())
+        Ok(self.list_resources_shared(allowlist, timeout).await?.as_ref().clone())
     }
 
     async fn list_resources_shared(
@@ -354,11 +338,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpResourceInfo>> {
-        Ok(self
-            .refresh_resources_shared(allowlist, timeout)
-            .await?
-            .as_ref()
-            .clone())
+        Ok(self.refresh_resources_shared(allowlist, timeout).await?.as_ref().clone())
     }
 
     async fn refresh_resources_shared(
@@ -419,11 +399,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpPromptInfo>> {
-        Ok(self
-            .list_prompts_shared(allowlist, timeout)
-            .await?
-            .as_ref()
-            .clone())
+        Ok(self.list_prompts_shared(allowlist, timeout).await?.as_ref().clone())
     }
 
     async fn list_prompts_shared(
@@ -449,11 +425,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpPromptInfo>> {
-        Ok(self
-            .refresh_prompts_shared(allowlist, timeout)
-            .await?
-            .as_ref()
-            .clone())
+        Ok(self.refresh_prompts_shared(allowlist, timeout).await?.as_ref().clone())
     }
 
     async fn refresh_prompts_shared(
@@ -500,10 +472,8 @@ impl McpProvider {
             .await
             .context("Failed to acquire MCP request slot")?;
         // Convert HashMap<String, String> to JsonObject (BTreeMap<String, Value>)
-        let args_json: Map<String, Value> = arguments
-            .into_iter()
-            .map(|(k, v)| (k, Value::String(v)))
-            .collect();
+        let args_json: Map<String, Value> =
+            arguments.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
 
         let params = GetPromptRequestParams::new(prompt_name.to_string()).with_arguments(args_json);
         let client = self.client.load_full();
@@ -518,12 +488,7 @@ impl McpProvider {
     }
 
     pub(super) async fn cached_tools(&self) -> Option<Vec<McpToolInfo>> {
-        self.caches
-            .lock()
-            .await
-            .tools
-            .as_ref()
-            .map(|tools| tools.as_ref().clone())
+        self.caches.lock().await.tools.as_ref().map(|tools| tools.as_ref().clone())
     }
 
     pub(super) async fn cached_tools_or_refresh(
@@ -663,10 +628,7 @@ fn mcp_tool_call_span(
                 .ok()
                 .and_then(|url| {
                     url.host_str().map(|host| {
-                        (
-                            host.to_string(),
-                            url.port_or_known_default().unwrap_or_default(),
-                        )
+                        (host.to_string(), url.port_or_known_default().unwrap_or_default())
                     })
                 })
                 .unwrap_or_default();
@@ -721,17 +683,11 @@ mod tests {
 
     impl Write for TestWriter {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0
-                .lock()
-                .map_err(|e| std::io::Error::other(e.to_string()))?
-                .write(buf)
+            self.0.lock().map_err(|e| std::io::Error::other(e.to_string()))?.write(buf)
         }
 
         fn flush(&mut self) -> std::io::Result<()> {
-            self.0
-                .lock()
-                .map_err(|e| std::io::Error::other(e.to_string()))?
-                .flush()
+            self.0.lock().map_err(|e| std::io::Error::other(e.to_string()))?.flush()
         }
     }
 

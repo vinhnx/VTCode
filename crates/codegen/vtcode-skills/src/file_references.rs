@@ -130,9 +130,7 @@ impl FileReferenceValidator {
                     let path = entry.path();
                     if path.is_file() {
                         references.push(
-                            path.strip_prefix(&self.skill_root)
-                                .unwrap_or(&path)
-                                .to_path_buf(),
+                            path.strip_prefix(&self.skill_root).unwrap_or(&path).to_path_buf(),
                         );
                     }
                 }
@@ -201,13 +199,7 @@ mod tests {
         let refs = validator.list_valid_references();
 
         assert_eq!(refs.len(), 2);
-        assert!(
-            refs.iter()
-                .any(|p| p.to_string_lossy() == "scripts/test.py")
-        );
-        assert!(
-            refs.iter()
-                .any(|p| p.to_string_lossy() == "references/ref.md")
-        );
+        assert!(refs.iter().any(|p| p.to_string_lossy() == "scripts/test.py"));
+        assert!(refs.iter().any(|p| p.to_string_lossy() == "references/ref.md"));
     }
 }

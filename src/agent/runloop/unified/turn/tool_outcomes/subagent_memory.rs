@@ -17,10 +17,7 @@ pub(super) struct ParsedSubagentSummary {
 }
 
 pub(super) fn request_user_input_result_stats(output: &serde_json::Value) -> (usize, bool) {
-    let cancelled = output
-        .get("cancelled")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
+    let cancelled = output.get("cancelled").and_then(serde_json::Value::as_bool).unwrap_or(false);
     if cancelled {
         return (0, true);
     }
@@ -32,10 +29,8 @@ pub(super) fn request_user_input_result_stats(output: &serde_json::Value) -> (us
     let answered_questions = answers
         .values()
         .filter(|answer| {
-            let selected_count = answer
-                .get("selected")
-                .and_then(serde_json::Value::as_array)
-                .map_or(0, Vec::len);
+            let selected_count =
+                answer.get("selected").and_then(serde_json::Value::as_array).map_or(0, Vec::len);
             let has_other = answer
                 .get("other")
                 .and_then(serde_json::Value::as_str)
@@ -57,11 +52,9 @@ pub(super) fn record_request_user_input_interview_result(
         return;
     }
 
-    let (answered_questions, cancelled) = output
-        .map(request_user_input_result_stats)
-        .unwrap_or((0, true));
-    ctx.plan_session
-        .record_interview_result(answered_questions, cancelled);
+    let (answered_questions, cancelled) =
+        output.map(request_user_input_result_stats).unwrap_or((0, true));
+    ctx.plan_session.record_interview_result(answered_questions, cancelled);
 }
 
 fn normalize_subagent_section_items(lines: &[String]) -> Vec<String> {
@@ -196,12 +189,12 @@ pub(super) fn build_subagent_memory_update(
         saw_summary = true;
 
         if let Some(parsed) = parse_subagent_summary_markdown(summary) {
-            update
-                .grounded_facts
-                .extend(parsed.facts.into_iter().map(|fact| GroundedFactRecord {
+            update.grounded_facts.extend(
+                parsed.facts.into_iter().map(|fact| GroundedFactRecord {
                     fact,
                     source: format!("subagent:{agent_name}"),
-                }));
+                }),
+            );
             update.touched_files.extend(parsed.touched_files);
             update.open_questions.extend(parsed.open_questions);
             update.verification_todo.extend(parsed.verification);
@@ -211,9 +204,7 @@ pub(super) fn build_subagent_memory_update(
                     .push(format!("{agent_name}: {}", parsed.summary.join(" | ")));
             }
         } else {
-            update
-                .delegation_notes
-                .push(format!("{agent_name}: {}", summary.trim()));
+            update.delegation_notes.push(format!("{agent_name}: {}", summary.trim()));
         }
     }
 
@@ -248,8 +239,7 @@ pub(super) fn merge_subagent_completion_into_memory(
     };
 
     if !update.touched_files.is_empty() {
-        ctx.session_stats
-            .record_touched_files(update.touched_files.iter().cloned());
+        ctx.session_stats.record_touched_files(update.touched_files.iter().cloned());
     }
 
     refresh_session_memory_envelope(

@@ -30,8 +30,7 @@ impl ZedAgent {
             return Ok(());
         }
 
-        self.send_update(session_id, acp::SessionUpdate::Plan(plan.to_plan()))
-            .await
+        self.send_update(session_id, acp::SessionUpdate::Plan(plan.to_plan())).await
     }
 
     pub(super) async fn send_available_commands_update(

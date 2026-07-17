@@ -12,9 +12,7 @@ pub(crate) struct ProgressUpdateGuard {
 
 impl ProgressUpdateGuard {
     pub(crate) fn new(handle: tokio::task::JoinHandle<()>) -> Self {
-        Self {
-            handle: Some(handle),
-        }
+        Self { handle: Some(handle) }
     }
 }
 
@@ -92,8 +90,7 @@ impl ProgressState {
     /// Mark the operation as complete
     pub async fn complete(&self) {
         self.is_complete.store(true, Ordering::SeqCst);
-        self.current
-            .store(self.total.load(Ordering::SeqCst), Ordering::SeqCst);
+        self.current.store(self.total.load(Ordering::SeqCst), Ordering::SeqCst);
     }
 
     /// Get the current progress state
@@ -160,9 +157,7 @@ impl ProgressReporter {
     pub async fn percentage(&self) -> u8 {
         let (current, total, _, _) = self.state.get_progress().await;
         if total > 0 {
-            ((current as f64 / total as f64) * 100.0)
-                .round()
-                .clamp(0.0, 100.0) as u8
+            ((current as f64 / total as f64) * 100.0).round().clamp(0.0, 100.0) as u8
         } else {
             0
         }
@@ -204,9 +199,7 @@ pub(crate) struct ProgressInfo {
 impl ProgressInfo {
     /// Format the ETA as a human-readable string
     pub fn eta_formatted(&self) -> String {
-        self.eta
-            .map(format_eta)
-            .unwrap_or_else(|| "Calculating...".to_string())
+        self.eta.map(format_eta).unwrap_or_else(|| "Calculating...".to_string())
     }
 }
 

@@ -50,16 +50,10 @@ pub fn export_skill_bundle(skill_root: &Path) -> Result<Vec<u8>> {
             .compression_method(zip::CompressionMethod::Deflated);
 
         add_dir_to_zip(&mut zip_writer, skill_root, skill_root, options)?;
-        zip_writer
-            .finish()
-            .context("Failed to finalize zip archive")?;
+        zip_writer.finish().context("Failed to finalize zip archive")?;
     }
 
-    info!(
-        "Exported skill bundle from {}: {} bytes",
-        skill_root.display(),
-        buf.len()
-    );
+    info!("Exported skill bundle from {}: {} bytes", skill_root.display(), buf.len());
     Ok(buf)
 }
 
@@ -101,11 +95,7 @@ fn add_dir_to_zip<W: Write + std::io::Seek>(
 /// Storage layout: `<dest_store>/<skill-name>/<version>/...`
 pub fn import_skill_bundle(zip_bytes: &[u8], dest_store: &Path) -> Result<ImportedSkillInfo> {
     if zip_bytes.len() > MAX_BUNDLE_SIZE {
-        bail!(
-            "Bundle size {} bytes exceeds maximum {} bytes",
-            zip_bytes.len(),
-            MAX_BUNDLE_SIZE
-        );
+        bail!("Bundle size {} bytes exceeds maximum {} bytes", zip_bytes.len(), MAX_BUNDLE_SIZE);
     }
 
     let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
@@ -122,17 +112,11 @@ pub fn import_skill_bundle(zip_bytes: &[u8], dest_store: &Path) -> Result<Import
         &fs::read_to_string(&skill_md_path).context("Failed to read extracted SKILL.md")?,
     )?;
 
-    let version = manifest
-        .version
-        .clone()
-        .unwrap_or_else(|| "0.0.0".to_string());
+    let version = manifest.version.clone().unwrap_or_else(|| "0.0.0".to_string());
 
     let dest_dir = dest_store.join(&manifest.name).join(&version);
     if dest_dir.exists() {
-        warn!(
-            "Overwriting existing skill version at {}",
-            dest_dir.display()
-        );
+        warn!("Overwriting existing skill version at {}", dest_dir.display());
         fs::remove_dir_all(&dest_dir).context("Failed to remove existing version")?;
     }
     fs::create_dir_all(&dest_dir).context("Failed to create destination directory")?;
@@ -175,17 +159,11 @@ fn extract_zip_safely(zip_bytes: &[u8], dest: &Path) -> Result<()> {
     let mut archive = zip::ZipArchive::new(cursor).context("Failed to open zip archive")?;
 
     if archive.len() > MAX_FILE_COUNT {
-        bail!(
-            "Zip contains {} entries, exceeds maximum {}",
-            archive.len(),
-            MAX_FILE_COUNT
-        );
+        bail!("Zip contains {} entries, exceeds maximum {}", archive.len(), MAX_FILE_COUNT);
     }
 
     for i in 0..archive.len() {
-        let mut file = archive
-            .by_index(i)
-            .with_context(|| format!("reading zip entry {i}"))?;
+        let mut file = archive.by_index(i).with_context(|| format!("reading zip entry {i}"))?;
         let raw_name = file.name().to_string();
 
         if raw_name.contains("..") {
@@ -284,10 +262,7 @@ fn validate_dir_recursive(
         let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
         let root_canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
         if !canonical.starts_with(&root_canonical) {
-            bail!(
-                "Path traversal detected: {} escapes bundle root",
-                path.display()
-            );
+            bail!("Path traversal detected: {} escapes bundle root", path.display());
         }
 
         if path.is_dir() {
@@ -325,11 +300,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(usize, u64)> {
             size += s;
         } else {
             fs::copy(&src_path, &dst_path).with_context(|| {
-                format!(
-                    "failed to copy {} to {}",
-                    src_path.display(),
-                    dst_path.display()
-                )
+                format!("failed to copy {} to {}", src_path.display(), dst_path.display())
             })?;
             count += 1;
             size += entry
@@ -367,14 +338,11 @@ fn update_skill_index(store_path: &Path, skill_name: &str, version: &str) -> Res
         SkillStoreIndex::default()
     };
 
-    let entry = index
-        .skills
-        .entry(skill_name.to_string())
-        .or_insert_with(|| SkillVersionIndex {
-            latest_version: version.to_string(),
-            default_version: None,
-            versions: Vec::new(),
-        });
+    let entry = index.skills.entry(skill_name.to_string()).or_insert_with(|| SkillVersionIndex {
+        latest_version: version.to_string(),
+        default_version: None,
+        versions: Vec::new(),
+    });
 
     if !entry.versions.contains(&version.to_string()) {
         entry.versions.push(version.to_string());
@@ -435,11 +403,6 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let result = import_skill_bundle(&oversized, temp.path());
         assert!(result.is_err());
-        assert!(
-            result
-                .expect_err("should fail")
-                .to_string()
-                .contains("exceeds maximum")
-        );
+        assert!(result.expect_err("should fail").to_string().contains("exceeds maximum"));
     }
 }

@@ -13,10 +13,7 @@ impl TerminalTitleConfig {
     #[must_use]
     pub fn effective_items(&self) -> Vec<String> {
         self.items.clone().unwrap_or_else(|| {
-            DEFAULT_TERMINAL_TITLE_ITEMS
-                .iter()
-                .map(|item| (*item).to_string())
-                .collect()
+            DEFAULT_TERMINAL_TITLE_ITEMS.iter().map(|item| (*item).to_string()).collect()
         })
     }
 
@@ -77,9 +74,7 @@ mod tests {
 
     #[test]
     fn explicit_empty_items_disables_terminal_title_management() {
-        let config = TerminalTitleConfig {
-            items: Some(Vec::new()),
-        };
+        let config = TerminalTitleConfig { items: Some(Vec::new()) };
 
         assert!(config.effective_items().is_empty());
         assert!(!config.manages_title());
@@ -91,10 +86,7 @@ mod tests {
             items: Some(vec!["project".to_string(), "model".to_string()]),
         };
 
-        assert_eq!(
-            config.effective_items(),
-            vec!["project".to_string(), "model".to_string()]
-        );
+        assert_eq!(config.effective_items(), vec!["project".to_string(), "model".to_string()]);
         assert!(config.manages_title());
     }
 }

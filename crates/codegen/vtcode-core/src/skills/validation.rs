@@ -241,10 +241,7 @@ impl Default for SkillValidator {
 impl SkillValidator {
     /// Create new validator with custom configuration
     pub fn with_config(config: ValidationConfig) -> Self {
-        Self {
-            config,
-            schema_validation_cache: HashMap::new(),
-        }
+        Self { config, schema_validation_cache: HashMap::new() }
     }
 
     /// Validate a traditional skill from directory
@@ -268,11 +265,7 @@ impl SkillValidator {
         checks.insert("skill_file_valid".to_string(), check_result.clone());
 
         let skill_name = if let Some(manifest) = &check_result.details {
-            manifest
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown")
-                .to_string()
+            manifest.get("name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string()
         } else {
             "unknown".to_string()
         };
@@ -327,9 +320,7 @@ impl SkillValidator {
         checks.insert("executable_exists".to_string(), check_result);
 
         // Check executable permissions
-        let check_result = self
-            .check_executable_permissions(&config.executable_path)
-            .await;
+        let check_result = self.check_executable_permissions(&config.executable_path).await;
         checks.insert("executable_permissions".to_string(), check_result);
 
         // Validate README if present
@@ -463,10 +454,8 @@ impl SkillValidator {
 
                 let mut details = serde_json::Map::new();
                 details.insert("name".to_string(), Value::String(manifest.name.clone()));
-                details.insert(
-                    "description".to_string(),
-                    Value::String(manifest.description.clone()),
-                );
+                details
+                    .insert("description".to_string(), Value::String(manifest.description.clone()));
                 details.insert(
                     "warnings".to_string(),
                     serde_json::to_value(&warnings).unwrap_or_else(|_| Value::Array(vec![])),
@@ -542,12 +531,11 @@ impl SkillValidator {
                 }
 
                 // Check extension
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()).filter(|e| {
-                    !self
-                        .config
-                        .allowed_script_extensions
-                        .contains(&e.to_string())
-                }) {
+                if let Some(ext) = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .filter(|e| !self.config.allowed_script_extensions.contains(&e.to_string()))
+                {
                     issues.push(format!("Unsupported script type: {ext}"));
                 }
 
@@ -593,9 +581,7 @@ impl SkillValidator {
         for resource_dir in &["templates", "data", "config"] {
             let dir_path = skill_path.join(resource_dir);
             if dir_path.exists() {
-                let result = self
-                    .validate_resource_directory(&dir_path, resource_dir)
-                    .await;
+                let result = self.validate_resource_directory(&dir_path, resource_dir).await;
                 results.insert(resource_dir.to_string(), result);
             }
         }
@@ -646,11 +632,8 @@ impl SkillValidator {
             let path = entry.path();
             if path.is_file() {
                 // Check file size
-                if let Some(metadata) = entry
-                    .metadata()
-                    .await
-                    .ok()
-                    .filter(|m| m.len() > 10 * 1024 * 1024)
+                if let Some(metadata) =
+                    entry.metadata().await.ok().filter(|m| m.len() > 10 * 1024 * 1024)
                 {
                     // 10MB limit for resources
                     issues.push(format!(
@@ -671,11 +654,7 @@ impl SkillValidator {
         let message = if status == CheckStatus::Passed {
             format!("{resource_type} directory is valid")
         } else {
-            format!(
-                "{} directory has issues: {}",
-                resource_type,
-                issues.join(", ")
-            )
+            format!("{} directory has issues: {}", resource_type, issues.join(", "))
         };
 
         CheckResult {
@@ -887,9 +866,7 @@ impl SkillValidator {
         let start_time = Instant::now();
 
         // Try to execute with --help or -h
-        let output = std::process::Command::new(&config.executable_path)
-            .arg("--help")
-            .output();
+        let output = std::process::Command::new(&config.executable_path).arg("--help").output();
 
         match output {
             Ok(output) => {
@@ -903,9 +880,8 @@ impl SkillValidator {
                     }
                 } else {
                     // Try -h
-                    let output = std::process::Command::new(&config.executable_path)
-                        .arg("-h")
-                        .output();
+                    let output =
+                        std::process::Command::new(&config.executable_path).arg("-h").output();
 
                     match output {
                         Ok(output) => {
@@ -997,16 +973,12 @@ impl SkillValidator {
         for check in checks.values() {
             match check.status {
                 CheckStatus::Warning => {
-                    recommendations.push(format!(
-                        "Address warning in {}: {}",
-                        check.name, check.message
-                    ));
+                    recommendations
+                        .push(format!("Address warning in {}: {}", check.name, check.message));
                 }
                 CheckStatus::Failed => {
-                    recommendations.push(format!(
-                        "Fix failed check {}: {}",
-                        check.name, check.message
-                    ));
+                    recommendations
+                        .push(format!("Fix failed check {}: {}", check.name, check.message));
                 }
                 _ => {}
             }
@@ -1034,12 +1006,8 @@ impl SkillValidator {
         checks: &HashMap<String, CheckResult>,
         security: &SecurityAssessment,
     ) -> ValidationStatus {
-        let has_failures = checks
-            .values()
-            .any(|check| check.status == CheckStatus::Failed);
-        let has_warnings = checks
-            .values()
-            .any(|check| check.status == CheckStatus::Warning);
+        let has_failures = checks.values().any(|check| check.status == CheckStatus::Failed);
+        let has_warnings = checks.values().any(|check| check.status == CheckStatus::Warning);
         let has_high_risk = security.security_level == SecurityLevel::HighRisk;
 
         if has_failures || has_high_risk {
@@ -1201,10 +1169,7 @@ hooks:
         std::fs::write(skill_dir.join("SKILL.md"), skill_md).unwrap();
 
         let mut validator = SkillValidator::new();
-        let report = validator
-            .validate_skill_directory(&skill_dir)
-            .await
-            .unwrap();
+        let report = validator.validate_skill_directory(&skill_dir).await.unwrap();
 
         assert_eq!(report.status, ValidationStatus::Invalid);
         let check = report.checks.get("skill_file_valid").unwrap();
@@ -1245,14 +1210,7 @@ hooks:
         let result2 = validator.validate_json_schema(&schema_path).await;
         assert_eq!(result2.status, CheckStatus::Passed);
         // Verify we still have the same cache entry
-        assert_eq!(
-            validator
-                .schema_validation_cache
-                .get(&schema_path)
-                .unwrap()
-                .0,
-            cached_mtime
-        );
+        assert_eq!(validator.schema_validation_cache.get(&schema_path).unwrap().0, cached_mtime);
 
         // 3. Modify file - should invalidate cache
         sleep_fs();
@@ -1266,9 +1224,6 @@ hooks:
         assert_eq!(result3.status, CheckStatus::Passed);
 
         let (new_mtime, _) = validator.schema_validation_cache.get(&schema_path).unwrap();
-        assert_ne!(
-            *new_mtime, cached_mtime,
-            "Cache should have updated with new mtime"
-        );
+        assert_ne!(*new_mtime, cached_mtime, "Cache should have updated with new mtime");
     }
 }

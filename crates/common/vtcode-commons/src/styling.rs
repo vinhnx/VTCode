@@ -178,9 +178,7 @@ impl Styles {
 
     /// Debug message style (cyan, dimmed)
     pub fn debug() -> Style {
-        Style::new()
-            .fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
-            .dimmed()
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))).dimmed()
     }
 
     /// Bold text style

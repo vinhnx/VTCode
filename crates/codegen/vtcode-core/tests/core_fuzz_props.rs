@@ -190,10 +190,7 @@ fn fuzz_known_dangerous_commands() {
     ];
     for cmd in dangerous_cases {
         let command: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
-        assert!(
-            command_might_be_dangerous(&command),
-            "expected dangerous: {cmd:?}"
-        );
+        assert!(command_might_be_dangerous(&command), "expected dangerous: {cmd:?}");
     }
 }
 
@@ -212,9 +209,6 @@ fn fuzz_known_safe_commands() {
     ];
     for cmd in safe_cases {
         let command: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
-        assert!(
-            !command_might_be_dangerous(&command),
-            "expected safe: {cmd:?}"
-        );
+        assert!(!command_might_be_dangerous(&command), "expected safe: {cmd:?}");
     }
 }

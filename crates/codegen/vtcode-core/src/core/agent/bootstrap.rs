@@ -135,11 +135,7 @@ impl<'config> AgentComponentBuilder<'config> {
         let models_manager = self.models_manager.take().unwrap_or_else(|| {
             // Clone Arc from global - this is cheap since ModelsManager is behind LazyLock
             Arc::new(ModelsManager::with_provider(
-                self.config
-                    .provider
-                    .parse::<Provider>()
-                    .ok()
-                    .unwrap_or_default(),
+                self.config.provider.parse::<Provider>().ok().unwrap_or_default(),
             ))
         });
 
@@ -188,16 +184,11 @@ fn create_llm_client(config: &AgentConfig) -> Result<AnyClient> {
     )
     .with_context(|| format!("Failed to initialize provider '{provider_name}'"))?;
 
-    Ok(Box::new(ProviderClientAdapter::new(
-        provider,
-        config.model.clone(),
-    )))
+    Ok(Box::new(ProviderClientAdapter::new(provider, config.model.clone())))
 }
 
 fn create_session_info() -> Result<SessionInfo> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| err.duration());
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|err| err.duration());
 
     Ok(build_session_info(now))
 }
@@ -339,18 +330,9 @@ mod tests {
             .await
             .expect("component build succeeds with overrides");
 
-        assert_eq!(
-            components.session_info.session_id,
-            custom_session.session_id
-        );
-        assert_eq!(
-            components.session_info.start_time,
-            custom_session.start_time
-        );
-        assert_eq!(
-            Arc::as_ptr(&components.tool_registry),
-            Arc::as_ptr(&registry)
-        );
+        assert_eq!(components.session_info.session_id, custom_session.session_id);
+        assert_eq!(components.session_info.start_time, custom_session.start_time);
+        assert_eq!(Arc::as_ptr(&components.tool_registry), Arc::as_ptr(&registry));
     }
 
     #[test]

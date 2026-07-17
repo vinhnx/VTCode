@@ -331,10 +331,7 @@ mod tests {
                 "bypass_sandbox"
             ])
         );
-        assert_eq!(
-            exec_params["properties"]["sandbox_permissions"]["default"],
-            "use_default"
-        );
+        assert_eq!(exec_params["properties"]["sandbox_permissions"]["default"], "use_default");
         assert_eq!(
             exec_params["properties"]["additional_permissions"]["properties"]["fs_read"]["items"]["type"],
             "string"
@@ -397,10 +394,7 @@ mod tests {
         property_names.sort_unstable();
 
         assert_eq!(params["required"], json!(["query"]));
-        assert_eq!(
-            property_names,
-            ["file_types", "max_results", "path", "query", "result_types"]
-        );
+        assert_eq!(property_names, ["file_types", "max_results", "path", "query", "result_types"]);
         assert_eq!(params["additionalProperties"], false);
         assert_eq!(params["properties"]["query"]["pattern"], "\\S");
         assert_eq!(params["properties"]["file_types"]["minItems"], 1);

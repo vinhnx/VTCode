@@ -136,12 +136,7 @@ impl CommandPolicyEvaluator {
             } else {
                 "Cached deny decision"
             };
-            return (
-                allowed,
-                None,
-                reason.to_string(),
-                PermissionDecision::Cached,
-            );
+            return (allowed, None, reason.to_string(), PermissionDecision::Cached);
         }
 
         // Resolve command to actual path

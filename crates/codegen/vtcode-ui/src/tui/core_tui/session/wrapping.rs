@@ -221,12 +221,7 @@ fn wrap_mixed_content(
 
     // Process remaining text after last URL
     if text_pos < text.len() {
-        push_wrapped_text(
-            &text[text_pos..],
-            &mut current_line,
-            &mut current_width,
-            &mut result,
-        );
+        push_wrapped_text(&text[text_pos..], &mut current_line, &mut current_width, &mut result);
     }
 
     flush_line(&mut current_line, &mut result);
@@ -287,12 +282,7 @@ mod tests {
         let line = Line::from(Span::raw("https://example.com"));
         let wrapped = wrap_line_preserving_urls(line, 80);
         assert_eq!(wrapped.len(), 1);
-        assert!(
-            wrapped[0]
-                .spans
-                .iter()
-                .any(|s| s.content.contains("https://"))
-        );
+        assert!(wrapped[0].spans.iter().any(|s| s.content.contains("https://")));
     }
 
     #[test]
@@ -324,10 +314,7 @@ mod tests {
         let long_url = "https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid";
         let line = Line::from(Span::raw(long_url.to_string()));
         let wrapped = wrap_line_preserving_urls(line, 80);
-        assert!(
-            wrapped.len() > 1,
-            "Long URL should wrap across multiple lines"
-        );
+        assert!(wrapped.len() > 1, "Long URL should wrap across multiple lines");
         let all_text: String = wrapped
             .iter()
             .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
@@ -348,12 +335,7 @@ mod tests {
         let wrapped = wrap_line_preserving_urls(line, 12);
         let rendered: Vec<String> = wrapped
             .iter()
-            .map(|line| {
-                line.spans
-                    .iter()
-                    .map(|span| span.content.as_ref())
-                    .collect()
-            })
+            .map(|line| line.spans.iter().map(|span| span.content.as_ref()).collect())
             .collect();
 
         assert_eq!(

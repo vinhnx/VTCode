@@ -119,14 +119,14 @@ where
                     config_path: config_path.clone(),
                 });
 
-                match ToolPolicyManager::new_with_config_path(&config_path)
-                    .await
-                    .with_context(|| {
+                match ToolPolicyManager::new_with_config_path(&config_path).await.with_context(
+                    || {
                         format!(
                             "failed to initialize tool policy manager at {}",
                             config_path.display()
                         )
-                    }) {
+                    },
+                ) {
                     Ok(manager) => manager,
                     Err(err) => {
                         self.report_error(&err);
@@ -153,17 +153,13 @@ where
     fn report_error(&self, error: &Error) {
         let message = self.error_formatter.format_error(error).into_owned();
         let _ = self.error_reporter.capture(error);
-        let _ = self
-            .telemetry
-            .record(&RegistryEvent::AdapterError { message });
+        let _ = self.telemetry.record(&RegistryEvent::AdapterError { message });
     }
 
     fn handle_error(&self, error: Error) {
         let message = self.error_formatter.format_error(&error).into_owned();
         let _ = self.error_reporter.capture(&error);
-        let _ = self
-            .telemetry
-            .record(&RegistryEvent::TelemetryFailure { message });
+        let _ = self.telemetry.record(&RegistryEvent::TelemetryFailure { message });
     }
 }
 
@@ -191,19 +187,12 @@ mod tests {
         let builder = RegistryBuilder::new(&paths, &telemetry, &reporter, &formatter);
         let registry = builder.build().await.expect("registry");
 
-        assert!(
-            registry
-                .has_tool(crate::config::constants::tools::CODE_SEARCH)
-                .await
-        );
+        assert!(registry.has_tool(crate::config::constants::tools::CODE_SEARCH).await);
 
         let events = telemetry.take();
         assert!(matches!(
             events.as_slice(),
-            [RegistryEvent::PolicyPathResolved {
-                scope: PathScope::Config,
-                ..
-            }]
+            [RegistryEvent::PolicyPathResolved { scope: PathScope::Config, .. }]
         ));
 
         let policy_file = config_dir.join("tool-policy.json");

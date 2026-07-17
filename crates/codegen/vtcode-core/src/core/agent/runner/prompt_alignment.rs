@@ -336,9 +336,7 @@ mod tests {
         .expect_err("canary should fire");
         assert_eq!(
             err,
-            AlignmentError::MutatingToolInPlanningWorkflowPrompt {
-                tool_name: "apply_patch"
-            }
+            AlignmentError::MutatingToolInPlanningWorkflowPrompt { tool_name: "apply_patch" }
         );
     }
 

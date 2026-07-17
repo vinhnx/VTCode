@@ -74,10 +74,7 @@ pub struct ToolIpcHandler {
 impl ToolIpcHandler {
     /// Create a new IPC handler with the given directory.
     pub fn new(ipc_dir: PathBuf) -> Self {
-        Self {
-            ipc_dir,
-            pii_tokenizer: None,
-        }
+        Self { ipc_dir, pii_tokenizer: None }
     }
 
     /// Create a new IPC handler with PII protection enabled.
@@ -116,9 +113,8 @@ impl ToolIpcHandler {
         if let Some(tokenizer) = &self.pii_tokenizer {
             let args_str =
                 serde_json::to_string(&request.args).context("failed to serialize request args")?;
-            let (tokenized, _) = tokenizer
-                .tokenize_string(&args_str)
-                .context("PII tokenization failed")?;
+            let (tokenized, _) =
+                tokenizer.tokenize_string(&args_str).context("PII tokenization failed")?;
             request.args = parse_json_with_context(&tokenized, "tokenized args")?;
         }
         Ok(())
@@ -131,13 +127,9 @@ impl ToolIpcHandler {
         {
             let result_str =
                 serde_json::to_string(result).context("failed to serialize response result")?;
-            let detokenized = tokenizer
-                .detokenize_string(&result_str)
-                .context("PII de-tokenization failed")?;
-            response.result = Some(parse_json_with_context(
-                &detokenized,
-                "de-tokenized result",
-            )?);
+            let detokenized =
+                tokenizer.detokenize_string(&result_str).context("PII de-tokenization failed")?;
+            response.result = Some(parse_json_with_context(&detokenized, "de-tokenized result")?);
         }
         Ok(())
     }
@@ -250,9 +242,7 @@ mod tests {
 
         tokio::spawn(async move {
             sleep(Duration::from_millis(10)).await;
-            fs::write(request_path, request_json)
-                .await
-                .expect("request file should write");
+            fs::write(request_path, request_json).await.expect("request file should write");
         });
 
         let received = handler

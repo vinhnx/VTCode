@@ -11,11 +11,7 @@ fn qwen_reasoning(message: &Value, choice: &Value) -> Option<String> {
     message
         .get("reasoning_content")
         .and_then(extract_reasoning_trace)
-        .or_else(|| {
-            choice
-                .get("reasoning_content")
-                .and_then(extract_reasoning_trace)
-        })
+        .or_else(|| choice.get("reasoning_content").and_then(extract_reasoning_trace))
 }
 
 impl OpenAiCompatSpec for QwenSpec {
@@ -37,15 +33,9 @@ impl OpenAiCompatSpec for QwenSpec {
     fn resolve_api_key(api_key: Option<String>) -> String {
         api_key
             .filter(|key| !key.trim().is_empty())
+            .or_else(|| std::env::var(Self::API_KEY_ENV).ok().filter(|key| !key.trim().is_empty()))
             .or_else(|| {
-                std::env::var(Self::API_KEY_ENV)
-                    .ok()
-                    .filter(|key| !key.trim().is_empty())
-            })
-            .or_else(|| {
-                std::env::var("DASHSCOPE_API_KEY")
-                    .ok()
-                    .filter(|key| !key.trim().is_empty())
+                std::env::var("DASHSCOPE_API_KEY").ok().filter(|key| !key.trim().is_empty())
             })
             .unwrap_or_default()
     }

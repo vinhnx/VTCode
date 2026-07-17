@@ -44,10 +44,7 @@ fn interactive_archive_backed_session(
     print_mode: &Option<String>,
 ) -> bool {
     startup.session_resume.is_some()
-        || matches!(
-            args.command,
-            Some(Commands::Chat) | Some(Commands::ChatVerbose)
-        )
+        || matches!(args.command, Some(Commands::Chat) | Some(Commands::ChatVerbose))
         || (args.command.is_none() && print_mode.is_none() && startup.automation_prompt.is_none())
 }
 
@@ -62,9 +59,7 @@ fn workspace_archive_label(workspace: &std::path::Path) -> String {
 async fn reserve_fresh_archive_session_id(startup: &StartupContext) -> Option<String> {
     let workspace_label = workspace_archive_label(startup.workspace.as_path());
     if history_persistence_enabled() {
-        reserve_session_archive_identifier(&workspace_label, None)
-            .await
-            .ok()
+        reserve_session_archive_identifier(&workspace_label, None).await.ok()
     } else {
         Some(generate_session_archive_identifier(&workspace_label, None))
     }
@@ -103,10 +98,7 @@ async fn resolve_archive_session_id(
     }
 
     match &args.command {
-        Some(Commands::Exec {
-            command: Some(ExecSubcommand::Resume(resume)),
-            ..
-        }) => {
+        Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) => {
             if resume.last {
                 let scope = if resume.all {
                     SessionQueryScope::All
@@ -189,9 +181,7 @@ mod tests {
 
     #[test]
     fn configure_debug_session_routing_reuses_specific_resume_identifier() {
-        let _guard = DEBUG_ROUTING_TEST_GUARD
-            .lock()
-            .expect("debug routing guard");
+        let _guard = DEBUG_ROUTING_TEST_GUARD.lock().expect("debug routing guard");
 
         let args = Cli::default();
         let startup = StartupContext {
@@ -219,9 +209,7 @@ mod tests {
 
     #[test]
     fn configure_debug_session_routing_reuses_exec_resume_identifier() {
-        let _guard = DEBUG_ROUTING_TEST_GUARD
-            .lock()
-            .expect("debug routing guard");
+        let _guard = DEBUG_ROUTING_TEST_GUARD.lock().expect("debug routing guard");
 
         let args = Cli::parse_from(["vtcode", "exec", "resume", "session-456", "continue"]);
         let startup = StartupContext {

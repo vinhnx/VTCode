@@ -461,16 +461,12 @@ impl OptimizedLLMClient {
         self.request_batcher
             .add_request(batched_request)
             .await
-            .map_err(|e| LLMError::InvalidRequest {
-                message: e.to_string(),
-                metadata: None,
-            })?;
+            .map_err(|e| LLMError::InvalidRequest { message: e.to_string(), metadata: None })?;
 
         // Wait for response
-        let response = response_rx.await.map_err(|e| LLMError::InvalidRequest {
-            message: e.to_string(),
-            metadata: None,
-        })??;
+        let response = response_rx
+            .await
+            .map_err(|e| LLMError::InvalidRequest { message: e.to_string(), metadata: None })??;
 
         // Cache successful response
         let cached_response = CachedResponse {
@@ -479,10 +475,7 @@ impl OptimizedLLMClient {
             ttl: Duration::from_secs(300), // 5 minutes
         };
 
-        self.response_cache
-            .write()
-            .await
-            .put(cache_key, cached_response);
+        self.response_cache.write().await.put(cache_key, cached_response);
 
         // Update metrics
         let execution_time = start_time.elapsed();
@@ -546,14 +539,10 @@ mod tests {
             temperature: Some(0.2),
             max_tokens: Some(128),
         };
-        let different_temperature = OptimizedRequest {
-            temperature: Some(0.8),
-            ..base_request.clone()
-        };
-        let different_max_tokens = OptimizedRequest {
-            max_tokens: Some(256),
-            ..base_request.clone()
-        };
+        let different_temperature =
+            OptimizedRequest { temperature: Some(0.8), ..base_request.clone() };
+        let different_max_tokens =
+            OptimizedRequest { max_tokens: Some(256), ..base_request.clone() };
 
         assert_ne!(
             client.generate_cache_key(&base_request),
@@ -574,10 +563,7 @@ mod tests {
             temperature: Some(0.2),
             max_tokens: Some(128),
         };
-        let different_request = OptimizedRequest {
-            temperature: Some(0.8),
-            ..base_request.clone()
-        };
+        let different_request = OptimizedRequest { temperature: Some(0.8), ..base_request.clone() };
 
         assert_ne!(
             batcher.generate_batch_key(&base_request),

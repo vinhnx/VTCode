@@ -107,8 +107,7 @@ impl StreamingProgressTracker {
             return;
         }
 
-        self.last_reported_progress
-            .store(percent, Ordering::Relaxed);
+        self.last_reported_progress.store(percent, Ordering::Relaxed);
 
         // Call the callback if set
         if let Some(ref callback) = self.callback {
@@ -233,9 +232,7 @@ mod tests {
 
     #[test]
     fn test_builder_pattern() {
-        let tracker = StreamingProgressBuilder::new(300)
-            .warning_threshold(0.75)
-            .build();
+        let tracker = StreamingProgressBuilder::new(300).warning_threshold(0.75).build();
 
         assert_eq!(tracker.total_timeout.as_secs(), 300);
         assert!((tracker.warning_threshold - 0.75).abs() < f32::EPSILON);

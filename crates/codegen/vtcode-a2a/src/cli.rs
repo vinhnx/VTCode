@@ -166,9 +166,7 @@ mod tests {
 
     #[test]
     fn test_cli_discover_command() {
-        let cmd = A2aCommands::Discover {
-            agent_url: "https://example.com".to_string(),
-        };
+        let cmd = A2aCommands::Discover { agent_url: "https://example.com".to_string() };
         match cmd {
             A2aCommands::Discover { agent_url } => {
                 assert_eq!(agent_url, "https://example.com")

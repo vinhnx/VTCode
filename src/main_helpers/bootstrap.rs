@@ -75,21 +75,9 @@ pub(crate) fn build_augmented_cli_command() -> clap::Command {
 
 fn clap_help_styles() -> Styles {
     Styles::styled()
-        .header(
-            ClapAnsiColor::BrightBlue
-                .on_default()
-                .effects(ClapEffects::BOLD),
-        )
-        .usage(
-            ClapAnsiColor::BrightBlue
-                .on_default()
-                .effects(ClapEffects::BOLD),
-        )
-        .literal(
-            ClapAnsiColor::BrightGreen
-                .on_default()
-                .effects(ClapEffects::BOLD),
-        )
+        .header(ClapAnsiColor::BrightBlue.on_default().effects(ClapEffects::BOLD))
+        .usage(ClapAnsiColor::BrightBlue.on_default().effects(ClapEffects::BOLD))
+        .literal(ClapAnsiColor::BrightGreen.on_default().effects(ClapEffects::BOLD))
         .placeholder(ClapAnsiColor::BrightCyan.on_default())
 }
 
@@ -164,9 +152,7 @@ fn home_config_path() -> Option<std::path::PathBuf> {
 }
 
 fn workspace_config_path() -> Option<std::path::PathBuf> {
-    std::env::current_dir()
-        .ok()
-        .map(|cwd| cwd.join("vtcode.toml"))
+    std::env::current_dir().ok().map(|cwd| cwd.join("vtcode.toml"))
 }
 
 /// Read a single TOML file and check for provider/model keys.
@@ -186,14 +172,11 @@ fn has_provider_or_model_keys(config: &toml::Value) -> bool {
 
     root.contains_key("provider")
         || root.contains_key("model")
-        || root
-            .get("agent")
-            .and_then(toml::Value::as_table)
-            .is_some_and(|agent| {
-                agent.contains_key("provider")
-                    || agent.contains_key("model")
-                    || agent.contains_key("default_model")
-            })
+        || root.get("agent").and_then(toml::Value::as_table).is_some_and(|agent| {
+            agent.contains_key("provider")
+                || agent.contains_key("model")
+                || agent.contains_key("default_model")
+        })
 }
 
 fn parse_help_color_choice(value: &str) -> Option<CliColorChoice> {
@@ -299,10 +282,7 @@ fn style_literal(text: &str) -> String {
 }
 
 fn style_placeholder(text: &str) -> String {
-    styled(
-        text,
-        anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightCyan))),
-    )
+    styled(text, anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightCyan))))
 }
 
 /// Score how similar `candidate` is to `input` (0.0 ..= 1.0, exclusive).
@@ -354,10 +334,7 @@ fn bigram_overlap(a: &str, b: &str) -> f64 {
     let a_bigrams: HashSet<[u8; 2]> = a.as_bytes().windows(2).map(|w| [w[0], w[1]]).collect();
     let b_bigrams: Vec<[u8; 2]> = b.as_bytes().windows(2).map(|w| [w[0], w[1]]).collect();
 
-    let matches = b_bigrams
-        .iter()
-        .filter(|bg| a_bigrams.contains(&**bg))
-        .count();
+    let matches = b_bigrams.iter().filter(|bg| a_bigrams.contains(&**bg)).count();
     let total = a_bigrams.len().max(b_bigrams.len()) as f64;
     if total == 0.0 {
         return 0.0;
@@ -507,10 +484,7 @@ mod tests {
     fn suggest_similar_commands_no_match_for_gibberish() {
         let candidates = cached_candidates();
         let suggestions = suggest_similar_commands("xyzzy", candidates, 3);
-        assert!(
-            suggestions.is_empty(),
-            "should not suggest anything for 'xyzzy': {suggestions:?}"
-        );
+        assert!(suggestions.is_empty(), "should not suggest anything for 'xyzzy': {suggestions:?}");
     }
 
     #[test]

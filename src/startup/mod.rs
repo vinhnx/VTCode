@@ -180,13 +180,8 @@ impl StartupContext {
             }
         };
 
-        let (theme_res, _dot_folder_res, _guardian_done, _appliers_done, auth_res) = tokio::join!(
-            theme_fut,
-            dot_folder_fut,
-            guardian_fut,
-            appliers_fut,
-            auth_fut
-        );
+        let (theme_res, _dot_folder_res, _guardian_done, _appliers_done, auth_res) =
+            tokio::join!(theme_fut, dot_folder_fut, guardian_fut, appliers_fut, auth_fut);
 
         let theme_resolution = theme_res?;
         let theme_selection = theme_resolution.theme;
@@ -219,11 +214,8 @@ impl StartupContext {
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
         if agent_config.provider.eq_ignore_ascii_case("openai")
-            && let Some(retention) = agent_config
-                .prompt_cache
-                .providers
-                .openai
-                .prompt_cache_retention
+            && let Some(retention) =
+                agent_config.prompt_cache.providers.openai.prompt_cache_retention
             && retention != PromptCacheRetention::Unknown
         {
             // Use constants list to identify which models use Responses API
@@ -277,10 +269,7 @@ async fn maybe_apply_codex_sidecar_fallback(
     selection: &mut RuntimeModelSelection,
     first_run_occurred: bool,
 ) -> Result<Option<String>> {
-    if !selection
-        .provider
-        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-    {
+    if !selection.provider.eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER) {
         return Ok(None);
     }
 
@@ -367,9 +356,7 @@ async fn persist_runtime_selection(
 
     let mut manager = crate::main_helpers::load_workspace_config(workspace)?;
     manager.save_config(config)?;
-    update_model_preference(&selection.provider, &selection.model)
-        .await
-        .ok();
+    update_model_preference(&selection.provider, &selection.model).await.ok();
     Ok(())
 }
 
@@ -379,21 +366,15 @@ async fn resolve_runtime_provider_auth(
     selection: &RuntimeModelSelection,
     first_run_occurred: bool,
 ) -> Result<(String, Option<OpenAIChatGptAuthHandle>)> {
-    if selection
-        .provider
-        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-    {
+    if selection.provider.eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER) {
         return Ok((String::new(), None));
     }
 
     if selection.provider.eq_ignore_ascii_case("openai") {
         let api_key = get_api_key(&selection.provider, &ApiKeySources::default()).ok();
-        let resolved = resolve_openai_auth(
-            &config.auth.openai,
-            config.agent.credential_storage_mode,
-            api_key,
-        )
-        .with_context(|| missing_api_key_message(config, selection, first_run_occurred))?;
+        let resolved =
+            resolve_openai_auth(&config.auth.openai, config.agent.credential_storage_mode, api_key)
+                .with_context(|| missing_api_key_message(config, selection, first_run_occurred))?;
         return Ok((resolved.api_key().to_string(), resolved.handle()));
     }
 
@@ -438,10 +419,7 @@ fn missing_api_key_message(
     first_run_occurred: bool,
 ) -> String {
     let provider_name = provider_label(&selection.provider, Some(config));
-    if selection
-        .provider
-        .eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER)
-    {
+    if selection.provider.eq_ignore_ascii_case(crate::codex_app_server::CODEX_PROVIDER) {
         return format!(
             "Codex authentication is managed by the official `codex app-server`. Run `vtcode auth codex` or `vtcode login codex`. {}",
             crate::codex_app_server::codex_sidecar_requirement_note()
@@ -590,20 +568,16 @@ mod validation_tests {
 
     #[test]
     fn acp_can_start_without_provider_auth() {
-        assert!(can_start_without_provider_auth(Some(
-            &Commands::AgentClientProtocol {
-                target: vtcode_core::cli::args::AgentClientProtocolTarget::Zed,
-            },
-        )));
+        assert!(can_start_without_provider_auth(Some(&Commands::AgentClientProtocol {
+            target: vtcode_core::cli::args::AgentClientProtocolTarget::Zed,
+        },)));
     }
 
     #[test]
     fn app_server_can_start_without_provider_auth() {
-        assert!(can_start_without_provider_auth(Some(
-            &Commands::AppServer {
-                listen: "stdio://".to_string(),
-            }
-        )));
+        assert!(can_start_without_provider_auth(Some(&Commands::AppServer {
+            listen: "stdio://".to_string(),
+        })));
     }
 
     #[test]
@@ -623,23 +597,13 @@ mod validation_tests {
     #[test]
     fn non_tool_auth_skip_commands_skip_runtime_init() {
         for command in [
-            Commands::Login {
-                provider: "openai".to_string(),
-                device_code: false,
-            },
-            Commands::Logout {
-                provider: "openai".to_string(),
-            },
-            Commands::Auth {
-                provider: Some("openai".to_string()),
-            },
+            Commands::Login { provider: "openai".to_string(), device_code: false },
+            Commands::Logout { provider: "openai".to_string() },
+            Commands::Auth { provider: Some("openai".to_string()) },
             Commands::ToolPolicy {
                 command: vtcode_core::cli::tool_policy_commands::ToolPolicyCommands::Status,
             },
-            Commands::Notify {
-                title: None,
-                message: "x".to_string(),
-            },
+            Commands::Notify { title: None, message: "x".to_string() },
             Commands::Pods {
                 command: vtcode_core::cli::args::PodsCommands::List,
             },
@@ -682,16 +646,15 @@ mod validation_tests {
     #[test]
     fn missing_api_key_message_uses_custom_provider_label_and_env_key() {
         let mut cfg = VTCodeConfig::default();
-        cfg.custom_providers
-            .push(vtcode_config::core::CustomProviderConfig {
-                name: "mycorp".to_string(),
-                display_name: "MyCorporateName".to_string(),
-                base_url: "https://llm.example/v1".to_string(),
-                api_key_env: "MYCORP_API_KEY".to_string(),
-                auth: None,
-                model: "gpt-5-mini".to_string(),
-                models: Vec::new(),
-            });
+        cfg.custom_providers.push(vtcode_config::core::CustomProviderConfig {
+            name: "mycorp".to_string(),
+            display_name: "MyCorporateName".to_string(),
+            base_url: "https://llm.example/v1".to_string(),
+            api_key_env: "MYCORP_API_KEY".to_string(),
+            auth: None,
+            model: "gpt-5-mini".to_string(),
+            models: Vec::new(),
+        });
 
         let selection = RuntimeModelSelection {
             model: "gpt-5-mini".to_string(),
@@ -801,10 +764,7 @@ mod validation_tests {
 
         let (_, session_resume) = resolve_session_resume(&args).expect("session resume");
 
-        assert!(matches!(
-            session_resume,
-            Some(SessionResumeMode::Interactive)
-        ));
+        assert!(matches!(session_resume, Some(SessionResumeMode::Interactive)));
         validate_resume_all_usage(&args, session_resume.as_ref()).unwrap();
     }
 
@@ -823,18 +783,13 @@ mod validation_tests {
             vtcode_core::config::constants::models::openai::GPT_5,
         ]);
 
-        let ctx = StartupContext::from_cli_args(&args)
-            .await
-            .expect("startup success");
+        let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
 
         assert_eq!(
             ctx.config.agent.default_model,
             vtcode_core::config::constants::models::openai::GPT_5
         );
-        assert_eq!(
-            ctx.agent_config.model,
-            vtcode_core::config::constants::models::openai::GPT_5
-        );
+        assert_eq!(ctx.agent_config.model, vtcode_core::config::constants::models::openai::GPT_5);
     }
 
     #[tokio::test]
@@ -854,9 +809,7 @@ mod validation_tests {
             "prompt_cache.providers.openai.prompt_cache_retention=24h",
         ]);
 
-        let ctx = StartupContext::from_cli_args(&args)
-            .await
-            .expect("startup success");
+        let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
         let maybe_warning = check_prompt_cache_retention_compat(
             &ctx.config,
             &ctx.agent_config.model,
@@ -883,9 +836,7 @@ mod validation_tests {
             "provider.openai.hosted_shell.enabled=true",
         ]);
 
-        let ctx = StartupContext::from_cli_args(&args)
-            .await
-            .expect("startup success");
+        let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
         let maybe_warning =
             check_openai_hosted_shell_compat(&ctx.config, &ctx.agent_config.model, "openai");
 
@@ -909,9 +860,7 @@ mod validation_tests {
             "prompt_cache.providers.openai.prompt_cache_retention=24h",
         ]);
 
-        let ctx = StartupContext::from_cli_args(&args)
-            .await
-            .expect("startup success");
+        let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
         let maybe_warning = check_prompt_cache_retention_compat(
             &ctx.config,
             &ctx.agent_config.model,
@@ -942,9 +891,7 @@ mod validation_tests {
             "--full-auto",
         ]);
 
-        let ctx = StartupContext::from_cli_args(&args)
-            .await
-            .expect("startup success");
+        let ctx = StartupContext::from_cli_args(&args).await.expect("startup success");
 
         assert!(ctx.full_auto_requested);
         assert!(!ctx.skip_confirmations);

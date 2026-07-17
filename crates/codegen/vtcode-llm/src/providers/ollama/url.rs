@@ -16,10 +16,7 @@ pub fn is_openai_compatible_base_url(base_url: &str) -> bool {
 pub fn base_url_to_host_root(base_url: &str) -> String {
     let trimmed = base_url.trim_end_matches('/');
     if trimmed.ends_with("/v1") {
-        trimmed
-            .trim_end_matches("/v1")
-            .trim_end_matches('/')
-            .to_string()
+        trimmed.trim_end_matches("/v1").trim_end_matches('/').to_string()
     } else {
         trimmed.to_string()
     }
@@ -39,21 +36,9 @@ mod tests {
 
     #[test]
     fn test_base_url_to_host_root() {
-        assert_eq!(
-            base_url_to_host_root("http://localhost:11434/v1"),
-            "http://localhost:11434"
-        );
-        assert_eq!(
-            base_url_to_host_root("http://localhost:11434"),
-            "http://localhost:11434"
-        );
-        assert_eq!(
-            base_url_to_host_root("http://localhost:11434/"),
-            "http://localhost:11434"
-        );
-        assert_eq!(
-            base_url_to_host_root("https://api.example.com/v1/"),
-            "https://api.example.com"
-        );
+        assert_eq!(base_url_to_host_root("http://localhost:11434/v1"), "http://localhost:11434");
+        assert_eq!(base_url_to_host_root("http://localhost:11434"), "http://localhost:11434");
+        assert_eq!(base_url_to_host_root("http://localhost:11434/"), "http://localhost:11434");
+        assert_eq!(base_url_to_host_root("https://api.example.com/v1/"), "https://api.example.com");
     }
 }

@@ -17,13 +17,13 @@ progress invariant. It complements [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
 
 | Component | Role in the system | Where it lives |
 |---|---|---|
-| **Model** | Reasoning engine. | `vtcode-llm/` (canonical provider trait, `providers/`, `cgp.rs`, `capabilities.rs`, `model_resolver.rs`); `vtcode-commons/src/model_family.rs`; `vtcode-core/src/llm/` re-export facade + `models_manager/`. |
-| **Harness** | The runtime that makes reasoning useful: instruction memory, continuation, hooks, guard rails. | `vtcode-core/src/core/agent/` + `src/agent/runloop/`; `vtcode-core/src/prompts/`; `continuation.rs` (`ContinuationController`). |
-| **Context** | Finite attention budget, curated each turn. | `vtcode-core/src/context/`; `vtcode-core/src/compaction/` (`memory_envelope.rs`); `context.dynamic` spooling. |
-| **Tools** | External capability surface. | `vtcode-core/src/tools/`; `vtcode-utility-tool-specs/`; `vtcode-mcp/`; `vtcode-skills/`. |
-| **Evals** | Closing the loop on quality. | `evals/` (Python `eval_engine.py`, `metrics.py`); `vtcode-core/src/llm/rl/` (`signal`/`ledger`/`engine`/`eval`: reward → RL). |
+| **Model** | Reasoning engine. | `vtcode-llm/` (canonical provider trait, `providers/`, `cgp.rs`, `capabilities.rs`, `model_resolver.rs`); `crates/common/vtcode-commons/src/model_family.rs`; `crates/codegen/vtcode-core/src/llm/` re-export facade + `models_manager/`. |
+| **Harness** | The runtime that makes reasoning useful: instruction memory, continuation, hooks, guard rails. | `crates/codegen/vtcode-core/src/core/agent/` + `src/agent/runloop/`; `crates/codegen/vtcode-core/src/prompts/`; `continuation.rs` (`ContinuationController`). |
+| **Context** | Finite attention budget, curated each turn. | `crates/codegen/vtcode-core/src/context/`; `crates/codegen/vtcode-core/src/compaction/` (`memory_envelope.rs`); `context.dynamic` spooling. |
+| **Tools** | External capability surface. | `crates/codegen/vtcode-core/src/tools/`; `vtcode-utility-tool-specs/`; `vtcode-mcp/`; `vtcode-skills/`. |
+| **Evals** | Closing the loop on quality. | `evals/` (Python `eval_engine.py`, `metrics.py`); `crates/codegen/vtcode-core/src/llm/rl/` (`signal`/`ledger`/`engine`/`eval`: reward → RL). |
 | **Sandbox** | The controlled, changing environment. | `vtcode-bash-runner/`; `vtcode-safety/` (`command_safety`, `exec_policy`, `sandboxing`). |
-| **State management** | Durable, resumable, cross-session. | `vtcode-session-store/`; `vtcode-exec-events/` (`ThreadEvent`); `vtcode-core/src/loop_state.rs`, `persistent_memory`. |
+| **State management** | Durable, resumable, cross-session. | `vtcode-session-store/`; `vtcode-exec-events/` (`ThreadEvent`); `crates/codegen/vtcode-core/src/loop_state.rs`, `persistent_memory`. |
 
 ## The three environmental constraints
 
@@ -37,7 +37,7 @@ progress invariant. It complements [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
    - **Tool-result offloading** — keep re-fetchable payloads out of the live
      window (split results, `output_spooler`, `context.dynamic`).
    Additionally, the durable **`ProgressLedger`**
-   (`vtcode-session-store/src/progress.rs`) is a tiny derived artifact that
+   (`crates/codegen/vtcode-session-store/src/progress.rs`) is a tiny derived artifact that
    summarizes goal progress without reloading the event log.
 
 2. **External tools.** The agent reaches beyond its weights through the tool
@@ -46,7 +46,7 @@ progress invariant. It complements [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
 
 3. **Changing environment.** The sandbox (`vtcode-bash-runner`,
    `vtcode-safety`) defines where code runs and what it can touch, and
-   `vtcode-commons/src/workspace_snapshot.rs` provides cheap
+   `crates/common/vtcode-commons/src/workspace_snapshot.rs` provides cheap
    environment-delta detection (added/changed/removed files per turn) so the
    harness can re-ground stale assumptions.
 
@@ -59,13 +59,13 @@ VT Code enforces this at several layers:
 
 - **Continuation controller** (`continuation.rs`) accepts completion only when
   the task tracker is complete *and* verification commands pass.
-- **`ProgressMonitor`** (`vtcode-core/src/core/agent/progress_monitor.rs`)
+- **`ProgressMonitor`** (`crates/codegen/vtcode-core/src/core/agent/progress_monitor.rs`)
   mirrors the tracker into a durable `ProgressLedger`, records advance/stall
   signals each turn, and checkpoints a human-readable summary to
   `memories/progress.md` (proactive context grounding, P3).
 - **Stagnation / escalation** handling reroutes a stalled run toward
   compaction → replan → escalation.
-- **RL action selection** (`vtcode-core/src/llm/rl/`) prefers low-latency,
+- **RL action selection** (`crates/codegen/vtcode-core/src/llm/rl/`) prefers low-latency,
   high-success actions and is fed by eval outcomes, so the *system* gets
   better at making progress, not just the model.
 - **Budget guardrails** (`SessionBudget` in `usage_cost.rs`) pause or escalate

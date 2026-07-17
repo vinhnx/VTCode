@@ -74,10 +74,7 @@ pub fn play_bell(enabled: bool) {
 #[inline]
 pub fn is_bell_enabled(default_enabled: bool) -> bool {
     if let Ok(val) = std::env::var("VTCODE_HITL_BELL") {
-        return !matches!(
-            val.trim().to_ascii_lowercase().as_str(),
-            "false" | "0" | "off"
-        );
+        return !matches!(val.trim().to_ascii_lowercase().as_str(), "false" | "0" | "off");
     }
     default_enabled
 }
@@ -157,12 +154,8 @@ fn detect_terminal_notify_kind() -> TerminalNotifyKind {
         };
     }
 
-    let term = std::env::var("TERM")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let term_program = std::env::var("TERM_PROGRAM")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+    let term = std::env::var("TERM").unwrap_or_default().to_ascii_lowercase();
+    let term_program = std::env::var("TERM_PROGRAM").unwrap_or_default().to_ascii_lowercase();
     let has_kitty = std::env::var("KITTY_WINDOW_ID").is_ok();
     let has_iterm = std::env::var("ITERM_SESSION_ID").is_ok();
     let has_wezterm = std::env::var("WEZTERM_PANE").is_ok();
@@ -195,10 +188,7 @@ fn send_osc9_notification(message: Option<&str>) {
 
 fn sanitize_notification_text(raw: &str) -> String {
     const MAX_LEN: usize = 200;
-    let mut cleaned = raw
-        .chars()
-        .filter(|c| *c >= ' ' && *c != '\u{007f}')
-        .collect::<String>();
+    let mut cleaned = raw.chars().filter(|c| *c >= ' ' && *c != '\u{007f}').collect::<String>();
     if cleaned.len() > MAX_LEN {
         cleaned.truncate(MAX_LEN);
     }

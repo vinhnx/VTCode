@@ -115,17 +115,11 @@ pub(crate) fn snapshot_for_workspace(workspace_root: &Path) -> SearchRuntimeSnap
         warn!("search runtime cache mutex poisoned; recovering");
         poisoned.into_inner()
     });
-    guard
-        .entry(workspace_root)
-        .or_insert_with(|| snapshot.clone())
-        .clone()
+    guard.entry(workspace_root).or_insert_with(|| snapshot.clone()).clone()
 }
 
 pub fn dominant_workspace_language(workspace_root: &Path) -> Option<String> {
-    snapshot_for_workspace(workspace_root)
-        .workspace_languages
-        .into_iter()
-        .next()
+    snapshot_for_workspace(workspace_root).workspace_languages.into_iter().next()
 }
 
 pub fn search_tool_bundle_status(workspace_root: &Path) -> SearchToolBundleStatus {
@@ -173,14 +167,8 @@ mod tests {
             snapshot.workspace_languages,
             vec!["Rust".to_string(), "TypeScript".to_string()]
         );
-        assert_eq!(
-            snapshot.ripgrep_ready,
-            snapshot.search_tools.ripgrep.is_ready()
-        );
-        assert_eq!(
-            snapshot.ast_grep_ready,
-            snapshot.search_tools.ast_grep.is_ready()
-        );
+        assert_eq!(snapshot.ripgrep_ready, snapshot.search_tools.ripgrep.is_ready());
+        assert_eq!(snapshot.ast_grep_ready, snapshot.search_tools.ast_grep.is_ready());
         assert_eq!(
             snapshot.code_tree_sitter_languages,
             vec!["Rust".to_string(), "TypeScript".to_string()]
@@ -213,10 +201,7 @@ mod tests {
         fs::write(workspace.path().join("src/main.rs"), "fn beta() {}\n").expect("write rust");
         fs::write(workspace.path().join("web/app.ts"), "const app = 1;\n").expect("write ts");
 
-        assert_eq!(
-            dominant_workspace_language(workspace.path()).as_deref(),
-            Some("Rust")
-        );
+        assert_eq!(dominant_workspace_language(workspace.path()).as_deref(), Some("Rust"));
     }
 
     #[test]
@@ -238,10 +223,7 @@ mod tests {
             ast_grep: SearchToolReadiness::Missing,
         };
 
-        assert_eq!(
-            status.header_summary(),
-            "Search: ripgrep ready \u{00b7} ast-grep missing"
-        );
+        assert_eq!(status.header_summary(), "Search: ripgrep ready \u{00b7} ast-grep missing");
         assert!(!status.all_ready());
         assert!(!status.all_unavailable());
         assert!(!status.has_errors());

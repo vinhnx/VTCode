@@ -17,10 +17,7 @@ impl<'a> DeleteOperation<'a> {
         let full_path = root.join(self.path);
         match snapshot_for(&full_path).await? {
             Some(backup) => Ok(OperationEffect::applied(
-                OperationState::DeletedFile {
-                    original_path: full_path,
-                    backup,
-                },
+                OperationState::DeletedFile { original_path: full_path, backup },
                 format!("Deleted file: {}", self.path),
             )),
             None => Ok(OperationEffect::skipped(format!(

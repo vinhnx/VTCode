@@ -47,12 +47,7 @@ impl InstallationCache {
     }
 
     fn save(&self, paths: &InstallPaths) -> Result<()> {
-        save_json_cache(
-            &paths.state_dir,
-            &paths.cache_path,
-            self,
-            "ast-grep install cache",
-        )
+        save_json_cache(&paths.state_dir, &paths.cache_path, self, "ast-grep install cache")
     }
 
     pub(super) fn is_stale(paths: &InstallPaths) -> bool {
@@ -121,10 +116,7 @@ impl InstallLockGuard {
         }
 
         match acquire_lock_file(&paths.lock_path, INSTALL_LOCK_MAX_AGE_SECS)? {
-            Some(file) => Ok(Self {
-                path: paths.lock_path.clone(),
-                _file: file,
-            }),
+            Some(file) => Ok(Self { path: paths.lock_path.clone(), _file: file }),
             None => bail!("ast-grep installation already in progress"),
         }
     }
@@ -154,14 +146,8 @@ mod tests {
         let expected_bin_dir = expected_state_dir.join("bin");
         assert_eq!(paths.state_dir, expected_state_dir);
         assert_eq!(paths.bin_dir, expected_bin_dir);
-        assert_eq!(
-            paths.cache_path,
-            temp_dir.path().join(".vtcode/ast_grep_install_cache.json")
-        );
-        assert_eq!(
-            paths.lock_path,
-            temp_dir.path().join(".vtcode/ast_grep.lock")
-        );
+        assert_eq!(paths.cache_path, temp_dir.path().join(".vtcode/ast_grep_install_cache.json"));
+        assert_eq!(paths.lock_path, temp_dir.path().join(".vtcode/ast_grep.lock"));
     }
 
     #[test]
@@ -219,10 +205,7 @@ mod tests {
             .filter(|acquired| *acquired)
             .count();
 
-        assert_eq!(
-            successes, 1,
-            "exactly one thread should win the install lock"
-        );
+        assert_eq!(successes, 1, "exactly one thread should win the install lock");
     }
 
     #[test]

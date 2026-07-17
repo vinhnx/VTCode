@@ -105,10 +105,7 @@ pub fn get_git_repo_root(cwd: &Path) -> Result<Option<String>> {
         .current_dir(cwd)
         .output()
         .with_context(|| {
-            format!(
-                "Failed to run git rev-parse --show-toplevel in {}",
-                cwd.display()
-            )
+            format!("Failed to run git rev-parse --show-toplevel in {}", cwd.display())
         })?;
 
     if !output.status.success() {
@@ -137,11 +134,7 @@ pub fn collect_git_info(cwd: &Path) -> Result<GitInfo> {
     let head_commit = get_head_commit_hash(cwd)?;
     let repo_root = get_git_repo_root(cwd)?;
 
-    Ok(GitInfo {
-        remotes,
-        head_commit,
-        repo_root,
-    })
+    Ok(GitInfo { remotes, head_commit, repo_root })
 }
 
 /// Check if the given path is inside a git repository.
@@ -195,9 +188,7 @@ mod tests {
 
     #[test]
     fn test_get_git_repo_root() {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .canonicalize()
-            .unwrap();
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).canonicalize().unwrap();
         let root = get_git_repo_root(&manifest_dir).unwrap();
         assert!(root.is_some());
         let root = PathBuf::from(root.unwrap()).canonicalize().unwrap();

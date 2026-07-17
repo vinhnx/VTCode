@@ -64,10 +64,7 @@ impl RetryManager {
 
     /// Create a new retry manager with a custom retry policy
     pub fn with_policy(policy: RetryPolicy) -> Self {
-        Self {
-            policy,
-            stats: RetryStats::default(),
-        }
+        Self { policy, stats: RetryStats::default() }
     }
 
     /// Get the current retry statistics
@@ -110,10 +107,8 @@ impl RetryManager {
         // The `RetryObserver` centralises the bookkeeping so the loop
         // stays DRY at the observability layer.
         for attempt in 0..policy.max_attempts {
-            observer.observe(RetryEvent::AttemptStart {
-                attempt,
-                max_attempts: policy.max_attempts,
-            });
+            observer
+                .observe(RetryEvent::AttemptStart { attempt, max_attempts: policy.max_attempts });
 
             let err = match operation(primary_model.clone()).await {
                 Ok(result) => {
@@ -139,11 +134,7 @@ impl RetryManager {
                     });
                     return Err(error);
                 }
-                RetryStep::Backoff {
-                    delay,
-                    decision,
-                    error,
-                } => {
+                RetryStep::Backoff { delay, decision, error } => {
                     observer.observe(RetryEvent::Backoff {
                         attempt,
                         error: &error,
@@ -249,12 +240,7 @@ impl RetryObserver<'_> {
                 );
             }
             RetryEvent::Success { .. } => {}
-            RetryEvent::GiveUp {
-                attempt,
-                error,
-                decision,
-                category_was_retryable,
-            } => {
+            RetryEvent::GiveUp { attempt, error, decision, category_was_retryable } => {
                 warn!(
                     attempt = attempt + 1,
                     max_attempts = self.max_attempts,
@@ -269,13 +255,7 @@ impl RetryObserver<'_> {
                     self.stats.failed_retries += 1;
                 }
             }
-            RetryEvent::Backoff {
-                attempt,
-                error,
-                decision,
-                delay,
-                ..
-            } => {
+            RetryEvent::Backoff { attempt, error, decision, delay, .. } => {
                 warn!(
                     attempt = attempt + 1,
                     max_attempts = self.max_attempts,
@@ -325,9 +305,7 @@ pub fn is_empty_response(response: &serde_json::Value) -> bool {
 /// Detect if an error indicates a temporary failure that should be retried.
 /// Uses the shared VT Code retry policy for typed and fallback classification.
 pub fn is_retryable_error(error: &anyhow::Error) -> bool {
-    RetryPolicy::default()
-        .decision_for_anyhow(error, 0, None)
-        .retryable
+    RetryPolicy::default().decision_for_anyhow(error, 0, None).retryable
 }
 
 #[cfg(test)]
@@ -351,9 +329,7 @@ mod tests {
 
         assert!(!is_empty_response(&json!("hello")));
         assert!(!is_empty_response(&json!({"content": "hello"})));
-        assert!(!is_empty_response(
-            &json!({"candidates": [{"content": "hello"}]})
-        ));
+        assert!(!is_empty_response(&json!({"candidates": [{"content": "hello"}]})));
     }
 
     #[test]
@@ -369,9 +345,7 @@ mod tests {
         assert!(!is_retryable_error(&anyhow!("Invalid API key")));
         assert!(!is_retryable_error(&anyhow!("Permission denied")));
         assert!(!is_retryable_error(&anyhow!("Invalid model")));
-        assert!(!is_retryable_error(&anyhow!(
-            "You exceeded your current quota"
-        )));
+        assert!(!is_retryable_error(&anyhow!("You exceeded your current quota")));
         assert!(!is_retryable_error(&anyhow!("insufficient_quota")));
         assert!(!is_retryable_error(&anyhow!("429 quota exceeded")));
     }

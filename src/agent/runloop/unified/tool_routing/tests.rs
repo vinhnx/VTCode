@@ -37,10 +37,8 @@ fn create_headless_session() -> InlineSession {
     }
 }
 
-fn create_session_with_receiver() -> (
-    InlineSession,
-    tokio::sync::mpsc::UnboundedReceiver<vtcode_ui::tui::app::InlineCommand>,
-) {
+fn create_session_with_receiver()
+-> (InlineSession, tokio::sync::mpsc::UnboundedReceiver<vtcode_ui::tui::app::InlineCommand>) {
     let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
     (
@@ -58,10 +56,7 @@ fn drain_appended_lines(
     let mut lines = Vec::new();
     while let Ok(command) = receiver.try_recv() {
         if let vtcode_ui::tui::app::InlineCommand::AppendLine { segments, .. } = command {
-            let line = segments
-                .into_iter()
-                .map(|segment| segment.text)
-                .collect::<String>();
+            let line = segments.into_iter().map(|segment| segment.text).collect::<String>();
             if !line.trim().is_empty() {
                 lines.push(line);
             }
@@ -194,11 +189,7 @@ fn reject_policy_blocks_rule_prompts() {
 
 #[test]
 fn on_request_policy_keeps_prompts_enabled() {
-    assert!(!approval_policy_rejects_prompt(
-        AskForApproval::OnRequest,
-        true,
-        true
-    ));
+    assert!(!approval_policy_rejects_prompt(AskForApproval::OnRequest, true, true));
 }
 
 #[test]
@@ -271,14 +262,7 @@ async fn shell_approval_prefix_rules_persist_to_workspace_config() {
 
     let saved =
         ConfigManager::load_from_workspace(temp_dir.path()).expect("reload workspace config");
-    assert!(
-        saved
-            .config()
-            .commands
-            .approval_prefixes
-            .iter()
-            .any(|entry| entry == &rendered)
-    );
+    assert!(saved.config().commands.approval_prefixes.iter().any(|entry| entry == &rendered));
     assert!(shell_command_has_persisted_approval_prefix(
         &registry,
         &[
@@ -313,10 +297,7 @@ async fn shell_approval_prefix_matching_respects_token_boundaries() {
     let mut manager =
         ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
     let mut config = manager.config().clone();
-    config
-        .commands
-        .approval_prefixes
-        .push("echo hi".to_string());
+    config.commands.approval_prefixes.push("echo hi".to_string());
     manager.save_config(&config).expect("save config");
     registry.apply_commands_config(&config.commands);
 
@@ -362,10 +343,7 @@ async fn legacy_unscoped_shell_prefixes_do_not_match_escalated_runs() {
     let mut manager =
         ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
     let mut config = manager.config().clone();
-    config
-        .commands
-        .approval_prefixes
-        .push("echo hi".to_string());
+    config.commands.approval_prefixes.push("echo hi".to_string());
     manager.save_config(&config).expect("save config");
     registry.apply_commands_config(&config.commands);
 
@@ -746,9 +724,7 @@ async fn active_agent_ask_allows_skip_confirmations_auto_approval() {
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
-    let permissions = PermissionsConfig {
-        ..PermissionsConfig::default()
-    };
+    let permissions = PermissionsConfig { ..PermissionsConfig::default() };
     let agent_permissions = AgentPermissionsConfig {
         default: PermissionDefault::Allow,
         ask: vec!["Write(/docs/**)".to_string()],
@@ -894,9 +870,7 @@ async fn skip_confirmations_bypasses_active_agent_ask_default() {
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
-    let permissions = PermissionsConfig {
-        ..PermissionsConfig::default()
-    };
+    let permissions = PermissionsConfig { ..PermissionsConfig::default() };
     let agent_permissions = AgentPermissionsConfig::new(PermissionDefault::Ask);
 
     let flow = ensure_tool_permission(
@@ -1144,9 +1118,7 @@ async fn protected_write_prompts_without_matching_allow() {
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
-    let permissions = PermissionsConfig {
-        ..PermissionsConfig::default()
-    };
+    let permissions = PermissionsConfig { ..PermissionsConfig::default() };
 
     let flow = ensure_tool_permission(
         ToolPermissionsContext {
@@ -1310,9 +1282,7 @@ async fn matching_deny_rule_denies_without_classifier_review() {
 async fn full_auto_active_agent_ask_routes_to_auto_review_without_prompt() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-    registry
-        .enable_full_auto_permission(&[tools::UNIFIED_EXEC.to_string()])
-        .await;
+    registry.enable_full_auto_permission(&[tools::UNIFIED_EXEC.to_string()]).await;
     let mut session = create_headless_session();
     let handle = session.clone_inline_handle();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
@@ -1375,9 +1345,7 @@ async fn full_auto_active_agent_ask_routes_to_auto_review_without_prompt() {
 async fn full_auto_reviewer_error_blocks_without_prompt_fallback() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-    registry
-        .enable_full_auto_permission(&[tools::UNIFIED_EXEC.to_string()])
-        .await;
+    registry.enable_full_auto_permission(&[tools::UNIFIED_EXEC.to_string()]).await;
     let mut session = create_headless_session();
     let handle = session.clone_inline_handle();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
@@ -1438,9 +1406,7 @@ async fn full_auto_reviewer_error_blocks_without_prompt_fallback() {
 async fn full_auto_allowlist_does_not_bypass_tool_policy_deny() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-    registry
-        .enable_full_auto_permission(&[tools::UNIFIED_EXEC.to_string()])
-        .await;
+    registry.enable_full_auto_permission(&[tools::UNIFIED_EXEC.to_string()]).await;
     registry
         .set_tool_policy(tools::UNIFIED_EXEC, ToolPolicy::Deny)
         .await
@@ -1507,9 +1473,7 @@ async fn full_auto_allowlist_does_not_bypass_tool_policy_deny() {
 async fn full_auto_allowlist_does_not_bypass_explicit_deny_rule() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-    registry
-        .enable_full_auto_permission(&[tools::UNIFIED_EXEC.to_string()])
-        .await;
+    registry.enable_full_auto_permission(&[tools::UNIFIED_EXEC.to_string()]).await;
     let mut session = create_headless_session();
     let handle = session.clone_inline_handle();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
@@ -1575,9 +1539,7 @@ async fn full_auto_allowlist_does_not_bypass_explicit_deny_rule() {
 async fn full_auto_allowlist_denies_outside_tools_before_auto_review() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-    registry
-        .enable_full_auto_permission(&[tools::READ_FILE.to_string()])
-        .await;
+    registry.enable_full_auto_permission(&[tools::READ_FILE.to_string()]).await;
     let mut session = create_headless_session();
     let handle = session.clone_inline_handle();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
@@ -1670,7 +1632,7 @@ async fn permanent_shell_approval_reuses_for_loop_body_commands() {
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
     let approved_args = json!({
         "action": "run",
-        "command": "cd vtcode-core/src/tools/registry && for f in *.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done",
+        "command": "cd crates/codegen/vtcode-core/src/tools/registry && for f in *.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done",
     });
 
     persist_segment_approval_cache_keys(
@@ -1683,7 +1645,7 @@ async fn permanent_shell_approval_reuses_for_loop_body_commands() {
 
     let later_args = json!({
         "action": "run",
-        "command": "cd vtcode-core/src/tools/registry && for f in approval_recorder.rs assembly.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done",
+        "command": "cd crates/codegen/vtcode-core/src/tools/registry && for f in approval_recorder.rs assembly.rs; do echo \"=== $f ===\"; grep -nE '^(pub )?(struct|enum|fn)' \"$f\" | head -50; done",
     });
 
     assert!(
@@ -1899,16 +1861,12 @@ async fn skip_confirmations_does_not_bypass_safety_gateway_needs_approval() {
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let ctrl_c_state = Arc::new(crate::agent::runloop::unified::state::CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
-    let permissions = PermissionsConfig {
-        ..PermissionsConfig::default()
-    };
+    let permissions = PermissionsConfig { ..PermissionsConfig::default() };
     let agent_permissions = AgentPermissionsConfig::new(PermissionDefault::Deny);
 
     // Set the tool policy to Prompt so that policy_decision != Allow,
     // which is required for safety_requires_prompt to be true.
-    let _ = registry
-        .set_tool_policy(tools::UNIFIED_EXEC, ToolPolicy::Prompt)
-        .await;
+    let _ = registry.set_tool_policy(tools::UNIFIED_EXEC, ToolPolicy::Prompt).await;
 
     // When safety_approval_justification is Some, it means the safety gateway
     // flagged this tool call as requiring approval. Even with skip_confirmations

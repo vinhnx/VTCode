@@ -104,10 +104,8 @@ pub fn build_permission_request(
 ) -> PermissionRequest {
     let kind = build_request_kind(workspace_root, current_dir, normalized_tool_name, tool_args);
     let protected_write_paths = protected_write_paths(workspace_root, &kind);
-    let builtin_file_mutation = matches!(
-        kind,
-        PermissionRequestKind::Edit { .. } | PermissionRequestKind::Write { .. }
-    );
+    let builtin_file_mutation =
+        matches!(kind, PermissionRequestKind::Edit { .. } | PermissionRequestKind::Write { .. });
 
     PermissionRequest {
         exact_tool_name: normalized_tool_name.to_string(),
@@ -140,12 +138,7 @@ pub fn build_advertised_permission_requests(
     representative_args
         .iter()
         .map(|args| {
-            build_permission_request(
-                workspace_root,
-                current_dir,
-                normalized_tool_name,
-                Some(args),
-            )
+            build_permission_request(workspace_root, current_dir, normalized_tool_name, Some(args))
         })
         .collect()
 }
@@ -344,10 +337,7 @@ impl CompiledPermissionRule {
             return Some(Self::WebFetchAll);
         }
         if let Some(specifier) = parse_tool_specifier(rule, "webfetch") {
-            let domain = specifier
-                .strip_prefix("domain:")?
-                .trim()
-                .to_ascii_lowercase();
+            let domain = specifier.strip_prefix("domain:")?.trim().to_ascii_lowercase();
             if domain.is_empty() {
                 return None;
             }
@@ -383,9 +373,9 @@ impl CompiledPermissionRule {
     fn matches(&self, request: &PermissionRequest) -> bool {
         match self {
             Self::Bash(pattern) => match &request.kind {
-                PermissionRequestKind::Bash { command } => pattern
-                    .as_ref()
-                    .is_none_or(|pattern| pattern.matches(command)),
+                PermissionRequestKind::Bash { command } => {
+                    pattern.as_ref().is_none_or(|pattern| pattern.matches(command))
+                }
                 _ => false,
             },
             Self::Read(matcher) => match &request.kind {
@@ -408,22 +398,19 @@ impl CompiledPermissionRule {
             },
             Self::WebFetchAll => matches!(request.kind, PermissionRequestKind::WebFetch { .. }),
             Self::WebFetchDomain(domain) => match &request.kind {
-                PermissionRequestKind::WebFetch { domains } => domains
-                    .iter()
-                    .any(|candidate| domain_matches_allowed(candidate, domain)),
+                PermissionRequestKind::WebFetch { domains } => {
+                    domains.iter().any(|candidate| domain_matches_allowed(candidate, domain))
+                }
                 _ => false,
             },
             Self::McpServer(server) | Self::McpWildcard(server) => match &request.kind {
-                PermissionRequestKind::Mcp {
-                    server: candidate, ..
-                } => candidate == server,
+                PermissionRequestKind::Mcp { server: candidate, .. } => candidate == server,
                 _ => false,
             },
             Self::McpTool { server, tool } => match &request.kind {
-                PermissionRequestKind::Mcp {
-                    server: candidate_server,
-                    tool: candidate_tool,
-                } => candidate_server == server && candidate_tool == tool,
+                PermissionRequestKind::Mcp { server: candidate_server, tool: candidate_tool } => {
+                    candidate_server == server && candidate_tool == tool
+                }
                 _ => false,
             },
             Self::ExactTool(tool_name) => request.exact_tool_name == *tool_name,
@@ -438,9 +425,7 @@ fn parse_tool_specifier<'a>(rule: &'a str, tool_name: &str) -> Option<&'a str> {
         return None;
     }
     let prefix = &rule[..open];
-    prefix
-        .eq_ignore_ascii_case(tool_name)
-        .then_some(rule[open + 1..close].trim())
+    prefix.eq_ignore_ascii_case(tool_name).then_some(rule[open + 1..close].trim())
 }
 
 fn compile_bash_rule(specifier: &str) -> Option<Option<Pattern>> {
@@ -477,9 +462,7 @@ impl PathRuleMatcher {
     }
 
     fn matches(&self, candidate: &Path) -> bool {
-        self.matcher
-            .matched_path_or_any_parents(candidate, false)
-            .is_ignore()
+        self.matcher.matched_path_or_any_parents(candidate, false).is_ignore()
     }
 }
 
@@ -505,10 +488,7 @@ fn build_request_kind(
     };
 
     if normalized_tool_name == tools::EXEC_COMMAND {
-        let command = command_args::command_text(args)
-            .ok()
-            .flatten()
-            .unwrap_or_default();
+        let command = command_args::command_text(args).ok().flatten().unwrap_or_default();
         return PermissionRequestKind::Bash { command };
     }
 
@@ -712,9 +692,7 @@ fn extract_web_domains(args: &Value) -> Vec<String> {
 
 fn extract_url_domain(url: &str) -> Option<String> {
     let parsed = Url::parse(url).ok()?;
-    parsed
-        .host_str()
-        .map(|host| host.trim_end_matches('.').to_ascii_lowercase())
+    parsed.host_str().map(|host| host.trim_end_matches('.').to_ascii_lowercase())
 }
 
 fn protected_write_paths(workspace_root: &Path, kind: &PermissionRequestKind) -> Vec<PathBuf> {
@@ -737,28 +715,21 @@ fn is_protected_write_path(workspace_root: &Path, path: &Path) -> bool {
     };
 
     let as_string = relative.to_string_lossy().replace('\\', "/");
-    if matches!(
-        as_string.as_str(),
-        ".vtcode/commands" | ".vtcode/agents" | ".vtcode/skills"
-    ) || as_string.starts_with(".vtcode/commands/")
+    if matches!(as_string.as_str(), ".vtcode/commands" | ".vtcode/agents" | ".vtcode/skills")
+        || as_string.starts_with(".vtcode/commands/")
         || as_string.starts_with(".vtcode/agents/")
         || as_string.starts_with(".vtcode/skills/")
     {
         return false;
     }
 
-    matches!(
-        as_string.split('/').next(),
-        Some(".git" | ".vtcode" | ".vscode" | ".idea")
-    )
+    matches!(as_string.split('/').next(), Some(".git" | ".vtcode" | ".vscode" | ".idea"))
 }
 
 fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
     let normalized_domain = domain.trim_end_matches('.').to_ascii_lowercase();
-    let normalized_allowed = allowed
-        .trim_start_matches('.')
-        .trim_end_matches('.')
-        .to_ascii_lowercase();
+    let normalized_allowed =
+        allowed.trim_start_matches('.').trim_end_matches('.').to_ascii_lowercase();
 
     normalized_domain == normalized_allowed
         || normalized_domain.ends_with(&format!(".{normalized_allowed}"))
@@ -808,9 +779,7 @@ mod tests {
         };
         let request = PermissionRequest {
             exact_tool_name: "read_file".to_string(),
-            kind: PermissionRequestKind::Read {
-                paths: vec![workspace.join("docs/secret.txt")],
-            },
+            kind: PermissionRequestKind::Read { paths: vec![workspace.join("docs/secret.txt")] },
             builtin_file_mutation: false,
             protected_write_paths: Vec::new(),
         };
@@ -830,9 +799,7 @@ mod tests {
         };
         let request = PermissionRequest {
             exact_tool_name: "command_session".to_string(),
-            kind: PermissionRequestKind::Bash {
-                command: "cargo test -p vtcode".to_string(),
-            },
+            kind: PermissionRequestKind::Bash { command: "cargo test -p vtcode".to_string() },
             builtin_file_mutation: false,
             protected_write_paths: Vec::new(),
         };
@@ -852,9 +819,7 @@ mod tests {
         };
         let request = PermissionRequest {
             exact_tool_name: "read_file".to_string(),
-            kind: PermissionRequestKind::Read {
-                paths: vec![workspace.join("src/lib.rs")],
-            },
+            kind: PermissionRequestKind::Read { paths: vec![workspace.join("src/lib.rs")] },
             builtin_file_mutation: false,
             protected_write_paths: Vec::new(),
         };
@@ -974,9 +939,7 @@ mod tests {
         };
         let exec_request = PermissionRequest {
             exact_tool_name: "command_session".to_string(),
-            kind: PermissionRequestKind::Bash {
-                command: "test".to_string(),
-            },
+            kind: PermissionRequestKind::Bash { command: "test".to_string() },
             builtin_file_mutation: false,
             protected_write_paths: Vec::new(),
         };
@@ -1095,15 +1058,10 @@ mod tests {
             Some(&json!({"cmd": "rg --files"})),
         );
 
-        assert!(matches!(
-            code_search.kind,
-            PermissionRequestKind::Read { .. }
-        ));
+        assert!(matches!(code_search.kind, PermissionRequestKind::Read { .. }));
         assert_eq!(
             exec_command.kind,
-            PermissionRequestKind::Bash {
-                command: "rg --files".to_string()
-            }
+            PermissionRequestKind::Bash { command: "rg --files".to_string() }
         );
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &code_search),
@@ -1129,9 +1087,7 @@ mod tests {
 
         assert_eq!(
             request.kind,
-            PermissionRequestKind::Bash {
-                command: "python mutate.py --dry-run".to_string()
-            }
+            PermissionRequestKind::Bash { command: "python mutate.py --dry-run".to_string() }
         );
         assert_eq!(
             evaluate_agent_permissions(&permissions, &workspace, &cwd, &request),
@@ -1147,9 +1103,7 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_eq!(
             requests[0].kind,
-            PermissionRequestKind::Bash {
-                command: "rg --files".to_string()
-            }
+            PermissionRequestKind::Bash { command: "rg --files".to_string() }
         );
     }
 

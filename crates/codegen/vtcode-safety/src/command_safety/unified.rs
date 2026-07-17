@@ -41,12 +41,7 @@ impl std::fmt::Display for EvaluationReason {
             Self::SafetyDeny(msg) => write!(f, "Safety Deny: {msg}"),
             Self::DangerousCommand(msg) => write!(f, "Dangerous: {msg}"),
             Self::CacheHit(allowed, msg) => {
-                write!(
-                    f,
-                    "Cache {} {}",
-                    if *allowed { "Allow" } else { "Deny" },
-                    msg
-                )
+                write!(f, "Cache {} {}", if *allowed { "Allow" } else { "Deny" }, msg)
             }
         }
     }
@@ -150,11 +145,7 @@ impl UnifiedCommandEvaluator {
             self.log_audit_entry(command, false, "matches dangerous patterns", "Dangerous")
                 .await;
             self.cache
-                .put(
-                    command_text.clone(),
-                    false,
-                    "dangerous command pattern".into(),
-                )
+                .put(command_text.clone(), false, "dangerous command pattern".into())
                 .await;
             return Ok(result);
         }
@@ -169,11 +160,8 @@ impl UnifiedCommandEvaluator {
                     secondary_reasons: vec!["registry rule".into()],
                     resolved_path: None,
                 };
-                self.log_audit_entry(command, false, reason.clone(), "Deny")
-                    .await;
-                self.cache
-                    .put(command_text.clone(), false, reason.clone())
-                    .await;
+                self.log_audit_entry(command, false, reason.clone(), "Deny").await;
+                self.cache.put(command_text.clone(), false, reason.clone()).await;
                 return Ok(result);
             }
             SafetyDecision::Allow => {
@@ -206,11 +194,7 @@ impl UnifiedCommandEvaluator {
                         resolved_path: None,
                     };
                     self.cache
-                        .put(
-                            command_text.clone(),
-                            false,
-                            result.primary_reason.to_string(),
-                        )
+                        .put(command_text.clone(), false, result.primary_reason.to_string())
                         .await;
                     return Ok(result);
                 }
@@ -226,11 +210,7 @@ impl UnifiedCommandEvaluator {
                         resolved_path: None,
                     };
                     self.cache
-                        .put(
-                            command_text.clone(),
-                            false,
-                            result.primary_reason.to_string(),
-                        )
+                        .put(command_text.clone(), false, result.primary_reason.to_string())
                         .await;
                     return Ok(result);
                 }
@@ -244,11 +224,8 @@ impl UnifiedCommandEvaluator {
             secondary_reasons: vec!["passed all safety checks".into()],
             resolved_path: None,
         };
-        self.log_audit_entry(command, true, "passed all safety checks", "Allow")
-            .await;
-        self.cache
-            .put(command_text, true, "passed all safety checks".into())
-            .await;
+        self.log_audit_entry(command, true, "passed all safety checks", "Allow").await;
+        self.cache.put(command_text, true, "passed all safety checks".into()).await;
         Ok(result)
     }
 
@@ -332,10 +309,7 @@ mod tests {
     async fn safe_command_allowed() {
         let evaluator = UnifiedCommandEvaluator::new();
         // git is in the default safe registry
-        let result = evaluator
-            .evaluate(&["git".to_string(), "status".to_string()])
-            .await
-            .unwrap();
+        let result = evaluator.evaluate(&["git".to_string(), "status".to_string()]).await.unwrap();
         assert!(result.allowed);
     }
 
@@ -372,10 +346,7 @@ mod tests {
     #[tokio::test]
     async fn safe_command_is_audited() {
         let evaluator = UnifiedCommandEvaluator::new();
-        evaluator
-            .evaluate(&["git".to_string(), "status".to_string()])
-            .await
-            .unwrap();
+        evaluator.evaluate(&["git".to_string(), "status".to_string()]).await.unwrap();
 
         let entries = evaluator.audit_logger().entries().await;
         assert_eq!(entries.len(), 1);
@@ -455,10 +426,7 @@ mod tests {
     #[tokio::test]
     async fn evaluation_result_contains_reasons() {
         let evaluator = UnifiedCommandEvaluator::new();
-        let result = evaluator
-            .evaluate(&["git".to_string(), "status".to_string()])
-            .await
-            .unwrap();
+        let result = evaluator.evaluate(&["git".to_string(), "status".to_string()]).await.unwrap();
         assert!(result.allowed);
         assert!(!result.secondary_reasons.is_empty());
     }
@@ -467,10 +435,7 @@ mod tests {
     async fn forbidden_git_subcommand_denied() {
         let evaluator = UnifiedCommandEvaluator::new();
         // git push is not in the allowed subcommands for git
-        let result = evaluator
-            .evaluate(&["git".to_string(), "push".to_string()])
-            .await
-            .unwrap();
+        let result = evaluator.evaluate(&["git".to_string(), "push".to_string()]).await.unwrap();
         assert!(!result.allowed);
     }
 }
@@ -512,9 +477,7 @@ impl PolicyAwareEvaluator {
         if let (Some(policy_allowed), Some(reason)) =
             (&self.allow_policy_decision, &self.policy_reason)
         {
-            self.unified
-                .evaluate_with_policy(command, *policy_allowed, reason)
-                .await
+            self.unified.evaluate_with_policy(command, *policy_allowed, reason).await
         } else {
             // No policy configured, use pure safety evaluation
             self.unified.evaluate(command).await
@@ -552,20 +515,14 @@ mod adapter_tests {
     #[tokio::test]
     async fn policy_aware_without_policy_uses_safety() {
         let evaluator = PolicyAwareEvaluator::new();
-        let result = evaluator
-            .evaluate(&["git".to_string(), "status".to_string()])
-            .await
-            .unwrap();
+        let result = evaluator.evaluate(&["git".to_string(), "status".to_string()]).await.unwrap();
         assert!(result.allowed);
     }
 
     #[tokio::test]
     async fn policy_aware_with_deny_policy_blocks_safe_command() {
         let evaluator = PolicyAwareEvaluator::with_policy(false, "policy blocked");
-        let result = evaluator
-            .evaluate(&["git".to_string(), "status".to_string()])
-            .await
-            .unwrap();
+        let result = evaluator.evaluate(&["git".to_string(), "status".to_string()]).await.unwrap();
         assert!(!result.allowed);
         matches!(result.primary_reason, EvaluationReason::PolicyDeny(_));
     }
@@ -585,26 +542,17 @@ mod adapter_tests {
     async fn policy_aware_mutable_set_policy() {
         let mut evaluator = PolicyAwareEvaluator::new();
         // Initially no policy
-        let result1 = evaluator
-            .evaluate(&["git".to_string(), "status".to_string()])
-            .await
-            .unwrap();
+        let result1 = evaluator.evaluate(&["git".to_string(), "status".to_string()]).await.unwrap();
         assert!(result1.allowed);
 
         // Set deny policy
         evaluator.set_policy(false, "policy blocked");
-        let result2 = evaluator
-            .evaluate(&["git".to_string(), "status".to_string()])
-            .await
-            .unwrap();
+        let result2 = evaluator.evaluate(&["git".to_string(), "status".to_string()]).await.unwrap();
         assert!(!result2.allowed);
 
         // Clear policy
         evaluator.clear_policy();
-        let result3 = evaluator
-            .evaluate(&["git".to_string(), "status".to_string()])
-            .await
-            .unwrap();
+        let result3 = evaluator.evaluate(&["git".to_string(), "status".to_string()]).await.unwrap();
         assert!(result3.allowed);
     }
 }

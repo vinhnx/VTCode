@@ -62,10 +62,7 @@ impl FileOpsTool {
         let list_glob = compile_list_glob(input)?;
 
         if self.should_exclude(&base).await {
-            return Err(anyhow!(
-                "Path '{}' is excluded by .vtcodegitignore",
-                input.path
-            ));
+            return Err(anyhow!("Path '{}' is excluded by .vtcodegitignore", input.path));
         }
 
         // Try to get result from cache first for directories
@@ -162,14 +159,9 @@ impl FileOpsTool {
                 is_dir = base.is_dir(),
                 "Path does not exist or is neither file nor directory"
             );
-            let suggestion = self
-                .missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any)
-                .await;
-            return Err(anyhow!(
-                "Path '{}' does not exist{}",
-                input.path,
-                suggestion,
-            ));
+            let suggestion =
+                self.missing_path_suggestion_suffix(&input.path, PathSuggestionKind::Any).await;
+            return Err(anyhow!("Path '{}' does not exist{}", input.path, suggestion,));
         }
 
         // Apply max_items cap first for token efficiency - AGENTS.md requires max 5 items
@@ -206,27 +198,20 @@ impl FileOpsTool {
         // Implement AGENTS.md pattern for context optimization: show summary with sample
         let guidance = if has_overflow {
             // Show overflow indication when we have more items than max_items
-            Some(format!(
-                "[+{} more items]",
-                all_items.len() - input.max_items
-            ))
+            Some(format!("[+{} more items]", all_items.len() - input.max_items))
         } else if all_items.len() > 50 && page == 1 {
             // For large directories on first page, show summary pattern
             let file_count = page_items
                 .iter()
                 .filter(|item| {
-                    item.as_object()
-                        .and_then(|obj| obj.get("type"))
-                        .and_then(|t| t.as_str())
+                    item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str())
                         == Some("file")
                 })
                 .count();
             let dir_count = page_items
                 .iter()
                 .filter(|item| {
-                    item.as_object()
-                        .and_then(|obj| obj.get("type"))
-                        .and_then(|t| t.as_str())
+                    item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str())
                         == Some("directory")
                 })
                 .count();
@@ -235,9 +220,7 @@ impl FileOpsTool {
                 .iter()
                 .take(5)
                 .filter_map(|item| {
-                    item.as_object()
-                        .and_then(|obj| obj.get("name"))
-                        .and_then(|n| n.as_str())
+                    item.as_object().and_then(|obj| obj.get("name")).and_then(|n| n.as_str())
                 })
                 .collect::<Vec<_>>();
 
@@ -272,11 +255,7 @@ impl FileOpsTool {
                 "Empty directory".to_string()
             };
 
-            Some(format!(
-                "{} [+{} more items]",
-                summary,
-                all_items.len() - sample_names.len()
-            ))
+            Some(format!("{} [+{} more items]", summary, all_items.len() - sample_names.len()))
         } else if has_more || capped_total < all_items.len() || all_items.len() > 20 {
             Some(format!(
                 "Showing {} of {} items (page {}, per_page {}). Use 'page' and 'per_page' to page through results. To search code, use code_search with query and optional path, file_types, or result_types filters.",
@@ -298,10 +277,7 @@ impl FileOpsTool {
             .field("per_page", json!(per_page))
             .field("has_more", json!(has_more))
             .field("mode", json!("list"))
-            .field(
-                "response_format",
-                json!(if concise { "concise" } else { "detailed" }),
-            );
+            .field("response_format", json!(if concise { "concise" } else { "detailed" }));
 
         if let Some(msg) = guidance {
             builder = builder.message(msg);
@@ -341,10 +317,8 @@ impl FileOpsTool {
         mode: &str,
         pattern: Option<&str>,
     ) -> Value {
-        let (page, per_page) = (
-            input.page.unwrap_or(1).max(1),
-            input.per_page.unwrap_or(50).max(1),
-        );
+        let (page, per_page) =
+            (input.page.unwrap_or(1).max(1), input.per_page.unwrap_or(50).max(1));
         let total_capped = total_count.min(input.max_items);
         let start = (page - 1).saturating_mul(per_page);
         let end = (start + per_page).min(total_capped);

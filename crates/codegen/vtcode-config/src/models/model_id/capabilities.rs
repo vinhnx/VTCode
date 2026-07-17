@@ -439,9 +439,7 @@ impl ModelId {
 
     /// Ordered list of supported input modalities when VT Code has metadata for this model.
     pub fn input_modalities(&self) -> &'static [&'static str] {
-        self.generated_capabilities()
-            .map(|meta| meta.input_modalities)
-            .unwrap_or(&[])
+        self.generated_capabilities().map(|meta| meta.input_modalities).unwrap_or(&[])
     }
 
     /// Get the generation/version string for this model

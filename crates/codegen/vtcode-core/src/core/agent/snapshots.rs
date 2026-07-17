@@ -113,10 +113,7 @@ impl VersionedState for StoredSnapshot {
             (SchemaVersion::V0, SchemaVersion::V1) => {
                 // v0 -> v1: set the explicit schema version; no structural changes yet.
                 // Future versions add per-message metadata here.
-                Ok(Self {
-                    schema_version: Some(SchemaVersion::V1),
-                    ..self
-                })
+                Ok(Self { schema_version: Some(SchemaVersion::V1), ..self })
             }
             _ => anyhow::bail!("unsupported snapshot migration: {from:?} -> {to:?}"),
         }
@@ -269,10 +266,7 @@ impl SnapshotManager {
             return Ok(entries);
         }
         for entry in fs::read_dir(&self.storage_dir).with_context(|| {
-            format!(
-                "failed to read checkpoint directory: {}",
-                self.storage_dir.display()
-            )
+            format!("failed to read checkpoint directory: {}", self.storage_dir.display())
         })? {
             let entry = entry?;
             let path = entry.path();
@@ -305,9 +299,9 @@ impl SnapshotManager {
     fn decode_file(encoding: FileEncoding, data: &str) -> Result<Vec<u8>> {
         match encoding {
             FileEncoding::Utf8 => Ok(data.as_bytes().to_vec()),
-            FileEncoding::Base64 => BASE64
-                .decode(data)
-                .context("failed to decode base64 file contents"),
+            FileEncoding::Base64 => {
+                BASE64.decode(data).context("failed to decode base64 file contents")
+            }
         }
     }
 
@@ -444,10 +438,7 @@ impl SnapshotManager {
         let path = self.snapshot_path(turn_number);
         if let Some(parent) = path.parent() {
             ensure_dir_exists(parent).await.with_context(|| {
-                format!(
-                    "failed to ensure checkpoint directory: {}",
-                    parent.display()
-                )
+                format!("failed to ensure checkpoint directory: {}", parent.display())
             })?;
         }
 
@@ -531,10 +522,7 @@ impl SnapshotManager {
 
                 if let Some(parent) = absolute.parent() {
                     ensure_dir_exists(parent).await.with_context(|| {
-                        format!(
-                            "failed to create directories for restore: {}",
-                            parent.display()
-                        )
+                        format!("failed to create directories for restore: {}", parent.display())
                     })?;
                 }
 
@@ -553,10 +541,7 @@ impl SnapshotManager {
             Vec::new()
         };
 
-        Ok(Some(CheckpointRestore {
-            metadata: stored.metadata,
-            conversation,
-        }))
+        Ok(Some(CheckpointRestore { metadata: stored.metadata, conversation }))
     }
 
     pub async fn cleanup_old_snapshots(&self) -> Result<()> {
@@ -655,8 +640,7 @@ impl SnapshotManager {
 
     /// File path for an action-level snapshot.
     fn action_snapshot_path(&self, action_number: usize) -> PathBuf {
-        self.storage_dir
-            .join(format!("action_{action_number}.json"))
+        self.storage_dir.join(format!("action_{action_number}.json"))
     }
 
     /// Save an action-level snapshot to disk. Returns the action number.
@@ -667,10 +651,7 @@ impl SnapshotManager {
         let path = self.action_snapshot_path(action.action_number);
         if let Some(parent) = path.parent() {
             ensure_dir_exists(parent).await.with_context(|| {
-                format!(
-                    "failed to ensure checkpoint directory: {}",
-                    parent.display()
-                )
+                format!("failed to ensure checkpoint directory: {}", parent.display())
             })?;
         }
         write_json_file(&path, action)
@@ -774,19 +755,13 @@ mod tests {
     async fn create_and_list_snapshots() -> Result<()> {
         let (_dir, manager) = setup_manager();
         let mut conversation = Vec::new();
-        conversation.push(SessionMessage::new(
-            crate::llm::provider::MessageRole::User,
-            "Hello",
-        ));
+        conversation.push(SessionMessage::new(crate::llm::provider::MessageRole::User, "Hello"));
         let files = BTreeSet::new();
         manager
             .create_snapshot(1, "First turn", &conversation, &files, None, None)
             .await?
             .expect("metadata");
-        conversation.push(SessionMessage::new(
-            crate::llm::provider::MessageRole::Assistant,
-            "Hi",
-        ));
+        conversation.push(SessionMessage::new(crate::llm::provider::MessageRole::Assistant, "Hi"));
         manager
             .create_snapshot(2, "Second turn", &conversation, &files, None, None)
             .await?
@@ -818,10 +793,7 @@ mod tests {
             .expect("metadata");
 
         fs::write(&file_path, "v2")?;
-        manager
-            .restore_snapshot(1, RevertScope::Code)
-            .await?
-            .expect("restore");
+        manager.restore_snapshot(1, RevertScope::Code).await?.expect("restore");
         let restored = fs::read_to_string(&file_path)?;
         assert_eq!(restored, "v1");
         Ok(())
@@ -846,10 +818,7 @@ mod tests {
             .expect("metadata");
 
         fs::remove_file(&file_path)?;
-        manager
-            .restore_snapshot(1, RevertScope::Code)
-            .await?
-            .expect("restore");
+        manager.restore_snapshot(1, RevertScope::Code).await?.expect("restore");
         assert!(file_path.exists());
         let content = fs::read_to_string(&file_path)?;
         assert_eq!(content, "data");
@@ -943,14 +912,8 @@ mod tests {
     async fn snapshot_persists_prompt_metadata() -> Result<()> {
         let (_dir, manager) = setup_manager();
         let conversation = vec![
-            SessionMessage::new(
-                crate::llm::provider::MessageRole::User,
-                "Explain checkpointing",
-            ),
-            SessionMessage::new(
-                crate::llm::provider::MessageRole::Assistant,
-                "Working on it",
-            ),
+            SessionMessage::new(crate::llm::provider::MessageRole::User, "Explain checkpointing"),
+            SessionMessage::new(crate::llm::provider::MessageRole::Assistant, "Working on it"),
         ];
 
         manager
@@ -966,10 +929,7 @@ mod tests {
             .expect("metadata");
 
         let stored = manager.load_snapshot(1).await?.expect("stored snapshot");
-        assert_eq!(
-            stored.metadata.prompt_text.as_deref(),
-            Some("Explain checkpointing")
-        );
+        assert_eq!(stored.metadata.prompt_text.as_deref(), Some("Explain checkpointing"));
         assert_eq!(stored.metadata.prompt_message_index, Some(0));
         assert_eq!(stored.metadata.description, "Explain checkpointing");
         Ok(())
@@ -1003,10 +963,7 @@ mod tests {
         fs::write(path, serde_json::to_vec_pretty(&stored)?)?;
 
         let loaded = manager.load_snapshot(1).await?.expect("loaded snapshot");
-        assert_eq!(
-            loaded.metadata.prompt_text.as_deref(),
-            Some("Legacy prompt")
-        );
+        assert_eq!(loaded.metadata.prompt_text.as_deref(), Some("Legacy prompt"));
         assert_eq!(loaded.metadata.prompt_message_index, Some(0));
         Ok(())
     }
@@ -1017,14 +974,8 @@ mod tests {
             SnapshotManager::parse_revert_scope("conversation"),
             Some(RevertScope::Conversation)
         );
-        assert_eq!(
-            SnapshotManager::parse_revert_scope("code"),
-            Some(RevertScope::Code)
-        );
-        assert_eq!(
-            SnapshotManager::parse_revert_scope("full"),
-            Some(RevertScope::Both)
-        );
+        assert_eq!(SnapshotManager::parse_revert_scope("code"), Some(RevertScope::Code));
+        assert_eq!(SnapshotManager::parse_revert_scope("full"), Some(RevertScope::Both));
         assert_eq!(SnapshotManager::parse_revert_scope("unknown"), None);
     }
 }

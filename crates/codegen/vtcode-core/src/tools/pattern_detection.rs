@@ -104,10 +104,7 @@ impl PatternDetector {
                 // Confidence: based on frequency and consistency.
                 let confidence = (success_rate * (frequency as f64 / 10.0).min(1.0)).min(1.0);
 
-                let sequence_vec = sequence
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>();
+                let sequence_vec = sequence.iter().map(|s| s.to_string()).collect::<Vec<String>>();
                 let pattern_name = format!("pattern_{:x}", hash_sequence(&sequence_vec));
 
                 self.patterns.insert(
@@ -129,9 +126,7 @@ impl PatternDetector {
     pub fn patterns(&self) -> Vec<DetectedPattern> {
         let mut patterns: Vec<_> = self.patterns.values().cloned().collect();
         patterns.sort_unstable_by(|a, b| {
-            b.confidence
-                .partial_cmp(&a.confidence)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)
         });
         patterns
     }

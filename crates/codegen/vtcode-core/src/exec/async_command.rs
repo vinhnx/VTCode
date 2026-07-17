@@ -45,10 +45,7 @@ pub struct StreamCaptureConfig {
 
 impl Default for StreamCaptureConfig {
     fn default() -> Self {
-        Self {
-            capture: true,
-            max_bytes: DEFAULT_CAPTURE_LIMIT,
-        }
+        Self { capture: true, max_bytes: DEFAULT_CAPTURE_LIMIT }
     }
 }
 
@@ -129,10 +126,7 @@ impl AsyncProcessRunner {
         command.stderr(Stdio::piped());
 
         let mut child = command.spawn().with_context(|| {
-            format!(
-                "failed to spawn '{}' with args {:?}",
-                options.program, options.args
-            )
+            format!("failed to spawn '{}' with args {:?}", options.program, options.args)
         })?;
 
         let stdout_handle = child.stdout.take();
@@ -142,9 +136,7 @@ impl AsyncProcessRunner {
         let mut stdout_future = Box::pin(read_stream(stdout_handle, options.stdout));
         let mut stderr_future = Box::pin(read_stream(stderr_handle, options.stderr));
         let mut wait_future = Box::pin(wait_for_status(shared_child.clone()));
-        let mut timeout_future = options
-            .timeout
-            .map(|dur| Box::pin(sleep(dur)) as Pin<Box<Sleep>>);
+        let mut timeout_future = options.timeout.map(|dur| Box::pin(sleep(dur)) as Pin<Box<Sleep>>);
         let mut cancellation_future = options.cancellation_token.as_ref().map(|token| {
             Box::pin(token.clone().cancelled_owned()) as Pin<Box<WaitForCancellationFutureOwned>>
         });
@@ -388,10 +380,7 @@ mod tests {
             .expect("cancelled run should still yield a ProcessOutput, not an error");
 
         assert!(outcome.cancelled, "expected cancelled to be true");
-        assert!(
-            !outcome.timed_out,
-            "timed_out must remain false on cancellation"
-        );
+        assert!(!outcome.timed_out, "timed_out must remain false on cancellation");
     }
 
     /// A grandchild process that inherits the stdout pipe and outlives the

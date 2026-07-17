@@ -152,10 +152,7 @@ impl Provider {
     }
 
     pub fn is_local(&self) -> bool {
-        matches!(
-            self,
-            Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp
-        )
+        matches!(self, Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp)
     }
 
     pub fn local_install_instructions(&self) -> Option<&'static str> {

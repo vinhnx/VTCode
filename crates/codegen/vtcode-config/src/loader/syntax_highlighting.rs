@@ -63,15 +63,10 @@ impl SyntaxHighlightingConfig {
             SyntaxHighlightingDefaults::min_highlight_timeout_ms()
         );
 
-        ensure!(
-            !self.theme.trim().is_empty(),
-            "Syntax highlighting theme must not be empty"
-        );
+        ensure!(!self.theme.trim().is_empty(), "Syntax highlighting theme must not be empty");
 
         ensure!(
-            self.enabled_languages
-                .iter()
-                .all(|lang| !lang.trim().is_empty()),
+            self.enabled_languages.iter().all(|lang| !lang.trim().is_empty()),
             "Syntax highlighting languages must not contain empty entries"
         );
 

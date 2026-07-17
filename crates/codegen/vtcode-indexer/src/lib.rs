@@ -63,10 +63,7 @@ pub trait IndexStorage: Send + Sync {
     /// [`IndexStorage::persist_batch`] so existing custom storage backends remain
     /// compatible.
     fn persist_batch_refs(&self, index_dir: &Path, entries: &[&FileIndex]) -> Result<()> {
-        let owned = entries
-            .iter()
-            .map(|entry| (*entry).clone())
-            .collect::<Vec<_>>();
+        let owned = entries.iter().map(|entry| (*entry).clone()).collect::<Vec<_>>();
         self.persist_batch(index_dir, &owned)
     }
 }
@@ -108,10 +105,7 @@ impl IndexStorage for MarkdownIndexStorage {
     }
 
     fn remove(&self, index_dir: &Path, file_path: &Path) -> Result<()> {
-        let file_name = format!(
-            "{}.md",
-            calculate_hash(file_path.to_string_lossy().as_ref())
-        );
+        let file_name = format!("{}.md", calculate_hash(file_path.to_string_lossy().as_ref()));
         let index_path = index_dir.join(file_name);
         match fs::remove_file(index_path) {
             Ok(()) => Ok(()),
@@ -172,10 +166,7 @@ impl TraversalFilter for ConfigTraversalFilter {
 
         // Skip hidden files when configured.
         if config.ignore_hidden
-            && path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|s| s.starts_with('.'))
+            && path.file_name().and_then(|n| n.to_str()).is_some_and(|s| s.starts_with('.'))
         {
             return false;
         }
@@ -428,8 +419,7 @@ impl SimpleIndexer {
             self.apply_snapshot_directory_update(dir_path, &entries)?;
         } else {
             entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-            self.storage
-                .persist_batch(self.config.index_dir(), &entries)?;
+            self.storage.persist_batch(self.config.index_dir(), &entries)?;
         }
 
         self.replace_cached_entries(dir_path, &entries);
@@ -489,9 +479,7 @@ impl SimpleIndexer {
 
         entries.sort_by(|a, b| {
             b.1.cmp(&a.1).then_with(|| {
-                a.0.to_string_lossy()
-                    .to_lowercase()
-                    .cmp(&b.0.to_string_lossy().to_lowercase())
+                a.0.to_string_lossy().to_lowercase().cmp(&b.0.to_string_lossy().to_lowercase())
             })
         });
         entries
@@ -522,10 +510,7 @@ impl SimpleIndexer {
                 for (line_num, line) in content.lines().enumerate() {
                     if regex.is_match(line) {
                         let matches = if extract_matches {
-                            regex
-                                .find_iter(line)
-                                .map(|m| m.as_str().to_string())
-                                .collect()
+                            regex.find_iter(line).map(|m| m.as_str().to_string()).collect()
                         } else {
                             vec![line.to_string()]
                         };
@@ -646,10 +631,7 @@ impl SimpleIndexer {
     }
 
     fn is_allowed_path(&self, path: &Path) -> bool {
-        self.config
-            .allowed_dirs
-            .iter()
-            .any(|allowed| path.starts_with(allowed))
+        self.config.allowed_dirs.iter().any(|allowed| path.starts_with(allowed))
     }
 
     #[inline]
@@ -697,10 +679,7 @@ impl SimpleIndexer {
 
     #[inline]
     fn is_excluded_path(&self, path: &Path) -> bool {
-        self.config
-            .excluded_dirs
-            .iter()
-            .any(|excluded| path.starts_with(excluded))
+        self.config.excluded_dirs.iter().any(|excluded| path.starts_with(excluded))
     }
 
     #[inline]
@@ -744,15 +723,10 @@ impl SimpleIndexer {
     }
 
     fn replace_cached_entries(&mut self, dir_path: &Path, entries: &[FileIndex]) {
-        self.index_cache
-            .retain(|path, _| !Path::new(path).starts_with(dir_path));
+        self.index_cache.retain(|path, _| !Path::new(path).starts_with(dir_path));
 
-        self.index_cache.extend(
-            entries
-                .iter()
-                .cloned()
-                .map(|entry| (entry.path.clone(), entry)),
-        );
+        self.index_cache
+            .extend(entries.iter().cloned().map(|entry| (entry.path.clone(), entry)));
     }
 
     fn apply_snapshot_file_update(
@@ -786,21 +760,13 @@ impl SimpleIndexer {
         entries: &[FileIndex],
     ) -> Result<()> {
         let previous_entries = self.take_cached_entries(dir_path);
-        self.index_cache.extend(
-            entries
-                .iter()
-                .cloned()
-                .map(|entry| (entry.path.clone(), entry)),
-        );
+        self.index_cache
+            .extend(entries.iter().cloned().map(|entry| (entry.path.clone(), entry)));
 
         if let Err(err) = self.persist_current_snapshot() {
+            self.index_cache.retain(|path, _| !Path::new(path).starts_with(dir_path));
             self.index_cache
-                .retain(|path, _| !Path::new(path).starts_with(dir_path));
-            self.index_cache.extend(
-                previous_entries
-                    .into_iter()
-                    .map(|entry| (entry.path.clone(), entry)),
-            );
+                .extend(previous_entries.into_iter().map(|entry| (entry.path.clone(), entry)));
             return Err(err);
         }
 
@@ -823,8 +789,7 @@ impl SimpleIndexer {
     fn persist_current_snapshot(&self) -> Result<()> {
         let mut snapshot = self.index_cache.values().collect::<Vec<_>>();
         snapshot.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-        self.storage
-            .persist_batch_refs(self.config.index_dir(), &snapshot)
+        self.storage.persist_batch_refs(self.config.index_dir(), &snapshot)
     }
 }
 
@@ -844,11 +809,7 @@ fn should_skip_dir(path: &Path, config: &SimpleIndexerConfig) -> bool {
         return false;
     }
 
-    if config
-        .excluded_dirs
-        .iter()
-        .any(|excluded| path.starts_with(excluded))
-    {
+    if config.excluded_dirs.iter().any(|excluded| path.starts_with(excluded)) {
         return true;
     }
 
@@ -881,10 +842,7 @@ fn should_visit_entry(
         return true;
     }
 
-    if !entry
-        .file_type()
-        .is_some_and(|file_type| file_type.is_dir())
-    {
+    if !entry.file_type().is_some_and(|file_type| file_type.is_dir()) {
         return true;
     }
 
@@ -1123,10 +1081,7 @@ mod tests {
         let file_path = file_path.to_string_lossy().into_owned();
 
         assert_eq!(indexer.get_file_content(&file_path, Some(5), None)?, "");
-        assert_eq!(
-            indexer.get_file_content(&file_path, Some(0), Some(1))?,
-            "1: first\n"
-        );
+        assert_eq!(indexer.get_file_content(&file_path, Some(0), Some(1))?, "1: first\n");
         assert_eq!(indexer.get_file_content(&file_path, Some(2), Some(1))?, "");
 
         Ok(())
@@ -1171,10 +1126,7 @@ mod tests {
 
         let entries = records.lock().expect("lock poisoned");
         assert_eq!(entries.len(), 1);
-        assert_eq!(
-            entries[0].path,
-            workspace.join("notes.txt").to_string_lossy().into_owned()
-        );
+        assert_eq!(entries[0].path, workspace.join("notes.txt").to_string_lossy().into_owned());
 
         Ok(())
     }
@@ -1281,11 +1233,7 @@ mod tests {
             .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
 
-        assert_eq!(
-            entries.len(),
-            2,
-            "expected exactly README.md and src, got {names:?}"
-        );
+        assert_eq!(entries.len(), 2, "expected exactly README.md and src, got {names:?}");
         assert!(names.contains(&"README.md".to_string()));
         assert!(names.contains(&"src".to_string()));
 
@@ -1311,18 +1259,8 @@ mod tests {
         indexer.index_directory(&src_dir)?;
         indexer.index_directory(&docs_dir)?;
 
-        assert!(
-            indexer
-                .find_files("lib\\.rs$")?
-                .iter()
-                .any(|file| file.ends_with("lib.rs"))
-        );
-        assert!(
-            indexer
-                .find_files("guide\\.md$")?
-                .iter()
-                .any(|file| file.ends_with("guide.md"))
-        );
+        assert!(indexer.find_files("lib\\.rs$")?.iter().any(|file| file.ends_with("lib.rs")));
+        assert!(indexer.find_files("guide\\.md$")?.iter().any(|file| file.ends_with("guide.md")));
 
         let index_content =
             fs::read_to_string(workspace.join(".vtcode").join("index").join("index.md"))?;
@@ -1367,10 +1305,7 @@ mod tests {
         indexer.init()?;
 
         let legacy_file_name = format!("{}.md", calculate_hash("legacy-path"));
-        let legacy_file_path = workspace
-            .join(".vtcode")
-            .join("index")
-            .join(&legacy_file_name);
+        let legacy_file_path = workspace.join(".vtcode").join("index").join(&legacy_file_name);
         fs::write(&legacy_file_path, "# legacy")?;
         assert!(legacy_file_path.exists());
 
@@ -1413,10 +1348,7 @@ mod tests {
             }
 
             fn persist_batch(&self, _index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
-                self.snapshots
-                    .lock()
-                    .expect("lock poisoned")
-                    .push(entries.to_vec());
+                self.snapshots.lock().expect("lock poisoned").push(entries.to_vec());
                 Ok(())
             }
         }
@@ -1493,13 +1425,8 @@ mod tests {
                 .any(|path| path.ends_with("first.txt"))
         );
 
-        let err = indexer
-            .index_file(&second)
-            .expect_err("second persist should fail");
-        assert!(
-            err.to_string()
-                .contains("simulated snapshot persistence failure")
-        );
+        let err = indexer.index_file(&second).expect_err("second persist should fail");
+        assert!(err.to_string().contains("simulated snapshot persistence failure"));
         assert!(
             indexer
                 .find_files("first\\.txt$")?

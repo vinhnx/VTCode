@@ -31,16 +31,10 @@ impl AgentRunner {
         if !evaluation.findings.is_empty() {
             markdown.push_str("\n## Findings\n");
             for finding in &evaluation.findings {
-                let _ = write!(
-                    markdown,
-                    "- [{}] {}",
-                    finding.severity.trim(),
-                    finding.title.trim()
-                );
-                if let Some(detail) = finding
-                    .detail
-                    .as_deref()
-                    .filter(|text| !text.trim().is_empty())
+                let _ =
+                    write!(markdown, "- [{}] {}", finding.severity.trim(), finding.title.trim());
+                if let Some(detail) =
+                    finding.detail.as_deref().filter(|text| !text.trim().is_empty())
                 {
                     markdown.push_str(": ");
                     markdown.push_str(detail.trim());

@@ -102,21 +102,13 @@ impl ToolBudgetWarning {
     }
 
     pub(crate) fn log_threshold_reached(self, path: &'static str) {
-        tracing::info!(
-            used = self.used,
-            max = self.max,
-            remaining = self.remaining,
-            "{path}"
-        );
+        tracing::info!(used = self.used, max = self.max, remaining = self.remaining, "{path}");
     }
 }
 
 impl ToolBudgetExhaustion {
     pub(crate) fn policy_violation_message(self) -> String {
-        format!(
-            "Policy violation: exceeded max tool calls per turn ({})",
-            self.max
-        )
+        format!("Policy violation: exceeded max tool calls per turn ({})", self.max)
     }
 
     /// Compact stub returned for the 2nd+ rejected calls in the same batch so
@@ -130,10 +122,7 @@ impl ToolBudgetExhaustion {
     /// it must synthesize a final answer from already-gathered outputs.
     /// Mirrors `ToolWallClockExhaustion::synthesis_directive_message`.
     pub(crate) fn synthesis_directive_message(self) -> String {
-        debug_assert!(
-            self.max > 0,
-            "disabled tool-call caps must not emit exhaustion"
-        );
+        debug_assert!(self.max > 0, "disabled tool-call caps must not emit exhaustion");
         format!(
             "Tool-call budget exhausted for this turn ({}/{}). Tools are disabled for the rest of this turn. Do NOT emit more tool calls. Synthesize your final answer now from the tool outputs already gathered in this conversation.",
             self.used, self.max
@@ -143,10 +132,7 @@ impl ToolBudgetExhaustion {
 
 impl ToolWallClockExhaustion {
     pub(crate) fn policy_violation_message(self) -> String {
-        format!(
-            "Policy violation: exceeded tool wall clock budget ({}s)",
-            self.max_secs
-        )
+        format!("Policy violation: exceeded tool wall clock budget ({}s)", self.max_secs)
     }
 
     /// Compact stub returned for the 2nd+ rejected calls in the same batch so
@@ -436,12 +422,11 @@ impl HarnessTurnState {
     }
 
     pub(crate) fn tool_budget_exhaustion(&self) -> Option<ToolBudgetExhaustion> {
-        self.tool_budget_exhausted()
-            .then_some(ToolBudgetExhaustion {
-                used: self.tool_calls,
-                max: self.max_tool_calls,
-                remaining: self.remaining_tool_calls(),
-            })
+        self.tool_budget_exhausted().then_some(ToolBudgetExhaustion {
+            used: self.tool_calls,
+            max: self.max_tool_calls,
+            remaining: self.remaining_tool_calls(),
+        })
     }
 
     pub(crate) fn wall_clock_exhausted(&self) -> bool {
@@ -450,9 +435,7 @@ impl HarnessTurnState {
 
     pub(crate) fn wall_clock_budget_exhaustion(&self) -> Option<ToolWallClockExhaustion> {
         self.wall_clock_exhausted()
-            .then_some(ToolWallClockExhaustion {
-                max_secs: self.max_tool_wall_clock.as_secs(),
-            })
+            .then_some(ToolWallClockExhaustion { max_secs: self.max_tool_wall_clock.as_secs() })
     }
 
     pub(crate) fn record_tool_call(&mut self) {
@@ -501,10 +484,7 @@ impl HarnessTurnState {
             self.mark_tool_budget_exhausted_emitted();
             self.tool_budget_directive_pending = true;
         }
-        Some(ToolBudgetExhaustionNotice {
-            exhaustion,
-            first_notice,
-        })
+        Some(ToolBudgetExhaustionNotice { exhaustion, first_notice })
     }
 
     /// Consume the pending tool-call-budget synthesis-directive flag. Returns
@@ -529,10 +509,7 @@ impl HarnessTurnState {
             self.wall_clock_exhausted_emitted = true;
             self.wall_clock_directive_pending = true;
         }
-        Some(ToolWallClockExhaustionNotice {
-            exhaustion,
-            first_notice,
-        })
+        Some(ToolWallClockExhaustionNotice { exhaustion, first_notice })
     }
 
     /// Consume the pending wall-clock synthesis-directive flag. Returns `true`
@@ -595,10 +572,7 @@ impl HarnessTurnState {
     }
 
     pub(crate) fn is_recovery_active(&self) -> bool {
-        matches!(
-            self.recovery_phase,
-            RecoveryPhase::Pending | RecoveryPhase::InPass
-        )
+        matches!(self.recovery_phase, RecoveryPhase::Pending | RecoveryPhase::InPass)
     }
 
     pub(crate) fn recovery_reason(&self) -> Option<&str> {
@@ -606,10 +580,7 @@ impl HarnessTurnState {
     }
 
     pub(crate) fn recovery_pass_used(&self) -> bool {
-        matches!(
-            self.recovery_phase,
-            RecoveryPhase::InPass | RecoveryPhase::Completed
-        )
+        matches!(self.recovery_phase, RecoveryPhase::InPass | RecoveryPhase::Completed)
     }
 
     #[cfg(test)]
@@ -676,10 +647,7 @@ impl HarnessTurnState {
     /// `recovery_retry_count()` against its own limit.
     /// Only works if a recovery pass has been consumed (phase is InPass or Completed).
     pub(crate) fn retry_recovery_pass(&mut self) -> bool {
-        if matches!(
-            self.recovery_phase,
-            RecoveryPhase::InPass | RecoveryPhase::Completed
-        ) {
+        if matches!(self.recovery_phase, RecoveryPhase::InPass | RecoveryPhase::Completed) {
             self.recovery_phase = RecoveryPhase::Pending;
             self.recovery_retry_count += 1;
             true
@@ -743,9 +711,8 @@ impl HarnessTurnState {
 
     pub(crate) fn record_file_read_family_call(&mut self, signature: String) -> usize {
         if self.last_file_read_family_signature.as_deref() == Some(signature.as_str()) {
-            self.consecutive_same_file_read_family_calls = self
-                .consecutive_same_file_read_family_calls
-                .saturating_add(1);
+            self.consecutive_same_file_read_family_calls =
+                self.consecutive_same_file_read_family_calls.saturating_add(1);
         } else {
             self.last_file_read_family_signature = Some(signature);
             self.consecutive_same_file_read_family_calls = 1;
@@ -1041,11 +1008,7 @@ mod tests {
         assert_eq!(state.record_tool_call_with_default_warning(), None);
         assert_eq!(
             state.record_tool_call_with_default_warning(),
-            Some(ToolBudgetWarning {
-                used: 3,
-                max: 4,
-                remaining: 1,
-            })
+            Some(ToolBudgetWarning { used: 3, max: 4, remaining: 1 })
         );
         assert_eq!(state.record_tool_call_with_default_warning(), None);
     }
@@ -1053,12 +1016,7 @@ mod tests {
     #[test]
     fn tool_budget_warning_system_message_matches_contract() {
         assert_eq!(
-            ToolBudgetWarning {
-                used: 3,
-                max: 4,
-                remaining: 1,
-            }
-            .system_message(),
+            ToolBudgetWarning { used: 3, max: 4, remaining: 1 }.system_message(),
             "Tool-call budget warning: 3/4 used; 1 remaining for this turn. Use targeted extraction/batching before additional tool calls."
         );
     }
@@ -1080,11 +1038,7 @@ mod tests {
         assert_eq!(
             state.record_tool_budget_exhaustion_notice(),
             Some(ToolBudgetExhaustionNotice {
-                exhaustion: ToolBudgetExhaustion {
-                    used: 1,
-                    max: 1,
-                    remaining: 0,
-                },
+                exhaustion: ToolBudgetExhaustion { used: 1, max: 1, remaining: 0 },
                 first_notice: true,
             })
         );
@@ -1092,11 +1046,7 @@ mod tests {
         assert_eq!(
             state.record_tool_budget_exhaustion_notice(),
             Some(ToolBudgetExhaustionNotice {
-                exhaustion: ToolBudgetExhaustion {
-                    used: 1,
-                    max: 1,
-                    remaining: 0,
-                },
+                exhaustion: ToolBudgetExhaustion { used: 1, max: 1, remaining: 0 },
                 first_notice: false,
             })
         );
@@ -1105,12 +1055,7 @@ mod tests {
     #[test]
     fn tool_budget_exhaustion_synthesis_directive_matches_contract() {
         assert_eq!(
-            ToolBudgetExhaustion {
-                used: 4,
-                max: 4,
-                remaining: 0,
-            }
-            .synthesis_directive_message(),
+            ToolBudgetExhaustion { used: 4, max: 4, remaining: 0 }.synthesis_directive_message(),
             "Tool-call budget exhausted for this turn (4/4). Tools are disabled for the rest of this turn. Do NOT emit more tool calls. Synthesize your final answer now from the tool outputs already gathered in this conversation."
         );
     }
@@ -1544,22 +1489,10 @@ mod tests {
             1,
         );
 
-        assert_eq!(
-            state.record_shell_command_run("exec_command::cargo check".to_string()),
-            1
-        );
-        assert_eq!(
-            state.record_shell_command_run("exec_command::cargo check".to_string()),
-            2
-        );
-        assert_eq!(
-            state.record_shell_command_run("exec_command::cargo test".to_string()),
-            1
-        );
-        assert_eq!(
-            state.last_shell_command_signature.as_deref(),
-            Some("exec_command::cargo test")
-        );
+        assert_eq!(state.record_shell_command_run("exec_command::cargo check".to_string()), 1);
+        assert_eq!(state.record_shell_command_run("exec_command::cargo check".to_string()), 2);
+        assert_eq!(state.record_shell_command_run("exec_command::cargo test".to_string()), 1);
+        assert_eq!(state.last_shell_command_signature.as_deref(), Some("exec_command::cargo test"));
     }
 
     #[test]
@@ -1616,34 +1549,16 @@ mod tests {
         );
 
         // Same path, different offsets — each increments the path counter.
-        assert_eq!(
-            state.record_file_read_path_call("src/lib.rs".to_string()),
-            1
-        );
-        assert_eq!(
-            state.record_file_read_path_call("src/lib.rs".to_string()),
-            2
-        );
-        assert_eq!(
-            state.record_file_read_path_call("src/lib.rs".to_string()),
-            3
-        );
+        assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 1);
+        assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 2);
+        assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 3);
         // Different path gets its own counter.
-        assert_eq!(
-            state.record_file_read_path_call("src/main.rs".to_string()),
-            1
-        );
+        assert_eq!(state.record_file_read_path_call("src/main.rs".to_string()), 1);
         // Original path continues counting.
-        assert_eq!(
-            state.record_file_read_path_call("src/lib.rs".to_string()),
-            4
-        );
+        assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 4);
 
         state.reset_file_read_path_counts();
-        assert_eq!(
-            state.record_file_read_path_call("src/lib.rs".to_string()),
-            1
-        );
+        assert_eq!(state.record_file_read_path_call("src/lib.rs".to_string()), 1);
     }
 
     #[test]
@@ -1753,16 +1668,8 @@ mod tests {
         let empty_written = HashSet::new();
 
         // Empty turns should not trigger warnings or corrupt state
-        assert!(
-            tracker
-                .seal_turn(&empty_sigs, &empty_written, None)
-                .is_none()
-        );
-        assert!(
-            tracker
-                .seal_turn(&empty_sigs, &empty_written, None)
-                .is_none()
-        );
+        assert!(tracker.seal_turn(&empty_sigs, &empty_written, None).is_none());
+        assert!(tracker.seal_turn(&empty_sigs, &empty_written, None).is_none());
     }
 
     #[test]

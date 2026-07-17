@@ -44,9 +44,7 @@ impl PodTransport for SshTransport {
     async fn write_file(&self, ssh_target: &str, remote_path: &str, contents: &str) -> Result<()> {
         let remote_command = format!("cat > {remote_path}");
         let mut ssh = build_ssh_command(ssh_target, &remote_command)?;
-        ssh.stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped());
+        ssh.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped());
 
         let mut child = ssh
             .spawn()
@@ -78,9 +76,7 @@ impl PodTransport for SshTransport {
 
     async fn exec_stream(&self, ssh_target: &str, command: &str) -> Result<()> {
         let mut ssh = build_ssh_command(ssh_target, command)?;
-        ssh.stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit());
+        ssh.stdin(Stdio::null()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
 
         let status = ssh
             .status()

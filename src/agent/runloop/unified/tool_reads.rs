@@ -156,18 +156,12 @@ mod tests {
     #[test]
     fn spool_content_looks_like_error_detects_plain_error_prefix() {
         assert!(spool_content_looks_like_error("Error: file not found"));
-        assert!(spool_content_looks_like_error(
-            "ast-grep: command not found"
-        ));
+        assert!(spool_content_looks_like_error("ast-grep: command not found"));
     }
 
     #[test]
     fn spool_content_looks_like_error_returns_false_for_normal_output() {
-        assert!(!spool_content_looks_like_error(
-            "approval_recorder.rs\nassembly.rs\nbuilder.rs"
-        ));
-        assert!(!spool_content_looks_like_error(
-            "=== mod.rs ===\npub struct ToolRegistry"
-        ));
+        assert!(!spool_content_looks_like_error("approval_recorder.rs\nassembly.rs\nbuilder.rs"));
+        assert!(!spool_content_looks_like_error("=== mod.rs ===\npub struct ToolRegistry"));
     }
 }

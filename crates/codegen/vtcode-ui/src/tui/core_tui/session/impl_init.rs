@@ -25,20 +25,11 @@ impl Session {
             "does not exist",
         ];
 
-        error_indicators
-            .iter()
-            .any(|indicator| lower_content.contains(indicator))
+        error_indicators.iter().any(|indicator| lower_content.contains(indicator))
     }
 
     pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
-        Self::new_with_logs(
-            theme,
-            placeholder,
-            view_rows,
-            true,
-            None,
-            "Agent TUI".to_string(),
-        )
+        Self::new_with_logs(theme, placeholder, view_rows, true, None, "Agent TUI".to_string())
     }
 
     pub fn new_with_logs(
@@ -49,15 +40,7 @@ impl Session {
         appearance: Option<AppearanceConfig>,
         app_name: String,
     ) -> Self {
-        Self::new_with_options(
-            theme,
-            placeholder,
-            view_rows,
-            show_logs,
-            appearance,
-            app_name,
-            None,
-        )
+        Self::new_with_options(theme, placeholder, view_rows, show_logs, appearance, app_name, None)
     }
 
     pub fn new_with_bindings(

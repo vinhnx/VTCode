@@ -66,10 +66,7 @@ impl AuthHandler {
         match method {
             AuthMethod::Agent { .. } => {
                 // Agent handles auth itself - no special configuration needed
-                Ok(Self {
-                    env_vars: HashMap::new(),
-                    args: Vec::new(),
-                })
+                Ok(Self { env_vars: HashMap::new(), args: Vec::new() })
             }
 
             AuthMethod::EnvVar { var_name, .. } => {
@@ -78,49 +75,28 @@ impl AuthHandler {
                 if var_name.is_empty() {
                     anyhow::bail!("Environment variable name cannot be empty");
                 }
-                if !var_name
-                    .chars()
-                    .all(|c: char| c.is_alphanumeric() || c == '_')
-                {
+                if !var_name.chars().all(|c: char| c.is_alphanumeric() || c == '_') {
                     anyhow::bail!(
                         "Invalid environment variable name: '{var_name}'. Must contain only alphanumeric characters and underscores."
                     );
                 }
 
-                Ok(Self {
-                    env_vars: HashMap::new(),
-                    args: Vec::new(),
-                })
+                Ok(Self { env_vars: HashMap::new(), args: Vec::new() })
             }
 
             AuthMethod::Terminal { args, env, .. } => {
                 // Terminal auth: pass args and env to the agent process
-                Ok(Self {
-                    env_vars: env.clone(),
-                    args: args.clone(),
-                })
+                Ok(Self { env_vars: env.clone(), args: args.clone() })
             }
 
             // Legacy methods
-            AuthMethod::ApiKey => Ok(Self {
-                env_vars: HashMap::new(),
-                args: Vec::new(),
-            }),
+            AuthMethod::ApiKey => Ok(Self { env_vars: HashMap::new(), args: Vec::new() }),
 
-            AuthMethod::OAuth2 => Ok(Self {
-                env_vars: HashMap::new(),
-                args: Vec::new(),
-            }),
+            AuthMethod::OAuth2 => Ok(Self { env_vars: HashMap::new(), args: Vec::new() }),
 
-            AuthMethod::Bearer => Ok(Self {
-                env_vars: HashMap::new(),
-                args: Vec::new(),
-            }),
+            AuthMethod::Bearer => Ok(Self { env_vars: HashMap::new(), args: Vec::new() }),
 
-            AuthMethod::Custom(_) => Ok(Self {
-                env_vars: HashMap::new(),
-                args: Vec::new(),
-            }),
+            AuthMethod::Custom(_) => Ok(Self { env_vars: HashMap::new(), args: Vec::new() }),
         }
     }
 
@@ -212,9 +188,7 @@ mod tests {
             name: "Agent".to_string(),
             description: None,
         };
-        let handler = AuthHandler::new(&method)
-            .unwrap()
-            .with_env("MY_VAR", "my_value");
+        let handler = AuthHandler::new(&method).unwrap().with_env("MY_VAR", "my_value");
         assert_eq!(handler.env_vars.get("MY_VAR").unwrap(), "my_value");
     }
 

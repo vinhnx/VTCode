@@ -14,46 +14,23 @@ pub(super) fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
         MessageStyle::Info,
         "Usage: /mcp [status|list|tools|refresh|config|config edit|repair|diagnose|login <name>|logout <name>]",
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  status  – Show overall MCP connection health",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  list    – List configured providers from vtcode.toml",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  tools   – Show tools exposed by active providers",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  refresh – Reindex MCP tools without restarting",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  config  – Summarize MCP settings from vtcode.toml",
-    )?;
+    renderer.line(MessageStyle::Info, "  status  – Show overall MCP connection health")?;
+    renderer.line(MessageStyle::Info, "  list    – List configured providers from vtcode.toml")?;
+    renderer.line(MessageStyle::Info, "  tools   – Show tools exposed by active providers")?;
+    renderer.line(MessageStyle::Info, "  refresh – Reindex MCP tools without restarting")?;
+    renderer.line(MessageStyle::Info, "  config  – Summarize MCP settings from vtcode.toml")?;
     renderer.line(
         MessageStyle::Info,
         "  config edit – Show the config file path and editing guidance",
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  repair  – Restart MCP connections and refresh tool indices",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "  diagnose – Validate config and run MCP health checks",
-    )?;
+    renderer
+        .line(MessageStyle::Info, "  repair  – Restart MCP connections and refresh tool indices")?;
+    renderer.line(MessageStyle::Info, "  diagnose – Validate config and run MCP health checks")?;
     renderer.line(
         MessageStyle::Info,
         "  login/logout <name> – Manage provider authentication (if supported)",
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Examples: /mcp list, /mcp tools, /mcp login github",
-    )?;
+    renderer.line(MessageStyle::Info, "Examples: /mcp list, /mcp tools, /mcp login github")?;
     Ok(())
 }
 
@@ -70,14 +47,8 @@ pub(super) fn render_local_usage(renderer: &mut AnsiRenderer) -> Result<()> {
         MessageStyle::Info,
         "       /local status <provider>        (check specific server)",
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /local start <provider>         (start a server)",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "       /local stop <provider>          (stop a server)",
-    )?;
+    renderer.line(MessageStyle::Info, "       /local start <provider>         (start a server)")?;
+    renderer.line(MessageStyle::Info, "       /local stop <provider>          (stop a server)")?;
     renderer.line(
         MessageStyle::Info,
         "       /local configure <provider>     (show config and env vars)",
@@ -92,10 +63,7 @@ pub(super) fn render_local_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     )?;
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Info, "Providers: ollama, lmstudio, llama.cpp")?;
-    renderer.line(
-        MessageStyle::Info,
-        "Aliases: lm-studio -> lmstudio, llama.cpp -> llamacpp",
-    )?;
+    renderer.line(MessageStyle::Info, "Aliases: lm-studio -> lmstudio, llama.cpp -> llamacpp")?;
     renderer.line(
         MessageStyle::Info,
         "Examples: /local, /local ollama, /local start lmstudio, /local troubleshoot llamacpp",
@@ -109,23 +77,15 @@ pub(super) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
 
     for theme_id in available_themes {
         if let Some(label) = theme::theme_label(theme_id) {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  /theme {theme_id} – {label}"),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("  /theme {theme_id} – {label}"))?;
         } else {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  /theme {theme_id} – {theme_id}"),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("  /theme {theme_id} – {theme_id}"))?;
         }
     }
 
     renderer.line(MessageStyle::Info, "")?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Current theme: {}", theme::active_theme_label()),
-    )?;
+    renderer
+        .line(MessageStyle::Info, &format!("Current theme: {}", theme::active_theme_label()))?;
     Ok(())
 }
 
@@ -137,19 +97,14 @@ pub(super) async fn render_help(
     if let Some(cmd_name) = specific_command {
         if let Some(cmd) = resolve_help_command(cmd_name) {
             renderer.line(MessageStyle::Info, &format!("Help for /{}:", cmd.name))?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  Description: {}", cmd.description),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("  Description: {}", cmd.description))?;
             if let Some(spec) = find_command_skill_by_slash_name(cmd.name) {
                 renderer.line(MessageStyle::Info, &format!("  Usage: {}", spec.usage))?;
             }
         } else if let Some(template) = find_prompt_template(workspace, cmd_name).await {
             renderer.line(MessageStyle::Info, &format!("Help for /{}:", template.name))?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  Description: {}", template.description),
-            )?;
+            renderer
+                .line(MessageStyle::Info, &format!("  Description: {}", template.description))?;
             renderer.line(
                 MessageStyle::Info,
                 "  Type `/name [args...]` to expand this prompt template into the editor.",
@@ -166,10 +121,7 @@ pub(super) async fn render_help(
         // Show all commands
         renderer.line(MessageStyle::Info, "Available slash commands:")?;
         for cmd in visible_commands() {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  /{} – {}", cmd.name, cmd.description),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("  /{} – {}", cmd.name, cmd.description))?;
         }
         let prompt_templates = vtcode_core::prompts::discover_prompt_templates(workspace)
             .await
@@ -190,40 +142,22 @@ pub(super) async fn render_help(
         // Add information about interactive features
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Interactive mode features:")?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Ctrl+C – Cancel current input or generation",
-        )?;
+        renderer.line(MessageStyle::Info, "  Ctrl+C – Cancel current input or generation")?;
         renderer.line(MessageStyle::Info, "  Ctrl+D – Exit VT Code session")?;
         renderer.line(MessageStyle::Info, "  Ctrl+L – Clear screen (keep context)")?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Ctrl+R – Reverse search command history",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  /history – Open command history picker",
-        )?;
+        renderer.line(MessageStyle::Info, "  Ctrl+R – Reverse search command history")?;
+        renderer.line(MessageStyle::Info, "  /history – Open command history picker")?;
         renderer.line(
             MessageStyle::Info,
             "  Ctrl+V or Alt+V: App-level image paste (image-enabled sessions only; no text fallback)",
         )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Up/Down arrows – Navigate command history",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Enter – Submit now (or queue if a turn is active)",
-        )?;
+        renderer.line(MessageStyle::Info, "  Up/Down arrows – Navigate command history")?;
+        renderer.line(MessageStyle::Info, "  Enter – Submit now (or queue if a turn is active)")?;
         renderer.line(
             MessageStyle::Info,
             "  Tab – Accept suggestion, cycle primary agent when empty, or queue input",
         )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Ctrl+Enter – Run now / steer the active turn",
-        )?;
+        renderer.line(MessageStyle::Info, "  Ctrl+Enter – Run now / steer the active turn")?;
         renderer.line(MessageStyle::Info, "  Shift+Tab – Cycle primary agent")?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Multiline input:")?;
@@ -231,10 +165,7 @@ pub(super) async fn render_help(
             MessageStyle::Info,
             "  \\ + Enter – Quick escape (insert newline without submitting)",
         )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  Shift+Enter – Multiline input (if configured)",
-        )?;
+        renderer.line(MessageStyle::Info, "  Shift+Enter – Multiline input (if configured)")?;
         match TerminalType::detect().unwrap_or(TerminalType::Unknown) {
             TerminalType::Ghostty
             | TerminalType::Kitty
@@ -259,16 +190,11 @@ pub(super) async fn render_help(
                 )?;
             }
         }
-        renderer.line(
-            MessageStyle::Info,
-            "  Ctrl+J – Line feed character for multiline",
-        )?;
+        renderer.line(MessageStyle::Info, "  Ctrl+J – Line feed character for multiline")?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Shell mode:")?;
-        renderer.line(
-            MessageStyle::Info,
-            "  !command – Run shell commands directly (e.g., !ls -la)",
-        )?;
+        renderer
+            .line(MessageStyle::Info, "  !command – Run shell commands directly (e.g., !ls -la)")?;
     }
     Ok(())
 }
@@ -288,14 +214,8 @@ mod tests {
 
     #[test]
     fn help_resolution_supports_aliases() {
-        assert_eq!(
-            resolve_help_command("settings").map(|command| command.name),
-            Some("config")
-        );
-        assert_eq!(
-            resolve_help_command("comman").map(|command| command.name),
-            Some("command")
-        );
+        assert_eq!(resolve_help_command("settings").map(|command| command.name), Some("config"));
+        assert_eq!(resolve_help_command("comman").map(|command| command.name), Some("command"));
     }
 
     #[test]
@@ -307,9 +227,6 @@ mod tests {
 
     #[test]
     fn help_resolution_is_case_insensitive() {
-        assert_eq!(
-            resolve_help_command("Review").map(|command| command.name),
-            Some("review")
-        );
+        assert_eq!(resolve_help_command("Review").map(|command| command.name), Some("review"));
     }
 }

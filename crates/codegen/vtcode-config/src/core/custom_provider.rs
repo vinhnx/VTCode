@@ -194,10 +194,7 @@ impl CustomProviderConfig {
         }
 
         if self.base_url.trim().is_empty() {
-            return Err(format!(
-                "custom_providers[{}]: `base_url` must not be empty",
-                self.name
-            ));
+            return Err(format!("custom_providers[{}]: `base_url` must not be empty", self.name));
         }
 
         if let Some(auth) = &self.auth {
@@ -357,9 +354,7 @@ mod tests {
             models: vec!["valid-model".to_string(), "   ".to_string()],
         };
 
-        let err = config
-            .validate()
-            .expect_err("blank models entry should fail");
+        let err = config.validate().expect_err("blank models entry should fail");
         assert!(err.contains("`models` entries must not be empty"));
     }
 

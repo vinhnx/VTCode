@@ -28,9 +28,7 @@ pub(crate) fn render_reasoning_inline(
         subtitle: Some(KEEP_CURRENT_DESCRIPTION.to_string()),
         badge: Some(CURRENT_BADGE.to_string()),
         indent: 0,
-        selection: Some(InlineListSelection::Reasoning(
-            reasoning_to_selection_string(current),
-        )),
+        selection: Some(InlineListSelection::Reasoning(reasoning_to_selection_string(current))),
         search_value: None,
     });
 
@@ -42,9 +40,9 @@ pub(crate) fn render_reasoning_inline(
             subtitle: Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
             badge: Some("GPT-5.x".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::Reasoning(
-                reasoning_to_selection_string(ReasoningEffortLevel::None),
-            )),
+            selection: Some(InlineListSelection::Reasoning(reasoning_to_selection_string(
+                ReasoningEffortLevel::None,
+            ))),
             search_value: None,
         });
     }
@@ -69,9 +67,7 @@ pub(crate) fn render_reasoning_inline(
             subtitle: Some(reasoning_level_description(level).to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::Reasoning(
-                reasoning_to_selection_string(level),
-            )),
+            selection: Some(InlineListSelection::Reasoning(reasoning_to_selection_string(level))),
             search_value: None,
         });
     }
@@ -105,9 +101,7 @@ pub(crate) fn render_reasoning_inline(
         STEP_TWO_TITLE,
         lines,
         items,
-        Some(InlineListSelection::Reasoning(
-            reasoning_to_selection_string(current),
-        )),
+        Some(InlineListSelection::Reasoning(reasoning_to_selection_string(current))),
         None,
     );
     Ok(())
@@ -224,10 +218,7 @@ pub(crate) fn prompt_api_key_plain(
         MessageStyle::Info,
         &format!("The key will be saved to {env_path_display} and OS keyring."),
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "The key will NOT be stored in vtcode.toml for security.",
-    )?;
+    renderer.line(MessageStyle::Info, "The key will NOT be stored in vtcode.toml for security.")?;
 
     if matches!(selection.provider_enum, Some(Provider::HuggingFace)) {
         renderer.line(
@@ -279,9 +270,7 @@ pub(crate) fn render_service_tier_inline(
             ),
             badge: Some("OpenAI".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(
-                OpenAIServiceTierChoice::Flex,
-            )),
+            selection: Some(InlineListSelection::OpenAIServiceTier(OpenAIServiceTierChoice::Flex)),
             search_value: None,
         },
         InlineListItem {
@@ -348,20 +337,14 @@ pub(crate) fn show_secure_api_modal(
         .unwrap_or_else(|| "Saved to keyring and workspace .env file.".to_string());
     let mask_preview = "●●●●●●";
     let lines = vec![
-        format!(
-            "Bring your own key (BYOK) for {}.",
-            selection.provider_label
-        ),
+        format!("Bring your own key (BYOK) for {}.", selection.provider_label),
         format!("Expected env: {}", selection.env_key),
         format!("Secure display hint: {}", mask_preview),
         storage_line,
         "Key will NOT be stored in vtcode.toml.".to_string(),
         "Paste the key — it will be auto-detected and saved securely.".to_string(),
     ];
-    let prompt_label = format!(
-        "{} API key ({})",
-        selection.provider_label, selection.env_key
-    );
+    let prompt_label = format!("{} API key ({})", selection.provider_label, selection.env_key);
     renderer.show_secure_prompt_modal("Secure API key setup", lines, prompt_label);
 }
 
@@ -374,14 +357,9 @@ pub(crate) fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<(
         MessageStyle::Info,
         "For Ollama, you can use any locally available model like 'llama3:8b', 'mistral:7b', etc.",
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Type 'cancel' to exit the picker at any time.",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Type 'refresh' to reload LM Studio and Ollama model lists.",
-    )?;
+    renderer.line(MessageStyle::Info, "Type 'cancel' to exit the picker at any time.")?;
+    renderer
+        .line(MessageStyle::Info, "Type 'refresh' to reload LM Studio and Ollama model lists.")?;
     Ok(())
 }
 
@@ -405,9 +383,7 @@ pub(crate) fn render_mimo_auth_method_inline(renderer: &mut AnsiRenderer) -> Res
             ),
             badge: Some("Subscription".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
-                "mimo-auth:token-plan".to_string(),
-            )),
+            selection: Some(InlineListSelection::ConfigAction("mimo-auth:token-plan".to_string())),
             search_value: Some("mimo token plan subscription tp bearer".to_string()),
         },
     ];
@@ -430,10 +406,7 @@ pub(crate) fn prompt_mimo_auth_method_plain(renderer: &mut AnsiRenderer) -> Resu
         MessageStyle::Info,
         "MiMo auth method - choose 'pay-as-you-go' or 'token-plan'. Type 'skip' for default (pay-as-you-go).",
     )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Pay-as-you-go: standard API access with sk- key.",
-    )?;
+    renderer.line(MessageStyle::Info, "Pay-as-you-go: standard API access with sk- key.")?;
     renderer.line(
         MessageStyle::Info,
         "Token Plan: subscription-based access with tp- key. Includes more models.",

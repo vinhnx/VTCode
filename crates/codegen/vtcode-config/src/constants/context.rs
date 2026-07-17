@@ -64,7 +64,5 @@ pub const EXTENDED_CONTEXT_ELIGIBLE_MODELS: &[&str] = &[
 
 /// Check if a model is eligible for 1M context window
 pub fn supports_extended_context(model: &str) -> bool {
-    EXTENDED_CONTEXT_ELIGIBLE_MODELS
-        .iter()
-        .any(|m| model.contains(m))
+    EXTENDED_CONTEXT_ELIGIBLE_MODELS.iter().any(|m| model.contains(m))
 }

@@ -18,12 +18,7 @@ pub(crate) fn resolve_full_auto_primary_agent_runtime(
     primary_agent_explicitly_configured: bool,
 ) -> Result<FullAutoPrimaryAgentRuntime> {
     let discovered = discover_subagents(&SubagentDiscoveryInput::new(workspace.to_path_buf()))
-        .with_context(|| {
-            format!(
-                "Failed to discover primary agents in {}",
-                workspace.display()
-            )
-        })?;
+        .with_context(|| format!("Failed to discover primary agents in {}", workspace.display()))?;
 
     resolve_full_auto_primary_agent_runtime_from_specs(
         &discovered.effective,
@@ -48,10 +43,7 @@ fn resolve_full_auto_primary_agent_runtime_from_specs(
     let mut runtime_vt_cfg = build_primary_agent_runtime_config(vt_cfg, &active_primary_agent);
     runtime_vt_cfg.runtime_agent_permissions = Some(active_primary_agent.permissions.clone());
 
-    Ok(FullAutoPrimaryAgentRuntime {
-        vt_cfg: runtime_vt_cfg,
-        active_primary_agent,
-    })
+    Ok(FullAutoPrimaryAgentRuntime { vt_cfg: runtime_vt_cfg, active_primary_agent })
 }
 
 #[cfg(test)]
@@ -79,15 +71,9 @@ mod tests {
         .expect("defaulted auto should resolve");
 
         assert_eq!(resolved.active_primary_agent.identity.name, "auto");
-        assert_eq!(
-            resolved.active_primary_agent.instructions,
-            "Custom auto instructions"
-        );
+        assert_eq!(resolved.active_primary_agent.instructions, "Custom auto instructions");
         assert_eq!(resolved.vt_cfg.agent.default_model, "gpt-5");
-        assert_eq!(
-            resolved.vt_cfg.agent.reasoning_effort,
-            ReasoningEffortLevel::High
-        );
+        assert_eq!(resolved.vt_cfg.agent.reasoning_effort, ReasoningEffortLevel::High);
         assert_eq!(
             resolved
                 .vt_cfg

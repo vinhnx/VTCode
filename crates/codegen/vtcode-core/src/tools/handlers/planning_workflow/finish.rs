@@ -72,9 +72,7 @@ impl Tool for FinishPlanningTool {
 
         // Merge optional plan task tracker sidecar content (if present) so the
         // confirmation modal and readiness checks see the full plan state.
-        let tracker_file = plan_file
-            .as_ref()
-            .and_then(|path| tracker_file_for_plan_file(path));
+        let tracker_file = plan_file.as_ref().and_then(|path| tracker_file_for_plan_file(path));
         let tracker_content = if let Some(ref path) = tracker_file {
             if path.exists() {
                 read_file_with_context(path, "plan tracker file").await.ok()
@@ -95,17 +93,12 @@ impl Tool for FinishPlanningTool {
             )
         });
 
-        let plan_validation = plan_content
-            .as_deref()
-            .map(validate_plan_content)
-            .unwrap_or_default();
+        let plan_validation =
+            plan_content.as_deref().map(validate_plan_content).unwrap_or_default();
         let plan_ready = plan_validation.is_ready();
         let plan_recently_updated =
             if let (Some(path), Some(baseline)) = (plan_file.as_ref(), plan_baseline) {
-                match tokio::fs::metadata(path)
-                    .await
-                    .and_then(|meta| meta.modified())
-                {
+                match tokio::fs::metadata(path).await.and_then(|meta| meta.modified()) {
                     Ok(modified) => modified > baseline,
                     Err(_) => false,
                 }

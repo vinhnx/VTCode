@@ -49,10 +49,8 @@ impl OpenAiCompatSpec for MoonshotSpec {
         if let Some(effort) = request.reasoning_effort
             && is_thinking_model(&request.model)
         {
-            payload.insert(
-                "reasoning_effort".to_string(),
-                Value::String(effort.as_str().to_string()),
-            );
+            payload
+                .insert("reasoning_effort".to_string(), Value::String(effort.as_str().to_string()));
         }
         Ok(())
     }
@@ -102,10 +100,7 @@ mod tests {
 
     #[test]
     fn golden_payload_basic_shape() {
-        let payload = provider()
-            .core
-            .convert_request(&base_request("kimi-k2.7"))
-            .unwrap();
+        let payload = provider().core.convert_request(&base_request("kimi-k2.7")).unwrap();
 
         assert_eq!(payload["model"], "kimi-k2.7");
         // Moonshot does not inject the system prompt into messages.

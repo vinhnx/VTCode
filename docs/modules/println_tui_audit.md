@@ -50,8 +50,8 @@ If `select_from_specs` succeeds but a subsequent `sync_primary_agent_hook_runtim
 | `src/main.rs`, `src/main_helpers/` | various | Startup/shutdown, not TUI |
 | `src/process_hardening.rs` | various | `eprintln!` for error messages |
 | `src/startup/first_run_prompts/` | various | First-run setup, not TUI |
-| `vtcode-ui/src/tui/core_tui/session/terminal_title.rs` | 261-266 | Writes to stdout (TUI uses stderr) |
-| `vtcode-ui/src/tui/core_tui/panic_hook.rs` | 89-208 | `eprintln!` in panic hook by design |
+| `crates/codegen/vtcode-ui/src/tui/core_tui/session/terminal_title.rs` | 261-266 | Writes to stdout (TUI uses stderr) |
+| `crates/codegen/vtcode-ui/src/tui/core_tui/panic_hook.rs` | 89-208 | `eprintln!` in panic hook by design |
 
 ## Recommendations
 

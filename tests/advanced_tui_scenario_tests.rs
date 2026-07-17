@@ -239,10 +239,7 @@ fn test_ui_message_combinations() {
             "error_scenario",
             vec![
                 (InlineMessageKind::User, "Run this command"),
-                (
-                    InlineMessageKind::Error,
-                    "Command failed with error: Permission denied",
-                ),
+                (InlineMessageKind::Error, "Command failed with error: Permission denied"),
                 (
                     InlineMessageKind::Agent,
                     "I encountered an error. Would you like me to try again with sudo?",
@@ -252,10 +249,7 @@ fn test_ui_message_combinations() {
         (
             "tool_usage",
             vec![
-                (
-                    InlineMessageKind::User,
-                    "Show me files in current directory",
-                ),
+                (InlineMessageKind::User, "Show me files in current directory"),
                 (InlineMessageKind::Tool, "run_pty_cmd([\"ls\", \"-la\"])"),
                 (InlineMessageKind::Pty, "file1.txt  file2.rs  src/"),
                 (
@@ -267,10 +261,8 @@ fn test_ui_message_combinations() {
     ];
 
     for (name, messages) in test_cases {
-        let message_repr: Vec<String> = messages
-            .iter()
-            .map(|(kind, text)| format!("{kind:?}: {text}"))
-            .collect();
+        let message_repr: Vec<String> =
+            messages.iter().map(|(kind, text)| format!("{kind:?}: {text}")).collect();
         let expected = match name {
             "user_agent_exchange" => r#"["User: Hello!", "Agent: Hi there! How can I help you?"]"#,
             "error_scenario" => {

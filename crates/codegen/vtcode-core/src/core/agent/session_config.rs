@@ -79,10 +79,7 @@ mod tests {
     #[test]
     fn captures_origin_metadata_from_workspace_config() -> Result<()> {
         let temp = TempDir::new()?;
-        fs::write(
-            temp.path().join("vtcode.toml"),
-            "[agent]\nprovider = \"openai\"\n",
-        )?;
+        fs::write(temp.path().join("vtcode.toml"), "[agent]\nprovider = \"openai\"\n")?;
 
         let snapshot = ResolvedSessionConfig::load_from_workspace(temp.path())?;
 

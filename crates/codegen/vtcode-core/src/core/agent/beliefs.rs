@@ -268,10 +268,7 @@ pub enum BeliefCategory {
 }
 
 fn unix_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -304,9 +301,7 @@ mod tests {
         beliefs.add_or_reinforce(
             "low confidence",
             0.05,
-            BeliefSource::ToolResult {
-                tool: "ls".to_string(),
-            },
+            BeliefSource::ToolResult { tool: "ls".to_string() },
         );
         if let Some(low) = beliefs.about_system.last_mut() {
             low.last_reinforced_at = 1; // Unix epoch — very old
@@ -333,9 +328,7 @@ mod tests {
             id: "test_1".to_string(),
             statement: "the answer is 42".to_string(),
             confidence: 0.95,
-            source: BeliefSource::Inference {
-                by: "test".to_string(),
-            },
+            source: BeliefSource::Inference { by: "test".to_string() },
             created_at: 1000,
             last_reinforced_at: 1000,
             reinforcement_count: 1,
@@ -348,24 +341,12 @@ mod tests {
 
     #[test]
     fn test_belief_source_default_category() {
+        assert_eq!(BeliefSource::UserStatement.default_category(), BeliefCategory::User);
         assert_eq!(
-            BeliefSource::UserStatement.default_category(),
-            BeliefCategory::User
-        );
-        assert_eq!(
-            BeliefSource::ToolResult {
-                tool: "read_file".to_string()
-            }
-            .default_category(),
+            BeliefSource::ToolResult { tool: "read_file".to_string() }.default_category(),
             BeliefCategory::System
         );
-        assert_eq!(
-            BeliefSource::SystemPrompt.default_category(),
-            BeliefCategory::System
-        );
-        assert_eq!(
-            BeliefSource::PersistentMemory.default_category(),
-            BeliefCategory::User
-        );
+        assert_eq!(BeliefSource::SystemPrompt.default_category(), BeliefCategory::System);
+        assert_eq!(BeliefSource::PersistentMemory.default_category(), BeliefCategory::User);
     }
 }

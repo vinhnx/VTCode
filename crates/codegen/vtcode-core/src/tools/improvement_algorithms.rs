@@ -122,10 +122,7 @@ pub fn detect_pattern(history: &[ToolCallRecord], window_size: usize) -> Pattern
     let first = &recent[0];
 
     // --- Exact duplicates ---
-    if recent
-        .iter()
-        .all(|r| r.tool == first.tool && r.args_hash == first.args_hash)
-    {
+    if recent.iter().all(|r| r.tool == first.tool && r.args_hash == first.args_hash) {
         return if recent.len() >= 3 {
             PatternState::Loop
         } else {

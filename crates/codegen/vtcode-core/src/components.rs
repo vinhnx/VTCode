@@ -505,8 +505,7 @@ pub struct CachedResults;
 
 impl<Ctx: HasExecutionCaches> CacheProvider<Ctx> for CachedResults {
     fn get_json(ctx: &Ctx, tool_name: &str, args: &Value) -> Option<Value> {
-        ctx.json_cache()
-            .get_owned(&build_execution_cache_key(tool_name, args))
+        ctx.json_cache().get_owned(&build_execution_cache_key(tool_name, args))
     }
 
     fn put_json(ctx: &Ctx, tool_name: &str, args: &Value, result: &Value) {
@@ -516,8 +515,7 @@ impl<Ctx: HasExecutionCaches> CacheProvider<Ctx> for CachedResults {
     }
 
     fn get_dual(ctx: &Ctx, tool_name: &str, args: &Value) -> Option<SplitToolResult> {
-        ctx.dual_cache()
-            .get_owned(&build_execution_cache_key(tool_name, args))
+        ctx.dual_cache().get_owned(&build_execution_cache_key(tool_name, args))
     }
 
     fn put_dual(ctx: &Ctx, tool_name: &str, args: &Value, result: &SplitToolResult) {
@@ -1076,11 +1074,7 @@ where
             .await
             .map_err(|e| ToolCallError::respond(e.to_string()))?;
 
-        match self
-            .ctx
-            .execute_tool_json(&invocation.tool_name, args)
-            .await
-        {
+        match self.ctx.execute_tool_json(&invocation.tool_name, args).await {
             Ok(result) => {
                 let text = value_to_text(&result);
                 Ok(ToolOutput::simple(text))
@@ -1321,10 +1315,7 @@ pub fn wrap_tool_ci(
     tool: Arc<dyn Tool>,
     workspace_root: PathBuf,
 ) -> ToolFacade<ToolBridgeCtx<CiCtx>> {
-    let ctx = ToolBridgeCtx {
-        inner: tool,
-        runtime: CiCtx::new(workspace_root),
-    };
+    let ctx = ToolBridgeCtx { inner: tool, runtime: CiCtx::new(workspace_root) };
     ToolFacade::new(ctx)
 }
 

@@ -20,7 +20,7 @@ Implement in `tools/` (web_search, defuddle, outline_search are reference patter
 
 ## Adding an LLM Provider
 
-Implement in `vtcode-llm/src/providers/` (the canonical home). Use `adding-llm-providers` skill. Update `ModelId::all_models()` + `builtin_model_presets()`. Then add a re-export in `vtcode-core/src/llm/providers/mod.rs`.
+Implement in `crates/codegen/vtcode-llm/src/providers/` (the canonical home). Use `adding-llm-providers` skill. Update `ModelId::all_models()` + `builtin_model_presets()`. Then add a re-export in `crates/codegen/vtcode-core/src/llm/providers/mod.rs`.
 
 ## Gotchas
 
@@ -28,7 +28,7 @@ Implement in `vtcode-llm/src/providers/` (the canonical home). Use `adding-llm-p
 - Error classification is `vtcode_commons::classify_anyhow_error` → `ErrorCategory`; `UnifiedErrorKind`/`ToolErrorType` are derived views and `ToolExecutionError.error_type` always derives from `category`.
 - `lib.rs` is 500+ lines — append re-exports, don't restructure.
 - `#[cfg_attr(not(test), allow(...))]` clippy suppressions — do not remove.
-- Provider implementations live in `vtcode-llm/src/providers/`, not in core. Core's `llm/providers/` is a re-export facade.
+- Provider implementations live in `crates/codegen/vtcode-llm/src/providers/`, not in core. Core's `llm/providers/` is a re-export facade.
 - `llm/usage_cost.rs` is the canonical session-cost normalization: `raw_usd` for budget enforcement, `effective_usd` (cache-discounted) for display. Do not compute costs inline from `Usage`. `BudgetStatus::classify` is the single budget decision (used by both the runner `execute.rs` and binary `turn_loop.rs`) — do not re-derive `> max` / `>= threshold*max` inline.
 - `llm/request_gap.rs::RequestGapTracker` (+ `format_gap`) is the single home for cache-gap timing, embedded in both runloop `SessionStats` and headless `AgentSessionState` — do not re-add per-site `last_request_at` timers.
 - `context_reset.rs` is distinct from compaction: compaction preserves conversational continuity; context reset discards history. `should_reset()` is pure logic; `maybe_write_reset_*` writes the manifest. The runloop wires it via `summarize.rs` (on_compaction) and `continuation.rs` (on_stall).

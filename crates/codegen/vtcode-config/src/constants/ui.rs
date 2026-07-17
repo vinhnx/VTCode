@@ -165,10 +165,7 @@ pub const AGENT_MODE_HUE: &[(&str, &str)] = &[
 /// Resolve a primary-agent mode name to its standard ANSI hue
 /// (e.g. `"build"` -> `"red"`).
 pub fn agent_mode_hue(mode: &str) -> Option<&'static str> {
-    AGENT_MODE_HUE
-        .iter()
-        .find(|(m, _)| *m == mode)
-        .map(|(_, h)| *h)
+    AGENT_MODE_HUE.iter().find(|(m, _)| *m == mode).map(|(_, h)| *h)
 }
 
 // TUI tick rate constants for smooth scrolling
@@ -400,11 +397,7 @@ mod tests {
         let hues: Vec<&str> = AGENT_MODE_HUE.iter().map(|(_, h)| *h).collect();
         for i in 0..hues.len() {
             for j in (i + 1)..hues.len() {
-                assert_ne!(
-                    hues[i], hues[j],
-                    "mode hues {} and {} are identical",
-                    hues[i], hues[j]
-                );
+                assert_ne!(hues[i], hues[j], "mode hues {} and {} are identical", hues[i], hues[j]);
             }
         }
     }

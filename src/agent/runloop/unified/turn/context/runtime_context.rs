@@ -163,12 +163,7 @@ pub(crate) struct TurnProcessingContext<'a> {
 
 impl<'a> TurnProcessingContext<'a> {
     pub(crate) fn from_parts(parts: TurnProcessingContextParts<'a>) -> Self {
-        let TurnProcessingContextParts {
-            tool,
-            llm,
-            ui,
-            state,
-        } = parts;
+        let TurnProcessingContextParts { tool, llm, ui, state } = parts;
 
         Self {
             renderer: ui.renderer,
@@ -268,12 +263,7 @@ impl<'a> TurnProcessingContext<'a> {
             runtime_steering: self.runtime_steering,
         };
 
-        TurnProcessingContextParts {
-            tool,
-            llm,
-            ui,
-            state,
-        }
+        TurnProcessingContextParts { tool, llm, ui, state }
     }
 
     /// Creates a TurnLoopContext from this TurnProcessingContext.
@@ -281,12 +271,8 @@ impl<'a> TurnProcessingContext<'a> {
     pub(crate) fn as_turn_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
-        let TurnProcessingContextParts {
-            tool: tool_ctx,
-            llm: llm_ctx,
-            ui: ui_ctx,
-            state,
-        } = self.parts_mut();
+        let TurnProcessingContextParts { tool: tool_ctx, llm: llm_ctx, ui: ui_ctx, state } =
+            self.parts_mut();
 
         crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext::new(
             ui_ctx.renderer,
@@ -335,21 +321,16 @@ impl<'a> TurnProcessingContext<'a> {
     /// Creates a RunLoopContext directly from this TurnProcessingContext,
     /// skipping the intermediate TurnLoopContext conversion.
     pub(crate) fn as_run_loop_context(&mut self) -> RunLoopContext<'_> {
-        let TurnProcessingContextParts {
-            tool: tool_ctx,
-            llm: llm_ctx,
-            ui: ui_ctx,
-            state,
-        } = self.parts_mut();
+        let TurnProcessingContextParts { tool: tool_ctx, llm: llm_ctx, ui: ui_ctx, state } =
+            self.parts_mut();
 
-        let auto_permission = Some(
-            crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
+        let auto_permission =
+            Some(crate::agent::runloop::unified::run_loop_context::AutoPermissionRuntimeContext {
                 config: llm_ctx.config,
                 vt_cfg: llm_ctx.vt_cfg,
                 provider_client: llm_ctx.provider_client.as_mut(),
                 working_history: state.working_history.as_slice(),
-            },
-        );
+            });
 
         let mut ctx = RunLoopContext::new_with_auto_permission_context(
             ui_ctx.renderer,

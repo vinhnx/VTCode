@@ -22,10 +22,7 @@ pub async fn handle_memory_command() -> Result<MemoryReport> {
 /// Display memory report in human-readable format
 fn display_memory_report(report: &MemoryReport) {
     println!("\n{} Current Memory Usage:", style("[MEMORY]").dim());
-    println!(
-        "  RSS (Resident Set): {} MB",
-        style(format!("{:.1}", report.current_rss_mb)).cyan()
-    );
+    println!("  RSS (Resident Set): {} MB", style(format!("{:.1}", report.current_rss_mb)).cyan());
 
     println!("\n{} Thresholds:", style("[LIMITS]").dim());
     println!(
@@ -46,10 +43,7 @@ fn display_memory_report(report: &MemoryReport) {
     };
     println!("  Level: {pressure_colored}");
     println!("  Description: {}", report.pressure.description());
-    println!(
-        "  Usage: {:.1}% of hard limit",
-        style(format!("{:.1}", report.usage_percent)).cyan()
-    );
+    println!("  Usage: {:.1}% of hard limit", style(format!("{:.1}", report.usage_percent)).cyan());
 
     println!("\n{} Recommendations:", style("[RECOMMENDATIONS]").dim());
     match report.pressure {
@@ -79,11 +73,7 @@ fn display_memory_report(report: &MemoryReport) {
             println!(
                 "  [{}] {} MB - {}",
                 i + 1,
-                style(format!(
-                    "{:.1}",
-                    checkpoint.rss_bytes as f64 / (1024.0 * 1024.0)
-                ))
-                .cyan(),
+                style(format!("{:.1}", checkpoint.rss_bytes as f64 / (1024.0 * 1024.0))).cyan(),
                 style(&checkpoint.label).dim()
             );
         }

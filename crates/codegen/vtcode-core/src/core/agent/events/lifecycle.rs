@@ -132,15 +132,13 @@ fn summarize_list_items(output: &Value, items: &[Value]) -> String {
         .and_then(Value::as_u64)
         .unwrap_or(items.len() as u64);
 
-    let (files, directories) = items
-        .iter()
-        .fold((0u64, 0u64), |(files, directories), item| {
-            match item.get("type").and_then(Value::as_str) {
-                Some("file") => (files + 1, directories),
-                Some("directory") => (files, directories + 1),
-                _ => (files, directories),
-            }
-        });
+    let (files, directories) = items.iter().fold((0u64, 0u64), |(files, directories), item| {
+        match item.get("type").and_then(Value::as_str) {
+            Some("file") => (files + 1, directories),
+            Some("directory") => (files, directories + 1),
+            _ => (files, directories),
+        }
+    });
 
     let mut summary = format!("Listed {total} {}", pluralize(total, "item", "items"));
     if files > 0 || directories > 0 {
@@ -163,10 +161,7 @@ fn summarize_list_items(output: &Value, items: &[Value]) -> String {
 }
 
 fn summarize_file_list(output: &Value, files: &[Value]) -> String {
-    let total = output
-        .get("total")
-        .and_then(Value::as_u64)
-        .unwrap_or(files.len() as u64);
+    let total = output.get("total").and_then(Value::as_u64).unwrap_or(files.len() as u64);
     let mut summary = format!("Listed {total} {}", pluralize(total, "file", "files"));
 
     let samples = files
@@ -303,15 +298,14 @@ impl SharedLifecycleEmitter {
             return;
         }
         let item_id = self.next_item_id();
-        self.pending_events
-            .push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                item: ThreadItem {
-                    id: item_id,
-                    details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                        text: text.to_string(),
-                    }),
-                },
-            }));
+        self.pending_events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: item_id,
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                    text: text.to_string(),
+                }),
+            },
+        }));
     }
 
     /// Replace the current assistant streaming text. Returns `true` if the text changed.
@@ -339,12 +333,9 @@ impl SharedLifecycleEmitter {
     /// Emit a snapshot of the current assistant text as an item event.
     pub fn emit_assistant_snapshot(&mut self, item_id: Option<String>) -> bool {
         let item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        emit_text_snapshot(
-            &mut self.pending_events,
-            &mut self.assistant,
-            item_id,
-            |text| ThreadItemDetails::AgentMessage(AgentMessageItem { text }),
-        )
+        emit_text_snapshot(&mut self.pending_events, &mut self.assistant, item_id, |text| {
+            ThreadItemDetails::AgentMessage(AgentMessageItem { text })
+        })
     }
 
     /// Complete the assistant text stream, emitting a final completed event.
@@ -360,16 +351,15 @@ impl SharedLifecycleEmitter {
             return;
         }
         let item_id = self.next_item_id();
-        self.pending_events
-            .push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-                item: ThreadItem {
-                    id: item_id,
-                    details: ThreadItemDetails::Reasoning(ReasoningItem {
-                        text: text.to_string(),
-                        stage: self.reasoning_stage.clone(),
-                    }),
-                },
-            }));
+        self.pending_events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: item_id,
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                    text: text.to_string(),
+                    stage: self.reasoning_stage.clone(),
+                }),
+            },
+        }));
     }
 
     /// Replace the current reasoning streaming text. Returns `true` if the text changed.
@@ -407,17 +397,9 @@ impl SharedLifecycleEmitter {
     pub fn emit_reasoning_snapshot(&mut self, item_id: Option<String>) -> bool {
         let item_id = item_id.unwrap_or_else(|| self.next_item_id());
         let stage = self.reasoning_stage.clone();
-        emit_text_snapshot(
-            &mut self.pending_events,
-            &mut self.reasoning,
-            item_id,
-            move |text| {
-                ThreadItemDetails::Reasoning(ReasoningItem {
-                    text,
-                    stage: stage.clone(),
-                })
-            },
-        )
+        emit_text_snapshot(&mut self.pending_events, &mut self.reasoning, item_id, move |text| {
+            ThreadItemDetails::Reasoning(ReasoningItem { text, stage: stage.clone() })
+        })
     }
 
     /// Emit an update event reflecting the current reasoning stage.
@@ -428,16 +410,15 @@ impl SharedLifecycleEmitter {
         let Some(item_id) = self.reasoning.item_id.clone() else {
             return false;
         };
-        self.pending_events
-            .push(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
-                item: ThreadItem {
-                    id: item_id,
-                    details: ThreadItemDetails::Reasoning(ReasoningItem {
-                        text: self.reasoning.text.clone(),
-                        stage: self.reasoning_stage.clone(),
-                    }),
-                },
-            }));
+        self.pending_events.push(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+            item: ThreadItem {
+                id: item_id,
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                    text: self.reasoning.text.clone(),
+                    stage: self.reasoning_stage.clone(),
+                }),
+            },
+        }));
         true
     }
 
@@ -445,10 +426,7 @@ impl SharedLifecycleEmitter {
     pub fn complete_reasoning_stream(&mut self) -> bool {
         let stage = self.reasoning_stage.clone();
         complete_text_stream(&mut self.pending_events, &mut self.reasoning, move |text| {
-            ThreadItemDetails::Reasoning(ReasoningItem {
-                text,
-                stage: stage.clone(),
-            })
+            ThreadItemDetails::Reasoning(ReasoningItem { text, stage: stage.clone() })
         })
     }
 
@@ -460,15 +438,15 @@ impl SharedLifecycleEmitter {
         item_id: Option<String>,
     ) -> bool {
         let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        let buffer = self
-            .tool_calls
-            .entry(call_id.to_string())
-            .or_insert_with(|| ToolCallStreamState {
-                item_id: generated_item_id,
-                name: None,
-                arguments: String::new(),
-                started: false,
-            });
+        let buffer =
+            self.tool_calls
+                .entry(call_id.to_string())
+                .or_insert_with(|| ToolCallStreamState {
+                    item_id: generated_item_id,
+                    name: None,
+                    arguments: String::new(),
+                    started: false,
+                });
 
         if buffer.name.is_none() {
             buffer.name = tool_name;
@@ -500,15 +478,15 @@ impl SharedLifecycleEmitter {
         }
 
         let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        let buffer = self
-            .tool_calls
-            .entry(call_id.to_string())
-            .or_insert_with(|| ToolCallStreamState {
-                item_id: generated_item_id,
-                name: None,
-                arguments: String::new(),
-                started: false,
-            });
+        let buffer =
+            self.tool_calls
+                .entry(call_id.to_string())
+                .or_insert_with(|| ToolCallStreamState {
+                    item_id: generated_item_id,
+                    name: None,
+                    arguments: String::new(),
+                    started: false,
+                });
 
         if !buffer.started {
             buffer.started = true;
@@ -562,9 +540,7 @@ impl SharedLifecycleEmitter {
 
     #[must_use]
     pub fn tool_call_item_id(&self, call_id: &str) -> Option<&str> {
-        self.tool_calls
-            .get(call_id)
-            .map(|buffer| buffer.item_id.as_str())
+        self.tool_calls.get(call_id).map(|buffer| buffer.item_id.as_str())
     }
 
     pub fn sync_tool_call_arguments(
@@ -575,15 +551,15 @@ impl SharedLifecycleEmitter {
         item_id: Option<String>,
     ) -> bool {
         let generated_item_id = item_id.unwrap_or_else(|| self.next_item_id());
-        let buffer = self
-            .tool_calls
-            .entry(call_id.to_string())
-            .or_insert_with(|| ToolCallStreamState {
-                item_id: generated_item_id,
-                name: None,
-                arguments: String::new(),
-                started: false,
-            });
+        let buffer =
+            self.tool_calls
+                .entry(call_id.to_string())
+                .or_insert_with(|| ToolCallStreamState {
+                    item_id: generated_item_id,
+                    name: None,
+                    arguments: String::new(),
+                    started: false,
+                });
 
         if buffer.name.is_none() {
             buffer.name = tool_name;
@@ -704,10 +680,7 @@ fn complete_text_stream(
     state.started = false;
     let text = std::mem::take(&mut state.text);
     pending_events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: ThreadItem {
-            id: item_id,
-            details: build_details(text),
-        },
+        item: ThreadItem { id: item_id, details: build_details(text) },
     }));
     true
 }
@@ -842,14 +815,7 @@ pub fn tool_output_completed_event(
     output: impl Into<String>,
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_output_item(
-            &call_item_id,
-            tool_call_id,
-            status,
-            exit_code,
-            spool_path,
-            output,
-        ),
+        item: tool_output_item(&call_item_id, tool_call_id, status, exit_code, spool_path, output),
     })
 }
 
@@ -859,9 +825,7 @@ pub fn error_item_completed_event(item_id: String, message: impl Into<String>) -
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
         item: ThreadItem {
             id: item_id,
-            details: ThreadItemDetails::Error(ErrorItem {
-                message: message.into(),
-            }),
+            details: ThreadItemDetails::Error(ErrorItem { message: message.into() }),
         },
     })
 }
@@ -912,10 +876,7 @@ mod tests {
         }));
 
         assert_eq!(payload.aggregated_output, "");
-        assert_eq!(
-            payload.spool_path.as_deref(),
-            Some(".vtcode/context/tool_outputs/run-1.txt")
-        );
+        assert_eq!(payload.spool_path.as_deref(), Some(".vtcode/context/tool_outputs/run-1.txt"));
     }
 
     #[test]
@@ -985,18 +946,14 @@ mod tests {
         }));
 
         assert!(payload.aggregated_output.contains("Found 1 match"));
-        assert!(
-            payload
-                .aggregated_output
-                .contains("vtcode-tui/src/core_tui/runner/mod.rs")
-        );
+        assert!(payload.aggregated_output.contains("vtcode-tui/src/core_tui/runner/mod.rs"));
     }
 
     #[test]
     fn tool_output_payload_reports_empty_match_set() {
         let payload = tool_output_payload_from_value(&json!({
             "matches": [],
-            "path": "vtcode-core/src"
+            "path": "crates/codegen/vtcode-core/src"
         }));
 
         assert_eq!(payload.aggregated_output, "No matches found");
@@ -1013,15 +970,7 @@ mod tests {
         }));
 
         assert!(payload.aggregated_output.contains("No matches found"));
-        assert!(
-            payload
-                .aggregated_output
-                .contains("Pattern looks like a code fragment.")
-        );
-        assert!(
-            payload
-                .aggregated_output
-                .contains("Retry with a larger parseable pattern.")
-        );
+        assert!(payload.aggregated_output.contains("Pattern looks like a code fragment."));
+        assert!(payload.aggregated_output.contains("Retry with a larger parseable pattern."));
     }
 }

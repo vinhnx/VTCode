@@ -54,17 +54,11 @@ pub(super) fn persistent_memory_header_badge(
     }
 
     let text = if memory_status.pending_rollout_summaries > 0 {
-        format!(
-            "Memory: On ({} pending)",
-            memory_status.pending_rollout_summaries
-        )
+        format!("Memory: On ({} pending)", memory_status.pending_rollout_summaries)
     } else {
         "Memory: On".to_string()
     };
-    InlineHeaderStatusBadge {
-        text,
-        tone: InlineHeaderStatusTone::Ready,
-    }
+    InlineHeaderStatusBadge { text, tone: InlineHeaderStatusTone::Ready }
 }
 
 fn persistent_memory_header_highlight(

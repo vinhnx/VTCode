@@ -66,10 +66,7 @@ impl ToolPolicyManager {
     pub fn new_with_path(config_path: PathBuf) -> Result<Self> {
         let config = Self::load_or_create_config(&config_path)?;
 
-        Ok(Self {
-            config_path,
-            config,
-        })
+        Ok(Self { config_path, config })
     }
 
     /// Load existing config or create new one with all tools as "prompt"
@@ -95,9 +92,7 @@ impl ToolPolicyManager {
         // Add new tools as "prompt"
         for tool in &tools {
             if !current_tools.contains(tool) {
-                self.config
-                    .policies
-                    .insert(tool.clone(), ToolPolicy::Prompt);
+                self.config.policies.insert(tool.clone(), ToolPolicy::Prompt);
             }
         }
 
@@ -122,11 +117,7 @@ impl ToolPolicyManager {
 
     /// Get policy for a specific tool
     pub fn get_policy(&self, tool_name: &str) -> ToolPolicy {
-        self.config
-            .policies
-            .get(tool_name)
-            .cloned()
-            .unwrap_or(ToolPolicy::Prompt)
+        self.config.policies.get(tool_name).cloned().unwrap_or(ToolPolicy::Prompt)
     }
 
     /// Set policy for a specific tool
@@ -251,24 +242,12 @@ fn main() -> Result<()> {
 
     // Test 5: Check policy retrieval
     println!("{}", style("Test 5: Policy retrieval").cyan());
-    println!(
-        "read_file policy: {:?}",
-        policy_manager.get_policy("read_file")
-    );
-    println!(
-        "list_files policy: {:?}",
-        policy_manager.get_policy(tools::LIST_FILES)
-    );
-    println!(
-        "nonexistent_tool policy: {:?}",
-        policy_manager.get_policy("nonexistent_tool")
-    );
+    println!("read_file policy: {:?}", policy_manager.get_policy("read_file"));
+    println!("list_files policy: {:?}", policy_manager.get_policy(tools::LIST_FILES));
+    println!("nonexistent_tool policy: {:?}", policy_manager.get_policy("nonexistent_tool"));
     println!();
 
-    println!(
-        "{}",
-        style("✓ All tests completed successfully!").green().bold()
-    );
+    println!("{}", style("✓ All tests completed successfully!").green().bold());
     println!("The tool policy system is working correctly.");
     println!();
     println!("Key features demonstrated:");

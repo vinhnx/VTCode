@@ -35,10 +35,7 @@ pub struct TelemetryPipeline {
 
 impl TelemetryPipeline {
     pub fn new(config: TelemetryConfig) -> Self {
-        Self {
-            config,
-            events: Mutex::new(Vec::new()),
-        }
+        Self { config, events: Mutex::new(Vec::new()) }
     }
 
     pub async fn record(&self, event: TelemetryEvent) -> Result<()> {

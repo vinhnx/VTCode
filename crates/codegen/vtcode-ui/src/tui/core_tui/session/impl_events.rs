@@ -75,8 +75,7 @@ impl Session {
 
         let styles = render::modal_render_styles(self);
         let content_width =
-            area.width
-                .saturating_sub(inline_list::selection_padding_width() as u16) as usize;
+            area.width.saturating_sub(inline_list::selection_padding_width() as u16) as usize;
         let relative_row = usize::from(row.saturating_sub(area.y));
 
         if let Some(wizard) = self.wizard_overlay() {
@@ -379,8 +378,7 @@ impl Session {
                     }
 
                     self.mouse_drag_target = MouseDragTarget::Transcript;
-                    self.mouse_selection
-                        .start_selection(mouse_event.column, mouse_event.row);
+                    self.mouse_selection.start_selection(mouse_event.column, mouse_event.row);
                     self.mark_dirty();
                     self.handle_transcript_click(mouse_event);
                 }
@@ -475,10 +473,7 @@ impl Session {
     }
 
     pub(crate) fn handle_transcript_click(&mut self, mouse_event: MouseEvent) -> bool {
-        if !matches!(
-            mouse_event.kind,
-            MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
+        if !matches!(mouse_event.kind, MouseEventKind::Down(crossterm::event::MouseButton::Left)) {
             return false;
         }
 
@@ -575,10 +570,7 @@ impl Session {
     }
 
     pub(crate) fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {
-        if !matches!(
-            mouse_event.kind,
-            MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
+        if !matches!(mouse_event.kind, MouseEventKind::Down(crossterm::event::MouseButton::Left)) {
             return false;
         }
 

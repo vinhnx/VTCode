@@ -55,11 +55,7 @@ fn make_clickable_target(target: &str) -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let file_url = Url::from_file_path(resolve_editor_path(target.path(), &cwd)).ok()?;
     let suffix = target.location_suffix().unwrap_or("");
-    Some(format!(
-        "{scheme}://file{}{}",
-        file_url.as_str().trim_start_matches("file://"),
-        suffix
-    ))
+    Some(format!("{scheme}://file{}{}", file_url.as_str().trim_start_matches("file://"), suffix))
 }
 
 fn should_strip_inline_local_link_underline(target: &str) -> bool {
@@ -217,10 +213,7 @@ impl AnsiRenderer {
 
     fn should_render_style(&self, style: MessageStyle) -> bool {
         self.reasoning_visible
-            || !matches!(
-                style,
-                MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis
-            )
+            || !matches!(style, MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis)
     }
 
     fn is_diagnostic_error_style(style: MessageStyle) -> bool {
@@ -239,10 +232,7 @@ impl AnsiRenderer {
 
     fn indent_for_style(&self, style: MessageStyle) -> &'static str {
         if self.screen_reader_mode
-            && matches!(
-                style,
-                MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis
-            )
+            && matches!(style, MessageStyle::Reasoning | MessageStyle::ReasoningEmphasis)
         {
             "  [reasoning] "
         } else {
@@ -326,12 +316,7 @@ impl AnsiRenderer {
         if let Some(sink) = &mut self.sink {
             // Track if this line is empty
             self.last_line_was_empty = self.buffer.is_empty() && indent.is_empty();
-            sink.write_line(
-                style.style(),
-                indent,
-                &self.buffer,
-                Self::message_kind(style),
-            )?;
+            sink.write_line(style.style(), indent, &self.buffer, Self::message_kind(style))?;
             self.buffer.clear();
             return Ok(());
         }
@@ -479,11 +464,9 @@ impl AnsiRenderer {
         if !indent.is_empty() {
             self.buffer.push_str(indent);
         }
-        self.buffer
-            .push_str(&vtcode_commons::ansi_codes::hyperlink_open(url));
+        self.buffer.push_str(&vtcode_commons::ansi_codes::hyperlink_open(url));
         self.buffer.push_str(url);
-        self.buffer
-            .push_str(&vtcode_commons::ansi_codes::hyperlink_close());
+        self.buffer.push_str(&vtcode_commons::ansi_codes::hyperlink_close());
         let ansi_style = style.style();
         if self.color {
             writeln!(self.writer, "{ansi_style}{}{Reset}", self.buffer)?;
@@ -754,19 +737,12 @@ impl AnsiRenderer {
         let mut plain = String::new();
         if self.color {
             for segment in &line.segments {
-                let clickable_target = segment
-                    .link_target
-                    .as_deref()
-                    .and_then(make_clickable_target);
+                let clickable_target =
+                    segment.link_target.as_deref().and_then(make_clickable_target);
                 if let Some(target) = clickable_target.as_deref() {
                     write!(self.writer, "\u{1b}]8;;{target}\u{1b}\\")?;
                 }
-                write!(
-                    self.writer,
-                    "{style}{}{Reset}",
-                    segment.text,
-                    style = segment.style
-                )?;
+                write!(self.writer, "{style}{}{Reset}", segment.text, style = segment.style)?;
                 if clickable_target.is_some() {
                     write!(self.writer, "\u{1b}]8;;\u{1b}\\")?;
                 }
@@ -775,10 +751,8 @@ impl AnsiRenderer {
             writeln!(self.writer)?;
         } else {
             for segment in &line.segments {
-                let clickable_target = segment
-                    .link_target
-                    .as_deref()
-                    .and_then(make_clickable_target);
+                let clickable_target =
+                    segment.link_target.as_deref().and_then(make_clickable_target);
                 if let Some(target) = clickable_target.as_deref() {
                     write!(self.writer, "\u{1b}]8;;{target}\u{1b}\\")?;
                 }
@@ -873,10 +847,7 @@ impl InlineSink {
             return None;
         }
 
-        Some(LargeJsonPayload {
-            text: candidate,
-            line_count,
-        })
+        Some(LargeJsonPayload { text: candidate, line_count })
     }
 
     fn indent_multiline(text: &str, indent: &str) -> String {
@@ -910,8 +881,7 @@ impl InlineSink {
         if record_transcript {
             transcript::append(&full_text);
         }
-        self.handle
-            .append_pasted_message(kind, full_text, payload.line_count);
+        self.handle.append_pasted_message(kind, full_text, payload.line_count);
         Ok(())
     }
     #[cfg(feature = "tui")]
@@ -980,10 +950,7 @@ impl InlineSink {
         let fallback = self.resolve_fallback_style(base_style);
         let fallback_arc = Arc::new(fallback.clone());
         let theme_styles = theme::active_styles();
-        let highlight_cfg = self
-            .highlight_config
-            .enabled
-            .then_some(&self.highlight_config);
+        let highlight_cfg = self.highlight_config.enabled.then_some(&self.highlight_config);
         let mut rendered = render_markdown_to_lines_with_options(
             text,
             base_style,
@@ -1027,10 +994,7 @@ impl InlineSink {
             let mut segments = Vec::with_capacity(line.segments.len());
             let mut plain_line = String::with_capacity(120);
 
-            let has_content = line
-                .segments
-                .iter()
-                .any(|segment| !segment.text.trim().is_empty());
+            let has_content = line.segments.iter().any(|segment| !segment.text.trim().is_empty());
 
             if !indent.is_empty() && has_content {
                 segments.push(InlineSegment {
@@ -1067,10 +1031,7 @@ impl InlineSink {
                 }
                 inline_style.effects = converted.effects | fallback.effects;
                 plain_line.push_str(&segment.text);
-                segments.push(InlineSegment {
-                    text: segment.text,
-                    style: Arc::new(inline_style),
-                });
+                segments.push(InlineSegment { text: segment.text, style: Arc::new(inline_style) });
             }
 
             prepared.push(segments);
@@ -1082,10 +1043,7 @@ impl InlineSink {
             plain.push(String::new());
         }
 
-        let last_empty = plain
-            .last()
-            .map(|line| line.trim().is_empty())
-            .unwrap_or(true);
+        let last_empty = plain.last().map(|line| line.trim().is_empty()).unwrap_or(true);
 
         (prepared, plain, last_empty)
     }
@@ -1132,11 +1090,7 @@ impl InlineSink {
     }
 
     fn new(handle: InlineHandle, highlight_config: SyntaxHighlightingConfig) -> Self {
-        Self {
-            handle,
-            highlight_config,
-            table_max_width: None,
-        }
+        Self { handle, highlight_config, table_max_width: None }
     }
 
     fn set_highlight_config(&mut self, highlight_config: SyntaxHighlightingConfig) {
@@ -1151,8 +1105,7 @@ impl InlineSink {
         selected: Option<InlineListSelection>,
         search: Option<InlineListSearchConfig>,
     ) {
-        self.handle
-            .show_list_modal(title, lines, items, selected, search);
+        self.handle.show_list_modal(title, lines, items, selected, search);
     }
 
     fn show_secure_prompt_modal(&self, title: String, lines: Vec<String>, prompt_label: String) {
@@ -1462,10 +1415,7 @@ impl InlineSink {
         kind: InlineMessageKind,
     ) -> Result<()> {
         let converted = self.convert_segments(segments);
-        let plain = segments
-            .iter()
-            .map(|segment| segment.text.clone())
-            .collect::<String>();
+        let plain = segments.iter().map(|segment| segment.text.clone()).collect::<String>();
         self.handle.append_line(kind, converted);
         if Self::should_record_transcript(kind) {
             transcript::append(&plain);
@@ -1543,10 +1493,7 @@ mod tests {
         let segments = &converted[0];
         assert_eq!(segments.len(), 2);
         assert_eq!(segments[0].text, "red");
-        assert_eq!(
-            segments[0].style.color,
-            Some(AnsiColorEnum::Ansi(AnsiColor::Red))
-        );
+        assert_eq!(segments[0].style.color, Some(AnsiColorEnum::Ansi(AnsiColor::Red)));
         assert_eq!(segments[1].text, " plain");
         assert_eq!(segments[1].style.color, None);
     }
@@ -1580,8 +1527,7 @@ mod tests {
         // Use Tool kind to verify that multiple lines are combined into a single AppendLine command
         let kind = InlineMessageKind::Tool;
         let text = "one\ntwo\nthree";
-        sink.write_multiline(style.to_ansi_style(None), "", text, kind)
-            .unwrap();
+        sink.write_multiline(style.to_ansi_style(None), "", text, kind).unwrap();
 
         // We should receive exactly one AppendLine command
         let mut count = 0;
@@ -1689,9 +1635,7 @@ mod tests {
         };
 
         // This should not create an extra empty line after "line 2"
-        renderer
-            .line(MessageStyle::Tool, "line 1\nline 2\n")
-            .unwrap();
+        renderer.line(MessageStyle::Tool, "line 1\nline 2\n").unwrap();
 
         // Previously, this would have added an extra empty line due to the trailing \n
         // With our fix, it should only process the actual content lines
@@ -1708,9 +1652,7 @@ mod tests {
         renderer.set_show_diagnostics_in_transcript(false);
         transcript::clear();
 
-        renderer
-            .line(MessageStyle::Error, "fatal: hidden transcript failure")
-            .unwrap();
+        renderer.line(MessageStyle::Error, "fatal: hidden transcript failure").unwrap();
 
         let mut saw_append = false;
         while let Ok(command) = receiver.try_recv() {
@@ -1718,10 +1660,7 @@ mod tests {
                 saw_append = true;
             }
         }
-        assert!(
-            saw_append,
-            "error output should still be visible in inline UI"
-        );
+        assert!(saw_append, "error output should still be visible in inline UI");
         assert!(
             !transcript::snapshot()
                 .iter()
@@ -1738,9 +1677,7 @@ mod tests {
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         renderer.set_show_diagnostics_in_transcript(true);
-        renderer
-            .line(MessageStyle::Error, "fatal: visible in transcript")
-            .unwrap();
+        renderer.line(MessageStyle::Error, "fatal: visible in transcript").unwrap();
 
         let mut saw_append = false;
         while let Ok(command) = receiver.try_recv() {
@@ -1773,12 +1710,7 @@ mod tests {
         let mut saw_append_line = false;
         while let Ok(command) = receiver.try_recv() {
             match command {
-                InlineCommand::AppendPastedMessage {
-                    kind,
-                    text,
-                    line_count,
-                    ..
-                } => {
+                InlineCommand::AppendPastedMessage { kind, text, line_count, .. } => {
                     saw_pasted = true;
                     assert_eq!(kind, InlineMessageKind::Pty);
                     assert!(text.contains("\"end\": true"));
@@ -1803,16 +1735,13 @@ mod tests {
 
         let cwd = std::env::current_dir().expect("current dir");
         let expected =
-            Url::from_file_path(cwd.join("vtcode-core/src/utils/ansi.rs")).expect("file url");
+            Url::from_file_path(cwd.join("crates/codegen/vtcode-core/src/utils/ansi.rs")).expect("file url");
         let clickable =
-            make_clickable_target("./vtcode-core/src/utils/ansi.rs:42").expect("clickable target");
+            make_clickable_target("./crates/codegen/vtcode-core/src/utils/ansi.rs:42").expect("clickable target");
 
         assert_eq!(
             clickable,
-            format!(
-                "vscode://file{}:42",
-                expected.as_str().trim_start_matches("file://")
-            )
+            format!("vscode://file{}:42", expected.as_str().trim_start_matches("file://"))
         );
 
         apply_file_opener_config(original);
@@ -1840,10 +1769,7 @@ mod tests {
         let clickable = make_clickable_target("/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12")
             .expect("clickable target");
 
-        assert_eq!(
-            clickable,
-            "vscode://file/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12"
-        );
+        assert_eq!(clickable, "vscode://file/tmp/Example%20Folder/R%C3%A9sum%C3%A9.md:12");
 
         apply_file_opener_config(original);
     }

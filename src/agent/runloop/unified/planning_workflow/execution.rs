@@ -70,11 +70,8 @@ pub(crate) async fn handle_start_planning(
         return None;
     }
 
-    let already_approved = allow_preapproved
-        && args_val
-            .get("approved")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+    let already_approved =
+        allow_preapproved && args_val.get("approved").and_then(Value::as_bool).unwrap_or(false);
     let tool_args = if already_approved {
         args_val.clone()
     } else {
@@ -100,10 +97,8 @@ pub(crate) async fn handle_start_planning(
 
     if let ToolExecutionStatus::Success { ref output, .. } = tool_result {
         let status = output.get("status").and_then(|s| s.as_str());
-        let requires_confirmation = output
-            .get("requires_confirmation")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let requires_confirmation =
+            output.get("requires_confirmation").and_then(Value::as_bool).unwrap_or(false);
 
         if status == Some(PLAN_STATUS_PENDING_CONFIRMATION) && requires_confirmation {
             return Some(
@@ -164,9 +159,8 @@ pub(crate) async fn handle_finish_planning(
         return None;
     }
 
-    let require_confirmation = vt_cfg
-        .map(|cfg| cfg.agent.require_plan_confirmation)
-        .unwrap_or(true);
+    let require_confirmation =
+        vt_cfg.map(|cfg| cfg.agent.require_plan_confirmation).unwrap_or(true);
 
     let tool_result = execute_tool_with_timeout_ref_prevalidated(
         ctx.tool_registry,
@@ -183,10 +177,8 @@ pub(crate) async fn handle_finish_planning(
 
     if let ToolExecutionStatus::Success { ref output, .. } = tool_result {
         let status = output.get("status").and_then(|s| s.as_str());
-        let requires_confirmation_from_result = output
-            .get("requires_confirmation")
-            .and_then(|r| r.as_bool())
-            .unwrap_or(false);
+        let requires_confirmation_from_result =
+            output.get("requires_confirmation").and_then(|r| r.as_bool()).unwrap_or(false);
 
         match finish_planning_disposition(
             status,
@@ -205,19 +197,17 @@ pub(crate) async fn handle_finish_planning(
                     target: "vtcode.planning_workflow",
                     "Plan confirmation disabled via config, auto-approving with coder profile (mutating tools enabled)"
                 );
-                return Some(ToolPipelineOutcome::from_status(
-                    ToolExecutionStatus::Success {
-                        output: serde_json::json!({
-                            "status": PLAN_STATUS_APPROVED,
-                            "action": "execute",
-                            "auto_accept": true,
-                            "message": "Plan confirmation disabled. Proceeding with implementation."
-                        }),
-                        stdout: None,
-                        modified_files: vec![],
-                        command_success: true,
-                    },
-                ));
+                return Some(ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+                    output: serde_json::json!({
+                        "status": PLAN_STATUS_APPROVED,
+                        "action": "execute",
+                        "auto_accept": true,
+                        "message": "Plan confirmation disabled. Proceeding with implementation."
+                    }),
+                    stdout: None,
+                    modified_files: vec![],
+                    command_success: true,
+                }));
             }
             FinishPlanningDisposition::Passthrough => {
                 // When the plan is not ready but the user explicitly requested
@@ -357,10 +347,7 @@ fn build_plan_content(output: &Value) -> PlanContent {
             .and_then(|t| t.as_str())
             .unwrap_or("Implementation Plan")
             .to_string();
-        let file_path = output
-            .get("plan_file")
-            .and_then(|p| p.as_str())
-            .map(|s| s.to_string());
+        let file_path = output.get("plan_file").and_then(|p| p.as_str()).map(|s| s.to_string());
         PlanContent::from_markdown(title, raw_content, file_path)
     } else {
         let plan_summary_json = output.get("plan_summary").cloned().unwrap_or_default();
@@ -376,14 +363,8 @@ async fn handle_enter_pending_confirmation(
     ctrl_c_notify: &Arc<Notify>,
     max_tool_retries: usize,
 ) -> ToolPipelineOutcome {
-    let description = output
-        .get("description")
-        .and_then(Value::as_str)
-        .map(|s| s.to_string());
-    let plan_file = output
-        .get("plan_file")
-        .and_then(Value::as_str)
-        .map(|s| s.to_string());
+    let description = output.get("description").and_then(Value::as_str).map(|s| s.to_string());
+    let plan_file = output.get("plan_file").and_then(Value::as_str).map(|s| s.to_string());
 
     let decision = match present_start_planning_confirmation(
         ctx.handle,

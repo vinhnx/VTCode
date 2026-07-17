@@ -32,10 +32,7 @@ pub fn generate_temporal_context(use_utc: bool) -> String {
         )
     } else {
         let now: DateTime<Local> = Local::now();
-        format!(
-            "\n\nCurrent date and time: {}",
-            now.format("%A, %B %d, %Y at %I:%M:%S %p %Z")
-        )
+        format!("\n\nCurrent date and time: {}", now.format("%A, %B %d, %Y at %I:%M:%S %p %Z"))
     }
 }
 
@@ -46,24 +43,15 @@ mod tests {
     #[test]
     fn test_temporal_context_utc_format() {
         let context = generate_temporal_context(true);
-        assert!(
-            context.contains("Current date and time (UTC):"),
-            "Should include UTC label"
-        );
-        assert!(
-            context.contains("T"),
-            "Should use RFC3339 format with T separator"
-        );
+        assert!(context.contains("Current date and time (UTC):"), "Should include UTC label");
+        assert!(context.contains("T"), "Should use RFC3339 format with T separator");
         assert!(context.contains("Z"), "Should include Z timezone indicator");
     }
 
     #[test]
     fn test_temporal_context_local_format() {
         let context = generate_temporal_context(false);
-        assert!(
-            context.contains("Current date and time:"),
-            "Should include date/time label"
-        );
+        assert!(context.contains("Current date and time:"), "Should include date/time label");
         assert!(context.contains(" at "), "Should include 'at' separator");
         // Check for day of week (will be one of the weekdays)
         let has_weekday = context.contains("Monday")
@@ -84,10 +72,7 @@ mod tests {
         assert!(!utc.is_empty(), "UTC context should not be empty");
         assert!(!local.is_empty(), "Local context should not be empty");
         assert!(utc.len() > 30, "UTC context should have reasonable length");
-        assert!(
-            local.len() > 40,
-            "Local context should have reasonable length"
-        );
+        assert!(local.len() > 40, "Local context should have reasonable length");
     }
 
     #[test]
@@ -95,13 +80,7 @@ mod tests {
         let utc = generate_temporal_context(true);
         let local = generate_temporal_context(false);
 
-        assert!(
-            utc.starts_with("\n\n"),
-            "Should start with double newline for spacing"
-        );
-        assert!(
-            local.starts_with("\n\n"),
-            "Should start with double newline for spacing"
-        );
+        assert!(utc.starts_with("\n\n"), "Should start with double newline for spacing");
+        assert!(local.starts_with("\n\n"), "Should start with double newline for spacing");
     }
 }

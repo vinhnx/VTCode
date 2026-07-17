@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
 ### Module Structure
 
 ```
-vtcode-llm/src/providers/
+crates/codegen/vtcode-llm/src/providers/
 ├── lmstudio.rs        # LM Studio provider implementation
 ├── lmstudio/
 │   └── client.rs      # Low-level HTTP client (LMStudioClient)

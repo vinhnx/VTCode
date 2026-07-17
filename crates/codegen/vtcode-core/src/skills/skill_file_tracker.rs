@@ -52,10 +52,8 @@ impl SkillFileTracker {
         // Extract potential filenames from output
         for pattern in &self.file_patterns {
             for capture in pattern.captures_iter(output) {
-                if let Some(filename) = capture
-                    .get(1)
-                    .map(|m| m.as_str())
-                    .filter(|f| !Self::is_false_positive(f))
+                if let Some(filename) =
+                    capture.get(1).map(|m| m.as_str()).filter(|f| !Self::is_false_positive(f))
                 {
                     detected_files.insert(filename.to_string());
                 }
@@ -100,12 +98,7 @@ impl SkillFileTracker {
         let summary = self.generate_verification_summary(&verified_files, &missing_files);
         let suggestion = self.generate_user_suggestion(&verified_files, &missing_files);
 
-        Ok(SkillFileVerification {
-            verified_files,
-            missing_files,
-            summary,
-            suggestion,
-        })
+        Ok(SkillFileVerification { verified_files, missing_files, summary, suggestion })
     }
 
     /// Post-process skill output to add file verification information
@@ -331,11 +324,8 @@ Output saved to: chart.png
         assert_eq!(result.verified_files.len(), 0); // No files actually created
         assert_eq!(result.missing_files.len(), 3); // All detected but missing
 
-        let missing_names: Vec<String> = result
-            .missing_files
-            .iter()
-            .map(|m| m.filename.clone())
-            .collect();
+        let missing_names: Vec<String> =
+            result.missing_files.iter().map(|m| m.filename.clone()).collect();
 
         assert!(missing_names.contains(&"quarterly_report.pdf".to_string()));
         assert!(missing_names.contains(&"summary.csv".to_string()));
@@ -348,10 +338,7 @@ Output saved to: chart.png
         let tracker = SkillFileTracker::new(temp_dir.path().to_path_buf());
 
         let original = "Generated: report.pdf".to_string();
-        let enhanced = tracker
-            .enhance_skill_output(original.clone())
-            .await
-            .unwrap();
+        let enhanced = tracker.enhance_skill_output(original.clone()).await.unwrap();
 
         assert!(enhanced.contains("Generated: report.pdf"));
         assert!(enhanced.contains("Generated Files") || enhanced.contains("Missing Files"));

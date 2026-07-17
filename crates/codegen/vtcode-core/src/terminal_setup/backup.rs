@@ -85,14 +85,9 @@ impl ConfigBackupManager {
 
     /// List all available backups for a config file
     pub fn list_backups(&self, config_path: &Path) -> Result<Vec<PathBuf>> {
-        let config_name = config_path
-            .file_name()
-            .context("Invalid config path")?
-            .to_string_lossy();
+        let config_name = config_path.file_name().context("Invalid config path")?.to_string_lossy();
 
-        let config_dir = config_path
-            .parent()
-            .context("Config file has no parent directory")?;
+        let config_dir = config_path.parent().context("Config file has no parent directory")?;
 
         if !config_dir.exists() {
             return Ok(Vec::new());
@@ -156,15 +151,10 @@ impl ConfigBackupManager {
     fn generate_backup_path(&self, config_path: &Path) -> Result<PathBuf> {
         let timestamp = Local::now().format("%Y%m%d_%H%M%S_%6f");
 
-        let config_name = config_path
-            .file_name()
-            .context("Invalid config path")?
-            .to_string_lossy();
+        let config_name = config_path.file_name().context("Invalid config path")?.to_string_lossy();
 
         let backup_name = format!("{config_name}.vtcode_backup_{timestamp}");
-        let parent = config_path
-            .parent()
-            .context("Config file has no parent directory")?;
+        let parent = config_path.parent().context("Config file has no parent directory")?;
 
         let mut backup_path = parent.join(&backup_name);
         let mut collision_suffix: u32 = 0;
@@ -196,10 +186,7 @@ mod tests {
         let backup_path = manager.backup_config(&config_path).unwrap();
 
         assert!(backup_path.exists());
-        assert_eq!(
-            fs::read_to_string(&backup_path).unwrap(),
-            "original content"
-        );
+        assert_eq!(fs::read_to_string(&backup_path).unwrap(), "original content");
 
         // Modify original
         fs::write(&config_path, "modified content").unwrap();
@@ -207,10 +194,7 @@ mod tests {
         // Restore from backup
         manager.restore_backup(&config_path, &backup_path).unwrap();
 
-        assert_eq!(
-            fs::read_to_string(&config_path).unwrap(),
-            "original content"
-        );
+        assert_eq!(fs::read_to_string(&config_path).unwrap(), "original content");
     }
 
     #[test]

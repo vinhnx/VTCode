@@ -106,8 +106,7 @@ impl ToolCallSafetyValidator {
 
     /// Override per-turn and session limits based on runtime config
     pub(crate) fn set_limits(&self, max_per_turn: usize, max_per_session: usize) {
-        self.safety_gateway
-            .set_limits(max_per_turn, max_per_session);
+        self.safety_gateway.set_limits(max_per_turn, max_per_session);
     }
 
     /// Increase the session tool limit
@@ -118,10 +117,8 @@ impl ToolCallSafetyValidator {
     #[cfg(test)]
     pub fn set_rate_limit_per_second(&self, limit: usize) {
         if limit > 0 {
-            let mut test_rate_limits = self
-                .test_rate_limits
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut test_rate_limits =
+                self.test_rate_limits.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             test_rate_limits.per_second = limit;
             self.safety_gateway
                 .set_rate_limits(test_rate_limits.per_second, test_rate_limits.per_minute);
@@ -187,15 +184,9 @@ fn map_gateway_violation(violation: Option<GatewaySafetyError>, reason: &str) ->
         Some(GatewaySafetyError::SessionLimitReached { max }) => {
             SafetyError::SessionLimitReached { max }
         }
-        Some(GatewaySafetyError::RateLimitExceeded {
-            current,
-            max,
-            window,
-        }) => SafetyError::RateLimitExceeded {
-            current,
-            max,
-            window,
-        },
+        Some(GatewaySafetyError::RateLimitExceeded { current, max, window }) => {
+            SafetyError::RateLimitExceeded { current, max, window }
+        }
         Some(err) => SafetyError::Other(anyhow!(err.to_string())),
         None => SafetyError::Other(anyhow!(reason.to_string())),
     }
@@ -228,14 +219,8 @@ mod tests {
         validator.set_rate_limit_enforcement(true);
         validator.start_turn();
 
-        validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
-        validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
+        validator.validate_call("read_file", &json!({})).await.unwrap();
+        validator.validate_call("read_file", &json!({})).await.unwrap();
         assert!(matches!(
             validator.validate_call("read_file", &json!({})).await,
             Err(SafetyError::RateLimitExceeded { .. })
@@ -248,16 +233,10 @@ mod tests {
         validator.start_turn();
 
         // Safe tools pass without approval
-        validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
+        validator.validate_call("read_file", &json!({})).await.unwrap();
 
         // Destructive tools now correctly require approval instead of silently passing
-        let err = validator
-            .validate_call("delete_file", &json!({}))
-            .await
-            .unwrap_err();
+        let err = validator.validate_call("delete_file", &json!({})).await.unwrap_err();
         assert!(
             matches!(err, SafetyError::NeedsApproval(_)),
             "destructive tool should require approval, got: {err:?}"
@@ -273,14 +252,8 @@ mod tests {
         let validator = ToolCallSafetyValidator::with_gateway(gateway);
         validator.start_turn();
 
-        validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
-        validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
+        validator.validate_call("read_file", &json!({})).await.unwrap();
+        validator.validate_call("read_file", &json!({})).await.unwrap();
     }
 
     #[tokio::test]
@@ -289,31 +262,12 @@ mod tests {
         validator.set_limits(2, 3);
 
         validator.start_turn();
-        validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
-        validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
-        assert!(
-            validator
-                .validate_call("read_file", &json!({}))
-                .await
-                .is_err()
-        );
+        validator.validate_call("read_file", &json!({})).await.unwrap();
+        validator.validate_call("read_file", &json!({})).await.unwrap();
+        assert!(validator.validate_call("read_file", &json!({})).await.is_err());
 
         validator.start_turn();
-        validator
-            .validate_call("read_file", &json!({}))
-            .await
-            .unwrap();
-        assert!(
-            validator
-                .validate_call("read_file", &json!({}))
-                .await
-                .is_err()
-        );
+        validator.validate_call("read_file", &json!({})).await.unwrap();
+        assert!(validator.validate_call("read_file", &json!({})).await.is_err());
     }
 }

@@ -22,10 +22,7 @@ pub struct SlashCommandItem {
 
 impl SlashCommandItem {
     pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            description: description.into(),
-        }
+        Self { name: name.into(), description: description.into() }
     }
 }
 
@@ -221,9 +218,8 @@ impl PlanContent {
                 continue;
             }
 
-            if let Some(rest) = trimmed
-                .strip_prefix("[x] ")
-                .or_else(|| trimmed.strip_prefix("[X] "))
+            if let Some(rest) =
+                trimmed.strip_prefix("[x] ").or_else(|| trimmed.strip_prefix("[X] "))
             {
                 total_steps += 1;
                 completed_steps += 1;

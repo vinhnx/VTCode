@@ -15,10 +15,7 @@ pub(super) struct PublicToolResolution {
 
 impl PublicToolResolution {
     fn new(registration_name: String, default_permission: ToolPolicy) -> Self {
-        Self {
-            registration_name,
-            default_permission,
-        }
+        Self { registration_name, default_permission }
     }
 
     pub(super) fn registration_name(&self) -> &str {
@@ -44,12 +41,7 @@ impl ToolAssembly {
     pub(super) fn from_registrations(registrations: Vec<ToolRegistration>) -> Self {
         let registration_metadata = registrations
             .iter()
-            .map(|registration| {
-                (
-                    registration.name().to_string(),
-                    registration.metadata().clone(),
-                )
-            })
+            .map(|registration| (registration.name().to_string(), registration.metadata().clone()))
             .collect::<FxHashMap<_, _>>();
         let catalog = SessionToolCatalog::rebuild_from_registrations(registrations);
         let public_routes = build_public_routes(&catalog);
@@ -63,11 +55,7 @@ impl ToolAssembly {
                     .map(|metadata| (entry.registration_name.clone(), metadata))
             })
             .collect();
-        Self {
-            policy_seed_metadata,
-            catalog,
-            public_routes,
-        }
+        Self { policy_seed_metadata, catalog, public_routes }
     }
 
     pub(super) fn policy_seed_metadata(&self) -> &FxHashMap<String, ToolMetadata> {
@@ -132,9 +120,7 @@ fn build_public_routes(catalog: &SessionToolCatalog) -> FxHashMap<String, Public
             if is_removed_public_tool_name(alias) {
                 continue;
             }
-            public_routes
-                .entry(alias.clone())
-                .or_insert_with(|| resolution.clone());
+            public_routes.entry(alias.clone()).or_insert_with(|| resolution.clone());
         }
     }
 
@@ -161,11 +147,7 @@ fn is_removed_public_tool_name(name: &str) -> bool {
 }
 
 fn strip_wrapping_quotes(value: &str) -> &str {
-    value
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .trim_matches('`')
+    value.trim().trim_matches('"').trim_matches('\'').trim_matches('`')
 }
 
 fn strip_tool_namespace_prefix(value: &str) -> &str {
@@ -328,16 +310,12 @@ mod tests {
         .with_parameter_schema(json!({"type": "object"}))
         .with_permission(ToolPolicy::Prompt)
         .with_aliases([tools::READ_FILE, tools::WRITE_FILE]);
-        let custom_registration = ToolRegistration::new(
-            "custom_tool",
-            CapabilityLevel::CodeSearch,
-            true,
-            noop_executor,
-        )
-        .with_description("Custom tool")
-        .with_parameter_schema(json!({"type": "object"}))
-        .with_permission(ToolPolicy::Allow)
-        .with_aliases([tools::DELETE_FILE, "custom_alias"]);
+        let custom_registration =
+            ToolRegistration::new("custom_tool", CapabilityLevel::CodeSearch, true, noop_executor)
+                .with_description("Custom tool")
+                .with_parameter_schema(json!({"type": "object"}))
+                .with_permission(ToolPolicy::Allow)
+                .with_aliases([tools::DELETE_FILE, "custom_alias"]);
 
         let assembly =
             ToolAssembly::from_registrations(vec![legacy_registration, custom_registration]);

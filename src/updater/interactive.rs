@@ -63,10 +63,7 @@ pub(crate) fn append_notice_highlight(
 
 fn format_update_banner(notice: &StartupUpdateNotice, _use_unicode: bool) -> String {
     let lines = [
-        format!(
-            "Update available! {} -> {}",
-            notice.current_version, notice.latest_version
-        ),
+        format!("Update available! {} -> {}", notice.current_version, notice.latest_version),
         "Run /update install to update.".to_string(),
         String::new(),
         "See full release notes:".to_string(),
@@ -121,14 +118,8 @@ fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest
     TransientRequest::List(ListOverlayRequest {
         title: "Update available".to_string(),
         lines: vec![
-            format!(
-                "VT Code {} -> {}",
-                notice.current_version, notice.latest_version
-            ),
-            format!(
-                "Release notes: {}",
-                Updater::release_url(&notice.latest_version)
-            ),
+            format!("VT Code {} -> {}", notice.current_version, notice.latest_version),
+            format!("Release notes: {}", Updater::release_url(&notice.latest_version)),
         ],
         footer_hint: Some("Choose update and restart, or stay on the current version.".to_string()),
         items: vec![
@@ -149,15 +140,11 @@ fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest
                 subtitle: Some("Dismiss this prompt for the rest of this launch.".to_string()),
                 badge: None,
                 indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(
-                    STAY_CURRENT_ACTION.to_string(),
-                )),
+                selection: Some(InlineListSelection::ConfigAction(STAY_CURRENT_ACTION.to_string())),
                 search_value: None,
             },
         ],
-        selected: Some(InlineListSelection::ConfigAction(
-            UPDATE_AND_RESTART_ACTION.to_string(),
-        )),
+        selected: Some(InlineListSelection::ConfigAction(UPDATE_AND_RESTART_ACTION.to_string())),
         search: None,
         hotkeys: Vec::new(),
     })
@@ -219,10 +206,8 @@ pub(crate) async fn run_inline_update_prompt(
             execute_inline_update(renderer, handle, workspace_root, notice).await
         }
         OverlayWaitOutcome::Submitted(UpdatePromptChoice::StayCurrent) => {
-            renderer.line(
-                MessageStyle::Info,
-                "Staying on the current version for this session.",
-            )?;
+            renderer
+                .line(MessageStyle::Info, "Staying on the current version for this session.")?;
             Ok(InlineUpdateOutcome::Continue)
         }
         OverlayWaitOutcome::Cancelled
@@ -243,10 +228,7 @@ pub(crate) async fn execute_inline_update(
 
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "Updating VT Code {} -> {} ...",
-            notice.current_version, notice.latest_version
-        ),
+        &format!("Updating VT Code {} -> {} ...", notice.current_version, notice.latest_version),
     )?;
 
     let updater = Updater::new(&notice.current_version.to_string())?;
@@ -299,27 +281,18 @@ fn execute_managed_update(
     match result {
         Ok(command_result) if command_result.success => {
             queue_runtime_relaunch(relaunch_preference(notice));
-            renderer.line(
-                MessageStyle::Info,
-                "Update installed. Restarting VT Code...",
-            )?;
+            renderer.line(MessageStyle::Info, "Update installed. Restarting VT Code...")?;
             Ok(InlineUpdateOutcome::RestartRequested)
         }
         Ok(command_result) => {
             renderer.line(
                 MessageStyle::Error,
-                &format!(
-                    "Update command exited with status {}.",
-                    command_result.exit_code
-                ),
+                &format!("Update command exited with status {}.", command_result.exit_code),
             )?;
             Ok(InlineUpdateOutcome::Continue)
         }
         Err(err) => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to run update command: {err}"),
-            )?;
+            renderer.line(MessageStyle::Error, &format!("Failed to run update command: {err}"))?;
             Ok(InlineUpdateOutcome::Continue)
         }
     }
@@ -361,10 +334,7 @@ mod tests {
         assert!(matches!(first, InlineCommand::SetHeaderContext { .. }));
         assert!(matches!(
             second,
-            InlineCommand::AppendPastedMessage {
-                kind: InlineMessageKind::Info,
-                ..
-            }
+            InlineCommand::AppendPastedMessage { kind: InlineMessageKind::Info, .. }
         ));
     }
 

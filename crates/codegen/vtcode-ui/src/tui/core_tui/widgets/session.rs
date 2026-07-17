@@ -115,9 +115,7 @@ impl<'a> SessionWidget<'a> {
             self.session.header_lines()
         };
 
-        let natural_header_h = self
-            .session
-            .header_height_from_lines(area.width, &header_lines);
+        let natural_header_h = self.session.header_height_from_lines(area.width, &header_lines);
         let max_header_h = ((area.height as f32) * max_header_pct) as u16;
         let header_h = natural_header_h.min(max_header_h).max(1);
 
@@ -179,9 +177,7 @@ impl Widget for &mut SessionWidget<'_> {
         }
 
         // Determine layout mode from viewport or override
-        let mode = self
-            .layout_mode
-            .unwrap_or_else(|| self.session.resolved_layout_mode(area));
+        let mode = self.layout_mode.unwrap_or_else(|| self.session.resolved_layout_mode(area));
 
         if let (Some(header_area), Some(transcript_area)) = (self.header_area, self.transcript_area)
         {
@@ -193,9 +189,7 @@ impl Widget for &mut SessionWidget<'_> {
                 } else {
                     self.session.header_lines()
                 };
-                HeaderWidget::new(self.session)
-                    .lines(header_lines)
-                    .render(header_area, buf);
+                HeaderWidget::new(self.session).lines(header_lines).render(header_area, buf);
             }
 
             if transcript_area.width > 0 && transcript_area.height > 0 {
@@ -253,9 +247,7 @@ impl Widget for &mut SessionWidget<'_> {
         } else {
             self.session.header_lines()
         };
-        HeaderWidget::new(self.session)
-            .lines(header_lines)
-            .render(layout.header, buf);
+        HeaderWidget::new(self.session).lines(header_lines).render(layout.header, buf);
 
         // Render main content area (transcript + optional logs)
         let has_logs = self.session.show_logs && self.session.has_logs() && mode.show_logs_panel();
@@ -328,11 +320,7 @@ impl<'a> SessionWidget<'a> {
                 items
             };
 
-        let context_info = self
-            .session
-            .input_status_right
-            .as_deref()
-            .unwrap_or("Ready");
+        let context_info = self.session.input_status_right.as_deref().unwrap_or("Ready");
 
         SidebarWidget::new(&self.session.styles)
             .local_agents(self.session.local_agents.clone())
@@ -361,10 +349,8 @@ impl<'a> SessionWidget<'a> {
             footer_hints::EDITING
         };
 
-        let shimmer_phase = self
-            .session
-            .is_shimmer_active()
-            .then_some(self.session.shimmer_state.phase());
+        let shimmer_phase =
+            self.session.is_shimmer_active().then_some(self.session.shimmer_state.phase());
 
         let mut footer = FooterWidget::new(&self.session.styles)
             .left_status(left_status)
@@ -386,10 +372,8 @@ impl<'a> SessionWidget<'a> {
 
 #[expect(dead_code)]
 fn has_input_status(session: &Session) -> bool {
-    let left_present = session
-        .input_status_left
-        .as_ref()
-        .is_some_and(|value| !value.trim().is_empty());
+    let left_present =
+        session.input_status_left.as_ref().is_some_and(|value| !value.trim().is_empty());
     if left_present {
         return true;
     }
@@ -423,10 +407,7 @@ mod tests {
         let mut session = Session::new(InlineTheme::default(), None, 24);
 
         for index in 0..8 {
-            session.push_line(
-                InlineMessageKind::Agent,
-                vec![segment(&format!("line {index}"))],
-            );
+            session.push_line(InlineMessageKind::Agent, vec![segment(&format!("line {index}"))]);
         }
 
         let mut wide_widget = SessionWidget::new(&mut session);

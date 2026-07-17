@@ -88,11 +88,8 @@ pub fn format_openai_error(
     context: &str,
     client_request_id: Option<&str>,
 ) -> String {
-    let request_id = extract_header(
-        headers,
-        &["x-request-id", "request-id", "openai-request-id"],
-    )
-    .unwrap_or_else(|| "<none>".to_string());
+    let request_id = extract_header(headers, &["x-request-id", "request-id", "openai-request-id"])
+        .unwrap_or_else(|| "<none>".to_string());
     let effective_client_request_id = client_request_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -122,12 +119,7 @@ pub fn format_openai_error(
         metadata_parts.push(format!("organization={organization_id}"));
     }
 
-    let mut formatted = format!(
-        "{} (status {}) [{}]",
-        context,
-        status,
-        metadata_parts.join(" ")
-    );
+    let mut formatted = format!("{} (status {}) [{}]", context, status, metadata_parts.join(" "));
     if let Some(message) = error_details.message.as_deref() {
         formatted.push_str(&format!(" Message: {message}"));
     }
@@ -177,10 +169,7 @@ mod tests {
     fn model_not_found_requires_model_specific_body() {
         assert!(!is_model_not_found(StatusCode::NOT_FOUND, ""));
         assert!(is_model_not_found(StatusCode::NOT_FOUND, "model_not_found"));
-        assert!(is_model_not_found(
-            StatusCode::BAD_REQUEST,
-            "The requested model does not exist"
-        ));
+        assert!(is_model_not_found(StatusCode::BAD_REQUEST, "The requested model does not exist"));
     }
 
     #[test]
@@ -190,10 +179,7 @@ mod tests {
             StatusCode::BAD_REQUEST,
             "This endpoint is not enabled for the Responses API"
         ));
-        assert!(!is_responses_api_unsupported(
-            StatusCode::NOT_FOUND,
-            "model_not_found"
-        ));
+        assert!(!is_responses_api_unsupported(StatusCode::NOT_FOUND, "model_not_found"));
     }
 
     #[test]

@@ -4,15 +4,9 @@ use super::*;
 #[tokio::test]
 async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-denied-tool-output",
-    ))
-    .await;
-    runner
-        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
-        .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-tool-output")).await;
+    runner.enable_full_auto(&[tools::UNIFIED_FILE.to_string()]).await;
 
     let response = tool_call_response(
         tools::UNIFIED_EXEC,
@@ -59,12 +53,7 @@ async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
     let call_item_id =
         completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
     assert_eq!(
-        completed_tool_output_count(
-            &events,
-            &tool_call_id,
-            ToolCallStatus::Failed,
-            &call_item_id
-        ),
+        completed_tool_output_count(&events, &tool_call_id, ToolCallStatus::Failed, &call_item_id),
         1
     );
 }
@@ -72,15 +61,9 @@ async fn denied_tool_call_emits_one_failed_output_for_runtime_invocation() {
 #[tokio::test]
 async fn denied_parallel_tool_halt_returns_promptly() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-denied-parallel",
-    ))
-    .await;
-    runner
-        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
-        .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-parallel")).await;
+    runner.enable_full_auto(&[tools::UNIFIED_FILE.to_string()]).await;
 
     let tool_calls = tool_call_response(
         tools::UNIFIED_EXEC,
@@ -118,15 +101,9 @@ async fn denied_parallel_tool_halt_returns_promptly() {
 #[tokio::test]
 async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-duplicate-parallel",
-    ))
-    .await;
-    runner
-        .enable_full_auto(&[tools::EXEC_COMMAND.to_string()])
-        .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-duplicate-parallel")).await;
+    runner.enable_full_auto(&[tools::EXEC_COMMAND.to_string()]).await;
 
     let tool_calls = vec![
         ToolCall::function(
@@ -155,14 +132,7 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
     let mut recorder = ExecEventRecorder::new("thread-duplicate-parallel", None, None);
 
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[batch]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[batch]", false, false)
         .await
         .expect("tool execution should finish");
 
@@ -193,12 +163,8 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
 #[tokio::test]
 async fn removed_public_tool_names_are_rejected() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-removed-public-tools",
-    ))
-    .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-removed-public-tools")).await;
     assert!(!runner.is_valid_tool(tools::LIST_FILES).await);
     assert!(!runner.is_valid_tool(tools::UNIFIED_SEARCH).await);
 
@@ -231,14 +197,7 @@ async fn removed_public_tool_names_are_rejected() {
     let mut recorder = ExecEventRecorder::new("thread-removed-public-tools", None, None);
 
     runner
-        .execute_tool_call_batches(
-            tool_calls,
-            &mut runtime,
-            &mut recorder,
-            "[batch]",
-            false,
-            false,
-        )
+        .execute_tool_call_batches(tool_calls, &mut runtime, &mut recorder, "[batch]", false, false)
         .await
         .expect("tool execution should finish");
 
@@ -259,20 +218,14 @@ async fn removed_public_tool_names_are_rejected() {
         .iter()
         .find_map(|(id, output)| (*id == "call-list").then_some(output))
         .expect("list_files rejection output");
-    assert_eq!(
-        list_output.as_str(),
-        Some("Tool execution denied: list_files")
-    );
+    assert_eq!(list_output.as_str(), Some("Tool execution denied: list_files"));
 
     let search_output = tool_outputs
         .iter()
         .find_map(|(id, output)| (*id == "call-search").then_some(output))
         .expect("search_dispatch rejection output");
     let expected_search_denial = format!("Tool execution denied: {}", tools::UNIFIED_SEARCH);
-    assert_eq!(
-        search_output.as_str(),
-        Some(expected_search_denial.as_str())
-    );
+    assert_eq!(search_output.as_str(), Some(expected_search_denial.as_str()));
 
     let events = recorder.into_events();
     let list_item_id =
@@ -297,15 +250,9 @@ async fn removed_public_tool_names_are_rejected() {
 #[tokio::test]
 async fn denied_sequential_tool_halt_returns_promptly() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-denied-sequential",
-    ))
-    .await;
-    runner
-        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
-        .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-denied-sequential")).await;
+    runner.enable_full_auto(&[tools::UNIFIED_FILE.to_string()]).await;
 
     let tool_calls = tool_call_response(
         tools::UNIFIED_EXEC,
@@ -343,12 +290,7 @@ async fn denied_sequential_tool_halt_returns_promptly() {
 #[tokio::test]
 async fn execute_tool_internal_retries_open_circuit_breaker() {
     let temp = TempDir::new().expect("tempdir");
-    let runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-open-circuit",
-    ))
-    .await;
+    let runner = Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-open-circuit")).await;
     let breaker = Arc::new(CircuitBreaker::new(CircuitBreakerConfig {
         failure_threshold: 1,
         min_backoff: Duration::from_millis(10),
@@ -356,9 +298,7 @@ async fn execute_tool_internal_retries_open_circuit_breaker() {
         reset_timeout: Duration::from_millis(10),
         ..CircuitBreakerConfig::default()
     }));
-    runner
-        .tool_registry
-        .set_shared_circuit_breaker(breaker.clone());
+    runner.tool_registry.set_shared_circuit_breaker(breaker.clone());
     breaker.record_failure_category_for_tool(
         tools::EXEC_COMMAND,
         vtcode_commons::ErrorCategory::ExecutionError,
@@ -371,10 +311,7 @@ async fn execute_tool_internal_retries_open_circuit_breaker() {
         .expect("circuit-open retry should recover");
 
     assert!(start.elapsed() >= Duration::from_millis(10));
-    assert_eq!(
-        result.get("output").and_then(|value| value.as_str()),
-        Some("hello")
-    );
+    assert_eq!(result.get("output").and_then(|value| value.as_str()), Some("hello"));
 }
 
 #[tokio::test]
@@ -441,13 +378,7 @@ async fn sequential_policy_failure_halts_following_tool_calls() {
         "warnings: {:?}",
         runtime.state.warnings
     );
-    assert!(
-        !runtime
-            .state
-            .executed_commands
-            .iter()
-            .any(|tool| tool == tools::APPLY_PATCH)
-    );
+    assert!(!runtime.state.executed_commands.iter().any(|tool| tool == tools::APPLY_PATCH));
 
     let events = recorder.into_events();
     assert!(completed_tool_invocation_item_id(&events, "call-blocked").is_some());
@@ -460,9 +391,7 @@ async fn sequential_tool_failures_record_categorized_user_message() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-message")).await;
-    runner
-        .enable_full_auto(&[tools::EXEC_COMMAND.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::EXEC_COMMAND.to_string()]).await;
     assert!(runner.is_valid_tool(tools::EXEC_COMMAND).await);
     assert!(!runner.is_valid_tool(tools::UNIFIED_EXEC).await);
 
@@ -502,11 +431,7 @@ async fn sequential_tool_failures_record_categorized_user_message() {
         .expect("tool error recorded");
     let tool_error: serde_json::Value =
         serde_json::from_str(&tool_error).expect("structured tool error");
-    assert_eq!(
-        tool_error["error"]["category"].as_str(),
-        Some("PolicyViolation"),
-        "{tool_error}"
-    );
+    assert_eq!(tool_error["error"]["category"].as_str(), Some("PolicyViolation"), "{tool_error}");
     assert!(
         tool_error["error"]["recovery_suggestions"]
             .as_array()
@@ -528,9 +453,7 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.commands.deny_regex = vec!["^blocked-cmd$".to_string()];
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-policy-guard")).await;
-    runner
-        .enable_full_auto(&[tools::EXEC_COMMAND.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::EXEC_COMMAND.to_string()]).await;
     assert!(!runner.is_valid_tool(tools::UNIFIED_EXEC).await);
 
     let tool_calls = vec![ToolCall::function(
@@ -570,12 +493,8 @@ async fn sequential_tool_failures_do_not_record_interruption_guards() {
 #[tokio::test]
 async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     let temp = TempDir::new().expect("tempdir");
-    let mut runner = Box::pin(make_runner(
-        &temp,
-        VTCodeConfig::default(),
-        "thread-stop-tool-output",
-    ))
-    .await;
+    let mut runner =
+        Box::pin(make_runner(&temp, VTCodeConfig::default(), "thread-stop-tool-output")).await;
 
     let response = tool_call_response(
         tools::EXEC_COMMAND,
@@ -605,9 +524,7 @@ async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     let tool_call_id = tool_calls[0].id.clone();
     let mut recorder = ExecEventRecorder::new("thread-stop-tool-output", None, None);
     recorder.record_thread_events(runtime.take_emitted_events());
-    steering_tx
-        .send(SteeringMessage::SteerStop)
-        .expect("steer stop should queue");
+    steering_tx.send(SteeringMessage::SteerStop).expect("steer stop should queue");
 
     runner
         .execute_tool_call_batches(
@@ -625,12 +542,7 @@ async fn steer_stop_closes_open_tool_calls_with_failed_output_items() {
     let call_item_id =
         completed_tool_invocation_item_id(&events, &tool_call_id).expect("completed invocation");
     assert_eq!(
-        completed_tool_output_count(
-            &events,
-            &tool_call_id,
-            ToolCallStatus::Failed,
-            &call_item_id
-        ),
+        completed_tool_output_count(&events, &tool_call_id, ToolCallStatus::Failed, &call_item_id),
         1
     );
 }

@@ -46,10 +46,7 @@ pub enum AgentType {
 impl AgentType {
     /// Check if this is a specialized profile type.
     pub fn is_specialized(&self) -> bool {
-        matches!(
-            self,
-            Self::Explore | Self::Plan | Self::General | Self::Custom(_)
-        )
+        matches!(self, Self::Explore | Self::Plan | Self::General | Self::Custom(_))
     }
 
     /// Check if this agent has read-only capabilities.

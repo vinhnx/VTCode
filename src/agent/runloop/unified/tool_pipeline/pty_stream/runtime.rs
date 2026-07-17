@@ -91,14 +91,7 @@ impl PtyStreamRuntime {
             let _ = callback_tx.send(output.to_string());
         });
 
-        (
-            Self {
-                sender: Some(tx),
-                task: Some(task),
-                active,
-            },
-            callback,
-        )
+        (Self { sender: Some(tx), task: Some(task), active }, callback)
     }
 
     pub(crate) async fn shutdown(mut self) {

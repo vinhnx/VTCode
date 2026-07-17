@@ -81,9 +81,8 @@ struct PtyState {
 
 impl PtyManager {
     pub fn new(workspace_root: PathBuf, config: PtyConfig) -> Self {
-        let resolved_root = workspace_root
-            .canonicalize()
-            .unwrap_or_else(|_| workspace_root.clone());
+        let resolved_root =
+            workspace_root.canonicalize().unwrap_or_else(|_| workspace_root.clone());
 
         let default_paths = path_env::compute_extra_search_paths(
             &CommandsConfig::default().extra_path_entries,
@@ -468,16 +467,10 @@ if output.len() > max_tokens * 4 {
                 )
             })?;
         let metadata = tokio::fs::metadata(&normalized).await.with_context(|| {
-            format!(
-                "Working directory '{}' does not exist",
-                normalized.display()
-            )
+            format!("Working directory '{}' does not exist", normalized.display())
         })?;
         if !metadata.is_dir() {
-            return Err(anyhow!(
-                "Working directory '{}' is not a directory",
-                normalized.display()
-            ));
+            return Err(anyhow!("Working directory '{}' is not a directory", normalized.display()));
         }
         Ok(normalized)
     }
@@ -551,17 +544,11 @@ if output.len() > max_tokens * 4 {
                 ));
             }
 
-            (
-                shell.clone(),
-                vec!["-lc".to_owned(), full_command.clone()],
-                program.clone(),
-            )
+            (shell.clone(), vec!["-lc".to_owned(), full_command.clone()], program.clone())
         };
 
         let pty_system = native_pty_system();
-        let pair = pty_system
-            .openpty(size)
-            .context("failed to allocate PTY pair")?;
+        let pair = pty_system.openpty(size).context("failed to allocate PTY pair")?;
 
         let mut builder = CommandBuilder::new(exec_program.clone());
         for arg in &exec_args {
@@ -589,15 +576,11 @@ if output.len() > max_tokens * 4 {
         drop(pair.slave);
 
         let master = pair.master;
-        let mut reader = master
-            .try_clone_reader()
-            .context("failed to clone PTY reader")?;
+        let mut reader = master.try_clone_reader().context("failed to clone PTY reader")?;
         let writer = master.take_writer().context("failed to take PTY writer")?;
 
-        let screen_state = Arc::new(Mutex::new(PtyScreenState::new(
-            size,
-            self.config.scrollback_lines,
-        )));
+        let screen_state =
+            Arc::new(Mutex::new(PtyScreenState::new(size, self.config.scrollback_lines)));
         let scrollback = Arc::new(Mutex::new(PtyScrollback::new(
             self.config.scrollback_lines,
             self.config.max_scrollback_bytes,

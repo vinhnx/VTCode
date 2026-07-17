@@ -72,9 +72,7 @@ struct CachedLightweightSkillOutcome {
 
 impl CachedLightweightSkillOutcome {
     fn is_expired(&self) -> bool {
-        self.timestamp
-            .elapsed()
-            .unwrap_or(LIGHTWEIGHT_SKILL_CACHE_TTL)
+        self.timestamp.elapsed().unwrap_or(LIGHTWEIGHT_SKILL_CACHE_TTL)
             > LIGHTWEIGHT_SKILL_CACHE_TTL
     }
 }
@@ -224,9 +222,7 @@ fn add_system_cli_tools(outcome: &mut SkillLoadOutcome) {
 
 fn dedup_and_sort(outcome: &mut SkillLoadOutcome) {
     let mut seen: HashSet<String> = HashSet::new();
-    outcome
-        .skills
-        .retain(|skill| seen.insert(skill.name.clone()));
+    outcome.skills.retain(|skill| seen.insert(skill.name.clone()));
     outcome.skills.sort_by(|a, b| a.name.cmp(&b.name));
 }
 
@@ -288,16 +284,9 @@ fn disabled_skill_selectors(home_dir: Option<&Path>) -> DisabledSkillSelectors {
     };
 
     let mut selectors = DisabledSkillSelectors::default();
-    for entry in config
-        .skills
-        .config
-        .into_iter()
-        .filter(|entry| !entry.enabled)
-    {
+    for entry in config.skills.config.into_iter().filter(|entry| !entry.enabled) {
         if let Some(path) = entry.path {
-            selectors
-                .paths
-                .insert(dunce::canonicalize(&path).unwrap_or(path));
+            selectors.paths.insert(dunce::canonicalize(&path).unwrap_or(path));
         }
         if let Some(name) = entry.name.map(|name| name.trim().to_string())
             && !name.is_empty()
@@ -375,10 +364,7 @@ fn skill_roots_with_home_dir(
 }
 
 fn repo_skill_search_dirs(config: &SkillLoaderConfig) -> Vec<PathBuf> {
-    let stop = config
-        .project_root
-        .clone()
-        .unwrap_or_else(|| config.cwd.clone());
+    let stop = config.project_root.clone().unwrap_or_else(|| config.cwd.clone());
     let mut dirs = Vec::new();
     let mut current = config.cwd.clone();
 
@@ -1102,9 +1088,7 @@ fn skill_routing_keywords(skill: &SkillManifest) -> HashSet<String> {
     let Some(metadata) = &skill.metadata else {
         return keywords;
     };
-    for metadata_keywords in [metadata.get("keywords"), metadata.get("tags")]
-        .into_iter()
-        .flatten()
+    for metadata_keywords in [metadata.get("keywords"), metadata.get("tags")].into_iter().flatten()
     {
         match metadata_keywords {
             serde_json::Value::Array(values) => {
@@ -1189,10 +1173,8 @@ mod tests {
             "Fetch data from API endpoints and summarize responses",
         )];
 
-        let mentions = detect_skill_mentions(
-            "Fetch and summarize API responses for these endpoints",
-            &skills,
-        );
+        let mentions =
+            detect_skill_mentions("Fetch and summarize API responses for these endpoints", &skills);
         assert_eq!(mentions, vec!["api-fetcher".to_string()]);
     }
 
@@ -1200,10 +1182,7 @@ mod tests {
     fn metadata_keywords_drive_implicit_matches() {
         let mut ast_grep = manifest("ast-grep", "Structural search workflows");
         ast_grep.metadata = Some(HashMap::from([
-            (
-                "keywords".to_string(),
-                serde_json::json!(["tree-sitter parser"]),
-            ),
+            ("keywords".to_string(), serde_json::json!(["tree-sitter parser"])),
             ("tags".to_string(), serde_json::json!(["optional chaining"])),
         ]));
 
@@ -1231,10 +1210,8 @@ mod tests {
             "sql-checker",
             "Validate SQL migration scripts for safety",
         )];
-        let options = SkillMentionDetectionOptions {
-            enable_auto_trigger: false,
-            ..Default::default()
-        };
+        let options =
+            SkillMentionDetectionOptions { enable_auto_trigger: false, ..Default::default() };
         let mentions = detect_skill_mentions_with_options("Use $sql-checker", &skills, &options);
         assert!(mentions.is_empty());
     }
@@ -1246,9 +1223,7 @@ mod tests {
 
         let codex_home = tempdir().expect("codex home");
         let workspace = tempdir().expect("workspace");
-        let skill_dir = workspace
-            .path()
-            .join(".agents/skills/process-wide-cache-skill");
+        let skill_dir = workspace.path().join(".agents/skills/process-wide-cache-skill");
         fs::create_dir_all(&skill_dir).expect("create skill dir");
         fs::write(
             skill_dir.join("SKILL.md"),
@@ -1265,10 +1240,7 @@ mod tests {
 
         let first = discover_skill_metadata_lightweight_hermetic(&config);
         assert!(
-            first
-                .skills
-                .iter()
-                .any(|skill| skill.name == "process-wide-cache-skill"),
+            first.skills.iter().any(|skill| skill.name == "process-wide-cache-skill"),
             "expected first discovery to find test skill",
         );
 
@@ -1276,10 +1248,7 @@ mod tests {
 
         let second = discover_skill_metadata_lightweight_hermetic(&config);
         assert!(
-            second
-                .skills
-                .iter()
-                .any(|skill| skill.name == "process-wide-cache-skill"),
+            second.skills.iter().any(|skill| skill.name == "process-wide-cache-skill"),
             "expected cached discovery to preserve removed skill until cache is cleared",
         );
 
@@ -1287,10 +1256,7 @@ mod tests {
 
         let third = discover_skill_metadata_lightweight_hermetic(&config);
         assert!(
-            !third
-                .skills
-                .iter()
-                .any(|skill| skill.name == "process-wide-cache-skill"),
+            !third.skills.iter().any(|skill| skill.name == "process-wide-cache-skill"),
             "expected cleared cache to force rediscovery",
         );
     }
@@ -1308,10 +1274,7 @@ mod tests {
                 .any(|skill_ctx| skill_ctx.manifest().name == "cmd-status")
         );
 
-        let skill = loader
-            .get_skill("cmd-status")
-            .await
-            .expect("load cmd-status");
+        let skill = loader.get_skill("cmd-status").await.expect("load cmd-status");
         assert!(matches!(skill, EnhancedSkill::BuiltInCommand(_)));
     }
 
@@ -1349,10 +1312,7 @@ mod tests {
                 .any(|skill_ctx| skill_ctx.manifest().name == "cmd-review")
         );
 
-        let skill = loader
-            .get_skill("cmd-review")
-            .await
-            .expect("load cmd-review");
+        let skill = loader.get_skill("cmd-review").await.expect("load cmd-review");
         assert!(matches!(skill, EnhancedSkill::Traditional(_)));
     }
 
@@ -1435,14 +1395,9 @@ mod tests {
         let home = tempdir().expect("home");
         let codex_home = tempdir().expect("codex home");
 
-        let old_plugin_skill_dir = workspace
-            .path()
-            .join(".agents/plugins/example-plugin-v1/skills/release-helper");
-        write_skill(
-            &old_plugin_skill_dir,
-            "release-helper",
-            "Prepare release notes",
-        );
+        let old_plugin_skill_dir =
+            workspace.path().join(".agents/plugins/example-plugin-v1/skills/release-helper");
+        write_skill(&old_plugin_skill_dir, "release-helper", "Prepare release notes");
 
         write_codex_skill_config(
             home.path(),
@@ -1452,14 +1407,9 @@ mod tests {
             ),
         );
 
-        let new_plugin_skill_dir = workspace
-            .path()
-            .join(".agents/plugins/example-plugin-v2/skills/release-helper");
-        write_skill(
-            &new_plugin_skill_dir,
-            "release-helper",
-            "Prepare release notes",
-        );
+        let new_plugin_skill_dir =
+            workspace.path().join(".agents/plugins/example-plugin-v2/skills/release-helper");
+        write_skill(&new_plugin_skill_dir, "release-helper", "Prepare release notes");
 
         fs::remove_dir_all(workspace.path().join(".agents/plugins/example-plugin-v1"))
             .expect("remove old plugin version");
@@ -1470,10 +1420,7 @@ mod tests {
         );
 
         assert!(
-            outcome
-                .skills
-                .iter()
-                .all(|skill| skill.name != "release-helper"),
+            outcome.skills.iter().all(|skill| skill.name != "release-helper"),
             "expected release-helper to stay disabled after plugin path changed"
         );
     }
@@ -1501,10 +1448,7 @@ mod tests {
         );
 
         assert!(
-            outcome
-                .skills
-                .iter()
-                .all(|skill| skill.name != "path-disabled"),
+            outcome.skills.iter().all(|skill| skill.name != "path-disabled"),
             "expected path-disabled to remain filtered by legacy path config"
         );
     }

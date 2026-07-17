@@ -139,10 +139,7 @@ impl ToolOutputSpooler {
 
     /// Create a new spooler with custom configuration
     pub fn with_config(workspace_root: &Path, config: SpoolerConfig) -> Self {
-        let output_dir = workspace_root
-            .join(".vtcode")
-            .join("context")
-            .join("tool_outputs");
+        let output_dir = workspace_root.join(".vtcode").join("context").join("tool_outputs");
 
         let max_files = config.max_files;
         Self {
@@ -159,11 +156,7 @@ impl ToolOutputSpooler {
         if !self.config.enabled {
             return false;
         }
-        if value
-            .get("no_spool")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-        {
+        if value.get("no_spool").and_then(|v| v.as_bool()).unwrap_or(false) {
             return false;
         }
         self.estimate_size(value) > self.config.threshold_bytes
@@ -193,14 +186,9 @@ impl ToolOutputSpooler {
         is_mcp: bool,
     ) -> Result<SpoolResult> {
         // Ensure output directory exists
-        fs::create_dir_all(&self.output_dir)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to create tool output directory: {}",
-                    self.output_dir.display()
-                )
-            })?;
+        fs::create_dir_all(&self.output_dir).await.with_context(|| {
+            format!("Failed to create tool output directory: {}", self.output_dir.display())
+        })?;
 
         // Generate unique filename
         let timestamp = std::time::SystemTime::now()
@@ -325,10 +313,8 @@ impl ToolOutputSpooler {
             }
         }
 
-        let relative_path = file_path
-            .strip_prefix(&self.workspace_root)
-            .unwrap_or(&file_path)
-            .to_path_buf();
+        let relative_path =
+            file_path.strip_prefix(&self.workspace_root).unwrap_or(&file_path).to_path_buf();
 
         info!(
             tool = tool_name,
@@ -356,8 +342,7 @@ impl ToolOutputSpooler {
         value: Value,
         is_mcp: bool,
     ) -> Result<Value> {
-        self.process_output_with_force(tool_name, value, is_mcp, false)
-            .await
+        self.process_output_with_force(tool_name, value, is_mcp, false).await
     }
 
     /// Process a tool output, optionally forcing spool behavior.
@@ -371,10 +356,7 @@ impl ToolOutputSpooler {
         is_mcp: bool,
         force_spool: bool,
     ) -> Result<Value> {
-        let no_spool = value
-            .get("no_spool")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let no_spool = value.get("no_spool").and_then(|v| v.as_bool()).unwrap_or(false);
         if no_spool {
             return Ok(value);
         }
@@ -389,10 +371,8 @@ impl ToolOutputSpooler {
 
         // Periodic age-based cleanup: run every CLEANUP_EVERY_N_SPOOLS spool operations.
         // This ensures stale files are removed without adding overhead on every call.
-        let count = self
-            .spool_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count % CLEANUP_EVERY_N_SPOOLS == 0 {
+        let count = self.spool_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count.is_multiple_of(CLEANUP_EVERY_N_SPOOLS) {
             if let Err(e) = self.cleanup_old_files().await {
                 debug!(error = %e, "Periodic spool cleanup failed");
             }
@@ -414,15 +394,9 @@ impl ToolOutputSpooler {
         };
         let is_pty_tool = is_command_session_tool_name(tool_name);
         let use_output_field = is_pty_tool
-            || response
-                .get("output")
-                .and_then(|v| v.as_str())
-                .is_some_and(|s| !s.is_empty());
+            || response.get("output").and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty());
         let source_path = if tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE {
-            response
-                .get("path")
-                .and_then(|v| v.as_str())
-                .map(String::from)
+            response.get("path").and_then(|v| v.as_str()).map(String::from)
         } else {
             None
         };
@@ -455,8 +429,7 @@ impl ToolOutputSpooler {
             obj.insert("spool_note".to_string(), json!(spool_note));
 
             if let Some(src) = source_path {
-                obj.entry("source_path".to_string())
-                    .or_insert_with(|| json!(src));
+                obj.entry("source_path".to_string()).or_insert_with(|| json!(src));
             }
             if let Some(stderr) = stderr_preview {
                 obj.insert("stderr_preview".to_string(), json!(stderr));
@@ -575,10 +548,7 @@ mod tests {
         let spooler = ToolOutputSpooler::new(temp.path());
 
         assert!(spooler.config.enabled);
-        assert_eq!(
-            spooler.config.threshold_bytes,
-            DEFAULT_SPOOL_THRESHOLD_BYTES
-        );
+        assert_eq!(spooler.config.threshold_bytes, DEFAULT_SPOOL_THRESHOLD_BYTES);
         assert_eq!(spooler.config.max_age_secs, default_max_age_secs());
     }
 
@@ -594,10 +564,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_spool_large_value() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 100,
-            ..Default::default()
-        }; // Low threshold for testing
+        let config = SpoolerConfig { threshold_bytes: 100, ..Default::default() }; // Low threshold for testing
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let large_content = "x".repeat(200);
@@ -608,10 +575,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_not_spool_when_disabled() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 100,
-            ..Default::default()
-        }; // Low threshold for testing
+        let config = SpoolerConfig { threshold_bytes: 100, ..Default::default() }; // Low threshold for testing
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let large_content = "x".repeat(200);
@@ -622,19 +586,13 @@ mod tests {
     #[tokio::test]
     async fn test_spool_output() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 50,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let content = "Line 1\nLine 2\nLine 3\n".repeat(10);
         let value = json!({"output": content});
 
-        let result = spooler
-            .spool_output("test_tool", &value, false)
-            .await
-            .unwrap();
+        let result = spooler.spool_output("test_tool", &value, false).await.unwrap();
 
         assert!(result.file_path.to_string_lossy().contains("test_tool"));
         assert!(result.original_bytes > 0);
@@ -650,10 +608,7 @@ mod tests {
         let spooler = ToolOutputSpooler::new(temp.path());
 
         let small_value = json!({"result": "ok"});
-        let result = spooler
-            .process_output("test", small_value.clone(), false)
-            .await
-            .unwrap();
+        let result = spooler.process_output("test", small_value.clone(), false).await.unwrap();
 
         // Should return original value unchanged
         assert_eq!(result, small_value);
@@ -662,17 +617,11 @@ mod tests {
     #[tokio::test]
     async fn test_process_output_large() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 50,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let large_value = json!({"content": "x".repeat(200)});
-        let result = spooler
-            .process_output("test", large_value, false)
-            .await
-            .unwrap();
+        let result = spooler.process_output("test", large_value, false).await.unwrap();
 
         assert!(result.get("spool_path").is_some());
         assert!(result.get("spooled_to_file").is_none());
@@ -693,10 +642,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_spools_raw_content() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 50,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let file_content = "fn main() {\n    println!(\"Hello, world!\");\n}\n// More code here...";
@@ -708,10 +654,7 @@ mod tests {
             "path": "test.rs"
         });
 
-        let result = spooler
-            .process_output("read_file", read_file_response, false)
-            .await
-            .unwrap();
+        let result = spooler.process_output("read_file", read_file_response, false).await.unwrap();
 
         // Should include source_path for read_file
         let source_path = result.get("source_path").and_then(|v| v.as_str()).unwrap();
@@ -730,10 +673,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_pty_cmd_spools_raw_output() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 50,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output = "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev [unoptimized + debuginfo] target(s)";
@@ -746,10 +686,7 @@ mod tests {
             "success": true
         });
 
-        let result = spooler
-            .process_output("run_pty_cmd", pty_response, false)
-            .await
-            .unwrap();
+        let result = spooler.process_output("run_pty_cmd", pty_response, false).await.unwrap();
 
         // Should return file reference
         assert!(result.get("spool_path").is_some());
@@ -766,10 +703,7 @@ mod tests {
     #[tokio::test]
     async fn test_pty_tools_spool_raw_output() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 50,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output = "Some command output text\nwith multiple lines\nfor testing";
@@ -813,10 +747,7 @@ mod tests {
     #[tokio::test]
     async fn test_forced_pty_spool_keeps_structured_continuation_metadata() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 999_999,
-            ..Default::default()
-        }; // ensure only force triggers
+        let config = SpoolerConfig { threshold_bytes: 999_999, ..Default::default() }; // ensure only force triggers
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let output = "x".repeat(10_000);
@@ -834,10 +765,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            result.get("process_id").and_then(|v| v.as_str()),
-            Some("run-abc123")
-        );
+        assert_eq!(result.get("process_id").and_then(|v| v.as_str()), Some("run-abc123"));
         assert_eq!(
             result.get("next_continue_args"),
             Some(&json!({
@@ -845,10 +773,7 @@ mod tests {
             }))
         );
         assert!(result.get("follow_up_prompt").is_none());
-        assert_eq!(
-            result.get("truncated").and_then(|v| v.as_bool()),
-            Some(true)
-        );
+        assert_eq!(result.get("truncated").and_then(|v| v.as_bool()), Some(true));
         assert!(result.get("spooled_to_file").is_none());
         assert!(
             result
@@ -862,10 +787,7 @@ mod tests {
     #[tokio::test]
     async fn test_exec_command_spools_raw_output() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 50,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output =
@@ -896,10 +818,7 @@ mod tests {
     #[tokio::test]
     async fn test_exec_command_spools_internal_raw_output_over_preview() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 10,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 10, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let raw_output = "line 1\nline 2\nline 3\nline 4\nline 5\nline 6";
@@ -932,10 +851,7 @@ mod tests {
     #[tokio::test]
     async fn test_double_serialized_pty_output() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 50,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output =
@@ -949,10 +865,7 @@ mod tests {
         });
         let double_serialized = json!(serde_json::to_string(&inner_json).unwrap());
 
-        let result = spooler
-            .process_output("run_pty_cmd", double_serialized, false)
-            .await
-            .unwrap();
+        let result = spooler.process_output("run_pty_cmd", double_serialized, false).await.unwrap();
 
         assert!(result.get("spool_path").is_some());
         assert!(result.get("spooled_to_file").is_none());
@@ -966,10 +879,7 @@ mod tests {
     #[tokio::test]
     async fn test_bash_and_shell_spool_raw_output() {
         let temp = tempdir().unwrap();
-        let config = SpoolerConfig {
-            threshold_bytes: 50,
-            ..Default::default()
-        };
+        let config = SpoolerConfig { threshold_bytes: 50, ..Default::default() };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output = "total 32\ndrwxr-xr-x  10 user  staff   320 Jan  1 12:00 .";
@@ -980,10 +890,7 @@ mod tests {
             "wall_time": 0.1
         });
 
-        let result = spooler
-            .process_output("bash", bash_response, false)
-            .await
-            .unwrap();
+        let result = spooler.process_output("bash", bash_response, false).await.unwrap();
 
         assert!(result.get("spool_path").is_some());
         assert!(result.get("spooled_to_file").is_none());
@@ -997,10 +904,7 @@ mod tests {
             "wall_time": 0.2
         });
 
-        let result = spooler
-            .process_output("shell", shell_response, false)
-            .await
-            .unwrap();
+        let result = spooler.process_output("shell", shell_response, false).await.unwrap();
 
         assert!(result.get("spool_path").is_some());
         assert!(result.get("spooled_to_file").is_none());
@@ -1039,10 +943,7 @@ mod tests {
 
     #[test]
     fn test_tail_preview_content_shows_only_tail() {
-        let input = (0..200)
-            .map(|i| format!("line-{i}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let input = (0..200).map(|i| format!("line-{i}")).collect::<Vec<_>>().join("\n");
         let preview = tail_preview_content(&input, 500, 10);
         assert!(preview.contains("bytes omitted"));
         assert!(preview.contains("line-199"));
@@ -1096,10 +997,7 @@ mod tests {
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
         let value = json!({"output": "old output"});
 
-        let result = spooler
-            .spool_output("test_tool", &value, false)
-            .await
-            .unwrap();
+        let result = spooler.spool_output("test_tool", &value, false).await.unwrap();
         let full_path = temp.path().join(&result.file_path);
         assert!(full_path.exists());
 

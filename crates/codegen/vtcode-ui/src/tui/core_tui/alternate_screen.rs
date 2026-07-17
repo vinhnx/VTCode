@@ -82,10 +82,7 @@ impl AlternateScreenSession {
         execute!(stdout, EnterAlternateScreen)
             .context("failed to enter alternate screen for terminal app")?;
 
-        let mut session = Self {
-            original_state,
-            entered: true,
-        };
+        let mut session = Self { original_state, entered: true };
 
         // Enable raw mode
         enable_raw_mode().context("failed to enable raw mode for terminal app")?;

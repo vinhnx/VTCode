@@ -53,10 +53,7 @@ pub(crate) async fn is_workspace_trusted(workspace: &Path) -> bool {
     if let Ok(Some(WorkspaceTrustLevel::FullAuto)) = load_workspace_trust_level(workspace).await {
         return true;
     }
-    matches!(
-        parse_env_trust_override().ok().flatten(),
-        Some(EnvTrustOverride::FullAuto)
-    )
+    matches!(parse_env_trust_override().ok().flatten(), Some(EnvTrustOverride::FullAuto))
 }
 
 /// Grant full-auto trust for an already-running interactive TUI session.
@@ -70,10 +67,7 @@ pub(crate) async fn auto_grant_tui_full_auto_workspace_trust(workspace: &Path) -
         return Ok(());
     }
 
-    if matches!(
-        parse_env_trust_override().ok().flatten(),
-        Some(EnvTrustOverride::Deny)
-    ) {
+    if matches!(parse_env_trust_override().ok().flatten(), Some(EnvTrustOverride::Deny)) {
         bail!(
             "Workspace trust denied via {TRUST_OVERRIDE_ENV}=deny; auto agent switch cannot continue."
         );
@@ -327,9 +321,7 @@ enum PromptTone {
 
 fn print_prompt(message: &str, tone: PromptTone) -> Result<()> {
     print!("{}", styled_prompt_message(message, tone));
-    io::stdout()
-        .flush()
-        .context("Failed to flush workspace trust prompt")
+    io::stdout().flush().context("Failed to flush workspace trust prompt")
 }
 
 fn print_prompt_line(message: &str, tone: PromptTone) {
@@ -345,12 +337,8 @@ fn styled_prompt_message(message: &str, tone: PromptTone) -> String {
         PromptTone::Body => (INFO_RGB, false),
     };
 
-    let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256_for_theme(
-        rgb.0,
-        rgb.1,
-        rgb.2,
-        is_light_theme,
-    )));
+    let color =
+        Color::Ansi256(Ansi256Color(rgb_to_ansi256_for_theme(rgb.0, rgb.1, rgb.2, is_light_theme)));
     if is_heading {
         render_styled(message, color, Some("bold".to_string()))
     } else {
@@ -434,10 +422,7 @@ mod tests {
 
         env_guard.restore_var(TRUST_OVERRIDE_ENV, previous);
 
-        assert!(
-            err.to_string().contains("denied"),
-            "expected a denial error, got: {err}"
-        );
+        assert!(err.to_string().contains("denied"), "expected a denial error, got: {err}");
     }
 
     #[tokio::test]

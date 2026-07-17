@@ -64,19 +64,15 @@ pub(crate) async fn handle_initialize_workspace(
     let created_files = match bootstrap_config_files(workspace_path.clone(), force).await {
         Ok(files) => files,
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to initialize configuration: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to initialize configuration: {err}"))?;
             return Ok(SlashCommandControl::Continue);
         }
     };
 
     if created_files.is_empty() {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            "Existing configuration detected; no files were changed.",
-        )?;
+        ctx.renderer
+            .line(MessageStyle::Info, "Existing configuration detected; no files were changed.")?;
     } else {
         ctx.renderer.line(
             MessageStyle::Info,
@@ -136,10 +132,8 @@ pub(crate) async fn handle_initialize_workspace(
         }
     }
 
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Indexing workspace context (this may take a moment)...",
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, "Indexing workspace context (this may take a moment)...")?;
     match build_workspace_index(workspace_path).await {
         Ok(()) => {
             ctx.renderer.line(
@@ -148,10 +142,8 @@ pub(crate) async fn handle_initialize_workspace(
             )?;
         }
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to index workspace: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to index workspace: {err}"))?;
         }
     }
 
@@ -165,10 +157,8 @@ async fn maybe_ground_project_context(
         return Ok(None);
     };
 
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "Grounding project context with VT Code explorer subagent...",
-    )?;
+    ctx.renderer
+        .line(MessageStyle::Info, "Grounding project context with VT Code explorer subagent...")?;
     let Some(spec) =
         build_init_grounding_subagent_spec(controller.effective_specs().await.as_slice())
     else {
@@ -212,10 +202,7 @@ async fn wait_for_init_grounding(
     spawned: &SubagentStatusEntry,
 ) -> Result<Option<GuidedInitGrounding>> {
     let Some(status) = controller
-        .wait(
-            std::slice::from_ref(&spawned.id),
-            Some(INIT_GROUNDING_TIMEOUT_MS),
-        )
+        .wait(std::slice::from_ref(&spawned.id), Some(INIT_GROUNDING_TIMEOUT_MS))
         .await?
     else {
         ctx.renderer.line(
@@ -239,10 +226,7 @@ async fn wait_for_init_grounding(
         return Ok(Some(grounding));
     }
 
-    let status_message = status
-        .error
-        .as_deref()
-        .unwrap_or_else(|| status.status.as_str());
+    let status_message = status.error.as_deref().unwrap_or_else(|| status.status.as_str());
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(
@@ -258,9 +242,7 @@ fn build_init_grounding_subagent_spec(effective_specs: &[SubagentSpec]) -> Optio
         .find(|candidate| candidate.matches_name("explorer") && candidate.is_read_only())
         .cloned()
         .or_else(|| {
-            builtin_subagents()
-                .into_iter()
-                .find(|candidate| candidate.name == "explorer")
+            builtin_subagents().into_iter().find(|candidate| candidate.name == "explorer")
         })?;
     spec.name = INIT_GROUNDING_AGENT_NAME.to_string();
     spec.description =
@@ -281,10 +263,7 @@ fn build_init_grounding_subagent_spec(effective_specs: &[SubagentSpec]) -> Optio
 }
 
 fn parse_grounding_from_status(status: &SubagentStatusEntry) -> Option<GuidedInitGrounding> {
-    status
-        .summary
-        .as_deref()
-        .and_then(parse_grounding_from_text)
+    status.summary.as_deref().and_then(parse_grounding_from_text)
 }
 
 async fn parse_grounding_from_snapshot(
@@ -335,9 +314,7 @@ where
 }
 
 fn extract_first_json_block(text: &str) -> Option<&str> {
-    let (start, opening) = text
-        .char_indices()
-        .find(|(_, ch)| matches!(ch, '{' | '['))?;
+    let (start, opening) = text.char_indices().find(|(_, ch)| matches!(ch, '{' | '['))?;
     let mut stack = vec![opening];
     let mut in_string = false;
     let mut escaped = false;
@@ -395,8 +372,7 @@ async fn run_guided_agents_generation(
                 match prompt_overwrite_confirmation(ctx, &plan.path).await? {
                     Some(result) => result,
                     None => {
-                        ctx.renderer
-                            .line(MessageStyle::Info, "AGENTS.md generation cancelled.")?;
+                        ctx.renderer.line(MessageStyle::Info, "AGENTS.md generation cancelled.")?;
                         false
                     }
                 }
@@ -414,8 +390,7 @@ async fn run_guided_agents_generation(
         match prompt_guided_answers(ctx, &plan.questions).await? {
             Some(answers) => answers,
             None => {
-                ctx.renderer
-                    .line(MessageStyle::Info, "AGENTS.md generation cancelled.")?;
+                ctx.renderer.line(MessageStyle::Info, "AGENTS.md generation cancelled.")?;
                 return Ok(());
             }
         }
@@ -434,16 +409,12 @@ async fn run_guided_agents_generation(
     );
     match write_agents_file(ctx.config.workspace.as_path(), &content, overwrite_existing) {
         Ok(report) => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                &format!("AGENTS.md: {}", report.path.display()),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, &format!("AGENTS.md: {}", report.path.display()))?;
         }
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to scaffold AGENTS.md: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to scaffold AGENTS.md: {err}"))?;
         }
     }
 
@@ -463,10 +434,7 @@ async fn prompt_overwrite_confirmation(
 ) -> Result<Option<bool>> {
     let step = WizardStep {
         title: "Overwrite".to_string(),
-        question: format!(
-            "AGENTS.md already exists at {}. Overwrite it?",
-            path.display()
-        ),
+        question: format!("AGENTS.md already exists at {}. Overwrite it?", path.display()),
         items: vec![
             InlineListItem {
                 title: "1. Overwrite existing AGENTS.md".to_string(),
@@ -518,18 +486,14 @@ async fn prompt_overwrite_confirmation(
 
     Ok(match outcome {
         WizardModalOutcome::Submitted(selections) => {
-            selections
-                .into_iter()
-                .find_map(|selection| match selection {
-                    InlineListSelection::RequestUserInputAnswer {
-                        question_id,
-                        selected,
-                        ..
-                    } if question_id == OVERWRITE_PROMPT_ID => {
-                        selected.first().map(|value| value == "overwrite")
-                    }
-                    _ => None,
-                })
+            selections.into_iter().find_map(|selection| match selection {
+                InlineListSelection::RequestUserInputAnswer { question_id, selected, .. }
+                    if question_id == OVERWRITE_PROMPT_ID =>
+                {
+                    selected.first().map(|value| value == "overwrite")
+                }
+                _ => None,
+            })
         }
         WizardModalOutcome::Cancelled { .. } => None,
     })
@@ -539,10 +503,7 @@ async fn prompt_guided_answers(
     ctx: &mut SlashCommandContext<'_>,
     questions: &[GuidedInitQuestion],
 ) -> Result<Option<GuidedInitAnswers>> {
-    let steps = questions
-        .iter()
-        .map(build_question_step)
-        .collect::<Vec<_>>();
+    let steps = questions.iter().map(build_question_step).collect::<Vec<_>>();
 
     let outcome = show_wizard_modal_and_wait(
         ctx.handle,
@@ -621,9 +582,7 @@ fn build_question_step(question: &GuidedInitQuestion) -> WizardStep {
         completed: false,
         answer: None,
         allow_freeform: question.allow_custom,
-        freeform_label: question
-            .allow_custom
-            .then(|| question.key.custom_label().to_string()),
+        freeform_label: question.allow_custom.then(|| question.key.custom_label().to_string()),
         freeform_placeholder: question
             .allow_custom
             .then(|| question.key.custom_placeholder().to_string()),
@@ -633,11 +592,7 @@ fn build_question_step(question: &GuidedInitQuestion) -> WizardStep {
 
 fn selection_to_answer(selection: InlineListSelection) -> Option<GuidedInitAnswer> {
     match selection {
-        InlineListSelection::RequestUserInputAnswer {
-            question_id,
-            selected,
-            other,
-        } => {
+        InlineListSelection::RequestUserInputAnswer { question_id, selected, other } => {
             let key = question_id.parse::<GuidedInitQuestionKey>().ok()?;
             GuidedInitAnswer::from_input(
                 key,
@@ -662,10 +617,7 @@ mod tests {
         assert_eq!(spec.name, INIT_GROUNDING_AGENT_NAME);
         assert_eq!(spec.source, SubagentSource::ProjectVtcode);
         assert!(spec.is_read_only());
-        assert_eq!(
-            spec.nickname_candidates.as_slice(),
-            ["init-grounding".to_string()]
-        );
+        assert_eq!(spec.nickname_candidates.as_slice(), ["init-grounding".to_string()]);
         assert!(spec.prompt.contains("`/init`"));
     }
 
@@ -703,10 +655,7 @@ mod tests {
         assert_eq!(spec.skills.as_slice(), ["repo-skill".to_string()]);
         assert!(!spec.background);
         assert_eq!(spec.initial_prompt, None);
-        assert!(
-            spec.prompt
-                .contains("Use project-specific search guidance.")
-        );
+        assert!(spec.prompt.contains("Use project-specific search guidance."));
         assert!(spec.prompt.contains("`/init`"));
     }
 
@@ -731,10 +680,7 @@ Before the payload:
             grounding.project_summary.as_deref(),
             Some("Terminal-first coding agent for repository work.")
         );
-        assert_eq!(
-            grounding.verification_command.as_deref(),
-            Some("cargo nextest run")
-        );
+        assert_eq!(grounding.verification_command.as_deref(), Some("cargo nextest run"));
     }
 
     #[test]
@@ -749,9 +695,6 @@ Before the payload:
         ];
 
         let grounding = extract_grounding_from_messages(&messages).expect("grounding");
-        assert_eq!(
-            grounding.project_summary.as_deref(),
-            Some("Grounded summary")
-        );
+        assert_eq!(grounding.project_summary.as_deref(), Some("Grounded summary"));
     }
 }

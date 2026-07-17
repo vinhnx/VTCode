@@ -211,21 +211,13 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     let startup = runtime.block_on(resolve_startup_context(&args))?;
 
     Ok(BootstrapOutcome::Ready(Box::new(BootstrapReady {
-        prepared: PreparedRun {
-            args,
-            startup,
-            print_mode,
-        },
+        prepared: PreparedRun { args, startup, print_mode },
         runtime,
     })))
 }
 
 async fn run(prepared: PreparedRun) -> Result<()> {
-    let PreparedRun {
-        args,
-        startup,
-        print_mode,
-    } = prepared;
+    let PreparedRun { args, startup, print_mode } = prepared;
 
     configure_debug_session_routing(&args, &startup, &print_mode).await;
 

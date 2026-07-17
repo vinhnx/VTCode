@@ -100,16 +100,11 @@ enum HiddenLinesNoticeKind {
 fn hidden_lines_notice(hidden: usize, kind: HiddenLinesNoticeKind) -> String {
     match kind {
         HiddenLinesNoticeKind::CommandPreview => {
-            format!(
-                "    {} (/share html for full transcript)",
-                shared_hidden_lines_summary(hidden)
-            )
+            format!("    {} (/share html for full transcript)", shared_hidden_lines_summary(hidden))
         }
-        HiddenLinesNoticeKind::Generic => format!(
-            "[... {} line{} truncated ...]",
-            hidden,
-            if hidden == 1 { "" } else { "s" }
-        ),
+        HiddenLinesNoticeKind::Generic => {
+            format!("[... {} line{} truncated ...]", hidden, if hidden == 1 { "" } else { "s" })
+        }
         HiddenLinesNoticeKind::TokenBudget => {
             "[... content truncated by token budget ...]".to_string()
         }
@@ -275,11 +270,8 @@ fn format_diff_line_with_gutter_and_syntax(
 }
 
 fn collect_run_command_preview(content: &str) -> (SmallVec<[&str; 32]>, usize, usize) {
-    let preview = excerpt_text_lines(
-        content,
-        RUN_COMMAND_HEAD_PREVIEW_LINES,
-        RUN_COMMAND_TAIL_PREVIEW_LINES,
-    );
+    let preview =
+        excerpt_text_lines(content, RUN_COMMAND_HEAD_PREVIEW_LINES, RUN_COMMAND_TAIL_PREVIEW_LINES);
     let mut collected: SmallVec<[&str; 32]> =
         SmallVec::with_capacity(preview.head.len() + preview.tail.len());
     collected.extend(preview.head.iter().copied());
@@ -423,9 +415,7 @@ pub(crate) fn render_diff_content_block(
         render_preview_line(
             renderer,
             &display_buffer,
-            rendered
-                .as_deref()
-                .filter(|r| *r != display_buffer.as_str()),
+            rendered.as_deref().filter(|r| *r != display_buffer.as_str()),
             None,
             false,
             fallback_style,
@@ -628,15 +618,7 @@ pub(crate) async fn render_stream_section(
             if apply_line_styles
                 && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
             {
-                render_preview_line(
-                    renderer,
-                    line,
-                    None,
-                    None,
-                    true,
-                    fallback_style,
-                    Some(style),
-                )?;
+                render_preview_line(renderer, line, None, None, true, fallback_style, Some(style))?;
             } else {
                 render_preview_line(renderer, line, None, None, true, fallback_style, None)?;
             }
@@ -772,10 +754,7 @@ mod tests {
 
     #[test]
     fn language_hint_from_path_extracts_extension() {
-        assert_eq!(
-            language_hint_from_path("vtcode-tui/src/ui/markdown.rs").as_deref(),
-            Some("rs")
-        );
+        assert_eq!(language_hint_from_path("vtcode-tui/src/ui/markdown.rs").as_deref(), Some("rs"));
         assert_eq!(language_hint_from_path("Makefile"), None);
     }
 }

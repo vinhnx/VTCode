@@ -47,10 +47,7 @@ pub struct UserPreferences {
 impl PromptContext {
     /// Create context from workspace
     pub fn from_workspace(workspace: PathBuf) -> Self {
-        Self {
-            workspace: Some(workspace),
-            ..Default::default()
-        }
+        Self { workspace: Some(workspace), ..Default::default() }
     }
 
     /// Add detected language
@@ -82,11 +79,7 @@ impl PromptContext {
     /// Add available skill metadata
     pub fn add_skill_metadata(&mut self, metadata: SkillMetadata) {
         self.add_skill(metadata.name.clone(), metadata.description.clone());
-        if !self
-            .available_skill_metadata
-            .iter()
-            .any(|skill| skill.name == metadata.name)
-        {
+        if !self.available_skill_metadata.iter().any(|skill| skill.name == metadata.name) {
             self.available_skill_metadata.push(metadata);
         }
     }
@@ -112,9 +105,8 @@ impl PromptContext {
 
     /// Infer capability level from available tools
     pub fn infer_capability_level(&mut self) {
-        self.capability_level = Some(crate::prompts::guidelines::infer_capability_level(
-            &self.available_tools,
-        ));
+        self.capability_level =
+            Some(crate::prompts::guidelines::infer_capability_level(&self.available_tools));
     }
 
     /// Set current working directory
@@ -153,11 +145,7 @@ impl PromptContext {
         );
         let outcome = manager.skills_metadata_lightweight(workspace);
         self.add_skill_metadata_entries(
-            outcome
-                .skills
-                .into_iter()
-                .filter(is_model_catalog_eligible)
-                .collect(),
+            outcome.skills.into_iter().filter(is_model_catalog_eligible).collect(),
         );
     }
 
@@ -288,10 +276,7 @@ mod tests {
 
         let context = PromptContext::from_workspace_tools(workspace.path(), [tools::CODE_SEARCH]);
 
-        assert_eq!(
-            context.languages,
-            vec!["Rust".to_string(), "TypeScript".to_string()]
-        );
+        assert_eq!(context.languages, vec!["Rust".to_string(), "TypeScript".to_string()]);
     }
 
     #[test]
@@ -328,16 +313,8 @@ mod tests {
     fn replace_available_skills_with_named_recomputes_scope() {
         let workspace = TempDir::new().expect("workspace tempdir");
         fs::create_dir(workspace.path().join(".git")).expect("create git dir");
-        write_skill(
-            &workspace.path().join(".agents/skills/alpha"),
-            "alpha",
-            "Alpha skill",
-        );
-        write_skill(
-            &workspace.path().join(".agents/skills/beta"),
-            "beta",
-            "Beta skill",
-        );
+        write_skill(&workspace.path().join(".agents/skills/alpha"), "alpha", "Alpha skill");
+        write_skill(&workspace.path().join(".agents/skills/beta"), "beta", "Beta skill");
 
         let home = TempDir::new().expect("home tempdir");
         let mut context =

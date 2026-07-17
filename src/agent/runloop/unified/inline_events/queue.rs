@@ -36,16 +36,11 @@ impl<'a> InlineQueueState<'a> {
         queued_inputs: &'a mut VecDeque<QueuedInput>,
         prefer_latest_once: &'a mut bool,
     ) -> Self {
-        Self {
-            handle,
-            queued_inputs,
-            prefer_latest_once,
-        }
+        Self { handle, queued_inputs, prefer_latest_once }
     }
 
     pub(crate) fn push(&mut self, input: SubmittedInput, primary_agent: Option<String>) {
-        self.queued_inputs
-            .push_back(QueuedInput::new(input, primary_agent));
+        self.queued_inputs.push_back(QueuedInput::new(input, primary_agent));
         *self.prefer_latest_once = true;
         self.sync_handle_queue();
     }
@@ -66,10 +61,7 @@ impl<'a> InlineQueueState<'a> {
     }
 
     pub(crate) fn edit_latest(&mut self) -> Option<String> {
-        let result = self
-            .queued_inputs
-            .pop_back()
-            .map(|queued| queued.input.text);
+        let result = self.queued_inputs.pop_back().map(|queued| queued.input.text);
         if result.is_some() {
             *self.prefer_latest_once = false;
         }
@@ -84,12 +76,8 @@ impl<'a> InlineQueueState<'a> {
     }
 
     fn sync_handle_queue(&self) {
-        self.handle.set_queued_inputs(
-            self.queued_inputs
-                .iter()
-                .map(QueuedInput::display_label)
-                .collect(),
-        );
+        self.handle
+            .set_queued_inputs(self.queued_inputs.iter().map(QueuedInput::display_label).collect());
     }
 }
 
@@ -110,24 +98,15 @@ mod tests {
         queue.push("third".into(), Some("review".to_string()));
 
         assert_eq!(
-            queue
-                .take_next_submission()
-                .map(|queued| queued.input.text)
-                .as_deref(),
+            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
             Some("third")
         );
         assert_eq!(
-            queue
-                .take_next_submission()
-                .map(|queued| queued.input.text)
-                .as_deref(),
+            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
             Some("first")
         );
         assert_eq!(
-            queue
-                .take_next_submission()
-                .map(|queued| queued.input.text)
-                .as_deref(),
+            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
             Some("second")
         );
     }
@@ -147,24 +126,15 @@ mod tests {
         queue.prefer_latest_next();
 
         assert_eq!(
-            queue
-                .take_next_submission()
-                .map(|queued| queued.input.text)
-                .as_deref(),
+            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
             Some("third")
         );
         assert_eq!(
-            queue
-                .take_next_submission()
-                .map(|queued| queued.input.text)
-                .as_deref(),
+            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
             Some("first")
         );
         assert_eq!(
-            queue
-                .take_next_submission()
-                .map(|queued| queued.input.text)
-                .as_deref(),
+            queue.take_next_submission().map(|queued| queued.input.text).as_deref(),
             Some("second")
         );
     }
@@ -199,10 +169,7 @@ mod tests {
 
         let first = vtcode_ui::tui::app::ContentPart::image("first", "image/png");
         let second = vtcode_ui::tui::app::ContentPart::image("second", "image/jpeg");
-        queue.push(
-            SubmittedInput::new("see images", vec![first.clone(), second.clone()]),
-            None,
-        );
+        queue.push(SubmittedInput::new("see images", vec![first.clone(), second.clone()]), None);
 
         let queued = queue.take_next_submission().expect("queued input");
         assert_eq!(queued.input.text, "see images");

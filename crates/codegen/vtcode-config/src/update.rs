@@ -144,11 +144,7 @@ impl UpdateConfig {
 
     /// Set version pin
     pub fn set_pin(&mut self, version: Version, reason: Option<String>, auto_unpin: bool) {
-        self.pin = Some(VersionPin {
-            version: Some(version),
-            reason,
-            auto_unpin,
-        });
+        self.pin = Some(VersionPin { version: Some(version), reason, auto_unpin });
     }
 
     /// Clear version pin
@@ -160,9 +156,7 @@ impl UpdateConfig {
     /// release is available. Returns `false` when not pinned or when
     /// `auto_unpin` was not set.
     pub fn should_auto_unpin(&self) -> bool {
-        self.pin
-            .as_ref()
-            .is_some_and(|p| p.auto_unpin && p.version.is_some())
+        self.pin.as_ref().is_some_and(|p| p.auto_unpin && p.version.is_some())
     }
 
     /// Check if update check is due based on interval
@@ -175,9 +169,7 @@ impl UpdateConfig {
             return true; // Never checked before
         };
 
-        let elapsed = std::time::SystemTime::now()
-            .duration_since(last_check)
-            .unwrap_or_default();
+        let elapsed = std::time::SystemTime::now().duration_since(last_check).unwrap_or_default();
 
         elapsed >= std::time::Duration::from_secs(self.check_interval_hours * 3600)
     }

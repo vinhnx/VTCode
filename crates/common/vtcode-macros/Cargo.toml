@@ -1,8 +1,8 @@
 [package]
 name = "vtcode-macros"
 version.workspace = true
-edition.workspace = true
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.93.0"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Procedural macros for VT Code"
 license.workspace = true

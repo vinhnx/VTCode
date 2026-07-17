@@ -54,11 +54,7 @@ pub struct WorkflowOptimizer {
 impl WorkflowOptimizer {
     /// Create optimizer from detector output.
     pub fn from_detector(patterns: Vec<DetectedPattern>, features: Vec<f64>) -> Self {
-        let mut optimizer = Self {
-            patterns,
-            features,
-            optimizations: Vec::new(),
-        };
+        let mut optimizer = Self { patterns, features, optimizations: Vec::new() };
 
         optimizer.analyze();
         optimizer

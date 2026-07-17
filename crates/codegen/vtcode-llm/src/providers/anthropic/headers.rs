@@ -47,11 +47,7 @@ pub fn combined_beta_header_value(
     let mut pieces: Vec<String> = Vec::new();
 
     if let Some(pc) = prompt_cache_beta_header_value(cache_enabled, settings) {
-        for p in pc
-            .split(',')
-            .map(|s| s.trim().to_owned())
-            .filter(|s| !s.is_empty())
-        {
+        for p in pc.split(',').map(|s| s.trim().to_owned()).filter(|s| !s.is_empty()) {
             pieces.push(p);
         }
     }

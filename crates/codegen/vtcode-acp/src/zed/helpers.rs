@@ -58,11 +58,10 @@ impl PrimaryAgentCatalog {
         }
 
         let active = ActivePrimaryAgentState::from_specs_with_default(specs, default_primary_agent);
-        let default_id = if options.iter().any(|option| {
-            option
-                .id
-                .eq_ignore_ascii_case(&active.active().identity.name)
-        }) {
+        let default_id = if options
+            .iter()
+            .any(|option| option.id.eq_ignore_ascii_case(&active.active().identity.name))
+        {
             active.active().identity.name.clone()
         } else {
             options
@@ -71,10 +70,7 @@ impl PrimaryAgentCatalog {
                 .unwrap_or_else(|| "duck".to_string())
         };
 
-        Self {
-            options,
-            default_id,
-        }
+        Self { options, default_id }
     }
 
     #[must_use]
@@ -88,10 +84,7 @@ impl PrimaryAgentCatalog {
         self.options
             .iter()
             .find_map(|option| {
-                option
-                    .id
-                    .eq_ignore_ascii_case(primary_agent)
-                    .then_some(option.id.as_str())
+                option.id.eq_ignore_ascii_case(primary_agent).then_some(option.id.as_str())
             })
             .or_else(|| {
                 self.options.iter().find_map(|option| {
@@ -263,9 +256,7 @@ fn local_tool_rule_name(rule: &str) -> String {
         .and_then(|rule| rule.split_once('(').map(|(tool_name, _)| tool_name))
         .filter(|tool_name| matches!(*tool_name, "bash" | "read" | "edit" | "write" | "webfetch"))
         .unwrap_or(&normalized);
-    local_tool_semantic_name(tool_name)
-        .unwrap_or(tool_name)
-        .to_string()
+    local_tool_semantic_name(tool_name).unwrap_or(tool_name).to_string()
 }
 
 fn local_tool_rules_match(rules: &HashSet<String>, tool_name: &str) -> bool {
@@ -494,10 +485,7 @@ mod tests {
 
     #[test]
     fn build_available_commands_includes_templates_and_deduplicates_names() {
-        let slash_command = SlashCommandInfo {
-            name: "status",
-            description: "Show status",
-        };
+        let slash_command = SlashCommandInfo { name: "status", description: "Show status" };
         let templates = vec![
             PromptTemplate {
                 name: "custom-plan".to_string(),
@@ -514,10 +502,7 @@ mod tests {
         ];
 
         let commands = build_available_commands(&[&slash_command], &templates);
-        let names = commands
-            .iter()
-            .map(|command| command.name.as_str())
-            .collect::<Vec<_>>();
+        let names = commands.iter().map(|command| command.name.as_str()).collect::<Vec<_>>();
         assert_eq!(names, vec!["status", "custom-plan"]);
     }
 }

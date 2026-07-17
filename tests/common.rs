@@ -22,10 +22,7 @@ impl TestEnv {
         // Change to temp directory for tests
         env::set_current_dir(temp_dir.path()).expect("Failed to change directory");
 
-        Self {
-            temp_dir,
-            original_cwd,
-        }
+        Self { temp_dir, original_cwd }
     }
 
     pub fn path(&self) -> &Path {
@@ -40,8 +37,7 @@ impl TestEnv {
 
     pub fn create_test_dir(&self, name: &str) -> PathBuf {
         let dir = self.temp_dir.child(name);
-        dir.create_dir_all()
-            .expect("Failed to create test directory");
+        dir.create_dir_all().expect("Failed to create test directory");
         dir.path().to_path_buf()
     }
 }

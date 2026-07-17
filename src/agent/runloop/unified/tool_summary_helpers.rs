@@ -79,18 +79,12 @@ pub(super) fn describe_list_files(
     if let Some(pattern) = lookup_string(args, "name_pattern") {
         let mut used = HashSet::new();
         used.insert("name_pattern".to_string());
-        return Some((
-            format!("Find files named {}", truncate_middle(&pattern, 40)),
-            used,
-        ));
+        return Some((format!("Find files named {}", truncate_middle(&pattern, 40)), used));
     }
     if let Some(pattern) = lookup_string(args, "content_pattern") {
         let mut used = HashSet::new();
         used.insert("content_pattern".to_string());
-        return Some((
-            format!("Search files for {}", truncate_middle(&pattern, 40)),
-            used,
-        ));
+        return Some((format!("Search files for {}", truncate_middle(&pattern, 40)), used));
     }
     None
 }
@@ -176,10 +170,7 @@ pub(super) fn lookup_string(args: &Value, key: &str) -> Option<String> {
 /// Keys whose values are file-system paths and should be displayed relative to
 /// the workspace root when possible.
 fn is_path_key(key: &str) -> bool {
-    matches!(
-        key,
-        "path" | "file_path" | "filename" | "destination" | "source"
-    )
+    matches!(key, "path" | "file_path" | "filename" | "destination" | "source")
 }
 
 /// Relativize an absolute `path` against the `workspace_root` for compact display.
@@ -288,20 +279,14 @@ pub(super) fn collect_param_details(
                 } else {
                     Cow::Borrowed(s.as_str())
                 };
-                details.push(format!(
-                    "{}: {}",
-                    humanize_key(key),
-                    truncate_middle(&display, 60)
-                ))
+                details.push(format!("{}: {}", humanize_key(key), truncate_middle(&display, 60)))
             }
             Value::Bool(true) => {
                 details.push(humanize_key(key));
             }
             Value::Array(items) => {
-                let strings: Vec<String> = items
-                    .iter()
-                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                    .collect();
+                let strings: Vec<String> =
+                    items.iter().filter_map(|item| item.as_str().map(|s| s.to_string())).collect();
                 if !strings.is_empty() {
                     details.push(format!(
                         "{}: {}",
@@ -407,11 +392,8 @@ pub(super) fn summarize_list(items: &[String], max_items: usize, max_len: usize)
     if items.is_empty() {
         return String::new();
     }
-    let shown: Vec<String> = items
-        .iter()
-        .take(max_items)
-        .map(|s| truncate_middle(s, max_len))
-        .collect();
+    let shown: Vec<String> =
+        items.iter().take(max_items).map(|s| truncate_middle(s, max_len)).collect();
     if items.len() > max_items {
         format!("{} +{} more", shown.join(", "), items.len() - max_items)
     } else {

@@ -60,23 +60,21 @@ pub(super) async fn refresh_runtime_debug_context_for_next_session(
 ) -> Result<()> {
     let session_id = match next_runtime_archive_id_request(workspace, resume) {
         NextRuntimeArchiveId::Existing(identifier) => identifier,
-        NextRuntimeArchiveId::Reserve {
-            workspace_label,
-            custom_suffix,
-        } if vtcode_core::utils::session_archive::history_persistence_enabled() => {
+        NextRuntimeArchiveId::Reserve { workspace_label, custom_suffix }
+            if vtcode_core::utils::session_archive::history_persistence_enabled() =>
+        {
             vtcode_core::utils::session_archive::reserve_session_archive_identifier(
                 &workspace_label,
                 custom_suffix,
             )
             .await?
         }
-        NextRuntimeArchiveId::Reserve {
-            workspace_label,
-            custom_suffix,
-        } => vtcode_core::utils::session_archive::generate_session_archive_identifier(
-            &workspace_label,
-            custom_suffix,
-        ),
+        NextRuntimeArchiveId::Reserve { workspace_label, custom_suffix } => {
+            vtcode_core::utils::session_archive::generate_session_archive_identifier(
+                &workspace_label,
+                custom_suffix,
+            )
+        }
     };
 
     crate::main_helpers::configure_runtime_debug_context(session_id.clone(), Some(session_id));

@@ -67,8 +67,7 @@ fn record_tool_execution(
     is_argument_error: bool,
 ) {
     let duration = start_time.elapsed();
-    ctx.tool_health_tracker
-        .record_execution(tool_name, success, duration);
+    ctx.tool_health_tracker.record_execution(tool_name, success, duration);
     if !is_argument_error {
         ctx.autonomous_executor.record_execution(tool_name, success);
     }
@@ -112,10 +111,9 @@ fn extract_written_path(tool_name: &str, args: &serde_json::Value) -> Option<Str
                 _ => None,
             }
         }
-        tools::APPLY_PATCH => args
-            .get("path")
-            .and_then(serde_json::Value::as_str)
-            .map(|s| s.to_string()),
+        tools::APPLY_PATCH => {
+            args.get("path").and_then(serde_json::Value::as_str).map(|s| s.to_string())
+        }
         _ => None,
     }
 }
@@ -145,25 +143,12 @@ pub(crate) async fn handle_tool_execution_result<'a>(
         false
     };
 
-    record_tool_execution(
-        t_ctx.ctx,
-        tool_name,
-        tool_start_time,
-        is_success,
-        is_argument_error,
-    );
+    record_tool_execution(t_ctx.ctx, tool_name, tool_start_time, is_success, is_argument_error);
 
     match &pipeline_outcome.status {
         ToolExecutionStatus::Success { output, .. } => {
-            handle_success(
-                t_ctx,
-                tool_call_id,
-                tool_name,
-                args_val,
-                pipeline_outcome,
-                output,
-            )
-            .await?;
+            handle_success(t_ctx, tool_call_id, tool_name, args_val, pipeline_outcome, output)
+                .await?;
         }
         ToolExecutionStatus::Failure { error } => {
             if let Some(outcome) =
@@ -231,18 +216,13 @@ async fn handle_success<'a>(
     // Recording its signature would cause the turn-local guard
     // (`has_successful_readonly_signature`) to treat future identical calls as
     // duplicates and return the stale loop-detected stub instead of re-executing.
-    let is_loop_detected_stub = output
-        .get("loop_detected")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let is_loop_detected_stub =
+        output.get("loop_detected").and_then(|v| v.as_bool()).unwrap_or(false);
     if !is_loop_detected_stub
         && !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args_val).mutating
     {
         let signature = signature_key_for(tool_name, args_val);
-        t_ctx
-            .ctx
-            .harness_state
-            .record_successful_readonly_signature(signature);
+        t_ctx.ctx.harness_state.record_successful_readonly_signature(signature);
     } else {
         // Record written files for read-after-write guard
         if let Some(path) = extract_written_path(tool_name, args_val) {
@@ -266,10 +246,7 @@ async fn handle_success<'a>(
         t_ctx.turn_modified_files.insert(f);
     }
     t_ctx.ctx.session_stats.record_touched_files(
-        t_ctx
-            .turn_modified_files
-            .iter()
-            .map(|path| path.display().to_string()),
+        t_ctx.turn_modified_files.iter().map(|path| path.display().to_string()),
     );
     merge_subagent_completion_into_memory(t_ctx.ctx, tool_name, output)?;
 
@@ -339,13 +316,8 @@ async fn handle_failure<'a>(
 
     // Record genuine tool errors for recovery diagnostics (skip policy denials)
     if !is_planning_active_denial && !blocked_or_denied_failure {
-        record_recovery_tool_error(
-            t_ctx.ctx,
-            tool_name,
-            error,
-            RecoveryErrorType::ToolExecution,
-        )
-        .await;
+        record_recovery_tool_error(t_ctx.ctx, tool_name, error, RecoveryErrorType::ToolExecution)
+            .await;
     }
 
     finalize_failed_tool_response(t_ctx, tool_call_id, tool_name, args_val, error, "execution")
@@ -355,13 +327,7 @@ async fn handle_failure<'a>(
         let streak = t_ctx.ctx.record_blocked_tool_call();
         let max_streak = super::handlers::max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx);
         if streak > max_streak {
-            emit_turn_metric_log(
-                t_ctx.ctx,
-                "blocked_streak_break",
-                tool_name,
-                streak,
-                max_streak,
-            );
+            emit_turn_metric_log(t_ctx.ctx, "blocked_streak_break", tool_name, streak, max_streak);
             let display_tool = tool_action_label(tool_name, args_val);
             let block_reason = format!(
                 "Consecutive blocked/denied tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
@@ -446,10 +412,8 @@ async fn run_post_tool_hooks<'a>(
                 }
             }
             Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to run post-tool hooks: {err}"),
-                )?;
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("Failed to run post-tool hooks: {err}"))?;
             }
         }
     }

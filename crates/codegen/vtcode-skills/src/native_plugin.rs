@@ -224,9 +224,7 @@ fn normalize_trusted_dir(path: PathBuf) -> PathBuf {
         if path.is_absolute() {
             path
         } else {
-            std::env::current_dir()
-                .map(|cwd| cwd.join(&path))
-                .unwrap_or(path)
+            std::env::current_dir().map(|cwd| cwd.join(&path)).unwrap_or(path)
         }
     })
 }
@@ -355,9 +353,7 @@ pub struct PluginLoader {
 impl PluginLoader {
     /// Create a new plugin loader
     pub fn new() -> Self {
-        Self {
-            trusted_dirs: Vec::new(),
-        }
+        Self { trusted_dirs: Vec::new() }
     }
 
     /// Add a trusted plugin directory
@@ -763,27 +759,19 @@ mod tests {
     fn test_ensure_non_null_c_string_ptr_rejects_null() {
         let err = ensure_non_null_c_string_ptr(std::ptr::null::<c_char>(), "Test pointer")
             .expect_err("null pointer should be rejected");
-        assert!(
-            err.to_string()
-                .contains("Test pointer returned null pointer")
-        );
+        assert!(err.to_string().contains("Test pointer returned null pointer"));
     }
 
     #[test]
     fn test_decode_plugin_c_string_frees_plugin_buffer() {
         TEST_FREE_WAS_CALLED.with(|was_called| was_called.set(false));
 
-        let raw = CString::new("{\"ok\":true}")
-            .expect("valid C string")
-            .into_raw();
+        let raw = CString::new("{\"ok\":true}").expect("valid C string").into_raw();
         let ptr = NonNull::new(raw).expect("non-null raw pointer");
 
-        let decoded = decode_plugin_c_string(
-            ptr,
-            Some(test_free_string),
-            "Plugin result is not valid UTF-8",
-        )
-        .expect("valid UTF-8 payload");
+        let decoded =
+            decode_plugin_c_string(ptr, Some(test_free_string), "Plugin result is not valid UTF-8")
+                .expect("valid UTF-8 payload");
 
         assert_eq!(decoded, "{\"ok\":true}");
         TEST_FREE_WAS_CALLED.with(|was_called| assert!(was_called.get()));
@@ -805,10 +793,7 @@ mod tests {
         )
         .expect_err("invalid UTF-8 should fail decoding");
 
-        assert!(
-            err.to_string()
-                .contains("Plugin payload is not valid UTF-8")
-        );
+        assert!(err.to_string().contains("Plugin payload is not valid UTF-8"));
         TEST_FREE_WAS_CALLED.with(|was_called| assert!(was_called.get()));
     }
 

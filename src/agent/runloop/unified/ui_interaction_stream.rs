@@ -43,10 +43,7 @@ fn first_progress_timeout_error(provider_name: &str, budget: Duration) -> uni::L
     uni::LLMError::Provider {
         message: error_display::format_llm_error(
             provider_name,
-            &format!(
-                "LLM first token timed out after {} seconds",
-                budget.as_secs()
-            ),
+            &format!("LLM first token timed out after {} seconds", budget.as_secs()),
         ),
         metadata: None,
     }
@@ -504,9 +501,7 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
     let mut last_reasoning_render_at = Instant::now();
 
     let mut suppress_reasoning_due_to_duplication = false;
-    let mut plan_parser = options
-        .strip_proposed_plan_blocks
-        .then(ProposedPlanStreamParser::new);
+    let mut plan_parser = options.strip_proposed_plan_blocks.then(ProposedPlanStreamParser::new);
 
     let mut token_count = 0;
     let mut reasoning_token_count = 0;
@@ -854,18 +849,13 @@ pub(crate) async fn render_stream_with_options_and_copilot_runtime_impl(
                 provider_name,
                 "Stream ended without a completion event",
             );
-            return Err(uni::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(uni::LLMError::Provider { message: formatted_error, metadata: None });
         }
     };
 
     if !pending_content.is_empty() && !content_suppressed {
-        let reasoning_for_compare = response
-            .reasoning
-            .as_deref()
-            .unwrap_or(reasoning_accumulated.as_str());
+        let reasoning_for_compare =
+            response.reasoning.as_deref().unwrap_or(reasoning_accumulated.as_str());
         if !reasoning_for_compare.trim().is_empty()
             && reasoning_matches_content(reasoning_for_compare, &pending_content)
         {
@@ -1093,29 +1083,23 @@ mod tests {
 
         let mut stream: uni::LLMStream = Box::pin(stream::once(async {
             tokio::time::sleep(Duration::from_millis(5)).await;
-            Ok(LLMStreamEvent::Completed {
-                response: Box::new(completed_response("ok")),
-            })
+            Ok(LLMStreamEvent::Completed { response: Box::new(completed_response("ok")) })
         }));
 
         let (runtime_tx, mut runtime_rx) = mpsc::unbounded_channel();
         runtime_tx
-            .send(CopilotRuntimeRequest::ObservedToolCall(
-                CopilotObservedToolCall {
-                    tool_call_id: "call_1".to_string(),
-                    tool_name: "copilot_tool".to_string(),
-                    status: CopilotObservedToolCallStatus::Pending,
-                    arguments: None,
-                    output: None,
-                    terminal_id: None,
-                },
-            ))
+            .send(CopilotRuntimeRequest::ObservedToolCall(CopilotObservedToolCall {
+                tool_call_id: "call_1".to_string(),
+                tool_name: "copilot_tool".to_string(),
+                status: CopilotObservedToolCallStatus::Pending,
+                arguments: None,
+                output: None,
+                terminal_id: None,
+            }))
             .expect("send runtime request");
         drop(runtime_tx);
 
-        let mut handler = SleepingRuntimeHandler {
-            sleep_for: Duration::from_millis(40),
-        };
+        let mut handler = SleepingRuntimeHandler { sleep_for: Duration::from_millis(40) };
 
         let result = render_stream_with_options_and_copilot_runtime_impl(
             "copilot",
@@ -1123,9 +1107,7 @@ mod tests {
             None,
             Some(&mut runtime_rx),
             Some(&mut handler),
-            Some(FirstProgressTimeout::starting_now(Duration::from_millis(
-                20,
-            ))),
+            Some(FirstProgressTimeout::starting_now(Duration::from_millis(20))),
             &spinner,
             &mut renderer,
             &ctrl_c_state,
@@ -1135,10 +1117,7 @@ mod tests {
         )
         .await;
 
-        assert!(
-            result.is_ok(),
-            "runtime request should clear the first-progress timeout"
-        );
+        assert!(result.is_ok(), "runtime request should clear the first-progress timeout");
     }
 
     #[tokio::test]
@@ -1150,9 +1129,7 @@ mod tests {
 
         let mut stream: uni::LLMStream = Box::pin(stream::once(async {
             tokio::time::sleep(Duration::from_millis(40)).await;
-            Ok(LLMStreamEvent::Completed {
-                response: Box::new(completed_response("ok")),
-            })
+            Ok(LLMStreamEvent::Completed { response: Box::new(completed_response("ok")) })
         }));
 
         let result = render_stream_with_options_and_copilot_runtime_impl(

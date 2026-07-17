@@ -232,18 +232,12 @@ fn shell_syntax_segments(
         })
         .collect::<Vec<_>>();
 
-    let converted_text = converted
-        .iter()
-        .map(|segment| segment.text.as_str())
-        .collect::<String>();
+    let converted_text = converted.iter().map(|segment| segment.text.as_str()).collect::<String>();
     if converted_text != text {
         return semantic;
     }
 
-    let non_ws_count = semantic
-        .iter()
-        .filter(|segment| !segment.text.trim().is_empty())
-        .count();
+    let non_ws_count = semantic.iter().filter(|segment| !segment.text.trim().is_empty()).count();
     if non_ws_count > 1 {
         let mut first: Option<&InlineTextStyle> = None;
         let mut has_distinct = false;
@@ -304,10 +298,7 @@ fn apply_sgr_codes(sequence: &str, current: &mut InlineTextStyle, fallback: &Inl
     let params: Vec<u16> = if sequence.trim().is_empty() {
         vec![0]
     } else {
-        sequence
-            .split(';')
-            .map(|value| value.parse::<u16>().unwrap_or(0))
-            .collect()
+        sequence.split(';').map(|value| value.parse::<u16>().unwrap_or(0)).collect()
     };
 
     let mut index = 0usize;
@@ -376,9 +367,7 @@ fn sgr_payload(sequence: &str) -> Option<&str> {
 
 fn parse_osc8_target(sequence: &str) -> Option<Option<String>> {
     let payload = sequence.strip_prefix("\u{1b}]8;")?;
-    let payload = payload
-        .strip_suffix("\u{1b}\\")
-        .or_else(|| payload.strip_suffix('\u{7}'))?;
+    let payload = payload.strip_suffix("\u{1b}\\").or_else(|| payload.strip_suffix('\u{7}'))?;
     let (_, uri) = payload.split_once(';')?;
     if uri.is_empty() {
         Some(None)
@@ -423,10 +412,7 @@ fn ansi_output_segments(
                         target: InlineLinkTarget::Url(url),
                     });
                 }
-                segments.push(InlineSegment {
-                    text,
-                    style: Arc::new(current.clone()),
-                });
+                segments.push(InlineSegment { text, style: Arc::new(current.clone()) });
                 visible_offset = end;
             }
 
@@ -465,22 +451,13 @@ fn ansi_output_segments(
                 target: InlineLinkTarget::Url(url),
             });
         }
-        segments.push(InlineSegment {
-            text: text_buffer,
-            style: Arc::new(current),
-        });
+        segments.push(InlineSegment { text: text_buffer, style: Arc::new(current) });
     }
 
     if segments.is_empty() {
         return None;
     }
-    Some((
-        segments
-            .into_iter()
-            .filter(|segment| !segment.text.is_empty())
-            .collect(),
-        link_ranges,
-    ))
+    Some((segments.into_iter().filter(|segment| !segment.text.is_empty()).collect(), link_ranges))
 }
 
 fn append_output_segments_with_ansi(
@@ -589,10 +566,7 @@ mod tests {
             &styles,
         );
 
-        let text = segments
-            .iter()
-            .map(|segment| segment.text.as_str())
-            .collect::<String>();
+        let text = segments.iter().map(|segment| segment.text.as_str()).collect::<String>();
         assert_eq!(text, "  └ Go docs now");
         assert_eq!(link_ranges.len(), 1);
         assert_eq!(link_ranges[0].start, 7);

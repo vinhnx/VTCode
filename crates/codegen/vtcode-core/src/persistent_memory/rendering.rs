@@ -20,11 +20,8 @@ pub(crate) fn render_memory_index(
     notes: &[MemoryNoteSummary],
     pending_rollouts: usize,
 ) -> String {
-    let mut highlights: Vec<_> = preferences
-        .iter()
-        .chain(repository_facts.iter())
-        .cloned()
-        .collect();
+    let mut highlights: Vec<_> =
+        preferences.iter().chain(repository_facts.iter()).cloned().collect();
     let skip = highlights.len().saturating_sub(MEMORY_HIGHLIGHT_LIMIT);
     highlights = highlights.into_iter().skip(skip).collect();
     let mut out = String::from("# VT Code Memory Registry\n\n## Files\n");
@@ -35,10 +32,7 @@ pub(crate) fn render_memory_index(
     );
     out.push_str("- `notes/`: User-authored durable notes available to the native memory tool.\n");
     out.push_str("- `rollout_summaries/`: Per-session evidence summaries.\n");
-    let _ = write!(
-        out,
-        "\n## Rollout Status\n- Pending rollout summaries: {pending_rollouts}\n"
-    );
+    let _ = write!(out, "\n## Rollout Status\n- Pending rollout summaries: {pending_rollouts}\n");
     out.push_str("\n## Highlights\n");
     if highlights.is_empty() {
         out.push_str("- No persistent notes yet.\n");
@@ -72,9 +66,7 @@ pub(crate) fn render_memory_summary(
         .map(|f| f.fact.clone())
         .collect();
     bullets.extend(notes.iter().filter_map(|n| {
-        n.highlights
-            .first()
-            .map(|h| format!("Note ({}): {}", n.relative_path, h))
+        n.highlights.first().map(|h| format!("Note ({}): {}", n.relative_path, h))
     }));
     let skip = bullets.len().saturating_sub(MEMORY_HIGHLIGHT_LIMIT);
     bullets = bullets.into_iter().skip(skip).collect();
@@ -93,19 +85,13 @@ pub(crate) fn render_memory_summary_bullets(bullets: &[String]) -> String {
 }
 
 pub(crate) fn render_rollout_summary(classified: &ClassifiedFacts) -> String {
-    let mut out = format!(
-        "# Rollout Summary\n\n- Generated: {}\n",
-        chrono::Utc::now().to_rfc3339()
-    );
+    let mut out =
+        format!("# Rollout Summary\n\n- Generated: {}\n", chrono::Utc::now().to_rfc3339());
     if classified.total() == 0 {
         out.push_str("\n- No durable facts captured.\n");
     } else {
         out.push('\n');
-        for f in classified
-            .preferences
-            .iter()
-            .chain(&classified.repository_facts)
-        {
+        for f in classified.preferences.iter().chain(&classified.repository_facts) {
             let _ = writeln!(out, "- [{}] {}", f.source, f.fact);
         }
     }
@@ -113,9 +99,6 @@ pub(crate) fn render_rollout_summary(classified: &ClassifiedFacts) -> String {
 }
 
 pub(crate) fn unique_rollout_id() -> String {
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
+    let millis = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     format!("rollout-{millis}")
 }

@@ -287,15 +287,11 @@ where
     }
 
     fn workspace_paths_for(&self, _workspace_root: &Path) -> Box<dyn WorkspacePaths> {
-        Box::new(WorkspacePathsWrapper {
-            inner: Arc::clone(&self.paths),
-        })
+        Box::new(WorkspacePathsWrapper { inner: Arc::clone(&self.paths) })
     }
 
     fn home_config_paths(&self, config_file_name: &str) -> Vec<PathBuf> {
-        self.home_paths
-            .clone()
-            .unwrap_or_else(|| default_home_paths(config_file_name))
+        self.home_paths.clone().unwrap_or_else(|| default_home_paths(config_file_name))
     }
 
     fn syntax_theme(&self) -> String {
@@ -358,10 +354,7 @@ mod tests {
     #[serial]
     fn get_config_dir_uses_env_override() {
         with_env_var("VTCODE_CONFIG", Some("/tmp/vtcode-config-test"), || {
-            assert_eq!(
-                get_config_dir(),
-                Some(PathBuf::from("/tmp/vtcode-config-test"))
-            );
+            assert_eq!(get_config_dir(), Some(PathBuf::from("/tmp/vtcode-config-test")));
         });
     }
 
@@ -401,10 +394,7 @@ mod tests {
         let key = "VTCODE_CONFIG";
         let initial = super::read_env_var(key);
         with_env_var(key, Some("/tmp/vtcode-config-test"), || {
-            assert_eq!(
-                super::read_env_var(key),
-                Some("/tmp/vtcode-config-test".to_string())
-            );
+            assert_eq!(super::read_env_var(key), Some("/tmp/vtcode-config-test".to_string()));
         });
         assert_eq!(super::read_env_var(key), initial);
     }

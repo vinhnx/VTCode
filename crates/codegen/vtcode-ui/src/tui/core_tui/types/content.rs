@@ -14,10 +14,7 @@ impl ContentPart {
     }
 
     pub fn image(data: impl Into<String>, media_type: impl Into<String>) -> Self {
-        Self::Image {
-            data: data.into(),
-            media_type: media_type.into(),
-        }
+        Self::Image { data: data.into(), media_type: media_type.into() }
     }
 
     pub fn is_image(&self) -> bool {

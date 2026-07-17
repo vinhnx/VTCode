@@ -360,10 +360,7 @@ impl CircuitBreaker {
     /// Get the circuit state for a specific tool
     pub fn state_for_tool(&self, tool_name: &str) -> CircuitState {
         let states = self.tool_states.read();
-        states
-            .get(tool_name)
-            .map(|s| s.status)
-            .unwrap_or(CircuitState::Closed)
+        states.get(tool_name).map(|s| s.status).unwrap_or(CircuitState::Closed)
     }
 
     /// Reset the circuit breaker state for a specific tool
@@ -502,10 +499,7 @@ mod tests {
         let diagnostics = breaker.get_diagnostics("shell");
         assert_eq!(diagnostics.denied_requests, 1);
         assert!(diagnostics.last_denied_at.is_some());
-        assert_eq!(
-            diagnostics.last_error_category,
-            Some(ErrorCategory::ExecutionError)
-        );
+        assert_eq!(diagnostics.last_error_category, Some(ErrorCategory::ExecutionError));
     }
 
     #[test]
@@ -549,10 +543,7 @@ mod tests {
 
         breaker.record_failure_category_for_tool("shell", ErrorCategory::ExecutionError);
 
-        assert_eq!(
-            breaker.get_diagnostics("shell").current_backoff,
-            Duration::from_millis(10)
-        );
+        assert_eq!(breaker.get_diagnostics("shell").current_backoff, Duration::from_millis(10));
     }
 
     #[test]

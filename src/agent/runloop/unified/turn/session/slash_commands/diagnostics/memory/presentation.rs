@@ -124,10 +124,9 @@ pub(super) fn memory_lightweight_route_info(
     let effective_label = match resolution.source {
         LightweightRouteSource::MainModel => runtime_config.model.clone(),
         _ => match resolution.fallback_to_main_model() {
-            Some(fallback) => format!(
-                "{} -> fallback {}",
-                resolution.primary.model, fallback.model
-            ),
+            Some(fallback) => {
+                format!("{} -> fallback {}", resolution.primary.model, fallback.model)
+            }
             None => resolution.primary.model.clone(),
         },
     };
@@ -151,11 +150,7 @@ pub(super) fn show_memory_actions_modal(
     agents: &[String],
     matched_rules: &[String],
 ) {
-    let agent_config = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent.clone())
-        .unwrap_or_default();
+    let agent_config = ctx.vt_cfg.as_ref().map(|cfg| cfg.agent.clone()).unwrap_or_default();
     let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
     let title = if config_mode {
         "Memory Settings"
@@ -195,10 +190,7 @@ pub(super) fn show_memory_actions_modal(
             "clean"
         },
     ));
-    lines.push(format!(
-        "Effective memory route: {}",
-        lightweight_route.effective_label
-    ));
+    lines.push(format!("Effective memory route: {}", lightweight_route.effective_label));
     if let Some(warning) = &lightweight_route.warning {
         lines.push(format!("Route warning: {warning}"));
     }
@@ -245,14 +237,8 @@ pub(super) fn show_memory_actions_modal(
         search_value: Some("memory lightweight model toggle".to_string()),
     });
     items.push(InlineListItem {
-        title: format!(
-            "Memory Triage Model ({})",
-            lightweight_route.configured_label
-        ),
-        subtitle: Some(format!(
-            "Effective route: {}",
-            lightweight_route.effective_label
-        )),
+        title: format!("Memory Triage Model ({})", lightweight_route.configured_label),
+        subtitle: Some(format!("Effective route: {}", lightweight_route.effective_label)),
         badge: Some("Pick".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!(
@@ -280,10 +266,7 @@ pub(super) fn show_memory_actions_modal(
     });
     items.push(InlineListItem {
         title: "Use main model".to_string(),
-        subtitle: Some(format!(
-            "Keep memory extraction on {}.",
-            lightweight_route.main_model
-        )),
+        subtitle: Some(format!("Keep memory extraction on {}.", lightweight_route.main_model)),
         badge: Some(if lightweight_route.configured_label == "Use main model" {
             "Current".to_string()
         } else {
@@ -295,26 +278,19 @@ pub(super) fn show_memory_actions_modal(
         ))),
         search_value: Some("memory lightweight model main".to_string()),
     });
-    items.extend(lightweight_route.choices.iter().map(|model| {
-        InlineListItem {
-            title: model.clone(),
-            subtitle: Some("Explicit same-provider lightweight model.".to_string()),
-            badge: Some(
-                if lightweight_route
-                    .configured_label
-                    .eq_ignore_ascii_case(model.as_str())
-                {
-                    "Current".to_string()
-                } else {
-                    "Model".to_string()
-                },
-            ),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}{model}"
-            ))),
-            search_value: Some(format!("memory lightweight triage {model}")),
-        }
+    items.extend(lightweight_route.choices.iter().map(|model| InlineListItem {
+        title: model.clone(),
+        subtitle: Some("Explicit same-provider lightweight model.".to_string()),
+        badge: Some(if lightweight_route.configured_label.eq_ignore_ascii_case(model.as_str()) {
+            "Current".to_string()
+        } else {
+            "Model".to_string()
+        }),
+        indent: 0,
+        selection: Some(InlineListSelection::ConfigAction(format!(
+            "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}{model}"
+        ))),
+        search_value: Some(format!("memory lightweight triage {model}")),
     }));
     items.extend([
         InlineListItem {
@@ -501,9 +477,7 @@ pub(super) fn show_memory_actions_modal(
         title,
         lines,
         items,
-        Some(InlineListSelection::ConfigAction(format!(
-            "{MEMORY_ACTION_PREFIX}toggle_enabled"
-        ))),
+        Some(InlineListSelection::ConfigAction(format!("{MEMORY_ACTION_PREFIX}toggle_enabled"))),
         None,
     );
 }

@@ -246,11 +246,7 @@ impl InlineHandle {
     }
 
     pub fn append_pasted_message(&self, kind: InlineMessageKind, text: String, line_count: usize) {
-        self.send_command(InlineCommand::AppendPastedMessage {
-            kind,
-            text,
-            line_count,
-        });
+        self.send_command(InlineCommand::AppendPastedMessage { kind, text, line_count });
     }
 
     pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
@@ -263,12 +259,7 @@ impl InlineHandle {
         kind: InlineMessageKind,
         lines: Vec<Vec<InlineSegment>>,
     ) {
-        self.send_command(InlineCommand::ReplaceLast {
-            count,
-            kind,
-            lines,
-            link_ranges: None,
-        });
+        self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: None });
     }
 
     pub fn replace_last_with_links(
@@ -323,9 +314,7 @@ impl InlineHandle {
     }
 
     pub fn set_header_context(&self, context: InlineHeaderContext) {
-        self.send_command(InlineCommand::SetHeaderContext {
-            context: Box::new(context),
-        });
+        self.send_command(InlineCommand::SetHeaderContext { context: Box::new(context) });
     }
 
     pub fn set_input_status(&self, left: Option<String>, right: Option<String>) {
@@ -405,10 +394,7 @@ impl InlineHandle {
     }
 
     pub fn set_inline_prompt_suggestion(&self, suggestion: String, llm_generated: bool) {
-        self.send_command(InlineCommand::SetInlinePromptSuggestion {
-            suggestion,
-            llm_generated,
-        });
+        self.send_command(InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated });
     }
 
     pub fn clear_inline_prompt_suggestion(&self) {
@@ -428,9 +414,7 @@ impl InlineHandle {
     }
 
     pub fn show_transient(&self, request: TransientRequest) {
-        self.send_command(InlineCommand::ShowTransient {
-            request: Box::new(request),
-        });
+        self.send_command(InlineCommand::ShowTransient { request: Box::new(request) });
     }
 
     pub fn show_modal(
@@ -484,12 +468,10 @@ impl InlineHandle {
     }
 
     pub fn configure_agent_palette(&self, agents: Vec<AgentPaletteItem>) {
-        self.show_transient(TransientRequest::AgentPalette(
-            AgentPaletteTransientRequest {
-                agents,
-                visible: None,
-            },
-        ));
+        self.show_transient(TransientRequest::AgentPalette(AgentPaletteTransientRequest {
+            agents,
+            visible: None,
+        }));
     }
 
     pub fn show_history_picker(&self) {
@@ -565,9 +547,7 @@ impl InlineSession {
     }
 
     pub fn clone_inline_handle(&self) -> InlineHandle {
-        InlineHandle {
-            sender: self.handle.sender.clone(),
-        }
+        InlineHandle { sender: self.handle.sender.clone() }
     }
 }
 

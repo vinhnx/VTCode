@@ -14,10 +14,7 @@ impl ToolRegistry {
     pub(super) async fn execute_apply_patch_internal(&self, args: Value) -> Result<Value> {
         let patch_input =
             crate::tools::apply_patch::decode_apply_patch_input(&args)?.ok_or_else(|| {
-                anyhow!(
-                    "Missing patch input {}",
-                    crate::tools::error_helpers::PATCH_PARAMETER_HINT
-                )
+                anyhow!("Missing patch input {}", crate::tools::error_helpers::PATCH_PARAMETER_HINT)
             })?;
         let override_snapshot = conflict_override_snapshot(&args);
 
@@ -38,9 +35,8 @@ impl ToolRegistry {
         for write in planned_writes {
             let (path, result) = match write {
                 PlannedPatchWrite::Text { path, content } => {
-                    let result = self
-                        .edited_file_monitor_ref()
-                        .record_agent_write_text(&path, &content);
+                    let result =
+                        self.edited_file_monitor_ref().record_agent_write_text(&path, &content);
                     (path, result)
                 }
                 PlannedPatchWrite::Removal { path } => {
@@ -74,9 +70,8 @@ impl ToolRegistry {
     ) -> Result<Vec<PathBuf>> {
         let mut paths = Vec::new();
         for path in crate::tools::apply_patch::patch_mutation_target_paths(patch) {
-            let path = path
-                .to_str()
-                .ok_or_else(|| anyhow!("apply_patch path is not valid UTF-8"))?;
+            let path =
+                path.to_str().ok_or_else(|| anyhow!("apply_patch path is not valid UTF-8"))?;
             paths.push(self.file_ops_tool().normalize_user_path(path).await?);
         }
         paths.sort();
@@ -171,16 +166,10 @@ impl ToolRegistry {
                     path: self.file_ops_tool().normalize_user_path(path).await?,
                 }])
             }
-            crate::tools::editing::PatchOperation::UpdateFile {
-                path,
-                new_path,
-                chunks,
-            } => {
+            crate::tools::editing::PatchOperation::UpdateFile { path, new_path, chunks } => {
                 let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
-                let source_content = if let Some(content) = self
-                    .edited_file_monitor_ref()
-                    .tracked_read_text(&canonical_path)
-                    .await
+                let source_content = if let Some(content) =
+                    self.edited_file_monitor_ref().tracked_read_text(&canonical_path).await
                 {
                     content
                 } else {
@@ -210,32 +199,21 @@ impl ToolRegistry {
                 )
                 .await
                 .map_err(|err| {
-                    anyhow!(
-                        "Failed to plan patch output for {}: {err}",
-                        canonical_path.display()
-                    )
+                    anyhow!("Failed to plan patch output for {}: {err}", canonical_path.display())
                 })?;
 
                 let mut writes = Vec::new();
-                if let Some(destination) = new_path
-                    .as_ref()
-                    .filter(|candidate| candidate.as_str() != path.as_str())
+                if let Some(destination) =
+                    new_path.as_ref().filter(|candidate| candidate.as_str() != path.as_str())
                 {
-                    writes.push(PlannedPatchWrite::Removal {
-                        path: canonical_path,
-                    });
+                    writes.push(PlannedPatchWrite::Removal { path: canonical_path });
                     writes.push(PlannedPatchWrite::Text {
-                        path: self
-                            .file_ops_tool()
-                            .normalize_user_path(destination)
-                            .await?,
+                        path: self.file_ops_tool().normalize_user_path(destination).await?,
                         content: rendered,
                     });
                 } else {
-                    writes.push(PlannedPatchWrite::Text {
-                        path: canonical_path,
-                        content: rendered,
-                    });
+                    writes
+                        .push(PlannedPatchWrite::Text { path: canonical_path, content: rendered });
                 }
 
                 Ok(writes)

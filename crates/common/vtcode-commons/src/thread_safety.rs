@@ -198,9 +198,7 @@ impl<T: AtomicRepr> RelaxedAtomic<T> {
     /// Create a new `RelaxedAtomic` with the given initial value.
     #[inline]
     pub fn new(val: T) -> Self {
-        Self {
-            inner: T::new_atomic(val),
-        }
+        Self { inner: T::new_atomic(val) }
     }
 
     /// Load the current value with relaxed ordering.

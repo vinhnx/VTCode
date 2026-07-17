@@ -602,10 +602,7 @@ fn test_provider_tool_support_matrix() {
     let ollama = OllamaProvider::from_config(None, None, None, None, None, None, None);
 
     for &model in models::google::SUPPORTED_MODELS {
-        assert!(
-            gemini.supports_tools(model),
-            "Gemini should advertise tool calling for {model}"
-        );
+        assert!(gemini.supports_tools(model), "Gemini should advertise tool calling for {model}");
     }
 
     for &model in models::openai::SUPPORTED_MODELS {
@@ -627,30 +624,18 @@ fn test_provider_tool_support_matrix() {
     for &model in models::openrouter::SUPPORTED_MODELS {
         let supports = openrouter.supports_tools(model);
         if models::openrouter::TOOL_UNAVAILABLE_MODELS.contains(&model) {
-            assert!(
-                !supports,
-                "OpenRouter should disable tool calling for {model}"
-            );
+            assert!(!supports, "OpenRouter should disable tool calling for {model}");
         } else {
-            assert!(
-                supports,
-                "OpenRouter should advertise tool calling for {model}"
-            );
+            assert!(supports, "OpenRouter should advertise tool calling for {model}");
         }
     }
 
     for &model in models::ollama::SUPPORTED_MODELS {
-        assert!(
-            ollama.supports_tools(model),
-            "Ollama should advertise tool calling for {model}"
-        );
+        assert!(ollama.supports_tools(model), "Ollama should advertise tool calling for {model}");
     }
 
     for &model in models::openai::TOOL_UNAVAILABLE_MODELS {
-        assert!(
-            !openai.supports_tools(model),
-            "OpenAI should disable tool calling for {model}"
-        );
+        assert!(!openai.supports_tools(model), "OpenAI should disable tool calling for {model}");
     }
 
     for &model in models::openrouter::TOOL_UNAVAILABLE_MODELS {

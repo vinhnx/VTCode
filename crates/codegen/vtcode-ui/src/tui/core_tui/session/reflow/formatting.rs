@@ -56,10 +56,7 @@ impl Session {
                 std::borrow::Cow::Borrowed(&*line.spans[0].content)
             } else {
                 std::borrow::Cow::Owned(
-                    line.spans
-                        .iter()
-                        .map(|span| &*span.content)
-                        .collect::<String>(),
+                    line.spans.iter().map(|span| &*span.content).collect::<String>(),
                 )
             };
             let line_text: &str = &line_text_storage;
@@ -108,9 +105,7 @@ impl Session {
             .map(|span| {
                 Span::styled(
                     span.content.clone(),
-                    span.style
-                        .add_modifier(Modifier::DIM)
-                        .add_modifier(Modifier::CROSSED_OUT),
+                    span.style.add_modifier(Modifier::DIM).add_modifier(Modifier::CROSSED_OUT),
                 )
             })
             .collect();

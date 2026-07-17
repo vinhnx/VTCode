@@ -48,10 +48,7 @@ impl ShellHandler {
     }
 
     pub fn with_shell(shell: impl Into<String>) -> Self {
-        Self {
-            default_shell: shell.into(),
-            inherit_env: true,
-        }
+        Self { default_shell: shell.into(), inherit_env: true }
     }
 
     /// Parse shell parameters from payload.
@@ -79,9 +76,7 @@ impl ShellHandler {
                 })
             }
             ToolPayload::LocalShell { params } => Ok(params.clone()),
-            _ => Err(ToolCallError::respond(
-                "Invalid payload type for shell handler",
-            )),
+            _ => Err(ToolCallError::respond("Invalid payload type for shell handler")),
         }
     }
 
@@ -95,10 +90,8 @@ impl ShellHandler {
         let runner = ShellRunner::new(cwd.to_path_buf());
         let command = params.command.join(" ");
 
-        let timeout_ms = params
-            .timeout_ms
-            .unwrap_or(DEFAULT_SHELL_TIMEOUT_MS)
-            .min(MAX_SHELL_TIMEOUT_MS);
+        let timeout_ms =
+            params.timeout_ms.unwrap_or(DEFAULT_SHELL_TIMEOUT_MS).min(MAX_SHELL_TIMEOUT_MS);
 
         // Execute with timeout
         let result = tokio::time::timeout(Duration::from_millis(timeout_ms), runner.exec(&command))
@@ -127,10 +120,7 @@ impl ToolHandler for ShellHandler {
     }
 
     fn matches_kind(&self, payload: &ToolPayload) -> bool {
-        matches!(
-            payload,
-            ToolPayload::Function { .. } | ToolPayload::LocalShell { .. }
-        )
+        matches!(payload, ToolPayload::Function { .. } | ToolPayload::LocalShell { .. })
     }
 
     async fn is_mutating(&self, _invocation: &ToolInvocation) -> bool {
@@ -140,9 +130,7 @@ impl ToolHandler for ShellHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
         let params = self.parse_params(&invocation)?;
-        let output = self
-            .execute_command(&params, &invocation.turn.cwd, None)
-            .await?;
+        let output = self.execute_command(&params, &invocation.turn.cwd, None).await?;
 
         // Sanitize output to remove any secrets before display/storage
         let sanitized = output.sanitize_secrets();
@@ -170,10 +158,7 @@ impl ToolHandler for ShellHandler {
             content_text = "(no output)".to_string();
         }
 
-        Ok(ToolOutput::with_success(
-            content_text,
-            sanitized.exit_code == 0,
-        ))
+        Ok(ToolOutput::with_success(content_text, sanitized.exit_code == 0))
     }
 }
 
@@ -228,9 +213,7 @@ mod tests {
     fn test_shell_handler_matches_kind() {
         let handler = ShellHandler::new();
 
-        assert!(handler.matches_kind(&ToolPayload::Function {
-            arguments: "{}".to_string()
-        }));
+        assert!(handler.matches_kind(&ToolPayload::Function { arguments: "{}".to_string() }));
 
         assert!(handler.matches_kind(&ToolPayload::LocalShell {
             params: ShellToolCallParams {

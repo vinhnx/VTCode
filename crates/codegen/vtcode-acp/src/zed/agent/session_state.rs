@@ -146,10 +146,7 @@ impl ZedAgent {
     }
 
     pub(crate) fn session_handle(&self, session_id: &acp::SessionId) -> Option<SessionHandle> {
-        self.sessions
-            .lock()
-            .ok()
-            .and_then(|guard| guard.get(session_id).cloned())
+        self.sessions.lock().ok().and_then(|guard| guard.get(session_id).cloned())
     }
 
     pub(super) fn push_message(&self, session: &SessionHandle, message: Message) {
@@ -231,11 +228,9 @@ impl ZedAgent {
     }
 
     pub(super) fn provider_default_model(&self, provider: &str) -> Option<String> {
-        Provider::from_str(provider).ok().map(|value| {
-            ModelId::default_single_for_provider(value)
-                .as_str()
-                .to_string()
-        })
+        Provider::from_str(provider)
+            .ok()
+            .map(|value| ModelId::default_single_for_provider(value).as_str().to_string())
     }
 
     pub(super) fn provider_supports_model(&self, provider: &str, model: &str) -> bool {
@@ -266,10 +261,7 @@ impl ZedAgent {
                 .collect();
         }
 
-        if !providers
-            .iter()
-            .any(|provider| provider.eq_ignore_ascii_case(current_provider))
-        {
+        if !providers.iter().any(|provider| provider.eq_ignore_ascii_case(current_provider)) {
             providers.push(current_provider.to_string());
         }
 
@@ -315,10 +307,7 @@ impl ZedAgent {
             })
             .unwrap_or_default();
 
-        if !options
-            .iter()
-            .any(|option| option.value.0.as_ref() == current_model)
-        {
+        if !options.iter().any(|option| option.value.0.as_ref() == current_model) {
             options.push(acp::SessionConfigSelectOption::new(
                 current_model.to_string(),
                 current_model.to_string(),
@@ -485,10 +474,7 @@ impl ZedAgent {
             }
             SESSION_CONFIG_THOUGHT_LEVEL_ID => {
                 let (session_provider, session_model) = {
-                    let data = session
-                        .data
-                        .lock()
-                        .map_err(|_err| acp::Error::internal_error())?;
+                    let data = session.data.lock().map_err(|_err| acp::Error::internal_error())?;
                     (data.provider.clone(), data.model.clone())
                 };
                 if !self.model_supports_thought_level(&session_provider, &session_model) {
@@ -508,10 +494,7 @@ impl ZedAgent {
             SESSION_CONFIG_PROVIDER_ID => {
                 let provider = value.trim().to_lowercase();
                 let current_provider = {
-                    let data = session
-                        .data
-                        .lock()
-                        .map_err(|_err| acp::Error::internal_error())?;
+                    let data = session.data.lock().map_err(|_err| acp::Error::internal_error())?;
                     data.provider.clone()
                 };
                 if provider.is_empty() || !self.supports_provider(&provider, &current_provider) {
@@ -521,10 +504,7 @@ impl ZedAgent {
                     })));
                 }
                 let current_model = {
-                    let data = session
-                        .data
-                        .lock()
-                        .map_err(|_err| acp::Error::internal_error())?;
+                    let data = session.data.lock().map_err(|_err| acp::Error::internal_error())?;
                     data.model.clone()
                 };
                 let resolved_model = if self.provider_supports_model(&provider, &current_model) {
@@ -548,10 +528,7 @@ impl ZedAgent {
                     })));
                 }
                 let provider = {
-                    let data = session
-                        .data
-                        .lock()
-                        .map_err(|_err| acp::Error::internal_error())?;
+                    let data = session.data.lock().map_err(|_err| acp::Error::internal_error())?;
                     data.provider.clone()
                 };
                 if !self.provider_supports_model(&provider, model) {
@@ -575,10 +552,7 @@ impl ZedAgent {
             let config_options = self.current_session_config_options(&session);
             let update = acp::ConfigOptionUpdate::new(config_options);
             let _ = self
-                .send_update(
-                    &args.session_id,
-                    acp::SessionUpdate::ConfigOptionUpdate(update),
-                )
+                .send_update(&args.session_id, acp::SessionUpdate::ConfigOptionUpdate(update))
                 .await;
         }
 
@@ -661,11 +635,7 @@ mod tests {
     }
 
     fn primary_agent(session: &SessionHandle) -> String {
-        session
-            .data
-            .lock()
-            .map(|data| data.primary_agent.clone())
-            .unwrap_or_default()
+        session.data.lock().map(|data| data.primary_agent.clone()).unwrap_or_default()
     }
 
     fn reasoning_effort(session: &SessionHandle) -> ReasoningEffortLevel {
@@ -677,19 +647,11 @@ mod tests {
     }
 
     fn provider(session: &SessionHandle) -> String {
-        session
-            .data
-            .lock()
-            .map(|data| data.provider.clone())
-            .unwrap_or_default()
+        session.data.lock().map(|data| data.provider.clone()).unwrap_or_default()
     }
 
     fn model(session: &SessionHandle) -> String {
-        session
-            .data
-            .lock()
-            .map(|data| data.model.clone())
-            .unwrap_or_default()
+        session.data.lock().map(|data| data.model.clone()).unwrap_or_default()
     }
 
     #[tokio::test]
@@ -868,9 +830,6 @@ Research primary prompt."#,
         let config_options = agent.current_session_config_options(&session);
 
         assert_eq!(config_options.len(), 3);
-        assert_eq!(
-            config_options[0].id,
-            acp::SessionConfigId::new("primary_agent")
-        );
+        assert_eq!(config_options[0].id, acp::SessionConfigId::new("primary_agent"));
     }
 }

@@ -85,10 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn can_fallback_to_placeholder(error: &io::Error) -> bool {
-    matches!(
-        error.kind(),
-        io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied
-    )
+    matches!(error.kind(), io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied)
 }
 
 fn locate_asset(manifest_dir: &Path, workspace_dir: &Path, relative: &str) -> io::Result<PathBuf> {

@@ -294,10 +294,7 @@ fn is_dangerous_to_call_with_exec(command: &[String]) -> bool {
         }
 
         // ──── Rm ────
-        "rm" => matches!(
-            command.get(1).map(String::as_str),
-            Some("-f" | "-rf" | "-fr" | "-r")
-        ),
+        "rm" => matches!(command.get(1).map(String::as_str), Some("-f" | "-rf" | "-fr" | "-r")),
 
         // ──── Destructive system commands ────
         _ if base_cmd == "mkfs" || base_cmd.starts_with("mkfs.") => true,
@@ -447,12 +444,8 @@ mod tests {
 
     #[test]
     fn git_branch_delete_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "branch", "-d", "feature",
-        ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "branch", "-D", "feature",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-d", "feature",])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-D", "feature",])));
         // Test shell script parsing separately
         let script = "git branch --delete feature";
         if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
@@ -468,18 +461,10 @@ mod tests {
 
     #[test]
     fn git_branch_delete_with_stacked_short_flags_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "branch", "-dv", "feature",
-        ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "branch", "-vd", "feature",
-        ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "branch", "-vD", "feature",
-        ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "branch", "-Dvv", "feature",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-dv", "feature",])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-vd", "feature",])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-vD", "feature",])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-Dvv", "feature",])));
     }
 
     #[test]
@@ -512,9 +497,7 @@ mod tests {
     fn git_checkout_reset_is_not_dangerous() {
         // The first non-option token is "checkout", so later positional args
         // like branch names must not be treated as subcommands.
-        assert!(!command_might_be_dangerous(&vec_str(&[
-            "git", "checkout", "reset",
-        ])));
+        assert!(!command_might_be_dangerous(&vec_str(&["git", "checkout", "reset",])));
     }
 
     // ──── Git Push Dangerous Tests ────
@@ -524,9 +507,7 @@ mod tests {
         assert!(command_might_be_dangerous(&vec_str(&[
             "git", "push", "--force", "origin", "main",
         ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "push", "-f", "origin", "main",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "push", "-f", "origin", "main",])));
         assert!(command_might_be_dangerous(&vec_str(&[
             "git",
             "-C",
@@ -540,9 +521,7 @@ mod tests {
 
     #[test]
     fn git_push_plus_refspec_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "push", "origin", "+main",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "push", "origin", "+main",])));
         assert!(command_might_be_dangerous(&vec_str(&[
             "git",
             "push",
@@ -556,16 +535,12 @@ mod tests {
         assert!(command_might_be_dangerous(&vec_str(&[
             "git", "push", "--delete", "origin", "feature",
         ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "push", "-d", "origin", "feature",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "push", "-d", "origin", "feature",])));
     }
 
     #[test]
     fn git_push_delete_refspec_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "push", "origin", ":feature",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "push", "origin", ":feature",])));
         // Test shell script parsing separately
         let script = "git push origin :feature";
         if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
@@ -581,23 +556,15 @@ mod tests {
 
     #[test]
     fn git_push_without_force_is_not_dangerous() {
-        assert!(!command_might_be_dangerous(&vec_str(&[
-            "git", "push", "origin", "main",
-        ])));
+        assert!(!command_might_be_dangerous(&vec_str(&["git", "push", "origin", "main",])));
     }
 
     // ──── Git Clean Tests ────
 
     #[test]
     fn git_clean_force_is_dangerous_even_when_f_is_not_first_flag() {
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "clean", "-fdx",
-        ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "clean", "-xdf",
-        ])));
-        assert!(command_might_be_dangerous(&vec_str(&[
-            "git", "clean", "--force",
-        ])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "clean", "-fdx",])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "clean", "-xdf",])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "clean", "--force",])));
     }
 }

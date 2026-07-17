@@ -12,10 +12,9 @@ pub(super) fn parse_cached_output(cached_output: &str) -> serde_json::Result<Val
 
 pub(super) fn is_loop_detection_status(status: &ToolExecutionStatus) -> bool {
     match status {
-        ToolExecutionStatus::Success { output, .. } => output
-            .get("loop_detected")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false),
+        ToolExecutionStatus::Success { output, .. } => {
+            output.get("loop_detected").and_then(|value| value.as_bool()).unwrap_or(false)
+        }
         ToolExecutionStatus::Failure { error } => error.message.contains("LOOP DETECTION"),
         _ => false,
     }
@@ -23,10 +22,7 @@ pub(super) fn is_loop_detection_status(status: &ToolExecutionStatus) -> bool {
 
 pub(super) fn build_tool_status_message(tool_name: &str, args: &Value) -> String {
     if is_command_tool(tool_name, args) {
-        let command = args
-            .get("command")
-            .and_then(|value| value.as_str())
-            .unwrap_or(tool_name);
+        let command = args.get("command").and_then(|value| value.as_str()).unwrap_or(tool_name);
         format!("Running command: {command}")
     } else {
         format!("Running tool: {tool_name}")
@@ -48,11 +44,7 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
     // DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN (8) iterations —
     // blocking even unrelated tool calls (e.g. command_session) that happened to
     // follow the loop-detected ones.
-    if output
-        .get("loop_detected")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-    {
+    if output.get("loop_detected").and_then(|v| v.as_bool()).unwrap_or(false) {
         return ToolExecutionStatus::Success {
             output,
             stdout: None,
@@ -89,10 +81,7 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
         };
     }
 
-    let exit_code = output
-        .get("exit_code")
-        .and_then(|value| value.as_i64())
-        .unwrap_or(0);
+    let exit_code = output.get("exit_code").and_then(|value| value.as_i64()).unwrap_or(0);
     let command_success = exit_code == 0;
     let stdout = output
         .get("stdout")
@@ -117,12 +106,7 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
                 .collect::<Vec<String>>()
         })
         .unwrap_or_default();
-    ToolExecutionStatus::Success {
-        output,
-        stdout,
-        modified_files,
-        command_success,
-    }
+    ToolExecutionStatus::Success { output, stdout, modified_files, command_success }
 }
 
 fn is_command_like_output(output: &Value) -> bool {

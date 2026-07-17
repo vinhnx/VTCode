@@ -21,8 +21,7 @@ impl ToolRegistry {
             *self.cached_available_tools.write() = None;
             // Invalidate the tool catalog cache so the next snapshot reflects the
             // planning-workflow-filtered tool set rather than serving a stale pre-transition entry.
-            self.tool_catalog_state
-                .note_explicit_refresh("planning_workflow_enabled");
+            self.tool_catalog_state.note_explicit_refresh("planning_workflow_enabled");
         }
     }
 
@@ -33,8 +32,7 @@ impl ToolRegistry {
         if was_active {
             *self.cached_available_tools.write() = None;
             // Invalidate the catalog cache so mutating tools reappear immediately.
-            self.tool_catalog_state
-                .note_explicit_refresh("planning_workflow_disabled");
+            self.tool_catalog_state.note_explicit_refresh("planning_workflow_disabled");
         }
     }
 

@@ -38,10 +38,7 @@ pub struct EditorLaunchConfig {
 
 impl Default for EditorLaunchConfig {
     fn default() -> Self {
-        Self {
-            preferred_editor: None,
-            wait_for_editor: true,
-        }
+        Self { preferred_editor: None, wait_for_editor: true }
     }
 }
 
@@ -197,9 +194,8 @@ impl TerminalAppLauncher {
     ) -> Result<Command> {
         let tokens = shell_words::split(command)
             .with_context(|| format!("invalid editor command: {command}"))?;
-        let (program, args) = tokens
-            .split_first()
-            .ok_or_else(|| anyhow!("editor command cannot be empty"))?;
+        let (program, args) =
+            tokens.split_first().ok_or_else(|| anyhow!("editor command cannot be empty"))?;
         let adapter = EditorAdapter::from_program(program);
         let mut cmd = Command::new(program);
         cmd.args(filtered_editor_args(adapter, args, wait_for_editor));
@@ -435,11 +431,7 @@ impl TerminalAppLauncher {
                     } else {
                         Command::new("pwsh")
                     };
-                    command_builder
-                        .arg("-NoLogo")
-                        .arg("-NoProfile")
-                        .arg("-Command")
-                        .arg(command);
+                    command_builder.arg("-NoLogo").arg("-NoProfile").arg("-Command").arg(command);
                     command_builder
                 }
             };
@@ -538,10 +530,7 @@ fn filtered_editor_args(
         return args.to_vec();
     }
 
-    args.iter()
-        .filter(|arg| !matches_wait_flag(adapter, arg))
-        .cloned()
-        .collect()
+    args.iter().filter(|arg| !matches_wait_flag(adapter, arg)).cloned().collect()
 }
 
 fn matches_wait_flag(adapter: EditorAdapter, arg: &str) -> bool {
@@ -578,10 +567,8 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value| value.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> =
+            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(command.get_program(), OsStr::new("code"));
         assert_eq!(args, vec!["--wait".to_string(), "/tmp/test.rs".to_string()]);
@@ -605,10 +592,8 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value| value.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> =
+            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(
             args,
@@ -628,10 +613,8 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value| value.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> =
+            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(args, vec!["/tmp/test.rs:12:1".to_string()]);
     }
@@ -644,15 +627,10 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value| value.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> =
+            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
-        assert_eq!(
-            args,
-            vec!["+call cursor(12,4)".to_string(), "/tmp/test.rs".to_string()]
-        );
+        assert_eq!(args, vec!["+call cursor(12,4)".to_string(), "/tmp/test.rs".to_string()]);
     }
 
     #[test]
@@ -663,10 +641,8 @@ mod tests {
             true,
         )
         .expect("command should parse");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value| value.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> =
+            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(args, vec!["--flag".to_string(), "/tmp/test.rs".to_string()]);
     }
@@ -679,15 +655,10 @@ mod tests {
             false,
         )
         .expect("command should parse");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value| value.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> =
+            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
-        assert_eq!(
-            args,
-            vec!["-g".to_string(), "/tmp/test.rs:12:4".to_string()]
-        );
+        assert_eq!(args, vec!["-g".to_string(), "/tmp/test.rs:12:4".to_string()]);
     }
 
     #[test]
@@ -698,10 +669,8 @@ mod tests {
             false,
         )
         .expect("command should parse");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value| value.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> =
+            command.get_args().map(|value| value.to_string_lossy().to_string()).collect();
 
         assert_eq!(args, vec!["/tmp/test.rs".to_string()]);
     }
@@ -709,9 +678,7 @@ mod tests {
     #[test]
     fn test_program_requires_terminal_detects_terminal_editors() {
         assert!(TerminalAppLauncher::program_requires_terminal("nvim"));
-        assert!(TerminalAppLauncher::program_requires_terminal(
-            "/usr/bin/vim"
-        ));
+        assert!(TerminalAppLauncher::program_requires_terminal("/usr/bin/vim"));
         assert!(TerminalAppLauncher::program_requires_terminal("helix"));
         assert!(!TerminalAppLauncher::program_requires_terminal("code"));
         assert!(!TerminalAppLauncher::program_requires_terminal("zed"));

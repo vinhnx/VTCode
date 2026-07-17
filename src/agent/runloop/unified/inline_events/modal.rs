@@ -71,15 +71,9 @@ impl<'a> InlineModalProcessor<'a> {
             full_auto,
             compaction,
         };
-        let palette = PaletteCoordinator {
-            state: palette_state,
-            handle,
-        };
+        let palette = PaletteCoordinator { state: palette_state, handle };
 
-        Self {
-            model_picker,
-            palette,
-        }
+        Self { model_picker, palette }
     }
 
     pub(crate) fn active_primary_agent_name(&self) -> Option<String> {
@@ -95,18 +89,12 @@ impl<'a> InlineModalProcessor<'a> {
         renderer: &mut AnsiRenderer,
         url: String,
     ) -> Result<InlineLoopAction> {
-        if matches!(
-            self.palette.state.as_ref(),
-            Some(ActivePalette::UrlGuard { .. })
-        ) {
+        if matches!(self.palette.state.as_ref(), Some(ActivePalette::UrlGuard { .. })) {
             return Ok(InlineLoopAction::Continue);
         }
 
         let Some(prompt) = UrlGuardPrompt::parse(url) else {
-            renderer.line(
-                MessageStyle::Error,
-                "Blocked unsupported external link target.",
-            )?;
+            renderer.line(MessageStyle::Error, "Blocked unsupported external link target.")?;
             return Ok(InlineLoopAction::Continue);
         };
 
@@ -192,9 +180,7 @@ impl<'a> InlineModalProcessor<'a> {
         };
 
         if show_lightweight_model_palette(renderer, &view, None)? {
-            *self.palette.state = Some(ActivePalette::LightweightModel {
-                view: Box::new(view),
-            });
+            *self.palette.state = Some(ActivePalette::LightweightModel { view: Box::new(view) });
         }
 
         Ok(())
@@ -221,10 +207,7 @@ impl<'a> InlineModalProcessor<'a> {
         renderer: &mut AnsiRenderer,
         selection: InlineListSelection,
     ) -> Result<InlineLoopAction> {
-        if matches!(
-            self.palette.state.as_ref(),
-            Some(ActivePalette::UrlGuard { .. })
-        ) {
+        if matches!(self.palette.state.as_ref(), Some(ActivePalette::UrlGuard { .. })) {
             return Ok(InlineLoopAction::Continue);
         }
 
@@ -244,10 +227,7 @@ impl<'a> InlineModalProcessor<'a> {
         renderer: &mut AnsiRenderer,
         selection: &InlineListSelection,
     ) -> Result<Option<InlineLoopAction>> {
-        if !matches!(
-            self.palette.state.as_ref(),
-            Some(ActivePalette::UrlGuard { .. })
-        ) {
+        if !matches!(self.palette.state.as_ref(), Some(ActivePalette::UrlGuard { .. })) {
             return Ok(None);
         }
 
@@ -276,10 +256,7 @@ impl<'a> InlineModalProcessor<'a> {
     }
 
     fn handle_url_guard_cancel(&mut self, renderer: &mut AnsiRenderer) -> Result<bool> {
-        if !matches!(
-            self.palette.state.as_ref(),
-            Some(ActivePalette::UrlGuard { .. })
-        ) {
+        if !matches!(self.palette.state.as_ref(), Some(ActivePalette::UrlGuard { .. })) {
             return Ok(false);
         }
 
@@ -319,53 +296,26 @@ impl<'a> InlineModalProcessor<'a> {
         palette: ActivePalette,
     ) -> Result<()> {
         match palette {
-            ActivePalette::Theme {
-                mode,
-                original_theme_id,
-            } => {
+            ActivePalette::Theme { mode, original_theme_id } => {
                 if show_theme_palette(renderer, mode)? {
-                    *self.palette.state = Some(ActivePalette::Theme {
-                        mode,
-                        original_theme_id,
-                    });
+                    *self.palette.state = Some(ActivePalette::Theme { mode, original_theme_id });
                 }
             }
-            ActivePalette::Sessions {
-                mode,
-                listings,
-                limit,
-                show_all,
-            } => {
+            ActivePalette::Sessions { mode, listings, limit, show_all } => {
                 if show_sessions_palette(renderer, mode, &listings, limit, show_all)? {
-                    *self.palette.state = Some(ActivePalette::Sessions {
-                        mode,
-                        listings,
-                        limit,
-                        show_all,
-                    });
+                    *self.palette.state =
+                        Some(ActivePalette::Sessions { mode, listings, limit, show_all });
                 }
             }
-            ActivePalette::ForkMode {
-                session_id,
-                listings,
-                limit,
-                show_all,
-            } => {
+            ActivePalette::ForkMode { session_id, listings, limit, show_all } => {
                 if show_fork_mode_palette(renderer, &session_id)? {
-                    *self.palette.state = Some(ActivePalette::ForkMode {
-                        session_id,
-                        listings,
-                        limit,
-                        show_all,
-                    });
+                    *self.palette.state =
+                        Some(ActivePalette::ForkMode { session_id, listings, limit, show_all });
                 }
             }
             ActivePalette::Settings { state, .. } => {
                 if show_settings_palette(renderer, state.as_ref(), None)? {
-                    *self.palette.state = Some(ActivePalette::Settings {
-                        state,
-                        esc_armed: false,
-                    });
+                    *self.palette.state = Some(ActivePalette::Settings { state, esc_armed: false });
                 }
             }
             ActivePalette::ModelTarget => {
@@ -475,16 +425,11 @@ impl<'a> PaletteCoordinator<'a> {
         if let Some(active) = self.state.take() {
             match (&active, &selection) {
                 (
-                    ActivePalette::Sessions {
-                        mode: SessionPaletteMode::Resume,
-                        ..
-                    },
+                    ActivePalette::Sessions { mode: SessionPaletteMode::Resume, .. },
                     InlineListSelection::Session(session_id),
                 ) => {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Resuming session: {session_id}"),
-                    )?;
+                    renderer
+                        .line(MessageStyle::Info, &format!("Resuming session: {session_id}"))?;
                     return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
                 }
                 (
@@ -507,10 +452,7 @@ impl<'a> PaletteCoordinator<'a> {
                 }
                 (
                     ActivePalette::ForkMode { .. },
-                    InlineListSelection::SessionForkMode {
-                        session_id,
-                        summarize,
-                    },
+                    InlineListSelection::SessionForkMode { session_id, summarize },
                 ) => {
                     let mode_label = if *summarize {
                         "summarized"
@@ -623,10 +565,7 @@ impl<'a> ModelPickerCoordinator<'a> {
             .as_ref()
             .map(|cfg| cfg.agent.reasoning_effort)
             .unwrap_or(self.config.reasoning_effort);
-        let service_tier = self
-            .vt_cfg
-            .as_ref()
-            .and_then(|cfg| cfg.provider.openai.service_tier);
+        let service_tier = self.vt_cfg.as_ref().and_then(|cfg| cfg.provider.openai.service_tier);
         let workspace_hint = Some(self.config.workspace.clone());
         let picker_start = {
             let loading_spinner = if renderer.supports_inline_ui() {
@@ -693,10 +632,8 @@ impl<'a> ModelPickerCoordinator<'a> {
                 }
             }
             Err(err) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to start model picker: {err}"),
-                )?;
+                renderer
+                    .line(MessageStyle::Error, &format!("Failed to start model picker: {err}"))?;
             }
         }
 
@@ -795,14 +732,12 @@ fn update_header_for_plan_selection(
     handle: &InlineHandle,
 ) {
     let (name, color) = match selection {
-        InlineListSelection::PlanApprovalExecute | InlineListSelection::PlanApprovalAutoAccept => (
-            Some("build".to_string()),
-            Some(ui::AGENT_COLOR_BUILD.to_string()),
-        ),
-        InlineListSelection::PlanApprovalEditPlan => (
-            Some("plan".to_string()),
-            Some(ui::AGENT_COLOR_PLAN.to_string()),
-        ),
+        InlineListSelection::PlanApprovalExecute | InlineListSelection::PlanApprovalAutoAccept => {
+            (Some("build".to_string()), Some(ui::AGENT_COLOR_BUILD.to_string()))
+        }
+        InlineListSelection::PlanApprovalEditPlan => {
+            (Some("plan".to_string()), Some(ui::AGENT_COLOR_PLAN.to_string()))
+        }
         _ => return,
     };
 

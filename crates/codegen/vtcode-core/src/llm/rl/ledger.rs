@@ -73,15 +73,7 @@ mod tests {
     fn records_and_aggregates() {
         let mut ledger = RewardLedger::default();
         assert_eq!(ledger.total(), 0);
-        ledger.record(
-            "a",
-            RewardSignal {
-                success: true,
-                latency_secs: 0.1,
-                cost_usd: 0.0,
-            },
-            0.5,
-        );
+        ledger.record("a", RewardSignal { success: true, latency_secs: 0.1, cost_usd: 0.0 }, 0.5);
         assert_eq!(ledger.total(), 1);
         assert!(ledger.mean_score("a").is_some());
         // Untried action still yields a finite UCB (INFINITY) for selection.

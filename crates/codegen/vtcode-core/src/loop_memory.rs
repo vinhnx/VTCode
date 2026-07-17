@@ -59,10 +59,7 @@ impl MarkdownLoopMemory {
 
     /// Create a new markdown loop memory store with explicit paths (for testing).
     pub fn with_paths(notes_path: PathBuf, decisions_path: PathBuf) -> Self {
-        Self {
-            notes_path,
-            decisions_path,
-        }
+        Self { notes_path, decisions_path }
     }
 }
 
@@ -118,9 +115,8 @@ fn append_markdown_entry(path: &Path, content: &str, header: &str) -> Result<()>
 
     // Check if the file is empty (needs a header) using the same handle.
     let needs_header = {
-        let metadata = file
-            .metadata()
-            .with_context(|| format!("Failed to stat {}", path.display()))?;
+        let metadata =
+            file.metadata().with_context(|| format!("Failed to stat {}", path.display()))?;
         metadata.len() == 0
     };
 
@@ -172,19 +168,14 @@ impl SqliteLoopMemory {
                 content TEXT NOT NULL
             );",
         )?;
-        Ok(Self {
-            conn: std::sync::Mutex::new(conn),
-        })
+        Ok(Self { conn: std::sync::Mutex::new(conn) })
     }
 }
 
 #[cfg(feature = "sqlite")]
 impl LoopMemoryStore for SqliteLoopMemory {
     fn read_notes(&self) -> Result<String> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock poisoned: {e}"))?;
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("Lock poisoned: {e}"))?;
         let mut stmt = conn.prepare("SELECT timestamp, content FROM notes ORDER BY id")?;
         let rows = stmt.query_map([], |row| {
             let ts: String = row.get(0)?;
@@ -211,10 +202,7 @@ impl LoopMemoryStore for SqliteLoopMemory {
             return Ok(());
         }
         let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock poisoned: {e}"))?;
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("Lock poisoned: {e}"))?;
         conn.execute(
             "INSERT INTO notes (timestamp, content) VALUES (?1, ?2)",
             rusqlite::params![timestamp.to_string(), trimmed],
@@ -223,10 +211,7 @@ impl LoopMemoryStore for SqliteLoopMemory {
     }
 
     fn read_decisions(&self) -> Result<String> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock poisoned: {e}"))?;
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("Lock poisoned: {e}"))?;
         let mut stmt = conn.prepare("SELECT timestamp, content FROM decisions ORDER BY id")?;
         let rows = stmt.query_map([], |row| {
             let ts: String = row.get(0)?;
@@ -252,10 +237,7 @@ impl LoopMemoryStore for SqliteLoopMemory {
             return Ok(());
         }
         let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Lock poisoned: {e}"))?;
+        let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("Lock poisoned: {e}"))?;
         conn.execute(
             "INSERT INTO decisions (timestamp, content) VALUES (?1, ?2)",
             rusqlite::params![timestamp.to_string(), trimmed],
@@ -298,9 +280,7 @@ mod tests {
         let tmp = TempDir::new().expect("temp dir");
         let memory = MarkdownLoopMemory::new(tmp.path());
 
-        memory
-            .write_decision("Use retry with backoff")
-            .expect("write");
+        memory.write_decision("Use retry with backoff").expect("write");
         memory.write_decision("Skip tests for now").expect("write");
 
         let decisions = memory.read_decisions().expect("read");
@@ -392,9 +372,7 @@ mod tests {
             let db_path = tmp.path().join("test.db");
             let memory = SqliteLoopMemory::with_path(db_path).expect("create");
 
-            memory
-                .write_decision("Use retry with backoff")
-                .expect("write");
+            memory.write_decision("Use retry with backoff").expect("write");
             memory.write_decision("Skip tests for now").expect("write");
 
             let decisions = memory.read_decisions().expect("read");

@@ -36,10 +36,7 @@ pub struct HarnessContextSnapshot {
 impl HarnessContextSnapshot {
     /// Create a new harness context snapshot.
     pub fn new(session_id: String, task_id: Option<String>) -> Self {
-        Self {
-            session_id,
-            task_id,
-        }
+        Self { session_id, task_id }
     }
 
     /// Serialize snapshot for middleware/telemetry consumers without cloning callers.
@@ -246,10 +243,7 @@ fn spool_path_exists(result: &Value) -> bool {
         return path.exists();
     }
 
-    path.exists()
-        || env::current_dir()
-            .ok()
-            .is_some_and(|cwd| cwd.join(path).exists())
+    path.exists() || env::current_dir().ok().is_some_and(|cwd| cwd.join(path).exists())
 }
 
 /// Check whether a spool path is still replayable. Mirrors `spool_path_exists`
@@ -261,10 +255,7 @@ fn spool_path_is_replayable(spool_path: &str) -> bool {
         return path.exists();
     }
 
-    path.exists()
-        || env::current_dir()
-            .ok()
-            .is_some_and(|cwd| cwd.join(path).exists())
+    path.exists() || env::current_dir().ok().is_some_and(|cwd| cwd.join(path).exists())
 }
 
 /// Whether a TTL replay requires the record to reference a spool file.
@@ -325,10 +316,7 @@ fn is_read_style_tool_call(tool_name: &str, args: &Value) -> bool {
 }
 
 fn normalize_path_for_match(path: &str) -> String {
-    path.trim()
-        .replace('\\', "/")
-        .trim_start_matches("./")
-        .to_string()
+    path.trim().replace('\\', "/").trim_start_matches("./").to_string()
 }
 
 fn to_absolute_path(path: &str) -> Option<PathBuf> {
@@ -353,10 +341,7 @@ fn paths_match(record_path: &str, expected_path: &str) -> bool {
         return true;
     }
 
-    match (
-        to_absolute_path(record_path),
-        to_absolute_path(expected_path),
-    ) {
+    match (to_absolute_path(record_path), to_absolute_path(expected_path)) {
         (Some(abs_lhs), Some(abs_rhs)) => abs_lhs == abs_rhs,
         _ => false,
     }
@@ -393,11 +378,7 @@ fn result_spool_path(record: &ToolExecutionRecord) -> Option<String> {
 }
 
 fn arg_spool_path(record: &ToolExecutionRecord) -> Option<String> {
-    record
-        .args
-        .get("spool_path")
-        .and_then(Value::as_str)
-        .map(str::to_string)
+    record.args.get("spool_path").and_then(Value::as_str).map(str::to_string)
 }
 
 fn has_fallback_marker(record: &ToolExecutionRecord) -> bool {
@@ -415,14 +396,8 @@ fn command_requested_approval(record: &ToolExecutionRecord) -> bool {
         return false;
     }
     if let Ok(result) = &record.result
-        && (result
-            .get("approval_required")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-            || result
-                .get("requires_approval")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
+        && (result.get("approval_required").and_then(Value::as_bool).unwrap_or(false)
+            || result.get("requires_approval").and_then(Value::as_bool).unwrap_or(false)
             || result
                 .get("approval_reason")
                 .and_then(Value::as_str)
@@ -435,10 +410,7 @@ fn command_requested_approval(record: &ToolExecutionRecord) -> bool {
         .get("sandbox_permissions")
         .and_then(Value::as_str)
         .unwrap_or("use_default");
-    matches!(
-        permissions,
-        "require_escalated" | "with_additional_permissions"
-    )
+    matches!(permissions, "require_escalated" | "with_additional_permissions")
 }
 
 fn equivalent_call_key(record: &ToolExecutionRecord) -> String {
@@ -505,10 +477,8 @@ impl ToolExecutionHistory {
 
     /// Set the rate limit for tool executions per minute.
     pub fn set_rate_limit_per_minute(&self, limit: Option<usize>) {
-        self.rate_limit_per_minute.store(
-            limit.filter(|v| *v > 0).unwrap_or(0),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        self.rate_limit_per_minute
+            .store(limit.filter(|v| *v > 0).unwrap_or(0), std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Get the most recent records.
@@ -526,13 +496,8 @@ impl ToolExecutionHistory {
         let Ok(records) = self.records.read() else {
             return Vec::new();
         };
-        let mut failures: Vec<ToolExecutionRecord> = records
-            .iter()
-            .rev()
-            .filter(|r| !r.success)
-            .take(count)
-            .cloned()
-            .collect();
+        let mut failures: Vec<ToolExecutionRecord> =
+            records.iter().rev().filter(|r| !r.success).take(count).cloned().collect();
         failures.reverse();
         failures
     }
@@ -592,9 +557,7 @@ impl ToolExecutionHistory {
                 *seen_spool_paths.entry(spool_path).or_default() += 1;
             }
 
-            let count = equivalent_calls_by_key
-                .entry(equivalent_call_key(record))
-                .or_default();
+            let count = equivalent_calls_by_key.entry(equivalent_call_key(record)).or_default();
             if *count > 0 {
                 snapshot.repeated_equivalent_calls += 1;
             }
@@ -772,26 +735,14 @@ impl ToolExecutionHistory {
     /// requests a larger limit, different offset, or exact raw content after a
     /// summarized read (issue #680).
     fn read_extent_matches(cached_args: &Value, query_args: &Value) -> bool {
-        let cached_raw = cached_args
-            .get("raw")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let query_raw = query_args
-            .get("raw")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let cached_raw = cached_args.get("raw").and_then(Value::as_bool).unwrap_or(false);
+        let query_raw = query_args.get("raw").and_then(Value::as_bool).unwrap_or(false);
         if cached_raw != query_raw {
             return false;
         }
 
-        let cached_offset = cached_args
-            .get("offset")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
-        let query_offset = query_args
-            .get("offset")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
+        let cached_offset = cached_args.get("offset").and_then(Value::as_u64).unwrap_or(0);
+        let query_offset = query_args.get("offset").and_then(Value::as_u64).unwrap_or(0);
         if cached_offset != query_offset {
             return false;
         }
@@ -881,14 +832,8 @@ impl ToolExecutionHistory {
             let Ok(result) = &record.result else {
                 continue;
             };
-            let chunked = result
-                .get("spool_chunked")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let has_more = result
-                .get("has_more")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+            let chunked = result.get("spool_chunked").and_then(|v| v.as_bool()).unwrap_or(false);
+            let has_more = result.get("has_more").and_then(|v| v.as_bool()).unwrap_or(false);
             if !(chunked && has_more) {
                 continue;
             }
@@ -919,8 +864,7 @@ impl ToolExecutionHistory {
 
     /// Get the current loop limit.
     pub fn loop_limit(&self) -> usize {
-        self.identical_limit
-            .load(std::sync::atomic::Ordering::Relaxed)
+        self.identical_limit.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Get the effective loop limit for a specific tool.
@@ -930,16 +874,12 @@ impl ToolExecutionHistory {
 
     /// Get the rate limit per minute if configured.
     pub fn rate_limit_per_minute(&self) -> Option<usize> {
-        let val = self
-            .rate_limit_per_minute
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let val = self.rate_limit_per_minute.load(std::sync::atomic::Ordering::Relaxed);
         (val != 0).then_some(val)
     }
 
     fn effective_identical_limit_for_call(&self, tool_name: &str, args: &Value) -> usize {
-        let base_limit = self
-            .identical_limit
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let base_limit = self.identical_limit.load(std::sync::atomic::Ordering::Relaxed);
         if is_read_style_tool_call(tool_name, args)
             || tool_name_matches(tool_name, tools::CODE_SEARCH)
         {
@@ -951,18 +891,12 @@ impl ToolExecutionHistory {
 
     /// Count calls within a time window.
     pub fn calls_in_window(&self, window: Duration) -> usize {
-        let cutoff = SystemTime::now()
-            .checked_sub(window)
-            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let cutoff = SystemTime::now().checked_sub(window).unwrap_or(SystemTime::UNIX_EPOCH);
 
         let Ok(records) = self.records.read() else {
             return 0;
         };
-        records
-            .iter()
-            .rev()
-            .take_while(|record| record.timestamp >= cutoff)
-            .count()
+        records.iter().rev().take_while(|record| record.timestamp >= cutoff).count()
     }
 
     /// Detect if the agent is stuck in a loop.
@@ -978,9 +912,7 @@ impl ToolExecutionHistory {
             };
         }
 
-        let detect_window = self
-            .detect_window
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let detect_window = self.detect_window.load(std::sync::atomic::Ordering::Relaxed);
         let window = detect_window.max(limit.saturating_mul(2)).max(1);
 
         let Ok(records) = self.records.read() else {
@@ -1169,12 +1101,7 @@ mod tests {
         assert_eq!(snapshot.calls_by_tool.get(tools::EXEC_COMMAND), Some(&3));
         assert_eq!(snapshot.calls_by_tool.get(tools::CODE_SEARCH), Some(&1));
         assert_eq!(snapshot.calls_by_tool.get("file_operation"), Some(&1));
-        assert!(
-            !snapshot
-                .calls_by_tool
-                .keys()
-                .any(|label| label.contains("unified_"))
-        );
+        assert!(!snapshot.calls_by_tool.keys().any(|label| label.contains("unified_")));
 
         let json = snapshot.to_json();
         assert_eq!(json["total_tool_calls"], 5);
@@ -1487,7 +1414,7 @@ mod tests {
 
         let args = json!({
             "action": "read",
-            "path": "vtcode-core/src/core/agent/runner/tests.rs"
+            "path": "crates/codegen/vtcode-core/src/core/agent/runner/tests.rs"
         });
 
         // The effective limit is max(base_limit, MIN_READONLY_IDENTICAL_LIMIT).
@@ -1502,7 +1429,7 @@ mod tests {
 
         let args = json!({
             "query": "exec_only_policy",
-            "path": "vtcode-core/src/core/agent/runner/tests.rs",
+            "path": "crates/codegen/vtcode-core/src/core/agent/runner/tests.rs",
             "file_types": ["rust"],
             "result_types": ["definition", "usage"],
             "max_results": 5
@@ -1565,11 +1492,7 @@ mod tests {
                 "result_types" => json!(["text"]),
                 _ => unreachable!(),
             };
-            assert!(
-                !history
-                    .detect_loop(tools::CODE_SEARCH, &changed_args)
-                    .detected
-            );
+            assert!(!history.detect_loop(tools::CODE_SEARCH, &changed_args).detected);
         }
     }
 
@@ -1882,10 +1805,7 @@ mod tests {
             &json!({"action":"read","path":"src/lib.rs","offset":500,"limit":200}),
             Duration::from_secs(600),
         );
-        assert!(
-            result.is_none(),
-            "different offset should not match same path"
-        );
+        assert!(result.is_none(), "different offset should not match same path");
 
         // Query: different path, same pagination — should match record 2
         let result2 = history.find_recent_successful_by_read_target(
@@ -1910,10 +1830,7 @@ mod tests {
             &json!({"action":"write","path":"src/lib.rs","content":"new"}),
             Duration::from_secs(600),
         );
-        assert!(
-            result4.is_none(),
-            "write action should not match read records"
-        );
+        assert!(result4.is_none(), "write action should not match read records");
     }
 
     #[test]
@@ -1959,10 +1876,7 @@ mod tests {
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":100}),
             Duration::from_secs(600),
         );
-        assert!(
-            result.is_some(),
-            "smaller limit is a subset of cached extent"
-        );
+        assert!(result.is_some(), "smaller limit is a subset of cached extent");
     }
 
     #[test]
@@ -1991,10 +1905,7 @@ mod tests {
             &json!({"action":"read","path":"AGENTS.md"}),
             Duration::from_secs(600),
         );
-        assert!(
-            result.is_some(),
-            "both using default offset/limit should match"
-        );
+        assert!(result.is_some(), "both using default offset/limit should match");
 
         // Query: same path, default offset but explicit limit → should NOT match
         // (one has explicit pagination, other doesn't — can't compare)
@@ -2003,10 +1914,7 @@ mod tests {
             &json!({"action":"read","path":"AGENTS.md","limit":200}),
             Duration::from_secs(600),
         );
-        assert!(
-            result.is_none(),
-            "mixed default/explicit limit should not match"
-        );
+        assert!(result.is_none(), "mixed default/explicit limit should not match");
     }
 
     #[test]
@@ -2035,10 +1943,7 @@ mod tests {
             &json!({"action":"read","path":"AGENTS.md","offset":0,"limit":200,"raw":true}),
             Duration::from_secs(600),
         );
-        assert!(
-            result.is_none(),
-            "non-raw summarized read should not satisfy raw=true query"
-        );
+        assert!(result.is_none(), "non-raw summarized read should not satisfy raw=true query");
 
         // Record: raw=true read can satisfy the same raw=true shape.
         history.add_record(ToolExecutionRecord::success(

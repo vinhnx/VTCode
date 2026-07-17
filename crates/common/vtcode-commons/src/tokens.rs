@@ -67,8 +67,7 @@ pub fn truncate_to_tokens(text: &str, max_tokens: usize) -> String {
     if tokens.len() <= max_tokens {
         return text.to_string();
     }
-    bpe.decode_to_string(&tokens[..max_tokens])
-        .unwrap_or_else(|_| byte_truncate())
+    bpe.decode_to_string(&tokens[..max_tokens]).unwrap_or_else(|_| byte_truncate())
 }
 
 #[cfg(test)]

@@ -52,19 +52,10 @@ impl PiiType {
 // Compile default PII patterns once to avoid repeated regex compilation overhead.
 static DEFAULT_PII_PATTERNS: Lazy<Result<Vec<(PiiType, Regex)>, String>> = Lazy::new(|| {
     let patterns = vec![
-        (
-            PiiType::Email,
-            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-        ),
-        (
-            PiiType::PhoneNumber,
-            r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}",
-        ),
+        (PiiType::Email, r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
+        (PiiType::PhoneNumber, r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}"),
         (PiiType::SocialSecurityNumber, r"[0-9]{3}-[0-9]{2}-[0-9]{4}"),
-        (
-            PiiType::CreditCard,
-            r"[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}",
-        ),
+        (PiiType::CreditCard, r"[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}"),
         (
             PiiType::IpAddress,
             r"(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
@@ -73,10 +64,7 @@ static DEFAULT_PII_PATTERNS: Lazy<Result<Vec<(PiiType, Regex)>, String>> = Lazy:
             PiiType::ApiKey,
             r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#,
         ),
-        (
-            PiiType::AuthToken,
-            r"(?:bearer|token|authorization)\s+[a-zA-Z0-9._-]+",
-        ),
+        (PiiType::AuthToken, r"(?:bearer|token|authorization)\s+[a-zA-Z0-9._-]+"),
     ];
 
     let mut compiled = Vec::with_capacity(patterns.len());
@@ -136,9 +124,7 @@ impl PiiTokenizer {
 
         Ok(Self {
             patterns,
-            inner: Arc::new(Mutex::new(PiiTokenizerInner {
-                token_store: HashMap::new(),
-            })),
+            inner: Arc::new(Mutex::new(PiiTokenizerInner { token_store: HashMap::new() })),
         })
     }
 
@@ -152,9 +138,8 @@ impl PiiTokenizer {
                 let value = text[mat.start()..mat.end()].to_string();
                 let context_start = mat.start().saturating_sub(20);
                 let context_end = (mat.end() + 20).min(text.len());
-                let context = text[context_start..context_end]
-                    .replace('\n', "\\n")
-                    .replace('\r', "\\r");
+                let context =
+                    text[context_start..context_end].replace('\n', "\\n").replace('\r', "\\r");
 
                 debug!(
                     pii_type = pii_type.as_str(),
@@ -273,11 +258,7 @@ impl PiiTokenizer {
     pub fn register_pattern(&mut self, pii_type: PiiType, pattern: &str) -> Result<()> {
         let regex = Regex::new(pattern).context("invalid regex pattern for PII detection")?;
         self.patterns.insert(pii_type, regex);
-        debug!(
-            pii_type = pii_type.as_str(),
-            pattern = pattern,
-            "Registered custom PII pattern"
-        );
+        debug!(pii_type = pii_type.as_str(), pattern = pattern, "Registered custom PII pattern");
         Ok(())
     }
 }
@@ -286,9 +267,7 @@ impl Default for PiiTokenizer {
     fn default() -> Self {
         Self::new().unwrap_or_else(|_| Self {
             patterns: Default::default(),
-            inner: Arc::new(Mutex::new(PiiTokenizerInner {
-                token_store: HashMap::new(),
-            })),
+            inner: Arc::new(Mutex::new(PiiTokenizerInner { token_store: HashMap::new() })),
         })
     }
 }

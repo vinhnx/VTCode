@@ -15,16 +15,10 @@ fn resolve_prompt_boundary_in_history(
     metadata: &SnapshotMetadata,
     history: &[uni::Message],
 ) -> Option<usize> {
-    let prompt_text = metadata
-        .prompt_text
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
+    let prompt_text =
+        metadata.prompt_text.as_deref().map(str::trim).filter(|value| !value.is_empty());
 
-    if let Some(index) = metadata
-        .prompt_message_index
-        .filter(|index| *index < history.len())
-    {
+    if let Some(index) = metadata.prompt_message_index.filter(|index| *index < history.len()) {
         let message = &history[index];
         let matches_prompt =
             prompt_text.is_none_or(|text| message.content.as_text().trim() == text);
@@ -70,10 +64,7 @@ fn restore_prompt_input_and_report(
     conversation: &[vtcode_core::utils::session_archive::SessionMessage],
 ) -> Result<()> {
     if restore_prompt_input(handle, metadata, conversation) {
-        renderer.line(
-            MessageStyle::Info,
-            "Restored the selected prompt into the input field.",
-        )?;
+        renderer.line(MessageStyle::Info, "Restored the selected prompt into the input field.")?;
     }
     Ok(())
 }
@@ -93,10 +84,8 @@ pub(crate) async fn handle_rewind_latest(
     let snapshots = match manager.list_snapshots().await {
         Ok(snapshots) => snapshots,
         Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to list checkpoints: {err}"),
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Failed to list checkpoints: {err}"))?;
             return Ok(SlashCommandControl::Continue);
         }
     };
@@ -168,10 +157,9 @@ async fn restore_rewind_from_checkpoint(
             restored,
             supports_reasoning,
         ),
-        Ok(None) => renderer.line(
-            MessageStyle::Error,
-            &format!("No checkpoint found for turn {turn}"),
-        ),
+        Ok(None) => {
+            renderer.line(MessageStyle::Error, &format!("No checkpoint found for turn {turn}"))
+        }
         Err(err) => renderer.line(
             MessageStyle::Error,
             &format!("Failed to restore checkpoint for turn {turn}: {err}"),
@@ -189,11 +177,7 @@ fn render_rewind_restore_success(
     supports_reasoning: bool,
 ) -> Result<()> {
     if scope.includes_conversation() {
-        *conversation_history = restored
-            .conversation
-            .iter()
-            .map(uni::Message::from)
-            .collect();
+        *conversation_history = restored.conversation.iter().map(uni::Message::from).collect();
 
         renderer.clear_screen();
         let resume_lines =
@@ -223,10 +207,7 @@ fn render_rewind_restore_success(
     }
 
     if scope.includes_code() {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("Applied code changes from turn {turn}"),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("Applied code changes from turn {turn}"))?;
     }
 
     renderer.line(
@@ -241,10 +222,8 @@ fn render_rewind_cli_guidance(
     turn: usize,
     scope: RevertScope,
 ) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Rewinding to turn {turn} with scope {scope:?}..."),
-    )?;
+    renderer
+        .line(MessageStyle::Info, &format!("Rewinding to turn {turn} with scope {scope:?}..."))?;
     renderer.line(
         MessageStyle::Info,
         &format!(
@@ -275,10 +254,7 @@ mod tests {
 
     #[test]
     fn rewind_partial_arg_matches_cli_scope_values() {
-        assert_eq!(
-            rewind_partial_arg(RevertScope::Conversation),
-            "conversation"
-        );
+        assert_eq!(rewind_partial_arg(RevertScope::Conversation), "conversation");
         assert_eq!(rewind_partial_arg(RevertScope::Code), "code");
         assert_eq!(rewind_partial_arg(RevertScope::Both), "both");
     }
@@ -301,10 +277,7 @@ mod tests {
             prompt_message_index: Some(2),
         };
 
-        assert_eq!(
-            resolve_prompt_boundary_in_history(&metadata, &history),
-            Some(2)
-        );
+        assert_eq!(resolve_prompt_boundary_in_history(&metadata, &history), Some(2));
     }
 
     #[test]
@@ -325,9 +298,6 @@ mod tests {
             prompt_message_index: Some(2),
         };
 
-        assert_eq!(
-            resolve_prompt_boundary_in_history(&metadata, &history),
-            Some(2)
-        );
+        assert_eq!(resolve_prompt_boundary_in_history(&metadata, &history), Some(2));
     }
 }

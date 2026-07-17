@@ -85,30 +85,23 @@ impl DynamicModelRegistry {
             )
             .await;
 
-        let copilot_auth_cfg = vt_cfg
-            .map(|cfg| cfg.auth.copilot.clone())
-            .unwrap_or_default();
+        let copilot_auth_cfg = vt_cfg.map(|cfg| cfg.auth.copilot.clone()).unwrap_or_default();
         let copilot_status = probe_auth_status(&copilot_auth_cfg, Some(&workspace_root)).await;
         let copilot_fetch = if matches!(copilot_status.kind, CopilotAuthStatusKind::Authenticated) {
             let (result, warning) = cache_store
-                .fetch_with_cache(
-                    Provider::Copilot,
-                    Some(copilot_cache_base(&copilot_auth_cfg)),
-                    {
+                .fetch_with_cache(Provider::Copilot, Some(copilot_cache_base(&copilot_auth_cfg)), {
+                    let copilot_auth_cfg = copilot_auth_cfg.clone();
+                    let workspace_root = workspace_root.clone();
+                    move |_| {
                         let copilot_auth_cfg = copilot_auth_cfg.clone();
                         let workspace_root = workspace_root.clone();
-                        move |_| {
-                            let copilot_auth_cfg = copilot_auth_cfg.clone();
-                            let workspace_root = workspace_root.clone();
-                            async move {
-                                let models =
-                                    list_available_models(&copilot_auth_cfg, &workspace_root)
-                                        .await?;
-                                Ok(models.into_iter().map(|model| model.id).collect())
-                            }
+                        async move {
+                            let models =
+                                list_available_models(&copilot_auth_cfg, &workspace_root).await?;
+                            Ok(models.into_iter().map(|model| model.id).collect())
                         }
-                    },
-                )
+                    }
+                })
                 .await;
             Some((result, warning))
         } else {
@@ -118,22 +111,12 @@ impl DynamicModelRegistry {
 
         let mut registry = Self::default();
         if let Some((openai_result, openai_warning)) = openai_fetch {
-            registry.process_fetch(
-                Provider::OpenAI,
-                openai_result,
-                openai_base_url,
-                &static_index,
-            );
+            registry.process_fetch(Provider::OpenAI, openai_result, openai_base_url, &static_index);
             if let Some(warning) = openai_warning {
                 registry.record_warning(Provider::OpenAI, warning);
             }
         }
-        registry.process_fetch(
-            Provider::Ollama,
-            ollama_result,
-            ollama_base_url,
-            &static_index,
-        );
+        registry.process_fetch(Provider::Ollama, ollama_result, ollama_base_url, &static_index);
         if let Some(warning) = ollama_warning {
             registry.record_warning(Provider::Ollama, warning);
         }
@@ -190,10 +173,7 @@ impl DynamicModelRegistry {
     }
 
     pub(super) fn indexes_for(&self, provider: Provider) -> &[usize] {
-        self.provider_models
-            .get(&provider)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+        self.provider_models.get(&provider).map(Vec::as_slice).unwrap_or(&[])
     }
 
     pub(super) fn detail(&self, index: usize) -> Option<&SelectionDetail> {
@@ -224,12 +204,7 @@ impl DynamicModelRegistry {
             Err(err) => {
                 self.record_error(
                     provider,
-                    format!(
-                        "Failed to query {} at {} ({})",
-                        provider.label(),
-                        base_url,
-                        err
-                    ),
+                    format!("Failed to query {} at {} ({})", provider.label(), base_url, err),
                 );
             }
         }
@@ -253,10 +228,7 @@ impl DynamicModelRegistry {
             }
 
             let lower = trimmed.to_ascii_lowercase();
-            if static_index
-                .get(&provider)
-                .is_some_and(|set| set.contains(&lower))
-            {
+            if static_index.get(&provider).is_some_and(|set| set.contains(&lower)) {
                 continue;
             }
             if self.has_model(provider, trimmed) {
@@ -278,10 +250,7 @@ impl DynamicModelRegistry {
     fn register_model(&mut self, provider: Provider, detail: SelectionDetail) {
         let index = self.entries.len();
         self.entries.push(detail);
-        self.provider_models
-            .entry(provider)
-            .or_default()
-            .push(index);
+        self.provider_models.entry(provider).or_default().push(index);
     }
 
     fn has_model(&self, provider: Provider, candidate: &str) -> bool {
@@ -318,12 +287,8 @@ fn build_static_model_index(options: &[ModelOption]) -> StaticModelIndex {
 }
 
 fn resolve_openai_dynamic_auth(vt_cfg: Option<&VTCodeConfig>) -> Option<String> {
-    let auth_config = vt_cfg
-        .map(|cfg| cfg.auth.openai.clone())
-        .unwrap_or_default();
-    let storage_mode = vt_cfg
-        .map(|cfg| cfg.agent.credential_storage_mode)
-        .unwrap_or_default();
+    let auth_config = vt_cfg.map(|cfg| cfg.auth.openai.clone()).unwrap_or_default();
+    let storage_mode = vt_cfg.map(|cfg| cfg.agent.credential_storage_mode).unwrap_or_default();
     let api_key = get_api_key("openai", &ApiKeySources::default()).ok();
 
     vtcode_config::resolve_openai_auth(&auth_config, storage_mode, api_key)
@@ -368,15 +333,10 @@ async fn fetch_openai_models(
         .map_err(|err| anyhow!("failed to connect to OpenAI models endpoint: {err}"))?;
 
     if response.status() == StatusCode::UNAUTHORIZED || response.status() == StatusCode::FORBIDDEN {
-        return Err(anyhow!(
-            "OpenAI authentication failed while listing remote models"
-        ));
+        return Err(anyhow!("OpenAI authentication failed while listing remote models"));
     }
     if !response.status().is_success() {
-        return Err(anyhow!(
-            "failed to fetch OpenAI models: HTTP {}",
-            response.status()
-        ));
+        return Err(anyhow!("failed to fetch OpenAI models: HTTP {}", response.status()));
     }
 
     let parsed: ModelsResponse = response
@@ -448,9 +408,7 @@ mod tests {
 
         let indexes = registry.indexes_for(Provider::Ollama);
         assert_eq!(indexes.len(), 1);
-        let detail = registry
-            .detail(indexes[0])
-            .expect("only local dynamic model should remain");
+        let detail = registry.detail(indexes[0]).expect("only local dynamic model should remain");
         assert_eq!(detail.model_id, "custom-local-model");
     }
 

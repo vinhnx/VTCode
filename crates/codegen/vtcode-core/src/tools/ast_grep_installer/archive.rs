@@ -39,10 +39,7 @@ pub(super) fn install_archive(
         }
     } else if let Some(alias_path) = &paths.alias_path {
         fs::copy(&paths.binary_path, alias_path).with_context(|| {
-            format!(
-                "Failed to install ast-grep alias to {}",
-                alias_path.display()
-            )
+            format!("Failed to install ast-grep alias to {}", alias_path.display())
         })?;
         set_executable_permissions(alias_path)?;
     }
@@ -60,11 +57,7 @@ pub(super) fn ast_grep_version(binary: &Path) -> Result<String> {
         .output()
         .with_context(|| format!("Failed to run {}", binary.display()))?;
     if !output.status.success() {
-        bail!(
-            "{} --version exited with status {}",
-            binary.display(),
-            output.status
-        );
+        bail!("{} --version exited with status {}", binary.display(), output.status);
     }
 
     let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -153,26 +146,17 @@ fn install_binary_atomically(
         .with_context(|| format!("Failed to open extracted binary {}", source.display()))?;
 
     let mut staged = NamedTempFile::new_in(destination_dir).with_context(|| {
-        format!(
-            "Failed to create staging file in {}",
-            destination_dir.display()
-        )
+        format!("Failed to create staging file in {}", destination_dir.display())
     })?;
 
     io::copy(&mut source_file, staged.as_file_mut()).with_context(|| {
-        format!(
-            "Failed to stage ast-grep binary at {}",
-            staged.path().display()
-        )
+        format!("Failed to stage ast-grep binary at {}", staged.path().display())
     })?;
 
     set_executable_permissions(staged.path())?;
 
     staged.persist(destination).with_context(|| {
-        format!(
-            "Failed to publish ast-grep binary to {}",
-            destination.display()
-        )
+        format!("Failed to publish ast-grep binary to {}", destination.display())
     })?;
 
     Ok(())

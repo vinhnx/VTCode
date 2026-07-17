@@ -124,10 +124,7 @@ mod file_search_integration_tests {
         let test_paths = ["src/utils.rs", "tests/utils_test.rs", "src/main.rs"];
 
         // Simulate what filter_by_pattern would do
-        let src_files: Vec<_> = test_paths
-            .iter()
-            .filter(|p| p.starts_with("src/"))
-            .collect();
+        let src_files: Vec<_> = test_paths.iter().filter(|p| p.starts_with("src/")).collect();
 
         assert_eq!(src_files.len(), 2);
     }
@@ -172,10 +169,9 @@ mod file_search_integration_tests {
         let manager = GrepSearchManager::new(PathBuf::from("."));
 
         // Test list_all_files - non-blocking, just verify it doesn't panic
-        match manager.list_all_files(
-            20,
-            vec!["target/**".to_string(), "node_modules/**".to_string()],
-        ) {
+        match manager
+            .list_all_files(20, vec!["target/**".to_string(), "node_modules/**".to_string()])
+        {
             Ok(files) => {
                 eprintln!("Listed {} files", files.len());
             }

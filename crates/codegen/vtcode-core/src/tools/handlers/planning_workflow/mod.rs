@@ -69,14 +69,7 @@ mod tests {
         // Plan file should exist
         let plan_file = state.get_plan_file().await.unwrap();
         assert!(plan_file.exists());
-        assert_eq!(
-            plan_file,
-            temp_dir
-                .path()
-                .join(".vtcode")
-                .join("plans")
-                .join("test-plan.md")
-        );
+        assert_eq!(plan_file, temp_dir.path().join(".vtcode").join("plans").join("test-plan.md"));
 
         let content = std::fs::read_to_string(&plan_file).unwrap();
         assert!(content.contains("# Test Plan"));
@@ -166,12 +159,7 @@ mod tests {
         assert!(state.is_active());
         assert_eq!(result["status"], "pending_confirmation");
         assert!(result["requires_confirmation"].as_bool().unwrap());
-        assert!(
-            result["plan_content"]
-                .as_str()
-                .unwrap()
-                .contains("Test Plan")
-        );
+        assert!(result["plan_content"].as_str().unwrap().contains("Test Plan"));
         // Verify structured plan summary is included
         assert!(result["plan_summary"].is_object());
         let summary = &result["plan_summary"];
@@ -194,24 +182,15 @@ mod tests {
         )
         .unwrap();
         let tracker_file = plans_dir.join("merge-test.tasks.md");
-        std::fs::write(
-            &tracker_file,
-            "# Updated Plan\n\n## Plan of Work\n- [~] Tracker step\n",
-        )
-        .unwrap();
+        std::fs::write(&tracker_file, "# Updated Plan\n\n## Plan of Work\n- [~] Tracker step\n")
+            .unwrap();
         state.set_plan_file(Some(plan_file)).await;
 
         let tool = FinishPlanningTool::new(state.clone());
-        let result = tool
-            .execute(json!({ "reason": "merge test" }))
-            .await
-            .unwrap();
+        let result = tool.execute(json!({ "reason": "merge test" })).await.unwrap();
 
         assert_eq!(result["status"], "pending_confirmation");
-        assert_eq!(
-            result["plan_tracker_file"],
-            tracker_file.display().to_string()
-        );
+        assert_eq!(result["plan_tracker_file"], tracker_file.display().to_string());
         let plan_content = result["plan_content"].as_str().unwrap_or_default();
         assert!(plan_content.contains("Keep the base plan content"));
         assert!(plan_content.contains("Tracker step"));
@@ -260,10 +239,7 @@ mod tests {
         state.set_plan_file(Some(plan_file)).await;
 
         let tool = FinishPlanningTool::new(state.clone());
-        let result = tool
-            .execute(json!({ "reason": "auto_trigger_on_plan_ready" }))
-            .await
-            .unwrap();
+        let result = tool.execute(json!({ "reason": "auto_trigger_on_plan_ready" })).await.unwrap();
 
         assert_eq!(result["status"], "pending_confirmation");
         assert_eq!(result["requires_confirmation"], true);
@@ -276,19 +252,14 @@ mod tests {
         let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
         let tool = StartPlanningTool::new(state.clone());
 
-        let result = tool
-            .execute(json!({ "plan_name": "baseline-test" }))
-            .await
-            .unwrap();
+        let result = tool.execute(json!({ "plan_name": "baseline-test" })).await.unwrap();
         assert_eq!(result["status"], "success");
 
         let plan_file = state.get_plan_file().await.unwrap();
         std::fs::write(&plan_file, "# Test Plan\n\n## Plan of Work\n- Step one\n").unwrap();
 
         // Reset baseline to simulate no updates after template creation.
-        let baseline = std::fs::metadata(&plan_file)
-            .and_then(|meta| meta.modified())
-            .unwrap();
+        let baseline = std::fs::metadata(&plan_file).and_then(|meta| meta.modified()).unwrap();
         state.set_plan_baseline(Some(baseline)).await;
 
         let exit_tool = FinishPlanningTool::new(state.clone());
@@ -330,10 +301,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(result["status"], "already_active");
-        let plan_file = state
-            .get_plan_file()
-            .await
-            .expect("plan file should be set");
+        let plan_file = state.get_plan_file().await.expect("plan file should be set");
         assert!(plan_file.exists());
         assert!(
             plan_file
@@ -370,12 +338,7 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
 
         assert!(!report.is_ready());
         assert!(!report.placeholder_tokens.is_empty());
-        assert!(
-            report
-                .placeholder_tokens
-                .iter()
-                .any(|token| token.contains("file, symbol"))
-        );
+        assert!(report.placeholder_tokens.iter().any(|token| token.contains("file, symbol")));
     }
 
     #[test]
@@ -387,7 +350,7 @@ Next open decision: [if any], otherwise: No remaining scope decisions.
 Persist the reviewed plan draft and route execution through explicit approval.
 
 ## Implementation Steps
-1. Add plan lifecycle state -> files: [vtcode-core/src/tools/handlers/planning_workflow.rs] -> verify: [cargo test -p vtcode-core test_start_planning -- --nocapture]
+1. Add plan lifecycle state -> files: [crates/codegen/vtcode-core/src/tools/handlers/planning_workflow.rs] -> verify: [cargo test -p vtcode-core test_start_planning -- --nocapture]
 2. Gate plan entry with overlay approval -> files: [src/agent/runloop/unified/tool_pipeline/execution_planning.rs] -> verify: [cargo test -p vtcode test_run_tool_call_prevalidated_allows_task_tracker_in_planning_workflow -- --nocapture]
 
 ## Test Cases and Validation
@@ -408,9 +371,7 @@ Persist the reviewed plan draft and route execution through explicit approval.
         let temp_dir = TempDir::new().unwrap();
         let state = PlanningWorkflowState::new(temp_dir.path().to_path_buf());
         let tool = StartPlanningTool::new(state.clone());
-        tool.execute(json!({"plan_name":"draft-sync","approved":true}))
-            .await
-            .unwrap();
+        tool.execute(json!({"plan_name":"draft-sync","approved":true})).await.unwrap();
 
         let persisted = persist_plan_draft(
             &state,
@@ -420,8 +381,8 @@ Persist the reviewed plan draft and route execution through explicit approval.
 Persist a concrete draft and seed tracker state.
 
 ## Implementation Steps
-1. Persist the plan -> files: [vtcode-core/src/tools/handlers/planning_workflow.rs] -> verify: [cargo test]
-2. Sync the tracker -> files: [vtcode-core/src/tools/handlers/task_tracker.rs] -> verify: [cargo test]
+1. Persist the plan -> files: [crates/codegen/vtcode-core/src/tools/handlers/planning_workflow.rs] -> verify: [cargo test]
+2. Sync the tracker -> files: [crates/codegen/vtcode-core/src/tools/handlers/task_tracker.rs] -> verify: [cargo test]
 
 ## Test Cases and Validation
 1. Build and lint: cargo check
@@ -438,11 +399,7 @@ Persist a concrete draft and seed tracker state.
         let plan_content = std::fs::read_to_string(&persisted.plan_file).unwrap();
         let tracker_content = std::fs::read_to_string(&tracker_file).unwrap();
         let global_task = std::fs::read_to_string(
-            temp_dir
-                .path()
-                .join(".vtcode")
-                .join("tasks")
-                .join("current_task.md"),
+            temp_dir.path().join(".vtcode").join("tasks").join("current_task.md"),
         )
         .unwrap();
 

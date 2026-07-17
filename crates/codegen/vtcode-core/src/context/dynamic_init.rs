@@ -279,9 +279,7 @@ mod tests {
         let temp = tempdir().unwrap();
         let config = vtcode_config::DynamicContextConfig::default();
 
-        let dirs = initialize_dynamic_context(temp.path(), &config)
-            .await
-            .unwrap();
+        let dirs = initialize_dynamic_context(temp.path(), &config).await.unwrap();
 
         assert!(dirs.vtcode_dir.exists());
         assert!(dirs.tool_outputs.exists());
@@ -292,17 +290,13 @@ mod tests {
 
         // Check README was created
         assert!(dirs.vtcode_dir.join("README.md").exists());
-        let readme = fs::read_to_string(dirs.vtcode_dir.join("README.md"))
-            .await
-            .unwrap();
+        let readme = fs::read_to_string(dirs.vtcode_dir.join("README.md")).await.unwrap();
         assert!(readme.contains("`exec_command.cmd`"));
         assert!(readme.contains("`code_search`"));
 
         // Check startup index files were created
         assert!(dirs.terminals.join("INDEX.md").exists());
-        let terminals_index = fs::read_to_string(dirs.terminals.join("INDEX.md"))
-            .await
-            .unwrap();
+        let terminals_index = fs::read_to_string(dirs.terminals.join("INDEX.md")).await.unwrap();
         assert!(terminals_index.contains("`exec_command.cmd` with `sed`, `cat`, or `rg`"));
         assert!(!dirs.skills.join("INDEX.md").exists());
         assert!(!dirs.mcp_tools.join("INDEX.md").exists());
@@ -311,14 +305,9 @@ mod tests {
     #[tokio::test]
     async fn test_disabled_skips_creation() {
         let temp = tempdir().unwrap();
-        let config = vtcode_config::DynamicContextConfig {
-            enabled: false,
-            ..Default::default()
-        };
+        let config = vtcode_config::DynamicContextConfig { enabled: false, ..Default::default() };
 
-        let dirs = initialize_dynamic_context(temp.path(), &config)
-            .await
-            .unwrap();
+        let dirs = initialize_dynamic_context(temp.path(), &config).await.unwrap();
 
         // Directories should not be created when disabled
         assert!(!dirs.vtcode_dir.exists());
@@ -329,16 +318,12 @@ mod tests {
         let temp = tempdir().unwrap();
         let config = vtcode_config::DynamicContextConfig::default();
 
-        ensure_mcp_dynamic_context(temp.path(), &config)
-            .await
-            .unwrap();
+        ensure_mcp_dynamic_context(temp.path(), &config).await.unwrap();
 
         let dirs = DynamicContextDirs::from_workspace(temp.path());
         assert!(dirs.mcp_tools.exists());
         assert!(dirs.mcp_tools.join("INDEX.md").exists());
-        let index = fs::read_to_string(dirs.mcp_tools.join("INDEX.md"))
-            .await
-            .unwrap();
+        let index = fs::read_to_string(dirs.mcp_tools.join("INDEX.md")).await.unwrap();
         assert!(index.contains("`exec_command.cmd` with `sed`, `cat`, or `rg`"));
     }
 
@@ -347,16 +332,12 @@ mod tests {
         let temp = tempdir().unwrap();
         let config = vtcode_config::DynamicContextConfig::default();
 
-        ensure_skills_dynamic_context(temp.path(), &config)
-            .await
-            .unwrap();
+        ensure_skills_dynamic_context(temp.path(), &config).await.unwrap();
 
         let dirs = DynamicContextDirs::from_workspace(temp.path());
         assert!(dirs.skills.exists());
         assert!(dirs.skills.join("INDEX.md").exists());
-        let index = fs::read_to_string(dirs.skills.join("INDEX.md"))
-            .await
-            .unwrap();
+        let index = fs::read_to_string(dirs.skills.join("INDEX.md")).await.unwrap();
         assert!(index.contains("`exec_command.cmd` with `find`, `sed`, or `cat`"));
     }
 }

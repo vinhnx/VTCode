@@ -111,14 +111,9 @@ pub async fn auto_compact_messages(
         return Ok(None);
     }
 
-    let (mut compacted, mode) = compact_history_manual(
-        provider,
-        model,
-        &compaction_history,
-        &engine_cfg,
-        &manual_options,
-    )
-    .await?;
+    let (mut compacted, mode) =
+        compact_history_manual(provider, model, &compaction_history, &engine_cfg, &manual_options)
+            .await?;
 
     if compacted == compaction_history {
         return Ok(None);
@@ -136,9 +131,8 @@ pub async fn auto_compact_messages(
         placement,
         None,
     )?;
-    let history_artifact_path = envelope
-        .as_ref()
-        .and_then(|item| item.history_artifact_path.clone());
+    let history_artifact_path =
+        envelope.as_ref().and_then(|item| item.history_artifact_path.clone());
     let compacted_len = compacted.len();
     *history = compacted;
     Ok(Some(AutoCompactionOutcome {

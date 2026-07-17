@@ -50,10 +50,7 @@ const LEGACY_SEARCH_TOOLS: &str = "search_tools";
 
 #[inline]
 fn base_tool_name(tool_name: &str) -> &str {
-    tool_name
-        .split_once("::")
-        .map(|(base, _)| base)
-        .unwrap_or(tool_name)
+    tool_name.split_once("::").map(|(base, _)| base).unwrap_or(tool_name)
 }
 
 #[inline]
@@ -103,11 +100,7 @@ fn canonicalize_command_for_detection(command: &str) -> Option<String> {
         if matches!(*last, "--help" | "-h" | "--version" | "-V" | "version") {
             // Skip leading `env` and its VAR=val flags to find the actual tool
             let tool_token = if tokens[0] == "env" {
-                tokens
-                    .iter()
-                    .skip(1)
-                    .find(|t| !t.contains('='))
-                    .unwrap_or(&tokens[0])
+                tokens.iter().skip(1).find(|t| !t.contains('=')).unwrap_or(&tokens[0])
             } else {
                 &tokens[0]
             };
@@ -181,9 +174,7 @@ fn hash_normalized_args(tool_name: &str, args: &serde_json::Value) -> u64 {
             if let Some(s) = v.as_str() {
                 let trimmed = s.trim();
                 trimmed.is_empty()
-                    || trimmed
-                        .trim_matches(|c: char| c == '.' || c == '/')
-                        .is_empty()
+                    || trimmed.trim_matches(|c: char| c == '.' || c == '/').is_empty()
             } else {
                 false
             }
@@ -205,9 +196,8 @@ fn hash_normalized_args(tool_name: &str, args: &serde_json::Value) -> u64 {
 
             // For read tools: normalize alias keys to canonical names
             if is_read_tool {
-                if let Some((_, canonical)) = read_aliases
-                    .iter()
-                    .find(|(alias, _)| *alias == key.as_str())
+                if let Some((_, canonical)) =
+                    read_aliases.iter().find(|(alias, _)| *alias == key.as_str())
                 {
                     let canonical = canonical.to_string();
                     // Only insert if canonical key not already present
@@ -352,16 +342,12 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
             // Normalize limit aliases to "limit"
             // max_lines, chunk_lines, limit_lines, page_size_lines, line_end, end_line → limit
             // For line_end/end_line: compute limit from offset + end_line
-            if let Some(line_end) = normalized
-                .remove("line_end")
-                .or_else(|| normalized.remove("end_line"))
+            if let Some(line_end) =
+                normalized.remove("line_end").or_else(|| normalized.remove("end_line"))
             {
                 // start_line/end_line or line_start/line_end → offset + limit
                 if !normalized.contains_key("limit") {
-                    let start = normalized
-                        .get("offset")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(1);
+                    let start = normalized.get("offset").and_then(|v| v.as_u64()).unwrap_or(1);
                     let end = line_end.as_u64().unwrap_or(start);
                     let limit = end.saturating_sub(start).saturating_add(1);
                     normalized.insert("limit".into(), serde_json::json!(limit));
@@ -374,9 +360,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
             }
 
             // Canonicalize omitted offsets to the first line.
-            normalized
-                .entry(String::from("offset"))
-                .or_insert(serde_json::json!(1));
+            normalized.entry(String::from("offset")).or_insert(serde_json::json!(1));
 
             // Remove noise params that don't change semantic intent
             normalized.remove("encoding");
@@ -479,10 +463,7 @@ impl LoopDetector {
     /// Returns the effective navigation warning and hard-stop streak thresholds.
     fn effective_navigation_thresholds(&self) -> (usize, usize) {
         if self.is_subagent {
-            (
-                SUBAGENT_NAVIGATION_WARNING_STREAK,
-                SUBAGENT_NAVIGATION_HARD_STOP_STREAK,
-            )
+            (SUBAGENT_NAVIGATION_WARNING_STREAK, SUBAGENT_NAVIGATION_HARD_STOP_STREAK)
         } else {
             (NAVIGATION_WARNING_STREAK, NAVIGATION_HARD_STOP_STREAK)
         }
@@ -538,12 +519,10 @@ impl LoopDetector {
         {
             let required_history = limit.saturating_sub(1);
             if required_history > 0 && self.recent_calls.len() >= required_history {
-                let identical = self
-                    .recent_calls
-                    .iter()
-                    .rev()
-                    .take(required_history)
-                    .all(|record| record.tool_name == tool_name && record.args_hash == args_hash);
+                let identical =
+                    self.recent_calls.iter().rev().take(required_history).all(|record| {
+                        record.tool_name == tool_name && record.args_hash == args_hash
+                    });
 
                 if identical {
                     // Escalate to hard limit so callers halt immediately.
@@ -591,10 +570,7 @@ impl LoopDetector {
             base_name,
             tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::CODE_SEARCH
         ) || (base_name == tools::UNIFIED_FILE
-            && self
-                .recent_calls
-                .back()
-                .is_some_and(|r| r.read_target.is_some()));
+            && self.recent_calls.back().is_some_and(|r| r.read_target.is_some()));
 
         let is_mutating = matches!(
             base_name,
@@ -759,10 +735,8 @@ impl LoopDetector {
         // handles `file_operation` with `action: "read"` and command tools with
         // `__read__:path` normalization). Use that field as the authoritative
         // indicator instead of checking for a `::read` suffix.
-        let current_has_read_target = self
-            .recent_calls
-            .back()
-            .is_some_and(|r| r.read_target.is_some());
+        let current_has_read_target =
+            self.recent_calls.back().is_some_and(|r| r.read_target.is_some());
         let is_read_tool = base_name == tools::READ_FILE
             || (base_name == tools::UNIFIED_FILE && current_has_read_target)
             || (is_command_tool_name(base_name) && current_has_read_target);
@@ -1020,11 +994,8 @@ impl LoopDetector {
 
     /// Detect complex repetitive patterns (e.g. A -> B -> A -> B)
     fn detect_patterns(&self) -> Option<String> {
-        let history: Vec<(&str, u64)> = self
-            .recent_calls
-            .iter()
-            .map(|r| (r.tool_name.as_str(), r.args_hash))
-            .collect();
+        let history: Vec<(&str, u64)> =
+            self.recent_calls.iter().map(|r| (r.tool_name.as_str(), r.args_hash)).collect();
 
         let len = history.len();
         if len < 4 {
@@ -1259,14 +1230,7 @@ mod tests {
         detector.record_call(LEGACY_LIST_FILES, &json!({"path": "tests"}));
 
         // Count for each should be 1
-        assert_eq!(
-            detector
-                .tool_counts
-                .get(LEGACY_LIST_FILES)
-                .copied()
-                .unwrap_or(0),
-            3
-        );
+        assert_eq!(detector.tool_counts.get(LEGACY_LIST_FILES).copied().unwrap_or(0), 3);
     }
 
     #[test]
@@ -1444,7 +1408,7 @@ mod tests {
         let mut saw_hard_stop = false;
 
         for offset in [1, 2, 1, 2, 1, 2, 1, 2] {
-            let args = json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": offset, "limit": 20});
+            let args = json!({"path": "crates/codegen/vtcode-core/src/a2a/server.rs", "offset_lines": offset, "limit": 20});
             if let Some(warning) = detector.record_call(&tool_key, &args)
                 && warning.contains("HARD STOP")
             {
@@ -1462,7 +1426,7 @@ mod tests {
         let tool_key = format!("{}::read", tools::UNIFIED_FILE);
 
         for offset in 1..=MAX_SIMILAR_READ_TARGET_CALLS {
-            let args = json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": offset * 40, "limit": 40});
+            let args = json!({"path": "crates/codegen/vtcode-core/src/a2a/server.rs", "offset_lines": offset * 40, "limit": 40});
             if let Some(warning) = detector.record_call(&tool_key, &args) {
                 assert!(!warning.contains("HARD STOP"));
             }
@@ -1483,11 +1447,11 @@ mod tests {
         for offset in 1..=(MAX_SIMILAR_READ_TARGET_CALLS - 1) {
             let _ = detector.record_call(
                 &read_tool,
-                &json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": offset * 40, "limit": 20}),
+                &json!({"path": "crates/codegen/vtcode-core/src/a2a/server.rs", "offset_lines": offset * 40, "limit": 20}),
             );
             let _ = detector.record_call(
                 LEGACY_GREP_FILE,
-                &json!({"pattern": "handle_loop_detection", "path": "vtcode-core/src"}),
+                &json!({"pattern": "handle_loop_detection", "path": "crates/codegen/vtcode-core/src"}),
             );
         }
 
@@ -1509,10 +1473,8 @@ mod tests {
                 &read_tool,
                 &json!({"path": "Cargo.lock", "offset_lines": 1, "limit": 2000}),
             );
-            let _ = detector.record_call(
-                LEGACY_GREP_FILE,
-                &json!({"pattern": "aws-lc", "path": "Cargo.lock"}),
-            );
+            let _ = detector
+                .record_call(LEGACY_GREP_FILE, &json!({"pattern": "aws-lc", "path": "Cargo.lock"}));
         }
 
         assert!(detector.is_hard_limit_exceeded(&read_tool));
@@ -1536,14 +1498,8 @@ mod tests {
 
         // Verify aliases are normalized
         assert!(n1.get("max_lines").is_none(), "max_lines should be removed");
-        assert!(
-            n2.get("offset_lines").is_none(),
-            "offset_lines should be removed"
-        );
-        assert!(
-            n3.get("chunk_lines").is_none(),
-            "chunk_lines should be removed"
-        );
+        assert!(n2.get("offset_lines").is_none(), "offset_lines should be removed");
+        assert!(n3.get("chunk_lines").is_none(), "chunk_lines should be removed");
         assert_eq!(n1.get("limit"), n2.get("limit"));
         assert_eq!(n2.get("limit"), n3.get("limit"));
 
@@ -1608,36 +1564,20 @@ mod tests {
 
         for (i, (tool, args)) in sequence.iter().enumerate() {
             let res = detector.record_call(tool, args);
-            assert!(
-                res.is_none(),
-                "Call {} ({}) should not have triggered a warning",
-                i + 1,
-                tool
-            );
+            assert!(res.is_none(), "Call {} ({}) should not have triggered a warning", i + 1, tool);
         }
 
         // 4th call (any read-only) should trigger navigation loop warning (streak hits 4)
         let warning = detector.record_call(LEGACY_GREP_FILE, &grep_args);
-        assert!(
-            warning.is_some(),
-            "4th call should have triggered a navigation loop warning"
-        );
+        assert!(warning.is_some(), "4th call should have triggered a navigation loop warning");
         assert!(warning.unwrap().contains("Navigation Loop Detected"));
 
         // A mutating call should reset the streak
         let write_args = serde_json::json!({"path": "src/new.rs", "content": "test"});
-        assert!(
-            detector
-                .record_call(tools::WRITE_FILE, &write_args)
-                .is_none()
-        );
+        assert!(detector.record_call(tools::WRITE_FILE, &write_args).is_none());
 
         // Subsequent read calls should start from 0; single call should be fine
-        assert!(
-            detector
-                .record_call(LEGACY_LIST_FILES, &list_args)
-                .is_none()
-        );
+        assert!(detector.record_call(LEGACY_LIST_FILES, &list_args).is_none());
     }
 
     #[test]
@@ -1665,14 +1605,9 @@ mod tests {
 
         // Call 4: grep Cargo.lock (read-only, does NOT break streak, streak=4)
         // Navigation loop warning fires at streak 4 with the lowered threshold.
-        let r = detector.record_call(
-            LEGACY_GREP_FILE,
-            &json!({"pattern": "aws-lc", "path": "Cargo.lock"}),
-        );
-        assert!(
-            r.is_some(),
-            "Navigation loop warning should fire at streak 4"
-        );
+        let r = detector
+            .record_call(LEGACY_GREP_FILE, &json!({"pattern": "aws-lc", "path": "Cargo.lock"}));
+        assert!(r.is_some(), "Navigation loop warning should fire at streak 4");
         let msg = r.unwrap();
         assert!(msg.contains("Navigation Loop Detected"));
 
@@ -1764,10 +1699,7 @@ mod tests {
             }
         }
 
-        assert!(
-            saw_hard_stop,
-            "Global readonly budget should fire at {MAX_TOTAL_READONLY_CALLS}"
-        );
+        assert!(saw_hard_stop, "Global readonly budget should fire at {MAX_TOTAL_READONLY_CALLS}");
         assert!(detector.is_hard_limit_exceeded(tools::CODE_SEARCH));
     }
 
@@ -1795,14 +1727,8 @@ mod tests {
             }
         }
 
-        assert!(
-            hard_stop_count > 0,
-            "Global budget should fire when alternating tools"
-        );
-        assert_eq!(
-            detector.total_readonly_calls(),
-            MAX_TOTAL_READONLY_CALLS + 5
-        );
+        assert!(hard_stop_count > 0, "Global budget should fire when alternating tools");
+        assert_eq!(detector.total_readonly_calls(), MAX_TOTAL_READONLY_CALLS + 5);
     }
 
     #[test]
@@ -1849,10 +1775,7 @@ mod tests {
         // 4th call should trigger navigation loop warning (streak hits 4)
         let args = json!({"query": "p_4", "path": "src/"});
         let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(
-            warning.is_some(),
-            "Navigation loop warning should fire at streak 4"
-        );
+        assert!(warning.is_some(), "Navigation loop warning should fire at streak 4");
         assert!(warning.unwrap().contains("Navigation Loop Detected"));
     }
 
@@ -1869,10 +1792,7 @@ mod tests {
         // 7th call should trigger HARD STOP
         let args = json!({"query": "p_7", "path": "src/"});
         let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(
-            warning.is_some(),
-            "Navigation hard stop should fire at streak 7"
-        );
+        assert!(warning.is_some(), "Navigation hard stop should fire at streak 7");
         let msg = warning.unwrap();
         assert!(msg.contains("HARD STOP"), "Expected HARD STOP: {msg}");
         assert!(detector.is_hard_limit_exceeded(tools::CODE_SEARCH));
@@ -1892,10 +1812,7 @@ mod tests {
         // 5th call should trigger HARD STOP for subagent
         let args = json!({"query": "p_5", "path": "src/"});
         let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(
-            warning.is_some(),
-            "Subagent navigation hard stop should fire at streak 5"
-        );
+        assert!(warning.is_some(), "Subagent navigation hard stop should fire at streak 5");
         let msg = warning.unwrap();
         assert!(msg.contains("HARD STOP"), "Expected HARD STOP: {msg}");
     }
@@ -1914,19 +1831,13 @@ mod tests {
         // 21st call should trigger global budget HARD STOP
         let args = json!({"query": "final", "path": "src/"});
         let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(
-            warning.is_some(),
-            "Subagent global read-only budget should fire at 20"
-        );
+        assert!(warning.is_some(), "Subagent global read-only budget should fire at 20");
         let msg = warning.unwrap();
         assert!(
             msg.contains("Global read-only budget exhausted"),
             "Expected budget exhaustion: {msg}"
         );
-        assert!(
-            msg.contains("limit: 20"),
-            "Expected limit 20 in message: {msg}"
-        );
+        assert!(msg.contains("limit: 20"), "Expected limit 20 in message: {msg}");
     }
 
     #[test]
@@ -1943,15 +1854,9 @@ mod tests {
         // 31st call should trigger global budget HARD STOP
         let args = json!({"query": "final", "path": "src/"});
         let warning = detector.record_call(tools::CODE_SEARCH, &args);
-        assert!(
-            warning.is_some(),
-            "Main agent global read-only budget should fire at 30"
-        );
+        assert!(warning.is_some(), "Main agent global read-only budget should fire at 30");
         let msg = warning.unwrap();
-        assert!(
-            msg.contains("limit: 30"),
-            "Expected limit 30 in message: {msg}"
-        );
+        assert!(msg.contains("limit: 30"), "Expected limit 30 in message: {msg}");
     }
 
     // --- canonicalize_command_for_detection tests ---
@@ -2022,10 +1927,7 @@ mod tests {
 
     #[test]
     fn canonicalize_arbitrary_command_returns_none() {
-        assert_eq!(
-            canonicalize_command_for_detection("cargo check -p vtcode-core"),
-            None
-        );
+        assert_eq!(canonicalize_command_for_detection("cargo check -p vtcode-core"), None);
     }
 
     #[test]

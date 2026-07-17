@@ -79,29 +79,19 @@ fn tool_call_delay_for_rate_ignores_unset_or_zero_limits() {
 
 #[test]
 fn tool_call_delay_for_rate_uses_per_second_interval() {
-    assert_eq!(
-        tool_call_delay_for_rate(Some(4)),
-        Some(Duration::from_millis(250))
-    );
+    assert_eq!(tool_call_delay_for_rate(Some(4)), Some(Duration::from_millis(250)));
 }
 
 #[tokio::test]
 async fn tool_loop_limit_uses_tools_config() {
     let temp = TempDir::new().unwrap();
-    let tools_config = ToolsConfig {
-        max_tool_loops: 2,
-        ..ToolsConfig::default()
-    };
+    let tools_config = ToolsConfig { max_tool_loops: 2, ..ToolsConfig::default() };
     let agent = build_agent_with_tools_config(temp.path(), tools_config).await;
 
     assert!(!agent.tool_loop_limit_reached(0));
     assert!(!agent.tool_loop_limit_reached(1));
     assert!(agent.tool_loop_limit_reached(2));
-    assert!(
-        agent
-            .tool_loop_limit_message()
-            .contains("maximum tool loops (2)")
-    );
+    assert!(agent.tool_loop_limit_message().contains("maximum tool loops (2)"));
 }
 
 fn definition_names(definitions: Vec<ToolDefinition>) -> Vec<String> {
@@ -212,10 +202,7 @@ fn parse_terminal_command_rejects_non_string_indexed_argument() {
     let args = json!({ "command.0": 1 });
     let result = ZedAgent::parse_terminal_command(&args);
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err(),
-        "command array must contain only strings"
-    );
+    assert_eq!(result.unwrap_err(), "command array must contain only strings");
 }
 
 #[tokio::test]
@@ -245,21 +232,12 @@ async fn read_only_primary_agents_hide_local_tools() {
         })
         .collect();
 
-    let duck_names = definition_names(
-        agent
-            .tool_definitions(true, &enabled_tools, "duck")
-            .unwrap(),
-    );
-    let plan_names = definition_names(
-        agent
-            .tool_definitions(true, &enabled_tools, "plan")
-            .unwrap(),
-    );
-    let build_names = definition_names(
-        agent
-            .tool_definitions(true, &enabled_tools, "build")
-            .unwrap(),
-    );
+    let duck_names =
+        definition_names(agent.tool_definitions(true, &enabled_tools, "duck").unwrap());
+    let plan_names =
+        definition_names(agent.tool_definitions(true, &enabled_tools, "plan").unwrap());
+    let build_names =
+        definition_names(agent.tool_definitions(true, &enabled_tools, "build").unwrap());
 
     assert_eq!(duck_names, vec![tools::LIST_FILES.to_string()]);
     assert_eq!(plan_names, duck_names);
@@ -328,16 +306,10 @@ Reader prompt."#,
         })
         .collect();
 
-    let sheller_names = definition_names(
-        agent
-            .tool_definitions(true, &enabled_tools, "sheller")
-            .unwrap(),
-    );
-    let reader_names = definition_names(
-        agent
-            .tool_definitions(true, &enabled_tools, "reader")
-            .unwrap(),
-    );
+    let sheller_names =
+        definition_names(agent.tool_definitions(true, &enabled_tools, "sheller").unwrap());
+    let reader_names =
+        definition_names(agent.tool_definitions(true, &enabled_tools, "reader").unwrap());
 
     assert!(sheller_names.contains(&tools::EXEC_COMMAND.to_string()));
     assert!(!sheller_names.contains(&tools::APPLY_PATCH.to_string()));
@@ -352,10 +324,7 @@ async fn allows_tool_gates_deny_default_agent_by_tool_category() {
     let temp = TempDir::new().unwrap();
     let agent = build_agent(temp.path()).await;
     let local_names = definition_names(agent.acp_tool_registry.definitions_for(&[], true));
-    assert!(
-        !local_names.is_empty(),
-        "expected at least one local tool definition"
-    );
+    assert!(!local_names.is_empty(), "expected at least one local tool definition");
 
     // A `default: deny` agent that only allows `exec_command` must expose
     // exec_command and nothing that maps to a different, unallowed category.
@@ -429,9 +398,7 @@ async fn local_tool_execution_reports_registry_failure() {
     let temp = TempDir::new().unwrap();
     let agent = build_agent(temp.path()).await;
 
-    let report = agent
-        .execute_local_tool("unknown_tool", &json!({}), "call-local-missing")
-        .await;
+    let report = agent.execute_local_tool("unknown_tool", &json!({}), "call-local-missing").await;
 
     assert_eq!(report.status, crate::acp::ToolCallStatus::Failed);
     assert!(report.llm_response.contains("unknown_tool"));

@@ -298,9 +298,7 @@ pub(crate) async fn poll_inline_loop_action(
     ctrl_c_notify: &Arc<Notify>,
     resources: InlineEventLoopResources<'_>,
 ) -> Result<InlineLoopAction> {
-    InlineEventLoop::new(resources)
-        .poll(session, ctrl_c_notify)
-        .await
+    InlineEventLoop::new(resources).poll(session, ctrl_c_notify).await
 }
 
 async fn recv_startup_update_notice(
@@ -426,10 +424,7 @@ mod tests {
         let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
         let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel::<InlineEvent>();
         let handle = InlineHandle::new_for_tests(command_tx);
-        let mut session = InlineSession {
-            handle: handle.clone(),
-            events: event_rx,
-        };
+        let mut session = InlineSession { handle: handle.clone(), events: event_rx };
         let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());

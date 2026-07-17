@@ -47,11 +47,7 @@ fn preflight_fallback_remaps_file_operation_list_to_exec_command() {
     let fallback = preflight_validation_fallback(tool_names::UNIFIED_FILE, &args, &error)
         .expect("fallback expected for file_operation list payload");
     assert_eq!(fallback.0, tool_names::EXEC_COMMAND);
-    assert!(
-        fallback.1["cmd"]
-            .as_str()
-            .is_some_and(|cmd| cmd.contains("'src'"))
-    );
+    assert!(fallback.1["cmd"].as_str().is_some_and(|cmd| cmd.contains("'src'")));
 }
 
 #[test]
@@ -72,16 +68,8 @@ fn preflight_fallback_normalizes_request_user_input_single_question_shape() {
     assert_eq!(fallback.0, tool_names::REQUEST_USER_INPUT);
     assert_eq!(fallback.1["questions"][0]["id"], "question_1");
     assert_eq!(fallback.1["questions"][0]["header"], "Scope");
-    assert_eq!(
-        fallback.1["questions"][0]["question"],
-        "Which direction should we take?"
-    );
-    assert_eq!(
-        fallback.1["questions"][0]["options"]
-            .as_array()
-            .map(|v| v.len()),
-        Some(2)
-    );
+    assert_eq!(fallback.1["questions"][0]["question"], "Which direction should we take?");
+    assert_eq!(fallback.1["questions"][0]["options"].as_array().map(|v| v.len()), Some(2));
 }
 
 #[test]
@@ -107,16 +95,8 @@ fn preflight_fallback_normalizes_request_user_input_tabs_shape() {
     assert_eq!(fallback.0, tool_names::REQUEST_USER_INPUT);
     assert_eq!(fallback.1["questions"][0]["id"], "priority");
     assert_eq!(fallback.1["questions"][0]["header"], "Priority");
-    assert_eq!(
-        fallback.1["questions"][0]["question"],
-        "Which area should we prioritize first?"
-    );
-    assert_eq!(
-        fallback.1["questions"][0]["options"]
-            .as_array()
-            .map(|v| v.len()),
-        Some(2)
-    );
+    assert_eq!(fallback.1["questions"][0]["question"], "Which area should we prioritize first?");
+    assert_eq!(fallback.1["questions"][0]["options"].as_array().map(|v| v.len()), Some(2));
 }
 
 #[test]
@@ -136,10 +116,7 @@ fn validation_error_payload_includes_fallback_metadata() {
         parsed["fallback_tool_args"]["cmd"],
         "rg --line-number --column --color=never 'foo' '.'"
     );
-    assert_eq!(
-        parsed.get("next_action"),
-        Some(&json!("Retry with fallback_tool_args."))
-    );
+    assert_eq!(parsed.get("next_action"), Some(&json!("Retry with fallback_tool_args.")));
     assert!(parsed.get("loop_detected").is_none());
 }
 
@@ -156,14 +133,8 @@ fn validation_error_payload_marks_loop_detection_without_prose_hint() {
     // `loop_detected` is internal control logic and is stripped from model output.
     assert!(parsed.get("loop_detected").is_none());
     assert_eq!(parsed["fallback_tool"], tool_names::EXEC_COMMAND);
-    assert_eq!(
-        parsed["fallback_tool_args"]["cmd"],
-        "find '.' -maxdepth 1 -mindepth 1 -print"
-    );
-    assert_eq!(
-        parsed.get("next_action"),
-        Some(&json!("Retry with fallback_tool_args."))
-    );
+    assert_eq!(parsed["fallback_tool_args"]["cmd"], "find '.' -maxdepth 1 -mindepth 1 -print");
+    assert_eq!(parsed.get("next_action"), Some(&json!("Retry with fallback_tool_args.")));
 }
 
 #[test]
@@ -177,9 +148,7 @@ fn reused_read_only_result_uses_canonical_guidance() {
     });
 
     apply_reused_read_only_loop_metadata(
-        payload
-            .as_object_mut()
-            .expect("payload should be an object for reuse metadata"),
+        payload.as_object_mut().expect("payload should be an object for reuse metadata"),
     );
 
     assert_eq!(payload.get("reused_recent_result"), Some(&json!(true)));

@@ -45,10 +45,7 @@ fn parse_workspace_directory(raw: &str) -> Result<PathBuf, String> {
         ));
     }
     if !candidate.is_dir() {
-        return Err(format!(
-            "Workspace path is not a directory: {}",
-            candidate.display()
-        ));
+        return Err(format!("Workspace path is not a directory: {}", candidate.display()));
     }
     Ok(candidate)
 }
@@ -652,7 +649,7 @@ pub enum Commands {
 
     /// Headless code review for the current diff, selected files, or a custom git target
     #[command(
-        long_about = "Run a non-interactive code review.\n\nExamples:\n  vtcode review\n  vtcode review --last-diff\n  vtcode review --target HEAD~1..HEAD\n  vtcode review --file src/main.rs --file vtcode-core/src/lib.rs\n  vtcode review --style security"
+        long_about = "Run a non-interactive code review.\n\nExamples:\n  vtcode review\n  vtcode review --last-diff\n  vtcode review --target HEAD~1..HEAD\n  vtcode review --file src/main.rs --file crates/codegen/vtcode-core/src/lib.rs\n  vtcode review --style security"
     )]
     Review(ReviewArgs),
 
@@ -1410,10 +1407,7 @@ mod exec_command_tests {
     #[test]
     fn exec_shorthand_preserves_prompt() {
         let cli = Cli::parse_from(["vtcode", "exec", "count files"]);
-        let Some(Commands::Exec {
-            command, prompt, ..
-        }) = cli.command
-        else {
+        let Some(Commands::Exec { command, prompt, .. }) = cli.command else {
             panic!("expected exec command");
         };
 
@@ -1442,10 +1436,8 @@ mod exec_command_tests {
     #[test]
     fn exec_resume_parses_last_flag() {
         let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last", "continue"]);
-        let Some(Commands::Exec {
-            command: Some(ExecSubcommand::Resume(resume)),
-            ..
-        }) = cli.command
+        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) =
+            cli.command
         else {
             panic!("expected exec resume command");
         };
@@ -1458,10 +1450,8 @@ mod exec_command_tests {
     #[test]
     fn exec_resume_parses_all_flag() {
         let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last", "--all", "continue"]);
-        let Some(Commands::Exec {
-            command: Some(ExecSubcommand::Resume(resume)),
-            ..
-        }) = cli.command
+        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) =
+            cli.command
         else {
             panic!("expected exec resume command");
         };
@@ -1474,10 +1464,8 @@ mod exec_command_tests {
     #[test]
     fn exec_resume_allows_last_without_positional_for_stdin_prompt() {
         let cli = Cli::parse_from(["vtcode", "exec", "resume", "--last"]);
-        let Some(Commands::Exec {
-            command: Some(ExecSubcommand::Resume(resume)),
-            ..
-        }) = cli.command
+        let Some(Commands::Exec { command: Some(ExecSubcommand::Resume(resume)), .. }) =
+            cli.command
         else {
             panic!("expected exec resume command");
         };
@@ -1730,9 +1718,7 @@ pub struct SecurityConfig {
 impl Default for Cli {
     fn default() -> Self {
         Self {
-            color: ColorSelection {
-                color: ColorChoice::Auto,
-            },
+            color: ColorSelection { color: ColorChoice::Auto },
             workspace_path: None,
             model: Some(ModelId::default().to_string()),
             provider: Some("gemini".to_owned()),
@@ -1780,9 +1766,7 @@ impl Default for Cli {
 impl Cli {
     /// Get the model to use, with fallback to default
     pub fn get_model(&self) -> String {
-        self.model
-            .clone()
-            .unwrap_or_else(|| ModelId::default().to_string())
+        self.model.clone().unwrap_or_else(|| ModelId::default().to_string())
     }
 
     /// Load configuration from a simple TOML-like file without external deps
@@ -2021,10 +2005,7 @@ mod tests {
     fn parses_init_force_flag() {
         let cli = Cli::parse_from(["vtcode", "init", "--force"]);
 
-        assert!(matches!(
-            cli.command,
-            Some(super::Commands::Init { force: true })
-        ));
+        assert!(matches!(cli.command, Some(super::Commands::Init { force: true })));
     }
 
     #[test]

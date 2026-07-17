@@ -67,11 +67,7 @@ pub(super) async fn capture_code_change_snapshot(
     {
         Ok(Ok(Ok(snapshot))) => snapshot,
         Ok(Ok(Err(err))) => {
-            tracing::warn!(
-                "Failed to capture {} code-change snapshot: {}",
-                phase_label,
-                err
-            );
+            tracing::warn!("Failed to capture {} code-change snapshot: {}", phase_label, err);
             None
         }
         Ok(Err(err)) => {

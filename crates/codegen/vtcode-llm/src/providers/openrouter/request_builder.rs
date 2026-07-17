@@ -97,10 +97,7 @@ impl OpenRouterProvider {
         if messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenRouter", "No messages provided");
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
+            return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
         }
 
         let mut provider_request = json!({
@@ -205,9 +202,7 @@ mod tests {
         let payload = provider
             .convert_to_openrouter_format(&request)
             .expect("payload should serialize");
-        let messages = payload["messages"]
-            .as_array()
-            .expect("messages should be present");
+        let messages = payload["messages"].as_array().expect("messages should be present");
 
         assert_eq!(messages[0]["content"], json!("<think>trace</think>done"));
     }

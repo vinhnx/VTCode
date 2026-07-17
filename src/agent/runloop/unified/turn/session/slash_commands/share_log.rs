@@ -75,10 +75,7 @@ fn render_session_log_markdown(
     markdown.push_str("## Messages\n\n");
 
     for (index, message) in messages.iter().enumerate() {
-        let role = message
-            .get("role")
-            .and_then(Value::as_str)
-            .unwrap_or("Unknown");
+        let role = message.get("role").and_then(Value::as_str).unwrap_or("Unknown");
         let content = message.get("content").and_then(Value::as_str).unwrap_or("");
 
         let _ = writeln!(markdown, "### {}. {}\n", index + 1, role);
@@ -136,12 +133,8 @@ fn redact_sensitive_text(input: &str) -> String {
         redacted = redacted.replace(&home_dir, "~");
     }
 
-    redacted = USER_PATH_REGEX
-        .replace_all(&redacted, "${prefix}[REDACTED]")
-        .into_owned();
-    EMAIL_REGEX
-        .replace_all(&redacted, "[REDACTED_EMAIL]")
-        .into_owned()
+    redacted = USER_PATH_REGEX.replace_all(&redacted, "${prefix}[REDACTED]").into_owned();
+    EMAIL_REGEX.replace_all(&redacted, "[REDACTED_EMAIL]").into_owned()
 }
 
 fn redact_json_value(value: &Value) -> Value {
@@ -149,9 +142,7 @@ fn redact_json_value(value: &Value) -> Value {
         Value::String(text) => Value::String(redact_sensitive_text(text)),
         Value::Array(items) => Value::Array(items.iter().map(redact_json_value).collect()),
         Value::Object(map) => Value::Object(
-            map.iter()
-                .map(|(key, value)| (key.clone(), redact_json_value(value)))
-                .collect(),
+            map.iter().map(|(key, value)| (key.clone(), redact_json_value(value))).collect(),
         ),
         _ => value.clone(),
     }
@@ -183,23 +174,14 @@ pub(crate) async fn handle_share_log(
         "total_messages": redacted_log_messages.len(),
         "messages": redacted_log_messages,
     });
-    let json_output_path = ctx
-        .config
-        .workspace
-        .join(format!("vtcode-session-log-{timestamp}.json"));
-    let markdown_output_path = ctx
-        .config
-        .workspace
-        .join(format!("vtcode-session-log-{timestamp}.md"));
-    let html_output_path = ctx
-        .config
-        .workspace
-        .join(format!("vtcode-session-timeline-{timestamp}.html"));
+    let json_output_path =
+        ctx.config.workspace.join(format!("vtcode-session-log-{timestamp}.json"));
+    let markdown_output_path =
+        ctx.config.workspace.join(format!("vtcode-session-log-{timestamp}.md"));
+    let html_output_path =
+        ctx.config.workspace.join(format!("vtcode-session-timeline-{timestamp}.html"));
 
-    if matches!(
-        format,
-        SessionLogExportFormat::Both | SessionLogExportFormat::Json
-    ) {
+    if matches!(format, SessionLogExportFormat::Both | SessionLogExportFormat::Json) {
         let json = serde_json::to_string_pretty(&redacted_session_log_export)
             .context("Failed to serialize session log")?;
         write_file_with_context_sync(&json_output_path, &json, "session log")?;
@@ -219,10 +201,7 @@ pub(crate) async fn handle_share_log(
         write_file_with_context_sync(&markdown_output_path, &markdown, "session log")?;
     }
 
-    if matches!(
-        format,
-        SessionLogExportFormat::Both | SessionLogExportFormat::Html
-    ) {
+    if matches!(format, SessionLogExportFormat::Both | SessionLogExportFormat::Html) {
         let timeline_export = redact_timeline_export(&build_timeline_export(
             &exported_at,
             ctx.provider_client.name(),
@@ -275,10 +254,8 @@ pub(crate) async fn handle_share_log(
                     "Markdown"
                 ),
             )?;
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "You can share this file for debugging purposes.",
-            )?;
+            ctx.renderer
+                .line(MessageStyle::Info, "You can share this file for debugging purposes.")?;
         }
     }
 

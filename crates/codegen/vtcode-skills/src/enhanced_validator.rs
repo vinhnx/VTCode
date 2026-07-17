@@ -66,20 +66,13 @@ impl ComprehensiveSkillValidator {
         if manifest.name.len() > 64 {
             report.add_error(
                 Some("name".to_string()),
-                format!(
-                    "name exceeds maximum length: {} characters (max 64)",
-                    manifest.name.len()
-                ),
+                format!("name exceeds maximum length: {} characters (max 64)", manifest.name.len()),
                 Some("Use a shorter name (1-64 characters)".to_string()),
             );
         }
 
         // Check for valid characters
-        if !manifest
-            .name
-            .chars()
-            .all(|c| c.is_lowercase() || c.is_numeric() || c == '-')
-        {
+        if !manifest.name.chars().all(|c| c.is_lowercase() || c.is_numeric() || c == '-') {
             report.add_error(
                 Some("name".to_string()),
                 format!(
@@ -223,10 +216,7 @@ impl ComprehensiveSkillValidator {
         {
             report.add_error(
                 Some("license".to_string()),
-                format!(
-                    "license exceeds maximum length: {} characters (max 512)",
-                    license.len()
-                ),
+                format!("license exceeds maximum length: {} characters (max 512)", license.len()),
                 Some("Shorten the license field".to_string()),
             );
         }
@@ -368,17 +358,11 @@ impl ComprehensiveSkillValidator {
         // List valid references as info
         let valid_refs = validator.list_valid_references();
         if !valid_refs.is_empty() {
-            let ref_list: Vec<String> = valid_refs
-                .iter()
-                .map(|p| p.to_string_lossy().to_string())
-                .collect();
+            let ref_list: Vec<String> =
+                valid_refs.iter().map(|p| p.to_string_lossy().to_string()).collect();
             report.add_suggestion(
                 None,
-                format!(
-                    "Found {} valid file references: {}",
-                    ref_list.len(),
-                    ref_list.join(", ")
-                ),
+                format!("Found {} valid file references: {}", ref_list.len(), ref_list.join(", ")),
             );
         }
     }
@@ -414,11 +398,6 @@ mod tests {
             validator.validate_manifest(&manifest, PathBuf::from("/tmp/nonexistent").as_path());
 
         // Should have some suggestions for missing fields
-        assert!(
-            report
-                .suggestions
-                .iter()
-                .any(|s| s.field == Some("license".to_string()))
-        );
+        assert!(report.suggestions.iter().any(|s| s.field == Some("license".to_string())));
     }
 }

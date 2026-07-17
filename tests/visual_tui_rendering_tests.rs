@@ -20,10 +20,7 @@ fn blank_terminal(width: usize, height: usize) -> String {
     output
 }
 
-fn smoke_handle() -> (
-    InlineHandle,
-    tokio::sync::mpsc::UnboundedReceiver<InlineCommand>,
-) {
+fn smoke_handle() -> (InlineHandle, tokio::sync::mpsc::UnboundedReceiver<InlineCommand>) {
     let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
     (InlineHandle::new_for_tests(command_tx), command_rx)
 }

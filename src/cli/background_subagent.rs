@@ -55,9 +55,7 @@ pub(crate) async fn handle_background_subagent_command(
     controller
         .set_turn_delegation_hints_from_input("delegate this task to a background subagent")
         .await;
-    controller
-        .set_parent_session_id(args.session_id.clone())
-        .await;
+    controller.set_parent_session_id(args.session_id.clone()).await;
 
     let spawned = controller
         .spawn(SpawnAgentRequest {
@@ -71,9 +69,7 @@ pub(crate) async fn handle_background_subagent_command(
         })
         .await?;
 
-    let status = controller
-        .wait(std::slice::from_ref(&spawned.id), Some(300_000))
-        .await?;
+    let status = controller.wait(std::slice::from_ref(&spawned.id), Some(300_000)).await?;
     if let Some(status) = status {
         if let Some(summary) = status.summary.as_deref() {
             println!("background-subagent-summary: {}", summary.trim());
@@ -82,15 +78,9 @@ pub(crate) async fn handle_background_subagent_command(
             eprintln!("background-subagent-error: {}", error.trim());
         }
         if !status.status.is_terminal()
-            || matches!(
-                status.status,
-                vtcode_core::subagents::SubagentStatus::Completed
-            )
+            || matches!(status.status, vtcode_core::subagents::SubagentStatus::Completed)
         {
-            println!(
-                "background-subagent-ready: {} {}",
-                status.agent_name, status.session_id
-            );
+            println!("background-subagent-ready: {} {}", status.agent_name, status.session_id);
         } else {
             bail!(
                 "background subagent '{}' exited with status {}",
@@ -99,10 +89,7 @@ pub(crate) async fn handle_background_subagent_command(
             );
         }
     } else {
-        println!(
-            "background-subagent-ready: {} {}",
-            args.agent_name, args.session_id
-        );
+        println!("background-subagent-ready: {} {}", args.agent_name, args.session_id);
     }
 
     loop {
@@ -117,10 +104,7 @@ async fn run_background_demo_subprocess(
     let workspace_root = startup.agent_config.workspace.clone();
     let script_path = workspace_root.join("scripts/demo-background-subagent.sh");
     if !script_path.exists() {
-        bail!(
-            "background demo script not found at {}",
-            script_path.display()
-        );
+        bail!("background demo script not found at {}", script_path.display());
     }
 
     let mut child = Command::new(&script_path)
@@ -148,10 +132,7 @@ async fn run_background_demo_subprocess(
         .context("background demo subprocess exited before reporting readiness")?;
 
     println!("background-subagent-summary: {}", readiness_line.trim());
-    println!(
-        "background-subagent-ready: {} {}",
-        args.agent_name, args.session_id
-    );
+    println!("background-subagent-ready: {} {}", args.agent_name, args.session_id);
 
     let stdout_task = tokio::spawn(async move {
         while let Some(line) = stdout_lines

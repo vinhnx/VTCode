@@ -55,16 +55,11 @@ async fn test_code_search_dual_output_integration() {
     assert_eq!(response["query"], "ToolRegistry");
     assert_eq!(response["filters"]["path"], "src/tools");
     assert_eq!(response["filters"]["file_types"], json!(["rust"]));
-    assert_eq!(
-        response["filters"]["result_types"],
-        json!(["definition", "usage", "text"])
-    );
+    assert_eq!(response["filters"]["result_types"], json!(["definition", "usage", "text"]));
     assert_eq!(response["filters"]["max_results"], 10);
     assert_eq!(
         response["returned"].as_u64(),
-        response["results"]
-            .as_array()
-            .map(|results| results.len() as u64)
+        response["results"].as_array().map(|results| results.len() as u64)
     );
 }
 
@@ -295,8 +290,5 @@ async fn test_backward_compatibility() {
 
     println!("v Backward Compatibility:");
     println!("   Old API: Working");
-    println!(
-        "   New API: Working with {} savings",
-        new_result.savings_summary()
-    );
+    println!("   New API: Working with {} savings", new_result.savings_summary());
 }

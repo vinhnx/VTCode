@@ -7,10 +7,7 @@ use serde_json::{Value, json};
 
 impl ToolRegistry {
     pub(super) async fn execute_get_errors(&self, args: Value) -> Result<Value> {
-        let scope = args
-            .get("scope")
-            .and_then(|v| v.as_str())
-            .unwrap_or("archive");
+        let scope = args.get("scope").and_then(|v| v.as_str()).unwrap_or("archive");
         let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
         let error_patterns = crate::tools::constants::ERROR_DETECTION_PATTERNS;
 
@@ -57,11 +54,8 @@ impl ToolRegistry {
             .or_else(|| args.get("keyword"))
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("query is required"))?;
-        let detail_level = parse_detail_level(
-            args.get("detail_level")
-                .and_then(Value::as_str)
-                .unwrap_or(""),
-        );
+        let detail_level =
+            parse_detail_level(args.get("detail_level").and_then(Value::as_str).unwrap_or(""));
         let max_results = args
             .get("limit")
             .and_then(Value::as_u64)
@@ -69,9 +63,7 @@ impl ToolRegistry {
             .unwrap_or(5)
             .clamp(1, 25);
 
-        let mcp_client = self
-            .mcp_client()
-            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let mcp_client = self.mcp_client().ok_or_else(|| anyhow!("MCP client not available"))?;
         let discovery = ToolDiscovery::new(mcp_client.clone());
         let mut mcp_results = discovery.search_tools(query, detail_level).await?;
         if mcp_results.len() > max_results {
@@ -139,9 +131,7 @@ impl ToolRegistry {
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("name is required"))?;
 
-        let mcp_client = self
-            .mcp_client()
-            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let mcp_client = self.mcp_client().ok_or_else(|| anyhow!("MCP client not available"))?;
         let discovery = ToolDiscovery::new(mcp_client);
         let detail = discovery.get_tool_detail(tool_name).await?;
 
@@ -158,9 +148,7 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_mcp_list_servers(&self, _args: Value) -> Result<Value> {
-        let mcp_client = self
-            .mcp_client()
-            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let mcp_client = self.mcp_client().ok_or_else(|| anyhow!("MCP client not available"))?;
         let servers = mcp_client.list_servers();
         Ok(json!({
             "count": servers.len(),
@@ -173,9 +161,7 @@ impl ToolRegistry {
             .get("name")
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("name is required"))?;
-        let mcp_client = self
-            .mcp_client()
-            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let mcp_client = self.mcp_client().ok_or_else(|| anyhow!("MCP client not available"))?;
         if !mcp_client.allow_model_lifecycle_control() {
             bail!(
                 "mcp_connect_server is disabled by config. Set [mcp.lifecycle].allow_model_control = true to enable."
@@ -194,9 +180,7 @@ impl ToolRegistry {
             .get("name")
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("name is required"))?;
-        let mcp_client = self
-            .mcp_client()
-            .ok_or_else(|| anyhow!("MCP client not available"))?;
+        let mcp_client = self.mcp_client().ok_or_else(|| anyhow!("MCP client not available"))?;
         if !mcp_client.allow_model_lifecycle_control() {
             bail!(
                 "mcp_disconnect_server is disabled by config. Set [mcp.lifecycle].allow_model_control = true to enable."

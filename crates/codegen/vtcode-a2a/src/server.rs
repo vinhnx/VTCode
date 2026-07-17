@@ -77,10 +77,7 @@ impl A2aServerState {
 /// Create the A2A HTTP router
 pub fn create_router(state: A2aServerState) -> Router {
     Router::new()
-        .route(
-            "/.well-known/agent-card.json",
-            axum::routing::get(get_agent_card),
-        )
+        .route("/.well-known/agent-card.json", axum::routing::get(get_agent_card))
         .route("/a2a", post(handle_rpc))
         .route("/a2a/stream", post(handle_stream))
         .with_state(state)
@@ -103,10 +100,7 @@ async fn handle_rpc(
 ) -> Result<Json<JsonRpcResponse>, A2aErrorResponse> {
     // Validate request
     if request.jsonrpc != JSONRPC_VERSION {
-        return Err(A2aErrorResponse::invalid_request(
-            "Invalid JSON-RPC version",
-            request.id,
-        ));
+        return Err(A2aErrorResponse::invalid_request("Invalid JSON-RPC version", request.id));
     }
 
     // Dispatch to method handler
@@ -129,10 +123,7 @@ async fn handle_rpc(
             handle_push_config_get(&state, request.params, request.id.clone()).await
         }
         _ => {
-            return Err(A2aErrorResponse::method_not_found(
-                &request.method,
-                request.id,
-            ));
+            return Err(A2aErrorResponse::method_not_found(&request.method, request.id));
         }
     };
 
@@ -155,10 +146,7 @@ async fn handle_stream(
     }
 
     if request.method != METHOD_MESSAGE_STREAM {
-        return Err(A2aErrorResponse::method_not_found(
-            &request.method,
-            request.id.clone(),
-        ));
+        return Err(A2aErrorResponse::method_not_found(&request.method, request.id.clone()));
     }
 
     // Parse params
@@ -171,10 +159,7 @@ async fn handle_stream(
     let task_id = if let Some(task_id) = params.task_id.clone() {
         task_id
     } else {
-        let task = state
-            .task_manager
-            .create_task(params.context_id.clone())
-            .await;
+        let task = state.task_manager.create_task(params.context_id.clone()).await;
         task.id.clone()
     };
 
@@ -340,16 +325,10 @@ async fn handle_message_send(
     };
 
     // Add message to history
-    state
-        .task_manager
-        .add_message(&task_id, params.message)
-        .await?;
+    state.task_manager.add_message(&task_id, params.message).await?;
 
     // Update status to working
-    let task = state
-        .task_manager
-        .update_status(&task_id, TaskState::Working, None)
-        .await?;
+    let task = state.task_manager.update_status(&task_id, TaskState::Working, None).await?;
 
     // Return task as response
     Ok(serde_json::to_value(task)?)
@@ -363,10 +342,7 @@ async fn handle_push_config_set(
 ) -> A2aResult<Value> {
     let config: crate::rpc::TaskPushNotificationConfig =
         serde_json::from_value(params.unwrap_or_default()).map_err(|_e| {
-            A2aError::rpc(
-                A2aErrorCode::InvalidParams,
-                "Invalid pushNotificationConfig/set params",
-            )
+            A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid pushNotificationConfig/set params")
         })?;
 
     state.task_manager.set_webhook_config(config).await?;
@@ -382,10 +358,7 @@ async fn handle_push_config_get(
 ) -> A2aResult<Value> {
     let params: TaskIdParams =
         serde_json::from_value(params.unwrap_or_default()).map_err(|_e| {
-            A2aError::rpc(
-                A2aErrorCode::InvalidParams,
-                "Invalid pushNotificationConfig/get params",
-            )
+            A2aError::rpc(A2aErrorCode::InvalidParams, "Invalid pushNotificationConfig/get params")
         })?;
 
     let config = state.task_manager.get_webhook_config(&params.id).await;
@@ -466,20 +439,12 @@ impl A2aErrorResponse {
 
     /// Create an invalid request error response
     pub fn invalid_request(message: &str, id: Value) -> Self {
-        Self::new(
-            JsonRpcError::invalid_request(message),
-            id,
-            StatusCode::BAD_REQUEST,
-        )
+        Self::new(JsonRpcError::invalid_request(message), id, StatusCode::BAD_REQUEST)
     }
 
     /// Create a method not found error response
     pub fn method_not_found(method: &str, id: Value) -> Self {
-        Self::new(
-            JsonRpcError::method_not_found(method),
-            id,
-            StatusCode::NOT_FOUND,
-        )
+        Self::new(JsonRpcError::method_not_found(method), id, StatusCode::NOT_FOUND)
     }
 
     /// Create an error response from an A2aError

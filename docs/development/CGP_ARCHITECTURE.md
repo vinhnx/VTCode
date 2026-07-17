@@ -292,7 +292,7 @@ the runtime string-keyed lookup model.
 ### LLM contexts
 
 The zero-sized provider config types in
-`vtcode-core/src/llm/provider_config.rs` are the CGP contexts:
+`crates/codegen/vtcode-core/src/llm/provider_config.rs` are the CGP contexts:
 
 - `GeminiProviderConfig`
 - `OpenAIProviderConfig`
@@ -307,7 +307,7 @@ The zero-sized provider config types in
 - `LmStudioProviderConfig`
 - `ZAIProviderConfig`
 
-Each context is wired once in `vtcode-core/src/llm/cgp.rs`, then consumed by:
+Each context is wired once in `crates/codegen/vtcode-core/src/llm/cgp.rs`, then consumed by:
 
 - `register_builtin_cgp_providers(...)` and `LLMFactory::register_cgp_provider::<Ctx>()`
   for built-in and custom registration
@@ -431,8 +431,8 @@ tool_registry.register_cgp_tool(
 
 ## File Locations
 
-- `vtcode-core/src/components.rs` — CGP substrate, provider traits, facades, runtime contexts
-- `vtcode-core/src/tools/registry/cgp_facade.rs` — Registry integration (enable/register)
+- `crates/codegen/vtcode-core/src/components.rs` — CGP substrate, provider traits, facades, runtime contexts
+- `crates/codegen/vtcode-core/src/tools/registry/cgp_facade.rs` — Registry integration (enable/register)
 - `src/agent/runloop/unified/session_setup/init.rs` — Bootstrap wiring
 
 ## Reference

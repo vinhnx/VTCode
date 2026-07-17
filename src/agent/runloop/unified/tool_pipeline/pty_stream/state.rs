@@ -18,12 +18,8 @@ use crate::agent::runloop::unified::tool_summary_helpers::relativize_command_pat
 const LIVE_PREVIEW_HEAD_LINES: usize = 3;
 const MAX_BUFFERED_TAIL_LINES: usize = 64;
 
-type RenderedPtyPreview = (
-    usize,
-    Vec<Vec<InlineSegment>>,
-    Vec<Vec<InlineLinkRange>>,
-    Option<String>,
-);
+type RenderedPtyPreview =
+    (usize, Vec<Vec<InlineSegment>>, Vec<Vec<InlineLinkRange>>, Option<String>);
 
 struct RenderedPtyOutput {
     lines: Vec<String>,
@@ -80,28 +76,19 @@ impl LegacyPtyStreamState {
 
     fn render_output(&self, limit: usize) -> RenderedPtyOutput {
         if limit == 0 {
-            return RenderedPtyOutput {
-                lines: Vec::new(),
-                last_line: None,
-            };
+            return RenderedPtyOutput { lines: Vec::new(), last_line: None };
         }
 
         let has_current = !self.current_line.is_empty();
         let total = self.total_lines + usize::from(has_current);
         if total == 0 {
-            return RenderedPtyOutput {
-                lines: Vec::new(),
-                last_line: None,
-            };
+            return RenderedPtyOutput { lines: Vec::new(), last_line: None };
         }
 
         let last_line = if has_current {
             Some(self.current_line.clone())
         } else {
-            self.tail_lines
-                .back()
-                .cloned()
-                .or_else(|| self.head_lines.last().cloned())
+            self.tail_lines.back().cloned().or_else(|| self.head_lines.last().cloned())
         };
 
         let head_len = self.head_lines.len();
@@ -121,14 +108,8 @@ impl LegacyPtyStreamState {
 
         let (head_count, tail_count) = shared_summary_window(limit, LIVE_PREVIEW_HEAD_LINES);
         let head_count = head_count.min(head_len);
-        let mut tail_preview: Vec<_> = self
-            .tail_lines
-            .iter()
-            .rev()
-            .take(tail_count)
-            .rev()
-            .cloned()
-            .collect();
+        let mut tail_preview: Vec<_> =
+            self.tail_lines.iter().rev().take(tail_count).rev().cloned().collect();
         if has_current {
             tail_preview.push(self.current_line.clone());
         }
@@ -248,20 +229,14 @@ impl PtyStreamState {
 
     fn render_preview_output(&self, limit: usize) -> RenderedPtyOutput {
         if limit == 0 {
-            return RenderedPtyOutput {
-                lines: Vec::new(),
-                last_line: None,
-            };
+            return RenderedPtyOutput { lines: Vec::new(), last_line: None };
         }
 
         let snapshot = self.preview.snapshot_text();
         let lines = if snapshot.is_empty() {
             Vec::new()
         } else {
-            snapshot
-                .lines()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
+            snapshot.lines().map(ToString::to_string).collect::<Vec<_>>()
         };
         let last_line = last_non_empty_line(&lines).or_else(|| lines.last().cloned());
 
@@ -334,11 +309,7 @@ fn render_head_tail_lines(head: &[String], hidden_lines: usize, tail: &[String])
 }
 
 fn last_non_empty_line(lines: &[String]) -> Option<String> {
-    lines
-        .iter()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .cloned()
+    lines.iter().rev().find(|line| !line.trim().is_empty()).cloned()
 }
 
 fn format_hidden_lines_summary(hidden: usize) -> String {

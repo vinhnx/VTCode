@@ -15,10 +15,9 @@ pub fn determine_bootstrap_targets(
     config_file_name: &str,
     defaults_provider: &dyn ConfigDefaultsProvider,
 ) -> Result<(PathBuf, PathBuf)> {
-    if let (true, Some(home_config_path)) = (
-        use_home_dir,
-        select_home_config_path(defaults_provider, config_file_name),
-    ) {
+    if let (true, Some(home_config_path)) =
+        (use_home_dir, select_home_config_path(defaults_provider, config_file_name))
+    {
         let gitignore_path = gitignore_path_for(&home_config_path);
         return Ok((home_config_path, gitignore_path));
     }

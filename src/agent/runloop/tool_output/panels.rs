@@ -11,11 +11,7 @@ pub(crate) struct PanelContentLine {
 
 impl PanelContentLine {
     pub(crate) fn new(text: impl Into<String>, style: MessageStyle) -> Self {
-        Self {
-            rendered: text.into(),
-            style,
-            override_style: None,
-        }
+        Self { rendered: text.into(), style, override_style: None }
     }
 }
 
@@ -51,10 +47,7 @@ pub(crate) fn wrap_text(text: &str, width: usize) -> Vec<String> {
         let word_len = word.chars().count();
 
         if !current_line.is_empty() {
-            let current_visible = current_line
-                .chars()
-                .filter(|ch| !ch.is_whitespace())
-                .count();
+            let current_visible = current_line.chars().filter(|ch| !ch.is_whitespace()).count();
 
             if current_visible + word_len > width {
                 lines.push(current_line);
@@ -113,10 +106,7 @@ mod tests {
         assert_eq!(result, vec!["Hello world", "this is a", "long text"]);
 
         let result = wrap_text("supercalifragilisticexpialidocious", 10);
-        assert_eq!(
-            result,
-            vec!["supercalif", "ragilistic", "expialidoc", "ious",]
-        );
+        assert_eq!(result, vec!["supercalif", "ragilistic", "expialidoc", "ious",]);
 
         let result = wrap_text("", 10);
         assert_eq!(result, vec!["".to_string()]);

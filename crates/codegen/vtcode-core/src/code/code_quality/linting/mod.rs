@@ -11,11 +11,7 @@ mod parser_utils {
 
     /// Extract string value from JSON, return as owned String or default
     pub fn get_str(value: &Value, key: &str, default: &str) -> String {
-        value
-            .get(key)
-            .and_then(Value::as_str)
-            .unwrap_or(default)
-            .to_string()
+        value.get(key).and_then(Value::as_str).unwrap_or(default).to_string()
     }
 
     /// Extract u64 and convert to usize
@@ -76,9 +72,7 @@ impl Default for LintingOrchestrator {
 
 impl LintingOrchestrator {
     pub fn new() -> Self {
-        let mut orchestrator = Self {
-            configs: Vec::new(),
-        };
+        let mut orchestrator = Self { configs: Vec::new() };
 
         // Register default linters
         orchestrator.register(LintConfig::clippy());
@@ -181,15 +175,10 @@ impl LintingOrchestrator {
                         let file = span.get("file_name").and_then(Value::as_str).unwrap_or("");
                         let line_num =
                             span.get("line_start").and_then(Value::as_u64).unwrap_or(0) as usize;
-                        let column = span
-                            .get("column_start")
-                            .and_then(Value::as_u64)
-                            .unwrap_or(0) as usize;
+                        let column =
+                            span.get("column_start").and_then(Value::as_u64).unwrap_or(0) as usize;
                         let rule = parser_utils::get_str(
-                            message
-                                .get("code")
-                                .and_then(|c| c.get("code"))
-                                .unwrap_or(&Value::Null),
+                            message.get("code").and_then(|c| c.get("code")).unwrap_or(&Value::Null),
                             "code",
                             "",
                         );

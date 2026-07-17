@@ -108,9 +108,7 @@ pub struct TemplateEngine {
 impl TemplateEngine {
     /// Create new template engine with built-in templates
     pub fn new() -> Self {
-        let mut engine = Self {
-            templates: HashMap::new(),
-        };
+        let mut engine = Self { templates: HashMap::new() };
 
         // Register built-in templates
         engine.register_builtin_templates();
@@ -128,32 +126,23 @@ impl TemplateEngine {
     /// Register built-in templates
     fn register_builtin_templates(&mut self) {
         // Traditional skill template
-        self.templates.insert(
-            "traditional".to_string(),
-            Self::create_traditional_template(),
-        );
+        self.templates
+            .insert("traditional".to_string(), Self::create_traditional_template());
 
         // CLI tool template
-        self.templates
-            .insert("cli-tool".to_string(), Self::create_cli_tool_template());
+        self.templates.insert("cli-tool".to_string(), Self::create_cli_tool_template());
 
         // Code generator template
-        self.templates.insert(
-            "code-generator".to_string(),
-            Self::create_code_generator_template(),
-        );
+        self.templates
+            .insert("code-generator".to_string(), Self::create_code_generator_template());
 
         // Data processor template
-        self.templates.insert(
-            "data-processor".to_string(),
-            Self::create_data_processor_template(),
-        );
+        self.templates
+            .insert("data-processor".to_string(), Self::create_data_processor_template());
 
         // Testing utility template
-        self.templates.insert(
-            "testing-utility".to_string(),
-            Self::create_testing_utility_template(),
-        );
+        self.templates
+            .insert("testing-utility".to_string(), Self::create_testing_utility_template());
     }
 
     /// Create traditional skill template
@@ -533,11 +522,7 @@ impl TemplateEngine {
             debug!("Generated SKILL.md: {}", skill_md_path.display());
         }
 
-        info!(
-            "Successfully generated skill '{}' in {}",
-            skill_name,
-            skill_dir.display()
-        );
+        info!("Successfully generated skill '{}' in {}", skill_name, skill_dir.display());
         Ok(skill_dir)
     }
 
@@ -555,10 +540,7 @@ impl TemplateEngine {
                 // Validate pattern if specified
                 if let Some(pattern) = &variable.validation_pattern {
                     let regex = regex::Regex::new(pattern).with_context(|| {
-                        format!(
-                            "Invalid validation pattern for variable '{}'",
-                            variable.name
-                        )
+                        format!("Invalid validation pattern for variable '{}'", variable.name)
                     })?;
 
                     if !regex.is_match(value) {
@@ -574,17 +556,11 @@ impl TemplateEngine {
         }
 
         if !missing_required.is_empty() {
-            return Err(anyhow!(
-                "Missing required variables: {}",
-                missing_required.join(", ")
-            ));
+            return Err(anyhow!("Missing required variables: {}", missing_required.join(", ")));
         }
 
         if !invalid_values.is_empty() {
-            return Err(anyhow!(
-                "Invalid variable values: {}",
-                invalid_values.join(", ")
-            ));
+            return Err(anyhow!("Invalid variable values: {}", invalid_values.join(", ")));
         }
 
         Ok(())
@@ -785,17 +761,13 @@ impl SkillTemplateBuilder {
 
     /// Add file
     pub fn file(mut self, path: impl Into<String>, content: impl Into<String>) -> Self {
-        self.file_structure
-            .files
-            .insert(path.into(), content.into());
+        self.file_structure.files.insert(path.into(), content.into());
         self
     }
 
     /// Add executable
     pub fn executable(mut self, path: impl Into<String>, content: impl Into<String>) -> Self {
-        self.file_structure
-            .executables
-            .insert(path.into(), content.into());
+        self.file_structure.executables.insert(path.into(), content.into());
         self
     }
 
@@ -888,14 +860,10 @@ mod tests {
         let engine = TemplateEngine::new();
         let mut variables = HashMap::new();
         variables.insert("skill_name".to_string(), "test-skill".to_string());
-        variables.insert(
-            "description".to_string(),
-            "Handles repeatable report generation".to_string(),
-        );
+        variables
+            .insert("description".to_string(), "Handles repeatable report generation".to_string());
 
-        let skill_dir = engine
-            .generate_skill("traditional", variables, temp_dir.path())
-            .unwrap();
+        let skill_dir = engine.generate_skill("traditional", variables, temp_dir.path()).unwrap();
         let skill_md = std::fs::read_to_string(skill_dir.join("SKILL.md")).unwrap();
 
         assert!(!skill_md.contains("when-to-use:"));

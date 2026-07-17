@@ -28,10 +28,8 @@ pub(crate) fn prompt_model(
     match select_model_with_ratatui(&options, default_model) {
         Ok(model) => Ok(model),
         Err(error) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Falling back to manual input ({error})."),
-            )?;
+            renderer
+                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_model_text(renderer, provider, default_model, &options)
         }
     }
@@ -85,10 +83,8 @@ pub(crate) fn prompt_lightweight_model(
     match select_lightweight_model_with_ratatui(&options) {
         Ok(selected) => Ok(selected),
         Err(error) => {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Falling back to manual input ({error})."),
-            )?;
+            renderer
+                .line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
             prompt_lightweight_model_text(renderer, &options)
         }
     }
@@ -113,10 +109,7 @@ fn model_options(provider: Provider, default_model: &'static str) -> Vec<String>
 }
 
 fn model_entries(options: &[String]) -> Vec<SelectionEntry> {
-    options
-        .iter()
-        .map(|model| SelectionEntry::new(model.clone(), None))
-        .collect()
+    options.iter().map(|model| SelectionEntry::new(model.clone(), None)).collect()
 }
 
 #[derive(Clone)]
@@ -167,10 +160,7 @@ fn lightweight_model_options(provider: Provider, main_model: &str) -> Vec<Lightw
 fn select_model_with_ratatui(options: &[String], default_model: &'static str) -> Result<String> {
     let entries = model_entries(options);
 
-    let default_index = options
-        .iter()
-        .position(|model| model == default_model)
-        .unwrap_or(0);
+    let default_index = options.iter().position(|model| model == default_model).unwrap_or(0);
 
     let instructions = format!(
         "Default: {default_model}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default."
@@ -196,15 +186,9 @@ fn prompt_model_text(
     options: &[String],
 ) -> Result<String> {
     if !options.is_empty() {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("Suggested {} models:", provider.label()),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("Suggested {} models:", provider.label()))?;
         for (index, model) in options.iter().enumerate() {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  {:>2}. {}", index + 1, model),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("  {:>2}. {}", index + 1, model))?;
         }
     }
 
@@ -256,10 +240,7 @@ fn prompt_lightweight_model_text(
         return Ok(option.value.clone());
     }
 
-    renderer.line(
-        MessageStyle::Info,
-        "Unrecognized choice. It will be saved as entered.",
-    )?;
+    renderer.line(MessageStyle::Info, "Unrecognized choice. It will be saved as entered.")?;
     Ok(trimmed.to_string())
 }
 

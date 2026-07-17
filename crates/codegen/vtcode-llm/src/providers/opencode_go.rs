@@ -28,10 +28,7 @@ pub struct OpenCodeGoProvider {
 
 impl OpenCodeGoProvider {
     fn normalize_model(model: &str) -> &str {
-        model
-            .trim()
-            .strip_prefix("opencode-go/")
-            .unwrap_or(model.trim())
+        model.trim().strip_prefix("opencode-go/").unwrap_or(model.trim())
     }
 
     pub fn new(api_key: String) -> Self {
@@ -75,13 +72,7 @@ impl OpenCodeGoProvider {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::opencode_go::DEFAULT_MODEL);
 
-        Self::with_model_internal(
-            api_key_value,
-            model_value,
-            base_url,
-            timeouts,
-            _model_behavior,
-        )
+        Self::with_model_internal(api_key_value, model_value, base_url, timeouts, _model_behavior)
     }
 
     fn with_model_internal(
@@ -160,33 +151,23 @@ impl LLMProvider for OpenCodeGoProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
-        self.catalog_entry(model)
-            .map(|entry| entry.reasoning)
-            .unwrap_or(false)
+        self.catalog_entry(model).map(|entry| entry.reasoning).unwrap_or(false)
     }
 
     fn supports_tools(&self, model: &str) -> bool {
-        self.catalog_entry(model)
-            .map(|entry| entry.tool_call)
-            .unwrap_or(true)
+        self.catalog_entry(model).map(|entry| entry.tool_call).unwrap_or(true)
     }
 
     fn supports_structured_output(&self, model: &str) -> bool {
-        self.catalog_entry(model)
-            .map(|entry| entry.structured_output)
-            .unwrap_or(false)
+        self.catalog_entry(model).map(|entry| entry.structured_output).unwrap_or(false)
     }
 
     fn supports_context_caching(&self, model: &str) -> bool {
-        self.catalog_entry(model)
-            .map(|entry| entry.caching)
-            .unwrap_or(false)
+        self.catalog_entry(model).map(|entry| entry.caching).unwrap_or(false)
     }
 
     fn supports_vision(&self, model: &str) -> bool {
-        self.catalog_entry(model)
-            .map(|entry| entry.vision)
-            .unwrap_or(false)
+        self.catalog_entry(model).map(|entry| entry.vision).unwrap_or(false)
     }
 
     fn effective_context_size(&self, model: &str) -> usize {
@@ -203,9 +184,7 @@ impl LLMProvider for OpenCodeGoProvider {
             request.model = self.requested_model(&request.model).to_string();
         }
         self.validate_request(&request)?;
-        self.delegate_for_model(&request.model)
-            .generate(request)
-            .await
+        self.delegate_for_model(&request.model).generate(request).await
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -215,9 +194,7 @@ impl LLMProvider for OpenCodeGoProvider {
             request.model = self.requested_model(&request.model).to_string();
         }
         self.validate_request(&request)?;
-        self.delegate_for_model(&request.model)
-            .stream(request)
-            .await
+        self.delegate_for_model(&request.model).stream(request).await
     }
 
     fn supported_models(&self) -> Vec<String> {

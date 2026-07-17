@@ -118,10 +118,7 @@ pub(crate) async fn execute_request_user_input_tool(
 
 #[cfg(test)]
 pub(super) fn build_question_items(question: &RequestUserInputQuestion) -> Vec<InlineListItem> {
-    let options = question
-        .options
-        .clone()
-        .or_else(|| generate_suggested_options(question));
+    let options = question.options.clone().or_else(|| generate_suggested_options(question));
     build_question_items_with_options(question, options)
 }
 
@@ -187,10 +184,7 @@ fn append_summary_lines(
     wizard_mode: vtcode_ui::tui::app::WizardModalMode,
 ) {
     let summary_style = Arc::new(InlineTextStyle::default());
-    let summary_segment = |text: String| InlineSegment {
-        text,
-        style: summary_style.clone(),
-    };
+    let summary_segment = |text: String| InlineSegment { text, style: summary_style.clone() };
 
     if wizard_mode == vtcode_ui::tui::app::WizardModalMode::TabbedList {
         handle.append_line(
@@ -221,11 +215,8 @@ fn append_summary_lines(
                 if !answer.selected.is_empty() {
                     parts.push(answer.selected.join(", "));
                 }
-                if let Some(other) = answer
-                    .other
-                    .as_ref()
-                    .map(|text| text.trim())
-                    .filter(|text| !text.is_empty())
+                if let Some(other) =
+                    answer.other.as_ref().map(|text| text.trim()).filter(|text| !text.is_empty())
                 {
                     if parts.is_empty() {
                         parts.push(other.to_string());

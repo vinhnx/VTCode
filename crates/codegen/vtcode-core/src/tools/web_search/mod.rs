@@ -57,11 +57,7 @@ pub struct SearchResult {
 
 impl SearchResult {
     pub fn new(title: String, url: String, snippet: String) -> Self {
-        Self {
-            title,
-            url,
-            snippet,
-        }
+        Self { title, url, snippet }
     }
 }
 
@@ -90,13 +86,7 @@ impl SessionState {
     }
 
     fn cache_put(&mut self, key: String, payload: Value) {
-        self.cache.insert(
-            key,
-            CachedResults {
-                stored_at: Instant::now(),
-                payload,
-            },
-        );
+        self.cache.insert(key, CachedResults { stored_at: Instant::now(), payload });
     }
 }
 
@@ -142,10 +132,7 @@ impl WebSearchTool {
     }
 
     fn snapshot_config(&self) -> WebSearchConfig {
-        self.config
-            .lock()
-            .map(|guard| guard.clone())
-            .unwrap_or_default()
+        self.config.lock().map(|guard| guard.clone()).unwrap_or_default()
     }
 
     async fn run(&self, raw_args: Value) -> Result<Value> {
@@ -159,10 +146,7 @@ impl WebSearchTool {
 
         let snapshot = self.snapshot_config();
         let default_max = snapshot.max_results.clamp(1, MAX_RESULTS_CAP);
-        let max_results = args
-            .max_results
-            .unwrap_or(default_max)
-            .clamp(1, MAX_RESULTS_CAP);
+        let max_results = args.max_results.unwrap_or(default_max).clamp(1, MAX_RESULTS_CAP);
         let cooldown = Duration::from_millis(snapshot.cooldown_ms);
         let cache_ttl = Duration::from_secs(snapshot.cache_ttl_secs);
         let session_cap = snapshot.session_max_requests;
@@ -175,28 +159,23 @@ impl WebSearchTool {
         let cache_key = format!("{max_results}::{query}");
 
         // Fast path: cache hit. Avoid the network entirely.
-        if let Some(cached) = self
-            .state
-            .lock()
-            .ok()
-            .and_then(|guard| guard.cache_get(&cache_key, cache_ttl))
+        if let Some(cached) =
+            self.state.lock().ok().and_then(|guard| guard.cache_get(&cache_key, cache_ttl))
         {
             return Ok(mark_cached(cached));
         }
 
         // Enforce session-wide request cap before touching the network.
         {
-            let state = self
-                .state
-                .lock()
-                .map_err(|e| anyhow!("web_search state lock poisoned: {e}"))?;
+            let state =
+                self.state.lock().map_err(|e| anyhow!("web_search state lock poisoned: {e}"))?;
             if state.requests_made >= session_cap {
                 return Ok(session_cap_reached_response(&query, session_cap));
             }
             if let Some(last) = state.last_request_at {
                 let elapsed = last.elapsed();
                 if elapsed < cooldown {
-                    return Ok(cooldown_response(&query, cooldown - elapsed));
+                    return Ok(cooldown_response(&query, cooldown.checked_sub(elapsed).unwrap()));
                 }
             }
         }
@@ -348,10 +327,7 @@ async fn duckduckgo_search(
     let client = build_client(timeout_secs)?;
     let mut headers = HeaderMap::new();
     headers.insert(USER_AGENT, HeaderValue::from_static(BROWSER_USER_AGENT));
-    headers.insert(
-        ACCEPT,
-        HeaderValue::from_static("text/html,application/xhtml+xml"),
-    );
+    headers.insert(ACCEPT, HeaderValue::from_static("text/html,application/xhtml+xml"));
 
     // The HTML endpoint expects the query as a POST form field `q`.
     let response = client
@@ -373,10 +349,7 @@ async fn duckduckgo_search(
         ));
     }
 
-    let body = response
-        .text()
-        .await
-        .context("failed to read DuckDuckGo response body")?;
+    let body = response.text().await.context("failed to read DuckDuckGo response body")?;
 
     Ok(parse_duckduckgo_html(&body, max_results))
 }
@@ -384,10 +357,8 @@ async fn duckduckgo_search(
 /// Extract ranked results from a DuckDuckGo HTML body. Pure function so it can
 /// be exercised in unit tests against a local fixture (no live network).
 pub fn parse_duckduckgo_html(body: &str, max_results: usize) -> Vec<SearchResult> {
-    let snippets: Vec<String> = DDG_SNIPPET
-        .captures_iter(body)
-        .map(|c| clean_html(&c[1]))
-        .collect();
+    let snippets: Vec<String> =
+        DDG_SNIPPET.captures_iter(body).map(|c| clean_html(&c[1])).collect();
 
     let mut results = Vec::new();
     for (idx, caps) in DDG_RESULT_ANCHOR.captures_iter(body).enumerate() {
@@ -511,19 +482,13 @@ mod tests {
     #[test]
     fn normalize_ddg_url_extracts_uddg_target() {
         let href = "//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fvinhnx&rut=abc";
-        assert_eq!(
-            normalize_ddg_url(href).as_deref(),
-            Some("https://github.com/vinhnx")
-        );
+        assert_eq!(normalize_ddg_url(href).as_deref(), Some("https://github.com/vinhnx"));
     }
 
     #[test]
     fn normalize_ddg_url_passes_through_direct_https() {
         let href = "https://example.com/page";
-        assert_eq!(
-            normalize_ddg_url(href).as_deref(),
-            Some("https://example.com/page")
-        );
+        assert_eq!(normalize_ddg_url(href).as_deref(), Some("https://example.com/page"));
     }
 
     #[test]
@@ -587,10 +552,7 @@ mod tests {
 
         assert_eq!(results[0].title, "vinhnx (vinhnguyenxuan) · GitHub");
         assert_eq!(results[0].url, "https://github.com/vinhnx");
-        assert_eq!(
-            results[0].snippet,
-            "Personal GitHub profile of Vinh Nguyen Xuan."
-        );
+        assert_eq!(results[0].snippet, "Personal GitHub profile of Vinh Nguyen Xuan.");
 
         assert_eq!(results[1].title, "Example Page");
         assert_eq!(results[1].url, "https://example.com/page");

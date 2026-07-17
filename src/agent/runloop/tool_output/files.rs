@@ -52,10 +52,7 @@ pub(crate) fn render_write_file_preview(
     if get_bool(diff_value, "skipped") {
         let reason = get_string(diff_value, "reason").unwrap_or("skipped");
         if let Some(detail) = get_string(diff_value, "detail") {
-            renderer.line(
-                MessageStyle::ToolDetail,
-                &format!("diff: {reason} ({detail})"),
-            )?;
+            renderer.line(MessageStyle::ToolDetail, &format!("diff: {reason} ({detail})"))?;
         } else {
             renderer.line(MessageStyle::ToolDetail, &format!("diff: {reason}"))?;
         }
@@ -105,11 +102,7 @@ pub(crate) fn render_list_dir_output(
         let display_path = if path.is_empty() { "/" } else { path };
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!(
-                "{}{}",
-                display_path,
-                if !path.is_empty() { "/" } else { "" }
-            ),
+            &format!("{}{}", display_path, if !path.is_empty() { "/" } else { "" }),
         )?;
     }
 
@@ -177,9 +170,7 @@ pub(crate) fn render_list_dir_output(
                             .map(|e| e.to_string_lossy().to_lowercase())
                             .unwrap_or_default();
 
-                        ext_a
-                            .cmp(&ext_b)
-                            .then(a.0.to_lowercase().cmp(&b.0.to_lowercase()))
+                        ext_a.cmp(&ext_b).then(a.0.to_lowercase().cmp(&b.0.to_lowercase()))
                     });
                 }
                 _ => {
@@ -238,10 +229,8 @@ pub(crate) fn render_list_dir_output(
 
             let omitted = items.len().saturating_sub(MAX_DISPLAYED_FILES);
             if omitted > 0 {
-                renderer.line(
-                    MessageStyle::ToolDetail,
-                    &format!("+ {omitted} more items not shown"),
-                )?;
+                renderer
+                    .line(MessageStyle::ToolDetail, &format!("+ {omitted} more items not shown"))?;
             }
         }
     }
@@ -259,11 +248,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
         let files_ok = get_u64(val, "files_succeeded").unwrap_or(0);
         let failed = files_read.saturating_sub(files_ok);
 
-        let mut summary = format!(
-            "{} file{} read",
-            files_ok,
-            if files_ok == 1 { "" } else { "s" }
-        );
+        let mut summary = format!("{} file{} read", files_ok, if files_ok == 1 { "" } else { "s" });
         if failed > 0 {
             summary.push_str(&format!(", {failed} failed"));
         }
@@ -286,10 +271,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
                             format!(" ({total_lines} lines)")
                         })
                         .unwrap_or_default();
-                    renderer.line(
-                        MessageStyle::ToolDetail,
-                        &format!("  ✓ {short}{lines_info}"),
-                    )?;
+                    renderer.line(MessageStyle::ToolDetail, &format!("  ✓ {short}{lines_info}"))?;
                 }
             }
         }
@@ -306,10 +288,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
     let lines_read = get_u64(val, "lines_read");
     let start_line = get_u64(val, "start_line");
     let end_line = get_u64(val, "end_line");
-    let has_more = val
-        .get("has_more")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    let has_more = val.get("has_more").and_then(Value::as_bool).unwrap_or(false);
 
     let summary = if let Some(n) = lines_read {
         if has_more {

@@ -44,9 +44,7 @@ pub(crate) async fn handle_slash_command(
         return Ok(SlashCommandOutcome::ReplaceInput { content: expanded });
     }
 
-    Ok(SlashCommandOutcome::SubmitPrompt {
-        prompt: format!("/{}", input.trim()),
-    })
+    Ok(SlashCommandOutcome::SubmitPrompt { prompt: format!("/{}", input.trim()) })
 }
 
 pub(crate) async fn execute_command_skill_by_name(
@@ -114,10 +112,7 @@ fn dispatch_traditional_command_skill(
         }
         "analyze" => {
             if matches!(args.trim(), "--help" | "help") {
-                renderer.line(
-                    MessageStyle::Info,
-                    "Usage: /analyze [full|security|performance]",
-                )?;
+                renderer.line(MessageStyle::Info, "Usage: /analyze [full|security|performance]")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
             match parse_analyze_scope(args) {
@@ -125,10 +120,8 @@ fn dispatch_traditional_command_skill(
                 Ok(None) => String::new(),
                 Err(err) => {
                     renderer.line(MessageStyle::Error, &err)?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        "Usage: /analyze [full|security|performance]",
-                    )?;
+                    renderer
+                        .line(MessageStyle::Info, "Usage: /analyze [full|security|performance]")?;
                     return Ok(SlashCommandOutcome::Handled);
                 }
             }

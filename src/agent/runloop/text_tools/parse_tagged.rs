@@ -71,10 +71,7 @@ fn parse_standard_tagged_tool_call(text: &str) -> Option<(String, Value)> {
         let key = raw_key.trim();
         let value = parse_scalar_value(raw_value.trim());
         if let Some((base, index)) = split_indexed_key(key) {
-            indexed_values
-                .entry(base.to_string())
-                .or_default()
-                .insert(index, value);
+            indexed_values.entry(base.to_string()).or_default().insert(index, value);
         } else {
             object.insert(key.to_string(), value);
         }
@@ -177,9 +174,7 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
     let after_name = &invoke_rest[name_end + 1..];
     let body_start = after_name.find('>')?;
     let after_invoke_tag = &after_name[body_start + 1..];
-    let invoke_body_end = after_invoke_tag
-        .find(INVOKE_CLOSE)
-        .unwrap_or(after_invoke_tag.len());
+    let invoke_body_end = after_invoke_tag.find(INVOKE_CLOSE).unwrap_or(after_invoke_tag.len());
     let mut rest = &after_invoke_tag[..invoke_body_end];
 
     let mut object = Map::new();
@@ -212,10 +207,7 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
         let value = parse_scalar_value(rest[..value_end].trim());
 
         if let Some((base, index)) = split_indexed_key(parameter_name) {
-            indexed_values
-                .entry(base.to_string())
-                .or_default()
-                .insert(index, value);
+            indexed_values.entry(base.to_string()).or_default().insert(index, value);
         } else {
             object.insert(parameter_name.to_string(), value);
         }
@@ -281,10 +273,7 @@ fn parse_minimax_tool_call(text: &str) -> Option<(String, Value)> {
 
             // Add to object or indexed_values
             if let Some((base, index)) = split_indexed_key(tag_name) {
-                indexed_values
-                    .entry(base.to_string())
-                    .or_default()
-                    .insert(index, value);
+                indexed_values.entry(base.to_string()).or_default().insert(index, value);
             } else {
                 object.insert(tag_name.to_string(), value);
             }
@@ -334,10 +323,7 @@ fn read_tag_text(input: &str) -> (String, &str) {
 
     if let Some(idx) = trimmed.find('<') {
         let (value, rest) = trimmed.split_at(idx);
-        (
-            value.trim().to_string(),
-            rest.trim_start_matches(['\n', '\r']),
-        )
+        (value.trim().to_string(), rest.trim_start_matches(['\n', '\r']))
     } else {
         (trimmed.trim().to_string(), "")
     }

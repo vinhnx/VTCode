@@ -23,10 +23,7 @@ pub struct SubmittedInput {
 
 impl SubmittedInput {
     pub fn new(text: impl Into<String>, attachments: Vec<ContentPart>) -> Self {
-        Self {
-            text: text.into(),
-            attachments,
-        }
+        Self { text: text.into(), attachments }
     }
 
     pub fn text_only(text: impl Into<String>) -> Self {
@@ -253,11 +250,7 @@ impl InlineHandle {
     }
 
     pub fn append_pasted_message(&self, kind: InlineMessageKind, text: String, line_count: usize) {
-        self.send_command(InlineCommand::AppendPastedMessage {
-            kind,
-            text,
-            line_count,
-        });
+        self.send_command(InlineCommand::AppendPastedMessage { kind, text, line_count });
     }
 
     pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
@@ -270,12 +263,7 @@ impl InlineHandle {
         kind: InlineMessageKind,
         lines: Vec<Vec<InlineSegment>>,
     ) {
-        self.send_command(InlineCommand::ReplaceLast {
-            count,
-            kind,
-            lines,
-            link_ranges: None,
-        });
+        self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: None });
     }
 
     pub fn replace_last_with_links(
@@ -330,9 +318,7 @@ impl InlineHandle {
     }
 
     pub fn set_header_context(&self, context: InlineHeaderContext) {
-        self.send_command(InlineCommand::SetHeaderContext {
-            context: Box::new(context),
-        });
+        self.send_command(InlineCommand::SetHeaderContext { context: Box::new(context) });
     }
 
     pub fn set_input_status(&self, left: Option<String>, right: Option<String>) {
@@ -404,10 +390,7 @@ impl InlineHandle {
     }
 
     pub fn set_inline_prompt_suggestion(&self, suggestion: String, llm_generated: bool) {
-        self.send_command(InlineCommand::SetInlinePromptSuggestion {
-            suggestion,
-            llm_generated,
-        });
+        self.send_command(InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated });
     }
 
     pub fn clear_inline_prompt_suggestion(&self) {
@@ -427,9 +410,7 @@ impl InlineHandle {
     }
 
     pub fn show_overlay(&self, request: OverlayRequest) {
-        self.send_command(InlineCommand::ShowOverlay {
-            request: Box::new(request),
-        });
+        self.send_command(InlineCommand::ShowOverlay { request: Box::new(request) });
     }
 
     pub fn show_modal(
@@ -500,8 +481,6 @@ impl InlineSession {
     }
 
     pub fn clone_inline_handle(&self) -> InlineHandle {
-        InlineHandle {
-            sender: self.handle.sender.clone(),
-        }
+        InlineHandle { sender: self.handle.sender.clone() }
     }
 }

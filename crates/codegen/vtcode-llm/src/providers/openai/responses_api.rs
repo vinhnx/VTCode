@@ -34,10 +34,7 @@ fn responses_tool_call_output_type(kind: ResponsesToolCallKind) -> &'static str 
 }
 
 fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
-    let item_type = item
-        .get("type")
-        .and_then(|value| value.as_str())
-        .unwrap_or("");
+    let item_type = item.get("type").and_then(|value| value.as_str()).unwrap_or("");
     if item_type == "custom_tool_call" {
         let call_id = item
             .get("call_id")
@@ -45,15 +42,8 @@ fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
             .or_else(|| item.get("id").and_then(|v| v.as_str()))
             .unwrap_or("");
         let name = item.get("name").and_then(|value| value.as_str())?;
-        let input = item
-            .get("input")
-            .and_then(|value| value.as_str())
-            .unwrap_or_default();
-        return Some(ToolCall::custom(
-            call_id.to_string(),
-            name.to_string(),
-            input.to_string(),
-        ));
+        let input = item.get("input").and_then(|value| value.as_str()).unwrap_or_default();
+        return Some(ToolCall::custom(call_id.to_string(), name.to_string(), input.to_string()));
     }
 
     parse_responses_function_tool_call(item)
@@ -74,9 +64,7 @@ fn parse_responses_function_tool_call(item: &Value) -> Option<ToolCall> {
     let name = function_obj
         .and_then(|f| f.get("name").and_then(|n| n.as_str()))
         .or_else(|| item.get("name").and_then(|n| n.as_str()))?;
-    let arguments = function_obj
-        .and_then(|f| f.get("arguments"))
-        .or_else(|| item.get("arguments"));
+    let arguments = function_obj.and_then(|f| f.get("arguments")).or_else(|| item.get("arguments"));
 
     let serialized = arguments.map_or("{}".to_owned(), |args| {
         if args.is_string() {
@@ -115,9 +103,7 @@ fn append_user_content_parts(content_parts: &mut Vec<Value>, message_content: &M
                             }));
                         }
                     }
-                    ContentPart::Image {
-                        data, mime_type, ..
-                    } => {
+                    ContentPart::Image { data, mime_type, .. } => {
                         let image_url = {
                             let mut s = String::with_capacity(13 + mime_type.len() + data.len());
                             s.push_str("data:");
@@ -131,13 +117,7 @@ fn append_user_content_parts(content_parts: &mut Vec<Value>, message_content: &M
                             "image_url": image_url
                         }));
                     }
-                    ContentPart::File {
-                        filename,
-                        file_id,
-                        file_data,
-                        file_url,
-                        ..
-                    } => {
+                    ContentPart::File { filename, file_id, file_data, file_url, .. } => {
                         if file_id.is_none() && file_data.is_none() && file_url.is_none() {
                             continue;
                         }
@@ -233,9 +213,7 @@ fn reasoning_entry_needs_replay_preservation(entry: &Value) -> bool {
     };
 
     entry_obj.contains_key("encrypted_content")
-        || entry_obj
-            .keys()
-            .any(|key| key != "type" && key != "text" && key != "summary")
+        || entry_obj.keys().any(|key| key != "type" && key != "text" && key != "summary")
 }
 
 fn tool_result_history_text(message_content: &MessageContent) -> String {
@@ -291,26 +269,18 @@ pub fn parse_responses_payload(
     model: String,
     include_cached_prompt_metrics: bool,
 ) -> Result<LLMResponse, LLMError> {
-    let output = response_json
-        .get("output")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| {
+    let output =
+        response_json.get("output").and_then(|value| value.as_array()).ok_or_else(|| {
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
                 "Invalid Responses API format: missing output array",
             );
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
+            LLMError::Provider { message: formatted_error, metadata: None }
         })?;
 
     if output.is_empty() {
         let formatted_error = error_display::format_llm_error("OpenAI", "No output in response");
-        return Err(LLMError::Provider {
-            message: formatted_error,
-            metadata: None,
-        });
+        return Err(LLMError::Provider { message: formatted_error, metadata: None });
     }
 
     let mut content_fragments: Vec<String> = Vec::new();
@@ -320,20 +290,15 @@ pub fn parse_responses_payload(
     let mut tool_references: Vec<String> = Vec::new();
 
     for item in output {
-        let item_type = item
-            .get("type")
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
+        let item_type = item.get("type").and_then(|value| value.as_str()).unwrap_or("");
 
         match item_type {
             "message" => {
                 if let Some(content_array) = item.get("content").and_then(|value| value.as_array())
                 {
                     for entry in content_array {
-                        let entry_type = entry
-                            .get("type")
-                            .and_then(|value| value.as_str())
-                            .unwrap_or("");
+                        let entry_type =
+                            entry.get("type").and_then(|value| value.as_str()).unwrap_or("");
 
                         match entry_type {
                             "text" | "output_text" => {
@@ -386,10 +351,8 @@ pub fn parse_responses_payload(
                     let citations: Vec<String> = results
                         .iter()
                         .filter_map(|r| {
-                            let title = r
-                                .get("title")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("Untitled");
+                            let title =
+                                r.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled");
                             let url = r.get("url").and_then(|v| v.as_str()).unwrap_or("");
                             if !url.is_empty() {
                                 Some(format!("[{title}]({url})"))
@@ -573,10 +536,7 @@ pub fn build_standard_responses_payload(
                     for call in tool_calls {
                         if let Some(ref func) = call.function {
                             let call_kind = responses_tool_call_kind(call);
-                            if active_tool_calls
-                                .insert(call.id.clone(), call_kind)
-                                .is_none()
-                            {
+                            if active_tool_calls.insert(call.id.clone(), call_kind).is_none() {
                                 pending_tool_call_order.push(call.id.clone());
                             }
                             if include_structured_history_in_input {
@@ -621,10 +581,7 @@ pub fn build_standard_responses_payload(
                         "OpenAI",
                         "Tool messages must include tool_call_id for Responses API",
                     );
-                    LLMError::InvalidRequest {
-                        message: formatted_error,
-                        metadata: None,
-                    }
+                    LLMError::InvalidRequest { message: formatted_error, metadata: None }
                 })?;
 
                 if !active_tool_calls.contains_key(tool_call_id) {
@@ -681,10 +638,7 @@ pub fn build_standard_responses_payload(
         Some(instructions_segments.join("\n\n"))
     };
 
-    Ok(OpenAIResponsesPayload {
-        input,
-        instructions,
-    })
+    Ok(OpenAIResponsesPayload { input, instructions })
 }
 
 #[cfg(test)]
@@ -709,10 +663,7 @@ mod tests {
         assert_eq!(tool_result_content[0]["type"], "input_text");
         assert_eq!(tool_result_content[0]["text"], "inline image note");
         assert_eq!(tool_result_content[1]["type"], "input_image");
-        assert_eq!(
-            tool_result_content[1]["image_url"],
-            "data:image/png;base64,abc"
-        );
+        assert_eq!(tool_result_content[1]["image_url"], "data:image/png;base64,abc");
     }
 
     fn parsed_reasoning_details(response: &crate::provider::LLMResponse) -> Vec<Value> {
@@ -889,10 +840,7 @@ mod tests {
             .expect("function_call_output should exist");
 
         assert!(output_index > call_index);
-        assert_eq!(
-            payload.input[output_index]["output"],
-            "{\"output\":\"late\"}"
-        );
+        assert_eq!(payload.input[output_index]["output"], "{\"output\":\"late\"}");
         assert_ne!(payload.input[output_index]["output"], "aborted");
     }
 
@@ -934,10 +882,7 @@ mod tests {
             function_call.get("call_id").and_then(Value::as_str),
             Some("call_T4IsdQtJifUHQUXutDlwoFLd")
         );
-        assert!(
-            function_call.get("id").is_none(),
-            "function_call replay items should omit id"
-        );
+        assert!(function_call.get("id").is_none(), "function_call replay items should omit id");
     }
 
     #[test]
@@ -961,10 +906,7 @@ mod tests {
         assert_eq!(tool_calls.len(), 1);
         assert_eq!(tool_calls[0].id, "call_123");
         assert_eq!(
-            tool_calls[0]
-                .function
-                .as_ref()
-                .map(|function| function.name.as_str()),
+            tool_calls[0].function.as_ref().map(|function| function.name.as_str()),
             Some("exec_command")
         );
     }
@@ -1018,10 +960,7 @@ mod tests {
         assert!(tool_calls[0].is_custom());
         assert_eq!(tool_calls[0].id, "call_patch_1");
         assert_eq!(tool_calls[0].tool_name(), Some("apply_patch"));
-        assert_eq!(
-            tool_calls[0].raw_input(),
-            Some("*** Begin Patch\n*** End Patch\n")
-        );
+        assert_eq!(tool_calls[0].raw_input(), Some("*** Begin Patch\n*** End Patch\n"));
     }
 
     #[test]
@@ -1053,9 +992,7 @@ mod tests {
 
         let reasoning_details = parsed_reasoning_details(&parsed);
         assert!(
-            reasoning_details
-                .iter()
-                .any(|item| item == &encrypted_reasoning),
+            reasoning_details.iter().any(|item| item == &encrypted_reasoning),
             "encrypted reasoning item should be preserved verbatim"
         );
 
@@ -1099,11 +1036,7 @@ mod tests {
             .expect("payload should parse");
 
         let preserved_items = parsed_reasoning_details(&parsed);
-        assert!(
-            preserved_items
-                .iter()
-                .any(|item| item == &unknown_replay_item)
-        );
+        assert!(preserved_items.iter().any(|item| item == &unknown_replay_item));
 
         let payload = build_standard_responses_payload(
             &LLMRequest {
@@ -1164,10 +1097,7 @@ mod tests {
         assert_eq!(payload.input[0]["type"], "function_call");
         assert_eq!(payload.input[0]["call_id"], "call_789");
         assert_eq!(payload.input[0]["name"], "exec_command");
-        assert_eq!(
-            payload.input[0]["arguments"],
-            "{\"command\":\"cargo test\"}"
-        );
+        assert_eq!(payload.input[0]["arguments"], "{\"command\":\"cargo test\"}");
         assert_eq!(payload.input[1]["type"], "function_call_output");
         assert_eq!(payload.input[1]["call_id"], "call_789");
         assert_eq!(payload.input[1]["output"], "{\"exit_code\":0}");
@@ -1199,10 +1129,7 @@ mod tests {
         assert_eq!(payload.input[1]["type"], "custom_tool_call");
         assert_eq!(payload.input[1]["call_id"], "call_patch_1");
         assert_eq!(payload.input[1]["name"], "apply_patch");
-        assert_eq!(
-            payload.input[1]["input"],
-            "*** Begin Patch\n*** End Patch\n"
-        );
+        assert_eq!(payload.input[1]["input"], "*** Begin Patch\n*** End Patch\n");
         assert_eq!(payload.input[2]["type"], "custom_tool_call_output");
         assert_eq!(payload.input[2]["call_id"], "call_patch_1");
         assert_eq!(payload.input[2]["output"], "patched");
@@ -1390,10 +1317,7 @@ mod tests {
         let parsed = parse_responses_payload(response, "gpt-5".to_string(), true)
             .expect("payload should parse");
 
-        assert_eq!(
-            parsed.usage.and_then(|usage| usage.cached_prompt_tokens),
-            Some(42)
-        );
+        assert_eq!(parsed.usage.and_then(|usage| usage.cached_prompt_tokens), Some(42));
     }
 
     #[test]
@@ -1417,10 +1341,7 @@ mod tests {
         let parsed = parse_responses_payload(response, "gpt-5".to_string(), true)
             .expect("payload should parse");
 
-        assert_eq!(
-            parsed.usage.and_then(|usage| usage.cached_prompt_tokens),
-            None
-        );
+        assert_eq!(parsed.usage.and_then(|usage| usage.cached_prompt_tokens), None);
     }
 
     #[test]

@@ -34,9 +34,7 @@ pub(super) fn generate_suggested_options(
     }
 
     options.truncate(3);
-    if let Some(first) = options
-        .first_mut()
-        .filter(|first| !first.label.contains("(Recommended)"))
+    if let Some(first) = options.first_mut().filter(|first| !first.label.contains("(Recommended)"))
     {
         first.label.push_str(" (Recommended)");
     }
@@ -277,10 +275,7 @@ fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, con
             );
         }
 
-        if contains_any(
-            context,
-            &["loop", "stuck", "navigation", "repeat", "stall", "retry"],
-        ) {
+        if contains_any(context, &["loop", "stuck", "navigation", "repeat", "stall", "retry"]) {
             push_unique_option(
                 options,
                 "Loop prevention and recovery",
@@ -325,10 +320,7 @@ fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, con
             );
         }
 
-        if contains_any(
-            context,
-            &["redundan", "overlap", "duplicate", "repetitive", "verbose"],
-        ) {
+        if contains_any(context, &["redundan", "overlap", "duplicate", "repetitive", "verbose"]) {
             push_unique_option(
                 options,
                 "Prompt redundancy reduction",

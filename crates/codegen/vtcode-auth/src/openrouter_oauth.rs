@@ -160,10 +160,7 @@ pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> R
         .context("Failed to send token exchange request")?;
 
     let status = response.status();
-    let body = response
-        .text()
-        .await
-        .context("Failed to read response body")?;
+    let body = response.text().await.context("Failed to read response body")?;
 
     if !status.is_success() {
         // Parse error response for better messages
@@ -176,9 +173,7 @@ pub async fn exchange_code_for_token(code: &str, challenge: &PkceChallenge) -> R
                 "Invalid code or code_verifier. The authorization code may have expired."
             ));
         } else if status.as_u16() == 405 {
-            return Err(anyhow!(
-                "Method not allowed. Ensure you're using POST over HTTPS."
-            ));
+            return Err(anyhow!("Method not allowed. Ensure you're using POST over HTTPS."));
         }
         return Err(anyhow!("Token exchange failed (HTTP {status}): {body}"));
     }
@@ -245,8 +240,7 @@ fn encrypt_token(token: &OpenRouterToken) -> Result<EncryptedToken> {
 
     // Generate random nonce
     let mut nonce_bytes = [0u8; NONCE_LEN];
-    rng.fill(&mut nonce_bytes)
-        .map_err(|_| anyhow!("Failed to generate nonce"))?;
+    rng.fill(&mut nonce_bytes).map_err(|_| anyhow!("Failed to generate nonce"))?;
 
     // Serialize token to JSON
     let plaintext = serde_json::to_vec(token).context("Failed to serialize token")?;
@@ -269,10 +263,7 @@ fn encrypt_token(token: &OpenRouterToken) -> Result<EncryptedToken> {
 /// Decrypt stored token data.
 fn decrypt_token(encrypted: &EncryptedToken) -> Result<OpenRouterToken> {
     if encrypted.version != 1 {
-        return Err(anyhow!(
-            "Unsupported token format version: {}",
-            encrypted.version
-        ));
+        return Err(anyhow!("Unsupported token format version: {}", encrypted.version));
     }
 
     use base64::{Engine, engine::general_purpose::STANDARD};
@@ -285,16 +276,13 @@ fn decrypt_token(encrypted: &EncryptedToken) -> Result<OpenRouterToken> {
         .try_into()
         .map_err(|_| anyhow!("Invalid nonce length"))?;
 
-    let mut ciphertext = STANDARD
-        .decode(&encrypted.ciphertext)
-        .context("Invalid ciphertext encoding")?;
+    let mut ciphertext =
+        STANDARD.decode(&encrypted.ciphertext).context("Invalid ciphertext encoding")?;
 
     let nonce = Nonce::assume_unique_for_key(nonce_bytes);
-    let plaintext = key
-        .open_in_place(nonce, Aad::empty(), &mut ciphertext)
-        .map_err(|_| {
-            anyhow!("Decryption failed - token may be corrupted or from different machine")
-        })?;
+    let plaintext = key.open_in_place(nonce, Aad::empty(), &mut ciphertext).map_err(|_| {
+        anyhow!("Decryption failed - token may be corrupted or from different machine")
+    })?;
 
     serde_json::from_slice(plaintext).context("Failed to deserialize token")
 }
@@ -326,9 +314,7 @@ fn save_oauth_token_keyring(token: &OpenRouterToken) -> Result<()> {
     let token_json =
         serde_json::to_string(token).context("Failed to serialize token for keyring")?;
 
-    entry
-        .set_password(&token_json)
-        .context("Failed to store token in OS keyring")?;
+    entry.set_password(&token_json).context("Failed to store token in OS keyring")?;
 
     tracing::info!("OAuth token saved to OS keyring");
     Ok(())
@@ -570,15 +556,8 @@ impl AuthStatus {
     /// Get a human-readable status string.
     pub fn display_string(&self) -> String {
         match self {
-            AuthStatus::Authenticated {
-                label,
-                age_seconds,
-                expires_in,
-            } => {
-                let label_str = label
-                    .as_ref()
-                    .map(|l| format!(" ({l})"))
-                    .unwrap_or_default();
+            AuthStatus::Authenticated { label, age_seconds, expires_in } => {
+                let label_str = label.as_ref().map(|l| format!(" ({l})")).unwrap_or_default();
                 let age_str = humanize_duration(*age_seconds);
                 let expiry_str = expires_in
                     .map(|e| format!(", expires in {}", humanize_duration(e)))
@@ -623,10 +602,7 @@ mod tests {
                 temp_dir.path().to_path_buf(),
             ))
             .expect("set temp auth dir override");
-            Self {
-                temp_dir: Some(temp_dir),
-                previous,
-            }
+            Self { temp_dir: Some(temp_dir), previous }
         }
     }
 
@@ -740,10 +716,7 @@ mod tests {
         save_oauth_token_with_mode(&token, AuthCredentialsStoreMode::File).expect("save token");
         let loaded =
             load_oauth_token_with_mode(AuthCredentialsStoreMode::File).expect("load token");
-        assert_eq!(
-            loaded.as_ref().map(|value| &value.api_key),
-            Some(&token.api_key)
-        );
+        assert_eq!(loaded.as_ref().map(|value| &value.api_key), Some(&token.api_key));
 
         let stored =
             fs::read_to_string(get_token_path().expect("token path")).expect("read token file");

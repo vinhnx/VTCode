@@ -599,9 +599,7 @@ pub struct AskQuestionsConfig {
 
 impl Default for AskQuestionsConfig {
     fn default() -> Self {
-        Self {
-            enabled: default_ask_questions_enabled(),
-        }
+        Self { enabled: default_ask_questions_enabled() }
     }
 }
 

@@ -95,10 +95,7 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
     }
 
     if overflow > 0 {
-        let _ = write!(
-            prompt,
-            "\n(+{overflow} more skills available{SKILL_OVERFLOW_SUFFIX})"
-        );
+        let _ = write!(prompt, "\n(+{overflow} more skills available{SKILL_OVERFLOW_SUFFIX})");
     }
 
     // Append usage rules (Codex pattern)
@@ -131,11 +128,7 @@ pub fn generate_skills_prompt_xml(skills: &[SkillMetadata]) -> String {
     for skill in skill_list {
         xml.push_str("  <skill>\n");
         let _ = writeln!(xml, "    <name>{}</name>", xml_escape(&skill.name));
-        let _ = writeln!(
-            xml,
-            "    <description>{}</description>",
-            xml_escape(&skill.description)
-        );
+        let _ = writeln!(xml, "    <description>{}</description>", xml_escape(&skill.description));
         let _ = writeln!(
             xml,
             "    <location>{}</location>",

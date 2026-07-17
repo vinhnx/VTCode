@@ -13,10 +13,7 @@ use crate::providers::openai::tool_serialization::sanitize_openai_function_param
 /// Returns the first present header among `names`, as an owned string.
 pub fn extract_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> Option<String> {
     names.iter().find_map(|name| {
-        headers
-            .get(*name)
-            .and_then(|value| value.to_str().ok())
-            .map(ToOwned::to_owned)
+        headers.get(*name).and_then(|value| value.to_str().ok()).map(ToOwned::to_owned)
     })
 }
 
@@ -94,9 +91,7 @@ pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Val
                     payload.insert("type".to_owned(), Value::String("web_search".to_owned()));
                     payload.insert(
                         "web_search".to_owned(),
-                        tool.web_search
-                            .clone()
-                            .unwrap_or_else(|| json!({"enable": true})),
+                        tool.web_search.clone().unwrap_or_else(|| json!({"enable": true})),
                     );
                     return Some(Value::Object(payload));
                 }
@@ -143,9 +138,7 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
                             "text": text
                         }));
                     }
-                    ContentPart::Image {
-                        data, mime_type, ..
-                    } => {
+                    ContentPart::Image { data, mime_type, .. } => {
                         has_non_text = true;
                         let url = {
                             let mut s = String::with_capacity(13 + mime_type.len() + data.len());
@@ -162,13 +155,7 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
                             }
                         }));
                     }
-                    ContentPart::File {
-                        filename,
-                        file_id,
-                        file_data,
-                        file_url,
-                        ..
-                    } => {
+                    ContentPart::File { filename, file_id, file_data, file_url, .. } => {
                         if file_id.is_some() || file_data.is_some() {
                             has_non_text = true;
                             let mut file_payload = serde_json::Map::new();
@@ -268,9 +255,9 @@ fn text_contains_interleaved_reasoning_markup(text: &str) -> bool {
 fn message_content_is_text_only(content: &MessageContent) -> bool {
     match content {
         MessageContent::Text(_) => true,
-        MessageContent::Parts(parts) => parts
-            .iter()
-            .all(|part| matches!(part, ContentPart::Text { .. })),
+        MessageContent::Parts(parts) => {
+            parts.iter().all(|part| matches!(part, ContentPart::Text { .. }))
+        }
     }
 }
 
@@ -375,10 +362,7 @@ pub fn normalize_reasoning_detail_object(detail: &Value) -> Option<Value> {
 
 #[inline]
 pub fn normalize_reasoning_detail_objects(details: &[Value]) -> Vec<Value> {
-    details
-        .iter()
-        .filter_map(normalize_reasoning_detail_object)
-        .collect()
+    details.iter().filter_map(normalize_reasoning_detail_object).collect()
 }
 
 #[inline]
@@ -510,9 +494,7 @@ pub fn spawn_openai_compatible_stream(
         match result {
             Ok(Ok(_)) => {
                 let response = aggregator.finalize();
-                let _ = tx.send(Ok(LLMStreamEvent::Completed {
-                    response: Box::new(response),
-                }));
+                let _ = tx.send(Ok(LLMStreamEvent::Completed { response: Box::new(response) }));
             }
             Ok(Err(err)) => {
                 let _ = tx.send(Err(err));
@@ -718,10 +700,7 @@ pub async fn execute_token_count_request(
             provider_name,
             &format!("Token-count network error: {e}"),
         );
-        LLMError::Network {
-            message,
-            metadata: None,
-        }
+        LLMError::Network { message, metadata: None }
     })?;
 
     let status = response.status();
@@ -742,10 +721,7 @@ pub async fn execute_token_count_request(
             provider_name,
             &format!("Token-count request failed ({status}): {body}"),
         );
-        return Err(LLMError::Provider {
-            message,
-            metadata: None,
-        });
+        return Err(LLMError::Provider { message, metadata: None });
     }
 
     let value = response.json::<Value>().await.map_err(|e| {
@@ -753,10 +729,7 @@ pub async fn execute_token_count_request(
             provider_name,
             &format!("Failed to parse token-count response: {e}"),
         );
-        LLMError::Provider {
-            message,
-            metadata: None,
-        }
+        LLMError::Provider { message, metadata: None }
     })?;
 
     Ok(Some(value))
@@ -867,16 +840,11 @@ pub fn serialize_messages_openai_format(
     for message in request.messages.iter() {
         message
             .validate_for_provider(provider_key)
-            .map_err(|e| LLMError::InvalidRequest {
-                message: e,
-                metadata: None,
-            })?;
+            .map_err(|e| LLMError::InvalidRequest { message: e, metadata: None })?;
 
         let mut message_map = Map::with_capacity(4); // Pre-allocate for role, content, tool_calls, tool_call_id
-        message_map.insert(
-            KEY_ROLE.to_owned(),
-            Value::String(message.role.as_generic_str().to_owned()),
-        );
+        message_map
+            .insert(KEY_ROLE.to_owned(), Value::String(message.role.as_generic_str().to_owned()));
 
         let content_value = serialize_message_content_openai_for_model(message, &request.model);
         message_map.insert(KEY_CONTENT.to_owned(), content_value);
@@ -904,10 +872,8 @@ pub fn serialize_messages_openai_format(
         if message.role == MessageRole::Tool {
             match &message.tool_call_id {
                 Some(tool_call_id) => {
-                    message_map.insert(
-                        KEY_TOOL_CALL_ID.to_owned(),
-                        Value::String(tool_call_id.clone()),
-                    );
+                    message_map
+                        .insert(KEY_TOOL_CALL_ID.to_owned(), Value::String(tool_call_id.clone()));
                 }
                 None => {
                     return Err(LLMError::InvalidRequest {
@@ -919,19 +885,13 @@ pub fn serialize_messages_openai_format(
                 }
             }
         } else if let Some(tool_call_id) = &message.tool_call_id {
-            message_map.insert(
-                KEY_TOOL_CALL_ID.to_owned(),
-                Value::String(tool_call_id.clone()),
-            );
+            message_map.insert(KEY_TOOL_CALL_ID.to_owned(), Value::String(tool_call_id.clone()));
         }
 
         if message.role == MessageRole::Assistant
             && let Some(reasoning) = &message.reasoning
         {
-            message_map.insert(
-                KEY_REASONING_CONTENT.to_owned(),
-                Value::String(reasoning.clone()),
-            );
+            message_map.insert(KEY_REASONING_CONTENT.to_owned(), Value::String(reasoning.clone()));
         }
 
         messages.push(Value::Object(message_map));
@@ -950,10 +910,7 @@ pub fn validate_request_common(
 ) -> Result<(), LLMError> {
     if request.messages.is_empty() {
         let formatted = error_display::format_llm_error(provider_name, "Messages cannot be empty");
-        return Err(LLMError::InvalidRequest {
-            message: formatted,
-            metadata: None,
-        });
+        return Err(LLMError::InvalidRequest { message: formatted, metadata: None });
     }
 
     if let Some(models) = supported_models
@@ -962,19 +919,13 @@ pub fn validate_request_common(
     {
         let msg = format!("Unsupported model: {}", request.model);
         let formatted = error_display::format_llm_error(provider_name, &msg);
-        return Err(LLMError::InvalidRequest {
-            message: formatted,
-            metadata: None,
-        });
+        return Err(LLMError::InvalidRequest { message: formatted, metadata: None });
     }
 
     for message in request.messages.iter() {
         if let Err(err) = message.validate_for_provider(validation_provider) {
             let formatted = error_display::format_llm_error(provider_name, &err);
-            return Err(LLMError::InvalidRequest {
-                message: formatted,
-                metadata: None,
-            });
+            return Err(LLMError::InvalidRequest { message: formatted, metadata: None });
         }
     }
 
@@ -1021,10 +972,7 @@ where
             .get("role")
             .and_then(|r| r.as_str())
             .unwrap_or(vtcode_config::constants::message_roles::USER);
-        let content = entry
-            .get("content")
-            .map(&content_extractor)
-            .unwrap_or_default();
+        let content = entry.get("content").map(&content_extractor).unwrap_or_default();
         let assistant_phase = entry
             .get("phase")
             .and_then(Value::as_str)
@@ -1041,10 +989,7 @@ where
                     .get("tool_calls")
                     .and_then(|tc| tc.as_array())
                     .map(|calls| {
-                        calls
-                            .iter()
-                            .filter_map(parse_tool_call_openai_format)
-                            .collect::<Vec<_>>()
+                        calls.iter().filter_map(parse_tool_call_openai_format).collect::<Vec<_>>()
                     })
                     .filter(|calls| !calls.is_empty());
 
@@ -1070,23 +1015,10 @@ where
     Some(LLMRequest {
         messages: std::sync::Arc::new(messages),
         system_prompt: system_prompt.map(std::sync::Arc::new),
-        model: value
-            .get("model")
-            .and_then(|m| m.as_str())
-            .unwrap_or(default_model)
-            .to_string(),
-        max_tokens: value
-            .get("max_tokens")
-            .and_then(|m| m.as_u64())
-            .map(|m| m as u32),
-        temperature: value
-            .get("temperature")
-            .and_then(|t| t.as_f64())
-            .map(|t| t as f32),
-        stream: value
-            .get("stream")
-            .and_then(|s| s.as_bool())
-            .unwrap_or(false),
+        model: value.get("model").and_then(|m| m.as_str()).unwrap_or(default_model).to_string(),
+        max_tokens: value.get("max_tokens").and_then(|m| m.as_u64()).map(|m| m as u32),
+        temperature: value.get("temperature").and_then(|t| t.as_f64()).map(|t| t as f32),
+        stream: value.get("stream").and_then(|s| s.as_bool()).unwrap_or(false),
         ..Default::default()
     })
 }
@@ -1127,40 +1059,33 @@ pub fn parse_usage_openai_format(
     response_json: &Value,
     include_cache_metrics: bool,
 ) -> Option<crate::provider::Usage> {
-    response_json
-        .get("usage")
-        .map(|usage_value| crate::provider::Usage {
-            prompt_tokens: usage_value
-                .get("prompt_tokens")
+    response_json.get("usage").map(|usage_value| crate::provider::Usage {
+        prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0)
+            as u32,
+        completion_tokens: usage_value
+            .get("completion_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32,
+        total_tokens: usage_value.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        cached_prompt_tokens: if include_cache_metrics {
+            usage_value
+                .get("prompt_cache_hit_tokens")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            completion_tokens: usage_value
-                .get("completion_tokens")
+                .map(|v| v as u32)
+        } else {
+            None
+        },
+        cache_creation_tokens: if include_cache_metrics {
+            usage_value
+                .get("prompt_cache_miss_tokens")
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            total_tokens: usage_value
-                .get("total_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            cached_prompt_tokens: if include_cache_metrics {
-                usage_value
-                    .get("prompt_cache_hit_tokens")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32)
-            } else {
-                None
-            },
-            cache_creation_tokens: if include_cache_metrics {
-                usage_value
-                    .get("prompt_cache_miss_tokens")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32)
-            } else {
-                None
-            },
-            cache_read_tokens: None,
-            iterations: None,
-        })
+                .map(|v| v as u32)
+        } else {
+            None
+        },
+        cache_read_tokens: None,
+        iterations: None,
+    })
 }
 
 #[inline]
@@ -1290,27 +1215,19 @@ where
 {
     use crate::provider::LLMResponse;
 
-    let choices = response_json
-        .get("choices")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| {
+    let choices =
+        response_json.get("choices").and_then(|value| value.as_array()).ok_or_else(|| {
             let formatted_error = error_display::format_llm_error(
                 provider_name,
                 "Invalid response format: missing choices",
             );
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
+            LLMError::Provider { message: formatted_error, metadata: None }
         })?;
 
     if choices.is_empty() {
         let formatted_error =
             error_display::format_llm_error(provider_name, "No choices in response");
-        return Err(LLMError::Provider {
-            message: formatted_error,
-            metadata: None,
-        });
+        return Err(LLMError::Provider { message: formatted_error, metadata: None });
     }
 
     let choice = &choices[0];
@@ -1319,10 +1236,7 @@ where
             provider_name,
             "Invalid response format: missing message",
         );
-        LLMError::Provider {
-            message: formatted_error,
-            metadata: None,
-        }
+        LLMError::Provider { message: formatted_error, metadata: None }
     })?;
 
     let mut content = extract_content_from_message(message);
@@ -1330,12 +1244,7 @@ where
     let tool_calls = message
         .get("tool_calls")
         .and_then(|tc| tc.as_array())
-        .map(|calls| {
-            calls
-                .iter()
-                .filter_map(parse_tool_call_openai_format)
-                .collect::<Vec<_>>()
-        })
+        .map(|calls| calls.iter().filter_map(parse_tool_call_openai_format).collect::<Vec<_>>())
         .filter(|calls| !calls.is_empty());
 
     let native_reasoning_details_json = message.get("reasoning_details");

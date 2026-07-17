@@ -32,9 +32,7 @@ fn test_above_threshold_spools() {
     };
 
     let content = "This is content that exceeds the threshold";
-    let result = spool_large_output(content, "test_tool", &config)
-        .unwrap()
-        .unwrap();
+    let result = spool_large_output(content, "test_tool", &config).unwrap().unwrap();
 
     assert!(result.was_spooled);
     assert!(result.file_path.exists());
@@ -80,9 +78,7 @@ fn test_agent_response_format() {
         .collect::<Vec<_>>()
         .join("\n");
 
-    let result = spool_large_output(&content, "run_pty_cmd", &config)
-        .unwrap()
-        .unwrap();
+    let result = spool_large_output(&content, "run_pty_cmd", &config).unwrap().unwrap();
 
     let agent_response = result.to_agent_response().unwrap();
 
@@ -104,9 +100,7 @@ fn test_read_lines() {
     };
 
     let content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5";
-    let result = spool_large_output(content, "test", &config)
-        .unwrap()
-        .unwrap();
+    let result = spool_large_output(content, "test", &config).unwrap().unwrap();
 
     let lines = result.read_lines(2, 4).unwrap();
     assert!(lines.contains("Line 2"));

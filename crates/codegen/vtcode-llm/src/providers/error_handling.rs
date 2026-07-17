@@ -47,12 +47,7 @@ pub async fn handle_gemini_http_error(response: Response) -> Result<Response, LL
     let status = response.status();
     let metadata = extract_response_metadata(&response);
     let error_text = response.text().await.unwrap_or_default();
-    Err(parse_api_error_with_metadata(
-        "Gemini",
-        status,
-        &error_text,
-        metadata,
-    ))
+    Err(parse_api_error_with_metadata("Gemini", status, &error_text, metadata))
 }
 
 /// Handle HTTP response errors for Anthropic provider
@@ -65,12 +60,7 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
     let status = response.status();
     let metadata = extract_response_metadata(&response);
     let error_text = response.text().await.unwrap_or_default();
-    Err(parse_api_error_with_metadata(
-        "Anthropic",
-        status,
-        &error_text,
-        metadata,
-    ))
+    Err(parse_api_error_with_metadata("Anthropic", status, &error_text, metadata))
 }
 
 /// Handle HTTP response errors for OpenAI-compatible providers
@@ -98,12 +88,7 @@ pub async fn handle_openai_http_error(
         provider_name
     );
 
-    Err(parse_api_error_with_metadata(
-        provider_name,
-        status,
-        &error_text,
-        metadata,
-    ))
+    Err(parse_api_error_with_metadata(provider_name, status, &error_text, metadata))
 }
 
 /// Check if an error is a rate limit error based on status code and message
@@ -115,9 +100,7 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
 
     // Optimize: Lowercase once and use pre-lowercased patterns
     let lower = error_text.to_lowercase();
-    RATE_LIMIT_PATTERNS
-        .iter()
-        .any(|pattern| lower.contains(pattern))
+    RATE_LIMIT_PATTERNS.iter().any(|pattern| lower.contains(pattern))
 }
 
 /// Handle network errors with consistent formatting
@@ -125,10 +108,7 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
 pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
     let formatted_error =
         error_display::format_llm_error(provider, &format!("network error: {error}"));
-    LLMError::Network {
-        message: formatted_error,
-        metadata: None,
-    }
+    LLMError::Network { message: formatted_error, metadata: None }
 }
 
 /// Handle JSON parsing errors with consistent formatting
@@ -136,10 +116,7 @@ pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> L
 pub fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
     let formatted_error =
         error_display::format_llm_error(provider, &format!("failed to parse response: {error}"));
-    LLMError::Provider {
-        message: formatted_error,
-        metadata: None,
-    }
+    LLMError::Provider { message: formatted_error, metadata: None }
 }
 
 /// Format HTTP error with status code and message
@@ -322,30 +299,18 @@ pub fn extract_human_error_message(body: &str) -> String {
         return msg.to_string();
     }
     // Mistral: {"object":"error","message":{"detail":[{"msg":"..."}]}}
-    if let Some(detail) = json
-        .get("message")
-        .and_then(|m| m.get("detail"))
-        .and_then(|d| d.as_array())
-        && let Some(first) = detail
-            .first()
-            .and_then(|d| d.get("msg"))
-            .and_then(|m| m.as_str())
+    if let Some(detail) =
+        json.get("message").and_then(|m| m.get("detail")).and_then(|d| d.as_array())
+        && let Some(first) = detail.first().and_then(|d| d.get("msg")).and_then(|m| m.as_str())
     {
         return first.to_string();
     }
     // HuggingFace simple: {"error": "..."}
-    if let Some(msg) = json
-        .get("error")
-        .and_then(|e| e.as_str())
-        .filter(|s| !s.trim().is_empty())
-    {
+    if let Some(msg) = json.get("error").and_then(|e| e.as_str()).filter(|s| !s.trim().is_empty()) {
         return msg.to_string();
     }
     // FastAPI / OpenAI alternate: {"detail": "..."}
-    if let Some(msg) = json
-        .get("detail")
-        .and_then(|d| d.as_str())
-        .filter(|s| !s.trim().is_empty())
+    if let Some(msg) = json.get("detail").and_then(|d| d.as_str()).filter(|s| !s.trim().is_empty())
     {
         return msg.to_string();
     }
@@ -359,10 +324,7 @@ pub fn extract_human_error_message(body: &str) -> String {
         return msg.to_string();
     }
     // Top-level message: {"message": "..."}
-    if let Some(msg) = json
-        .get("message")
-        .and_then(|m| m.as_str())
-        .filter(|s| !s.trim().is_empty())
+    if let Some(msg) = json.get("message").and_then(|m| m.as_str()).filter(|s| !s.trim().is_empty())
     {
         return msg.to_string();
     }
@@ -373,10 +335,7 @@ pub fn extract_human_error_message(body: &str) -> String {
 fn extract_response_metadata(response: &Response) -> ApiResponseMetadata {
     let headers = response.headers();
     ApiResponseMetadata {
-        request_id: extract_header(
-            headers,
-            &["request-id", "x-request-id", "openai-request-id"],
-        ),
+        request_id: extract_header(headers, &["request-id", "x-request-id", "openai-request-id"]),
         organization_id: extract_header(
             headers,
             &[
@@ -470,10 +429,7 @@ mod tests {
     #[test]
     fn extract_huggingface_error_string() {
         let body = r#"{"error":"Model is currently loading"}"#;
-        assert_eq!(
-            extract_human_error_message(body),
-            "Model is currently loading"
-        );
+        assert_eq!(extract_human_error_message(body), "Model is currently loading");
     }
 
     #[test]

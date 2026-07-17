@@ -253,22 +253,18 @@ fn push_file_access_target(
 
 fn command_text_for_tool(tool_name: &str, args: &Value) -> Option<String> {
     match tool_name {
-        tools::EXEC_COMMAND => crate::tools::command_args::command_text(args)
-            .ok()
-            .flatten(),
+        tools::EXEC_COMMAND => crate::tools::command_args::command_text(args).ok().flatten(),
         tools::WRITE_STDIN => {
             crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
         }
-        tools::SHELL | tools::RUN_PTY_CMD => crate::tools::command_args::command_text(args)
-            .ok()
-            .flatten(),
+        tools::SHELL | tools::RUN_PTY_CMD => {
+            crate::tools::command_args::command_text(args).ok().flatten()
+        }
         tools::SEND_PTY_INPUT => {
             crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
         }
         tools::UNIFIED_EXEC if command_session_action_is(args, "run") => {
-            crate::tools::command_args::command_text(args)
-                .ok()
-                .flatten()
+            crate::tools::command_args::command_text(args).ok().flatten()
         }
         tools::UNIFIED_EXEC if command_session_action_in(args, &["write", "continue"]) => {
             crate::tools::command_args::interactive_input_text(args).map(str::to_owned)
@@ -395,10 +391,7 @@ fn proposed_changes_preview(args: &Value) -> String {
     }
 
     if let Some(old_str) = args.get("old_str").and_then(|value| value.as_str()) {
-        let new_str = args
-            .get("new_str")
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
+        let new_str = args.get("new_str").and_then(|value| value.as_str()).unwrap_or("");
         return format!("Replace:\n  '{old_str}'\nWith:\n  '{new_str}'");
     }
 
@@ -561,9 +554,7 @@ impl SafetyGateway {
         args: &Value,
         invocation_id: Option<ToolInvocationId>,
     ) -> SafetyDecision {
-        let inv_id = invocation_id
-            .map(|id| id.short())
-            .unwrap_or_else(|| "unknown".to_string());
+        let inv_id = invocation_id.map(|id| id.short()).unwrap_or_else(|| "unknown".to_string());
 
         tracing::trace!(
             invocation_id = %inv_id,
@@ -580,8 +571,7 @@ impl SafetyGateway {
             return SafetyDecision::Deny(err.to_string());
         }
 
-        self.evaluate_non_rate_decision(ctx, tool_name, args, &inv_id)
-            .await
+        self.evaluate_non_rate_decision(ctx, tool_name, args, &inv_id).await
     }
 
     /// Check safety and atomically reserve a rate-limit slot on success.
@@ -594,8 +584,7 @@ impl SafetyGateway {
         tool_name: &str,
         args: &Value,
     ) -> SafetyCheckResult {
-        self.check_and_record_with_id(ctx, tool_name, args, None)
-            .await
+        self.check_and_record_with_id(ctx, tool_name, args, None).await
     }
 
     /// Check safety with correlation ID and atomically reserve a rate-limit slot.
@@ -606,25 +595,17 @@ impl SafetyGateway {
         args: &Value,
         invocation_id: Option<ToolInvocationId>,
     ) -> SafetyCheckResult {
-        let inv_id = invocation_id
-            .map(|id| id.short())
-            .unwrap_or_else(|| "unknown".to_string());
+        let inv_id = invocation_id.map(|id| id.short()).unwrap_or_else(|| "unknown".to_string());
         tracing::trace!(
             invocation_id = %inv_id,
             tool = %tool_name,
             "SafetyGateway: checking and recording safety"
         );
 
-        let decision = self
-            .evaluate_non_rate_decision(ctx, tool_name, args, &inv_id)
-            .await;
+        let decision = self.evaluate_non_rate_decision(ctx, tool_name, args, &inv_id).await;
 
         if decision.is_denied() {
-            return SafetyCheckResult {
-                decision,
-                retry_after: None,
-                violation: None,
-            };
+            return SafetyCheckResult { decision, retry_after: None, violation: None };
         }
 
         let now = Instant::now();
@@ -632,11 +613,7 @@ impl SafetyGateway {
         match self.check_rate_limits_locked(&mut state, now) {
             Ok(()) => {
                 self.record_execution_locked(&mut state, now);
-                SafetyCheckResult {
-                    decision,
-                    retry_after: None,
-                    violation: None,
-                }
+                SafetyCheckResult { decision, retry_after: None, violation: None }
             }
             Err(err) => {
                 tracing::warn!(
@@ -660,9 +637,8 @@ impl SafetyGateway {
         args: &Value,
         inv_id: &str,
     ) -> SafetyDecision {
-        if let Some(decision) = self
-            .check_dotfile_protection(tool_name, args, &ctx.session_id)
-            .await
+        if let Some(decision) =
+            self.check_dotfile_protection(tool_name, args, &ctx.session_id).await
         {
             tracing::info!(
                 invocation_id = %inv_id,
@@ -789,15 +765,11 @@ impl SafetyGateway {
         }
 
         if state.current_turn_count >= config.max_per_turn {
-            return Err(SafetyError::TurnLimitReached {
-                max: config.max_per_turn,
-            });
+            return Err(SafetyError::TurnLimitReached { max: config.max_per_turn });
         }
 
         if state.session_count >= config.max_per_session {
-            return Err(SafetyError::SessionLimitReached {
-                max: config.max_per_session,
-            });
+            return Err(SafetyError::SessionLimitReached { max: config.max_per_session });
         }
 
         Ok(())
@@ -1075,11 +1047,7 @@ mod tests {
         let ctx = make_ctx();
 
         let decision = gateway
-            .check_safety(
-                &ctx,
-                "delete_file",
-                &serde_json::json!({"path": "/tmp/test"}),
-            )
+            .check_safety(&ctx, "delete_file", &serde_json::json!({"path": "/tmp/test"}))
             .await;
 
         assert!(decision.needs_approval());
@@ -1092,11 +1060,7 @@ mod tests {
         let ctx = make_ctx();
 
         let decision = gateway
-            .check_safety(
-                &ctx,
-                "write_file",
-                &serde_json::json!({"path": "/tmp/test"}),
-            )
+            .check_safety(&ctx, "write_file", &serde_json::json!({"path": "/tmp/test"}))
             .await;
 
         assert!(decision.is_denied());
@@ -1110,11 +1074,7 @@ mod tests {
         let ctx = make_ctx();
 
         let decision = gateway
-            .check_safety(
-                &ctx,
-                "delete_file",
-                &serde_json::json!({"path": "/tmp/test"}),
-            )
+            .check_safety(&ctx, "delete_file", &serde_json::json!({"path": "/tmp/test"}))
             .await;
 
         assert!(decision.is_allowed());
@@ -1127,11 +1087,7 @@ mod tests {
         ctx.trust_level = SafetyTrustLevel::Full;
 
         let decision = gateway
-            .check_safety(
-                &ctx,
-                "delete_file",
-                &serde_json::json!({"path": "/tmp/test"}),
-            )
+            .check_safety(&ctx, "delete_file", &serde_json::json!({"path": "/tmp/test"}))
             .await;
 
         assert!(decision.is_allowed());
@@ -1139,10 +1095,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiting() {
-        let config = SafetyGatewayConfig {
-            rate_limit_per_second: 2,
-            ..Default::default()
-        };
+        let config = SafetyGatewayConfig { rate_limit_per_second: 2, ..Default::default() };
         let gateway = SafetyGateway::with_config(config);
         let ctx = make_ctx();
 
@@ -1151,9 +1104,7 @@ mod tests {
         gateway.record_execution();
 
         // Third call should be denied
-        let decision = gateway
-            .check_safety(&ctx, "read_file", &serde_json::json!({}))
-            .await;
+        let decision = gateway.check_safety(&ctx, "read_file", &serde_json::json!({})).await;
 
         assert!(decision.is_denied());
         assert!(decision.reason().unwrap().contains("Rate limit"));
@@ -1161,32 +1112,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_atomic_check_and_record_rate_limited() {
-        let config = SafetyGatewayConfig {
-            rate_limit_per_second: 2,
-            ..Default::default()
-        };
+        let config = SafetyGatewayConfig { rate_limit_per_second: 2, ..Default::default() };
         let gateway = SafetyGateway::with_config(config);
         let ctx = make_ctx();
 
-        let first = gateway
-            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
-            .await;
+        let first = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
         assert!(first.decision.is_allowed());
 
-        let second = gateway
-            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
-            .await;
+        let second = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
         assert!(second.decision.is_allowed());
 
-        let third = gateway
-            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
-            .await;
+        let third = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
         assert!(third.decision.is_denied());
         assert!(third.retry_after.is_some());
-        assert!(matches!(
-            third.violation,
-            Some(SafetyError::RateLimitExceeded { .. })
-        ));
+        assert!(matches!(third.violation, Some(SafetyError::RateLimitExceeded { .. })));
     }
 
     #[tokio::test]
@@ -1297,11 +1236,7 @@ mod tests {
             .await;
 
         assert!(decision.needs_approval());
-        assert!(
-            decision
-                .reason()
-                .is_some_and(|reason| reason.contains(".gitignore"))
-        );
+        assert!(decision.reason().is_some_and(|reason| reason.contains(".gitignore")));
     }
 
     #[test]
@@ -1342,11 +1277,7 @@ mod tests {
             .await;
 
         assert!(decision.needs_approval());
-        assert!(
-            decision
-                .reason()
-                .is_some_and(|reason| reason.contains(".gitignore"))
-        );
+        assert!(decision.reason().is_some_and(|reason| reason.contains(".gitignore")));
     }
 
     #[tokio::test]
@@ -1385,21 +1316,15 @@ mod tests {
         gateway.set_limits(10, 1);
         let ctx = make_ctx();
 
-        let first = gateway
-            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
-            .await;
+        let first = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
         assert!(first.decision.is_allowed());
 
-        let second = gateway
-            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
-            .await;
+        let second = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
         assert!(second.decision.is_denied());
 
         gateway.increase_session_limit(1);
 
-        let third = gateway
-            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
-            .await;
+        let third = gateway.check_and_record(&ctx, "read_file", &serde_json::json!({})).await;
         assert!(third.decision.is_allowed());
     }
 }

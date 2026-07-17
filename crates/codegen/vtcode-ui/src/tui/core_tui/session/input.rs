@@ -150,10 +150,7 @@ fn tokenize_input(content: &str) -> Vec<InputToken> {
                 while i < len && !chars[i].is_whitespace() {
                     i += 1;
                 }
-                if kinds[start..i]
-                    .iter()
-                    .all(|kind| *kind == InputTokenKind::Normal)
-                {
+                if kinds[start..i].iter().all(|kind| *kind == InputTokenKind::Normal) {
                     for kind in &mut kinds[start..i] {
                         *kind = InputTokenKind::FileReference;
                     }
@@ -211,20 +208,12 @@ fn tokenize_input(content: &str) -> Vec<InputToken> {
     let mut cur_start = 0;
     for (i, kind) in kinds.iter().enumerate().skip(1) {
         if *kind != cur_kind {
-            tokens.push(InputToken {
-                kind: cur_kind,
-                start: cur_start,
-                end: i,
-            });
+            tokens.push(InputToken { kind: cur_kind, start: cur_start, end: i });
             cur_kind = *kind;
             cur_start = i;
         }
     }
-    tokens.push(InputToken {
-        kind: cur_kind,
-        start: cur_start,
-        end: len,
-    });
+    tokens.push(InputToken { kind: cur_kind, start: cur_start, end: len });
     tokens
 }
 
@@ -266,9 +255,7 @@ impl Session {
         } else {
             Block::new()
         };
-        block = block
-            .style(background_style)
-            .padding(self.input_block_padding());
+        block = block.style(background_style).padding(self.input_block_padding());
         if shell_mode_title.is_some() || active_subagent_title.is_some() {
             block = block
                 .border_type(super::terminal_capabilities::get_border_type())
@@ -296,10 +283,8 @@ impl Session {
         }
 
         if self.cursor_should_be_visible() && inner.width > 0 && inner.height > 0 {
-            let cursor_x = input_render
-                .cursor_x
-                .min(inner.width.saturating_sub(1))
-                .saturating_add(inner.x);
+            let cursor_x =
+                input_render.cursor_x.min(inner.width.saturating_sub(1)).saturating_add(inner.x);
             let cursor_y = input_render
                 .cursor_y
                 .min(inner.height.saturating_sub(1))
@@ -312,9 +297,7 @@ impl Session {
         }
 
         if let Some(status_area) = status_area {
-            let status_line = self
-                .render_input_status_line(status_area.width)
-                .unwrap_or_default();
+            let status_line = self.render_input_status_line(status_area.width).unwrap_or_default();
             let status = Paragraph::new(status_line)
                 .style(self.styles.default_style())
                 .wrap(Wrap { trim: false });
@@ -359,9 +342,7 @@ impl Session {
     }
 
     pub(crate) fn input_block_height_for_lines(lines: u16) -> u16 {
-        lines
-            .max(1)
-            .saturating_add(ui::INLINE_INPUT_PADDING_VERTICAL.saturating_mul(2))
+        lines.max(1).saturating_add(ui::INLINE_INPUT_PADDING_VERTICAL.saturating_mul(2))
     }
 
     pub(crate) fn input_block_extra_height(&self) -> u16 {
@@ -453,11 +434,7 @@ impl Session {
             cursor_column = current.prefix_width + current.text_width;
         }
 
-        InputLayout {
-            buffers,
-            cursor_line_idx,
-            cursor_column,
-        }
+        InputLayout { buffers, cursor_line_idx, cursor_column }
     }
 
     fn visible_input_window(&self, width: u16, height: u16) -> (InputLayout, usize, usize) {
@@ -476,11 +453,7 @@ impl Session {
 
     fn build_input_render(&self, width: u16, height: u16) -> InputRender {
         if width == 0 || height == 0 {
-            return InputRender {
-                text: Text::default(),
-                cursor_x: 0,
-                cursor_y: 0,
-            };
+            return InputRender { text: Text::default(), cursor_x: 0, cursor_y: 0 };
         }
 
         let max_visible_lines = height.max(1).min(ui::INLINE_INPUT_MAX_LINES as u16) as usize;
@@ -508,12 +481,11 @@ impl Session {
         if self.input_compact_mode
             && cursor_at_end
             && let Some(preview) = self.input_compact_preview().or_else(|| {
-                self.input_compact_placeholder()
-                    .map(|placeholder| CompactInputPreview {
-                        before: String::new(),
-                        placeholder,
-                        after_lines: Vec::new(),
-                    })
+                self.input_compact_placeholder().map(|placeholder| CompactInputPreview {
+                    before: String::new(),
+                    placeholder,
+                    after_lines: Vec::new(),
+                })
             })
         {
             let placeholder_style = InlineTextStyle {
@@ -534,11 +506,7 @@ impl Session {
                     spans.push(Span::styled(" ".to_string(), accent_style));
                 }
             }
-            let first_after = preview
-                .after_lines
-                .first()
-                .map(String::as_str)
-                .unwrap_or_default();
+            let first_after = preview.after_lines.first().map(String::as_str).unwrap_or_default();
             let needs_after_space =
                 !first_after.is_empty() && !first_after.starts_with(char::is_whitespace);
             spans.push(Span::styled(preview.placeholder, style));
@@ -566,18 +534,10 @@ impl Session {
                     .map(|span| UnicodeWidthStr::width(span.content.as_ref()) as u16)
                     .fold(prompt_display_width, u16::saturating_add)
             } else {
-                let last_line = preview
-                    .after_lines
-                    .last()
-                    .map(String::as_str)
-                    .unwrap_or_default();
+                let last_line = preview.after_lines.last().map(String::as_str).unwrap_or_default();
                 prompt_display_width.saturating_add(UnicodeWidthStr::width(last_line) as u16)
             };
-            return InputRender {
-                text: Text::from(lines),
-                cursor_x,
-                cursor_y,
-            };
+            return InputRender { text: Text::from(lines), cursor_x, cursor_y };
         }
 
         if self.input_manager.content().is_empty() {
@@ -615,9 +575,7 @@ impl Session {
         }
 
         let slash_style = accent_style.fg(Color::Yellow).add_modifier(Modifier::BOLD);
-        let file_ref_style = accent_style
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::UNDERLINED);
+        let file_ref_style = accent_style.fg(Color::Cyan).add_modifier(Modifier::UNDERLINED);
         let code_style = accent_style.fg(Color::Green).add_modifier(Modifier::BOLD);
 
         let (layout, start, end) = self.visible_input_window(width, max_visible_lines as u16);
@@ -681,10 +639,7 @@ impl Session {
         }
 
         if lines.is_empty() {
-            lines.push(Line::from(vec![Span::styled(
-                self.prompt_prefix.clone(),
-                prompt_style,
-            )]));
+            lines.push(Line::from(vec![Span::styled(self.prompt_prefix.clone(), prompt_style)]));
         }
 
         InputRender {
@@ -769,10 +724,7 @@ impl Session {
         let line_index = (start + usize::from(relative_row)).min(end.saturating_sub(1));
         let buffer = layout.buffers.get(line_index)?;
         if relative_column <= buffer.prefix_width {
-            return Some(char_index_to_byte_index(
-                self.input_manager.content(),
-                buffer.char_start,
-            ));
+            return Some(char_index_to_byte_index(self.input_manager.content(), buffer.char_start));
         }
 
         let target_width = relative_column.saturating_sub(buffer.prefix_width);
@@ -789,10 +741,7 @@ impl Session {
         }
 
         let char_index = buffer.char_start.saturating_add(char_offset);
-        Some(char_index_to_byte_index(
-            self.input_manager.content(),
-            char_index,
-        ))
+        Some(char_index_to_byte_index(self.input_manager.content(), char_index))
     }
 
     pub(crate) fn input_compact_placeholder(&self) -> Option<String> {
@@ -840,10 +789,7 @@ impl Session {
         }
 
         let before = compact_inline_segment(&content[..range.start]);
-        let after_lines = content[range.end..]
-            .split('\n')
-            .map(compact_inline_segment)
-            .collect();
+        let after_lines = content[range.end..].split('\n').map(compact_inline_segment).collect();
         let char_count = pasted.chars().count();
         Some(CompactInputPreview {
             before,
@@ -933,10 +879,7 @@ impl Session {
                 spans.extend(self.create_git_status_spans(left_value, dim_style));
             }
         } else if self.thinking_spinner.is_active {
-            spans.push(Span::styled(
-                self.thinking_spinner.current_frame(),
-                dim_style,
-            ));
+            spans.push(Span::styled(self.thinking_spinner.current_frame(), dim_style));
             spans.push(Span::raw(" "));
             spans.push(Span::styled("Thinking", dim_style));
         }
@@ -955,10 +898,7 @@ impl Session {
 
         if !right_spans.is_empty() {
             let left_width: u16 = spans.iter().map(|s| measure_text_width(&s.content)).sum();
-            let right_width: u16 = right_spans
-                .iter()
-                .map(|s| measure_text_width(&s.content))
-                .sum();
+            let right_width: u16 = right_spans.iter().map(|s| measure_text_width(&s.content)).sum();
             let padding = width.saturating_sub(left_width + right_width);
 
             if padding > 0 {
@@ -997,8 +937,7 @@ impl Session {
     }
 
     pub(crate) fn shell_mode_border_title(&self) -> Option<&'static str> {
-        self.input_uses_shell_prefix()
-            .then_some(SHELL_MODE_BORDER_TITLE)
+        self.input_uses_shell_prefix().then_some(SHELL_MODE_BORDER_TITLE)
     }
 
     pub(crate) fn active_subagent_input_title(&self) -> Option<Line<'static>> {
@@ -1026,12 +965,7 @@ impl Session {
         )
         .fg
         {
-            return Some(
-                self.styles
-                    .accent_style()
-                    .fg(color_style)
-                    .add_modifier(Modifier::BOLD),
-            );
+            return Some(self.styles.accent_style().fg(color_style).add_modifier(Modifier::BOLD));
         }
 
         let badge = self.header_context.subagent_badges.first()?;
@@ -1046,17 +980,11 @@ impl Session {
             title_style.fg.or(title_style.bg)
         }?;
 
-        Some(
-            self.styles
-                .accent_style()
-                .fg(color)
-                .add_modifier(Modifier::BOLD),
-        )
+        Some(self.styles.accent_style().fg(color).add_modifier(Modifier::BOLD))
     }
 
     fn shell_mode_status_hint(&self) -> Option<&'static str> {
-        self.input_uses_shell_prefix()
-            .then_some(SHELL_MODE_STATUS_HINT)
+        self.input_uses_shell_prefix().then_some(SHELL_MODE_STATUS_HINT)
     }
 
     fn local_agents_input_status_hint(&self) -> Option<String> {
@@ -1091,9 +1019,7 @@ impl Session {
             let indicator_style = if indicator_trim == ui::HEADER_GIT_DIRTY_SUFFIX {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
             } else if indicator_trim == ui::HEADER_GIT_CLEAN_SUFFIX {
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
             } else {
                 self.styles.accent_style().add_modifier(Modifier::BOLD)
             };
@@ -1115,9 +1041,7 @@ impl Session {
     }
 
     fn secure_prompt_active(&self) -> bool {
-        self.modal_state()
-            .and_then(|modal| modal.secure_prompt.as_ref())
-            .is_some()
+        self.modal_state().and_then(|modal| modal.secure_prompt.as_ref()).is_some()
     }
 
     /// Build input render data for external widgets
@@ -1165,11 +1089,7 @@ fn compact_image_label(content: &str) -> Option<String> {
     let unquoted = trimmed
         .strip_prefix('"')
         .and_then(|value| value.strip_suffix('"'))
-        .or_else(|| {
-            trimmed
-                .strip_prefix('\'')
-                .and_then(|value| value.strip_suffix('\''))
-        })
+        .or_else(|| trimmed.strip_prefix('\'').and_then(|value| value.strip_suffix('\'')))
         .unwrap_or(trimmed);
 
     if unquoted.starts_with("data:image/") {
@@ -1177,10 +1097,7 @@ fn compact_image_label(content: &str) -> Option<String> {
     }
 
     let windows_drive = unquoted.as_bytes().get(1).is_some_and(|ch| *ch == b':')
-        && unquoted
-            .as_bytes()
-            .get(2)
-            .is_some_and(|ch| *ch == b'\\' || *ch == b'/');
+        && unquoted.as_bytes().get(2).is_some_and(|ch| *ch == b'\\' || *ch == b'/');
     let starts_like_path = unquoted.starts_with('@')
         || unquoted.starts_with("file://")
         || unquoted.starts_with('/')
@@ -1216,10 +1133,7 @@ fn compact_image_label(content: &str) -> Option<String> {
         return None;
     }
 
-    let label = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(without_scheme);
+    let label = path.file_name().and_then(|name| name.to_str()).unwrap_or(without_scheme);
     Some(label.to_string())
 }
 
@@ -1294,10 +1208,7 @@ fn image_label_for_path(raw: &str) -> Option<String> {
         return None;
     }
 
-    let label = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(unescaped.as_str());
+    let label = path.file_name().and_then(|name| name.to_str()).unwrap_or(unescaped.as_str());
     Some(label.to_string())
 }
 

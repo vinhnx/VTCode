@@ -170,11 +170,7 @@ fn test_process_tool_output() {
 
     let status = process_llm_tool_output(output);
     if let ToolExecutionStatus::Success {
-        output: _,
-        stdout,
-        modified_files,
-        command_success,
-        ..
+        output: _, stdout, modified_files, command_success, ..
     } = status
     {
         assert_eq!(stdout, Some("test output".to_string()));
@@ -194,11 +190,7 @@ fn test_process_apply_patch_output_collects_internal_modified_files() {
     });
 
     match process_llm_tool_output(output) {
-        ToolExecutionStatus::Success {
-            modified_files,
-            command_success,
-            ..
-        } => {
+        ToolExecutionStatus::Success { modified_files, command_success, .. } => {
             assert_eq!(modified_files, vec!["/workspace/src/widget.rs"]);
             assert!(command_success);
         }
@@ -233,10 +225,7 @@ fn test_process_tool_output_loop_detection() {
             "loop_detected flag must be preserved in the output"
         );
         assert_eq!(output.get("repeat_count").and_then(|v| v.as_u64()), Some(5));
-        assert_eq!(
-            output.get("tool").and_then(|v| v.as_str()),
-            Some("read_file")
-        );
+        assert_eq!(output.get("tool").and_then(|v| v.as_str()), Some("read_file"));
     } else {
         panic!(
             "Expected Success variant for loop detection (to avoid blocked-streak increment), got: {status:?}"

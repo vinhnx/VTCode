@@ -152,10 +152,7 @@ impl CommandTool {
             let allow_confirmed_risky = risky_command
                 && confirm_ok
                 && policy_allowed
-                && matches!(
-                    eval_result.primary_reason,
-                    EvaluationReason::DangerousCommand(_)
-                );
+                && matches!(eval_result.primary_reason, EvaluationReason::DangerousCommand(_));
             if !allow_confirmed_risky {
                 // If unified evaluator denied, forward to validator for custom checks
                 validate_command(command, &self.workspace_root, &working_dir, confirm_ok).await?;
@@ -179,10 +176,7 @@ impl CommandTool {
                 CommandInvocation {
                     program: program.to_owned(),
                     args: command[1..].to_vec(),
-                    display: input
-                        .raw_command
-                        .clone()
-                        .unwrap_or_else(|| format_command(command)),
+                    display: input.raw_command.clone().unwrap_or_else(|| format_command(command)),
                 }
             } else {
                 // Honor explicit shell override provided in the input. If the caller set `login` to
@@ -262,9 +256,7 @@ fn is_risky_command(command: &[String]) -> bool {
     }
 
     if program == "docker"
-        && args
-            .iter()
-            .any(|a| a == "run" && args.iter().any(|b| b == "--privileged"))
+        && args.iter().any(|a| a == "run" && args.iter().any(|b| b == "--privileged"))
     {
         return true;
     }
@@ -281,10 +273,7 @@ fn quote_argument_posix(arg: &str) -> String {
         return "''".to_owned();
     }
 
-    if arg
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || "-_./:@".contains(ch))
-    {
+    if arg.chars().all(|ch| ch.is_ascii_alphanumeric() || "-_./:@".contains(ch)) {
         return arg.to_owned();
     }
 
@@ -347,16 +336,11 @@ mod tests {
     async fn prepare_invocation_allows_cargo_via_policy() {
         let tool = make_tool();
         let input = make_input(vec!["cargo", "check"]);
-        let invocation = tool
-            .prepare_invocation(&input)
-            .await
-            .expect("cargo check should be allowed");
+        let invocation =
+            tool.prepare_invocation(&input).await.expect("cargo check should be allowed");
         let shell = resolve_fallback_shell();
         assert_eq!(invocation.program, shell);
-        assert_eq!(
-            invocation.args,
-            vec!["-lc".to_owned(), "cargo check".to_owned()]
-        );
+        assert_eq!(invocation.args, vec!["-lc".to_owned(), "cargo check".to_owned()]);
         assert_eq!(invocation.display, "cargo check");
     }
 
@@ -368,11 +352,7 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect_err("custom-tool should be blocked");
-        assert!(
-            error
-                .to_string()
-                .contains("is not permitted by the execution policy")
-        );
+        assert!(error.to_string().contains("is not permitted by the execution policy"));
     }
 
     #[tokio::test]
@@ -412,10 +392,7 @@ mod tests {
             .expect("custom allow list should enable command");
         let shell = resolve_fallback_shell();
         assert_eq!(invocation.program, shell);
-        assert_eq!(
-            invocation.args,
-            vec!["-lc".to_owned(), "my-build".to_owned()]
-        );
+        assert_eq!(invocation.args, vec!["-lc".to_owned(), "my-build".to_owned()]);
     }
 
     #[tokio::test]
@@ -440,9 +417,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&fake_tool_path)
-                .expect("metadata")
-                .permissions();
+            let mut perms = std::fs::metadata(&fake_tool_path).expect("metadata").permissions();
             perms.set_mode(0o755);
             std::fs::set_permissions(&fake_tool_path, perms).expect("set perms");
         }
@@ -464,10 +439,8 @@ mod tests {
         config.deny_list.push("cargo".to_string());
         let tool = CommandTool::with_commands_config(cwd, config);
         let input = make_input(vec!["cargo", "check"]);
-        let error = tool
-            .prepare_invocation(&input)
-            .await
-            .expect_err("deny list should block cargo");
+        let error =
+            tool.prepare_invocation(&input).await.expect_err("deny list should block cargo");
         assert!(error.to_string().contains("is not permitted"));
     }
 
@@ -478,10 +451,7 @@ mod tests {
         let invocation = tool.prepare_invocation(&input).await.expect("invocation");
         let shell = resolve_fallback_shell();
         assert_eq!(invocation.program, shell);
-        assert_eq!(
-            invocation.args,
-            vec!["-lc".to_owned(), "cargo check".to_owned()]
-        );
+        assert_eq!(invocation.args, vec!["-lc".to_owned(), "cargo check".to_owned()]);
         assert_eq!(invocation.display, "cargo check");
     }
 
@@ -494,35 +464,23 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&binary_path)
-                .expect("metadata")
-                .permissions();
+            let mut perms = std::fs::metadata(&binary_path).expect("metadata").permissions();
             perms.set_mode(0o755);
             std::fs::set_permissions(&binary_path, perms).expect("set perms");
         }
 
         let mut config = CommandsConfig::default();
         config.allow_list.push("fake-extra".to_owned());
-        config.extra_path_entries = vec![
-            binary_path
-                .parent()
-                .expect("parent")
-                .to_string_lossy()
-                .into_owned(),
-        ];
+        config.extra_path_entries =
+            vec![binary_path.parent().expect("parent").to_string_lossy().into_owned()];
 
         let tool = CommandTool::with_commands_config(cwd, config);
         let input = make_input(vec!["fake-extra"]);
-        let invocation = tool
-            .prepare_invocation(&input)
-            .await
-            .expect("extra path should allow command");
+        let invocation =
+            tool.prepare_invocation(&input).await.expect("extra path should allow command");
         let shell = resolve_fallback_shell();
         assert_eq!(invocation.program, shell);
-        assert_eq!(
-            invocation.args,
-            vec!["-lc".to_owned(), "fake-extra".to_owned()]
-        );
+        assert_eq!(invocation.args, vec!["-lc".to_owned(), "fake-extra".to_owned()]);
         assert_eq!(
             tool.extra_path_entries,
             vec![binary_path.parent().expect("parent").to_path_buf()]
@@ -538,11 +496,7 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect_err("working dir escape should fail");
-        assert!(
-            error
-                .to_string()
-                .contains("working directory '../' escapes the workspace root")
-        );
+        assert!(error.to_string().contains("working directory '../' escapes the workspace root"));
     }
 
     #[tokio::test]
@@ -564,11 +518,7 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect_err("empty executable should be rejected");
-        assert!(
-            error
-                .to_string()
-                .contains("Command executable cannot be empty")
-        );
+        assert!(error.to_string().contains("Command executable cannot be empty"));
     }
 
     #[tokio::test]
@@ -579,11 +529,7 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect_err("whitespace-only executable should be rejected");
-        assert!(
-            error
-                .to_string()
-                .contains("Command executable cannot be empty")
-        );
+        assert!(error.to_string().contains("Command executable cannot be empty"));
     }
 
     #[tokio::test]
@@ -605,20 +551,14 @@ mod tests {
             .validate_args(&args)
             .await
             .expect_err("empty executable should fail validation");
-        assert!(
-            error
-                .to_string()
-                .contains("Command executable cannot be empty")
-        );
+        assert!(error.to_string().contains("Command executable cannot be empty"));
     }
 
     #[tokio::test]
     async fn validate_args_accepts_valid_command() {
         let tool = make_tool();
         let args = make_input(vec!["ls", "-la"]);
-        tool.validate_args(&args)
-            .await
-            .expect("valid command should pass validation");
+        tool.validate_args(&args).await.expect("valid command should pass validation");
     }
 
     #[test]
@@ -626,7 +566,7 @@ mod tests {
         // Verify that the environment setup includes inherited parent process variables.
         // This test documents the fix for the cargo fmt issue where PATH and other
         // critical environment variables were not being passed to subprocesses.
-        // See: vtcode-core/src/tools/command.rs:execute_terminal_command()
+        // See: crates/codegen/vtcode-core/src/tools/command.rs:execute_terminal_command()
 
         // The fix uses std::env::vars_os().collect() which inherits all parent variables
         let env: HashMap<OsString, OsString> = std::env::vars_os().collect();

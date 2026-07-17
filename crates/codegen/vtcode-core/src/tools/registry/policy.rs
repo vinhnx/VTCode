@@ -173,11 +173,8 @@ impl ToolPolicyGateway {
         let file_operation_read =
             normalized == tools::UNIFIED_FILE && file_operation_action_is(&args, "read");
 
-        if let Some(constraints) = self
-            .tool_policy
-            .as_ref()
-            .and_then(|tp| tp.get_constraints(normalized))
-            .cloned()
+        if let Some(constraints) =
+            self.tool_policy.as_ref().and_then(|tp| tp.get_constraints(normalized)).cloned()
         {
             let obj = args
                 .as_object_mut()
@@ -201,9 +198,8 @@ impl ToolPolicyGateway {
 
             match normalized {
                 n if n == tools::CODE_SEARCH => {
-                    let valid_cap = constraints
-                        .max_results_per_call
-                        .filter(|cap| (1..=100).contains(cap));
+                    let valid_cap =
+                        constraints.max_results_per_call.filter(|cap| (1..=100).contains(cap));
                     match (obj.get("max_results"), valid_cap) {
                         (None, cap) => {
                             obj.insert(
@@ -221,10 +217,9 @@ impl ToolPolicyGateway {
                 }
                 n if n == tools::READ_FILE || file_operation_read => {
                     if let Some(cap) = constraints.max_bytes_per_read {
-                        let requested = obj
-                            .get("max_bytes")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(cap as u64) as usize;
+                        let requested =
+                            obj.get("max_bytes").and_then(|v| v.as_u64()).unwrap_or(cap as u64)
+                                as usize;
                         if requested > cap {
                             obj.insert("max_bytes".to_string(), json!(cap));
                             obj.insert(
@@ -267,9 +262,7 @@ impl ToolPolicyGateway {
 
     pub async fn add_approval_cache_key(&mut self, approval_key: &str) -> Result<()> {
         if let Some(ref mut manager) = self.tool_policy {
-            manager
-                .add_approval_cache_key_with_segments(approval_key)
-                .await
+            manager.add_approval_cache_key_with_segments(approval_key).await
         } else {
             Err(anyhow::anyhow!("Tool policy manager not initialized"))
         }
@@ -322,9 +315,7 @@ impl ToolPolicyGateway {
         session_tools_config: SessionToolsConfig,
     ) {
         let mut normalized: FxHashSet<String> = FxHashSet::default();
-        let wildcard = allowed_tools
-            .iter()
-            .any(|tool| tool.trim() == tools::WILDCARD_ALL);
+        let wildcard = allowed_tools.iter().any(|tool| tool.trim() == tools::WILDCARD_ALL);
         if wildcard {
             for tool in available_tools {
                 let canonical = canonical_tool_name(tool);
@@ -411,10 +402,7 @@ impl ToolPolicyGateway {
         // In safe mode (tools_policy), high-risk tools always require a prompt
         // regardless of persisted policy
         if self.requires_safe_mode_prompt(safe_mode_prompt) {
-            tracing::debug!(
-                "Tool '{}' requires prompt in safe mode (tools_policy)",
-                normalized
-            );
+            tracing::debug!("Tool '{}' requires prompt in safe mode (tools_policy)", normalized);
             return Ok(ToolPermissionDecision::Prompt);
         }
 
@@ -454,9 +442,7 @@ impl ToolPolicyGateway {
                     if Self::should_auto_approve_by_risk(normalized)
                         || ToolPolicyManager::is_auto_allow_tool(normalized)
                     {
-                        policy_manager
-                            .set_policy(normalized, ToolPolicy::Allow)
-                            .await?;
+                        policy_manager.set_policy(normalized, ToolPolicy::Allow).await?;
                         self.preapproved_tools.insert(normalized.to_string());
                         Ok(ToolPermissionDecision::Allow)
                     } else {
@@ -548,9 +534,7 @@ impl ToolPolicyGateway {
         policy: ToolPolicy,
     ) -> Result<()> {
         if let Some(manager) = self.tool_policy.as_mut() {
-            manager
-                .set_mcp_tool_policy(provider, tool_name, policy)
-                .await?;
+            manager.set_mcp_tool_policy(provider, tool_name, policy).await?;
         }
         Ok(())
     }
@@ -588,13 +572,9 @@ mod tests {
     fn network_tools_are_not_auto_approved_by_risk() {
         // Web fetches must require HITL approval and never be auto-promoted to
         // Allow by the low-risk auto-approval heuristic.
-        assert!(!ToolPolicyGateway::should_auto_approve_by_risk(
-            tools::WEB_FETCH
-        ));
+        assert!(!ToolPolicyGateway::should_auto_approve_by_risk(tools::WEB_FETCH));
         // The read-only code search tool stays auto-approved for low friction.
-        assert!(ToolPolicyGateway::should_auto_approve_by_risk(
-            tools::CODE_SEARCH
-        ));
+        assert!(ToolPolicyGateway::should_auto_approve_by_risk(tools::CODE_SEARCH));
     }
 
     #[test]
@@ -603,12 +583,8 @@ mod tests {
         // connect/disconnect actions open/tear down a network connection and
         // must stay HITL-gated via the action-qualified policy keys, never
         // auto-promoted to Allow by the low-risk auto-approval heuristic.
-        assert!(!ToolPolicyGateway::should_auto_approve_by_risk(
-            "mcp:connect"
-        ));
-        assert!(!ToolPolicyGateway::should_auto_approve_by_risk(
-            "mcp:disconnect"
-        ));
+        assert!(!ToolPolicyGateway::should_auto_approve_by_risk("mcp:connect"));
+        assert!(!ToolPolicyGateway::should_auto_approve_by_risk("mcp:disconnect"));
         // The bare mcp tool (discovery actions) stays auto-approved for low
         // friction.
         assert!(ToolPolicyGateway::should_auto_approve_by_risk(tools::MCP));

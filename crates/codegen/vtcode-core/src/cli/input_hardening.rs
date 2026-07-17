@@ -13,11 +13,7 @@ fn first_disallowed_control_char(value: &str) -> Option<char> {
 
 pub fn validate_agent_safe_text(field_name: &str, value: &str) -> Result<()> {
     if let Some(ch) = first_disallowed_control_char(value) {
-        bail!(
-            "Invalid {}: contains unsupported control character U+{:04X}",
-            field_name,
-            ch as u32
-        );
+        bail!("Invalid {}: contains unsupported control character U+{:04X}", field_name, ch as u32);
     }
     Ok(())
 }

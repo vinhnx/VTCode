@@ -73,12 +73,7 @@ impl PromptSession {
         tokio::task::JoinHandle<Result<PromptCompletion>>,
         PromptSessionCancelHandle,
     ) {
-        (
-            self.updates,
-            self.runtime_requests,
-            self.completion,
-            self.cancel_handle,
-        )
+        (self.updates, self.runtime_requests, self.completion, self.cancel_handle)
     }
 }
 
@@ -120,9 +115,7 @@ macro_rules! define_pending_request {
 
         impl $name {
             pub fn respond(self, response: $response_ty) -> Result<()> {
-                self.response_tx
-                    .send(response)
-                    .map_err(|_e| anyhow!($error_message))
+                self.response_tx.send(response).map_err(|_e| anyhow!($error_message))
             }
         }
     };
@@ -138,9 +131,7 @@ macro_rules! define_pending_signal_request {
 
         impl $name {
             pub fn respond(self) -> Result<()> {
-                self.response_tx
-                    .send(())
-                    .map_err(|_e| anyhow!($error_message))
+                self.response_tx.send(()).map_err(|_e| anyhow!($error_message))
             }
         }
     };
@@ -260,10 +251,7 @@ impl RpcReply {
     }
 
     fn runtime_error(message: &'static str) -> Self {
-        Self::Error {
-            code: ACP_RUNTIME_UNAVAILABLE_CODE,
-            message,
-        }
+        Self::Error { code: ACP_RUNTIME_UNAVAILABLE_CODE, message }
     }
 }
 
@@ -345,25 +333,18 @@ impl CopilotAcpClient {
         // Use a Weak reference to avoid a retain cycle:
         //   Arc<Inner> → StdioTransport → handler → Weak<Inner>
         let inner_weak = Arc::downgrade(&inner);
-        inner
-            .transport
-            .set_notification_handler(Arc::new(move |message| {
-                if let Some(inner_strong) = inner_weak.upgrade() {
-                    handle_acp_message(&inner_strong, message)?;
-                }
-                Ok(())
-            }));
+        inner.transport.set_notification_handler(Arc::new(move |message| {
+            if let Some(inner_strong) = inner_weak.upgrade() {
+                handle_acp_message(&inner_strong, message)?;
+            }
+            Ok(())
+        }));
 
         let client = Self { inner };
         timeout(resolved.startup_timeout, async {
             client.initialize().await?;
             let session_id = client
-                .create_session(
-                    config,
-                    workspace_root.to_path_buf(),
-                    raw_model,
-                    custom_tools,
-                )
+                .create_session(config, workspace_root.to_path_buf(), raw_model, custom_tools)
                 .await?;
             *client
                 .inner
@@ -404,10 +385,8 @@ impl CopilotAcpClient {
             if active_prompt.is_some() {
                 return Err(anyhow!("copilot acp only supports one active prompt"));
             }
-            *active_prompt = Some(ActivePrompt {
-                updates: updates_tx,
-                runtime_requests: runtime_tx,
-            });
+            *active_prompt =
+                Some(ActivePrompt { updates: updates_tx, runtime_requests: runtime_tx });
         }
 
         if self.compatibility_state()? == CopilotAcpCompatibilityState::PromptOnly {
@@ -497,14 +476,9 @@ impl CopilotAcpClient {
             .await
             .context("copilot acp initialize")?;
 
-        let protocol_version = response
-            .get("protocolVersion")
-            .and_then(Value::as_i64)
-            .unwrap_or(1);
+        let protocol_version = response.get("protocolVersion").and_then(Value::as_i64).unwrap_or(1);
         if protocol_version != 1 {
-            return Err(anyhow!(
-                "unsupported copilot acp protocol version {protocol_version}"
-            ));
+            return Err(anyhow!("unsupported copilot acp protocol version {protocol_version}"));
         }
 
         Ok(())
@@ -537,10 +511,7 @@ impl CopilotAcpClient {
         custom_tools: &[ToolDefinition],
     ) -> Result<String> {
         let mut params = serde_json::Map::from_iter([
-            (
-                "clientName".to_string(),
-                Value::String("VT Code".to_string()),
-            ),
+            ("clientName".to_string(), Value::String("VT Code".to_string())),
             ("workingDirectory".to_string(), json!(workspace_root)),
             ("requestPermission".to_string(), Value::Bool(true)),
             ("streaming".to_string(), Value::Bool(true)),
@@ -593,11 +564,7 @@ impl CopilotAcpClient {
     }
 
     async fn call(&self, method: &str, params: Value) -> Result<Value> {
-        self.inner
-            .transport
-            .call(method, params)
-            .await
-            .map_err(anyhow::Error::from)
+        self.inner.transport.call(method, params).await.map_err(anyhow::Error::from)
     }
 
     fn clear_active_prompt(&self) {
@@ -696,14 +663,10 @@ fn handle_session_update(inner: &Arc<CopilotAcpClientInner>, params: Option<&Val
 
 fn send_rpc_reply(inner: &CopilotAcpClientInner, id: RpcId, reply: RpcReply) -> Result<()> {
     match reply {
-        RpcReply::Result(value) => inner
-            .transport
-            .respond(id, value)
-            .map_err(anyhow::Error::from),
-        RpcReply::Error { code, message } => inner
-            .transport
-            .respond_error(id, code, message)
-            .map_err(anyhow::Error::from),
+        RpcReply::Result(value) => inner.transport.respond(id, value).map_err(anyhow::Error::from),
+        RpcReply::Error { code, message } => {
+            inner.transport.respond_error(id, code, message).map_err(anyhow::Error::from)
+        }
     }
 }
 
@@ -811,10 +774,7 @@ fn handle_permission_request(inner: &Arc<CopilotAcpClientInner>, message: &Value
                 .cloned()
                 .map(parse_permission_request)
                 .transpose()?
-                .unwrap_or(CopilotPermissionRequest::Unknown {
-                    kind: None,
-                    raw: Value::Null,
-                }))
+                .unwrap_or(CopilotPermissionRequest::Unknown { kind: None, raw: Value::Null }))
         },
         |request, response_tx| {
             CopilotRuntimeRequest::Permission(PendingPermissionRequest {
@@ -881,11 +841,7 @@ fn handle_tool_call_request(inner: &Arc<CopilotAcpClientInner>, message: &Value)
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
-        tool_name: params
-            .get("toolName")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown")
-            .to_string(),
+        tool_name: params.get("toolName").and_then(Value::as_str).unwrap_or("unknown").to_string(),
         arguments: params.get("arguments").cloned().unwrap_or(Value::Null),
     };
     let tool_name = request.tool_name.clone();
@@ -893,10 +849,7 @@ fn handle_tool_call_request(inner: &Arc<CopilotAcpClientInner>, message: &Value)
 
     dispatch_runtime_request(
         inner,
-        CopilotRuntimeRequest::ToolCall(PendingToolCallRequest {
-            request,
-            response_tx,
-        }),
+        CopilotRuntimeRequest::ToolCall(PendingToolCallRequest { request, response_tx }),
         response_rx,
         id,
         |response| RpcReply::result(build_tool_call_result(response)),
@@ -937,11 +890,9 @@ fn handle_terminal_output_request(
         inner,
         message,
         |params| {
-            parse_terminal_request(params, |session_id, terminal_id| {
-                CopilotTerminalOutputRequest {
-                    session_id,
-                    terminal_id,
-                }
+            parse_terminal_request(params, |session_id, terminal_id| CopilotTerminalOutputRequest {
+                session_id,
+                terminal_id,
             })
         },
         |request, response_tx| {
@@ -968,10 +919,7 @@ fn handle_terminal_release_request(
         message,
         |params| {
             parse_terminal_request(params, |session_id, terminal_id| {
-                CopilotTerminalReleaseRequest {
-                    session_id,
-                    terminal_id,
-                }
+                CopilotTerminalReleaseRequest { session_id, terminal_id }
             })
         },
         |request, response_tx| {
@@ -994,18 +942,13 @@ fn handle_terminal_kill_request(inner: &Arc<CopilotAcpClientInner>, message: &Va
         inner,
         message,
         |params| {
-            parse_terminal_request(params, |session_id, terminal_id| {
-                CopilotTerminalKillRequest {
-                    session_id,
-                    terminal_id,
-                }
+            parse_terminal_request(params, |session_id, terminal_id| CopilotTerminalKillRequest {
+                session_id,
+                terminal_id,
             })
         },
         |request, response_tx| {
-            CopilotRuntimeRequest::TerminalKill(PendingTerminalKillRequest {
-                request,
-                response_tx,
-            })
+            CopilotRuntimeRequest::TerminalKill(PendingTerminalKillRequest { request, response_tx })
         },
         |_| RpcReply::result(json!({})),
         RpcReply::runtime_error("VT Code could not kill the requested terminal command."),
@@ -1025,10 +968,7 @@ fn handle_terminal_wait_for_exit_request(
         message,
         |params| {
             parse_terminal_request(params, |session_id, terminal_id| {
-                CopilotTerminalWaitForExitRequest {
-                    session_id,
-                    terminal_id,
-                }
+                CopilotTerminalWaitForExitRequest { session_id, terminal_id }
             })
         },
         |request, response_tx| {
@@ -1058,14 +998,11 @@ fn parse_terminal_create_request(params: &Value) -> Result<CopilotTerminalCreate
     )?;
     let env = parse_terminal_env_vars(params.get("env"))?;
     let cwd = params.get("cwd").and_then(Value::as_str).map(PathBuf::from);
-    let output_byte_limit = params
-        .get("outputByteLimit")
-        .and_then(Value::as_u64)
-        .map(|value| {
-            usize::try_from(value)
-                .unwrap_or(MAX_TERMINAL_OUTPUT_BYTE_LIMIT)
-                .min(MAX_TERMINAL_OUTPUT_BYTE_LIMIT)
-        });
+    let output_byte_limit = params.get("outputByteLimit").and_then(Value::as_u64).map(|value| {
+        usize::try_from(value)
+            .unwrap_or(MAX_TERMINAL_OUTPUT_BYTE_LIMIT)
+            .min(MAX_TERMINAL_OUTPUT_BYTE_LIMIT)
+    });
 
     Ok(CopilotTerminalCreateRequest {
         session_id,
@@ -1088,11 +1025,7 @@ fn parse_terminal_request<T>(params: &Value, build: impl FnOnce(String, String) 
 }
 
 fn optional_session_id(params: &Value) -> String {
-    params
-        .get("sessionId")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string()
+    params.get("sessionId").and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
 fn required_non_empty_string(
@@ -1125,12 +1058,7 @@ fn parse_string_array(
 
     values
         .iter()
-        .map(|value| {
-            value
-                .as_str()
-                .map(str::to_string)
-                .ok_or_else(|| anyhow!(item_error))
-        })
+        .map(|value| value.as_str().map(str::to_string).ok_or_else(|| anyhow!(item_error)))
         .collect()
 }
 
@@ -1192,14 +1120,9 @@ fn build_terminal_exit_status_json(status: CopilotTerminalExitStatus) -> Value {
     let mut result = serde_json::Map::new();
     result.insert(
         "exitCode".to_string(),
-        status
-            .exit_code
-            .map_or(Value::Null, |value| Value::from(u64::from(value))),
+        status.exit_code.map_or(Value::Null, |value| Value::from(u64::from(value))),
     );
-    result.insert(
-        "signal".to_string(),
-        status.signal.map_or(Value::Null, Value::String),
-    );
+    result.insert("signal".to_string(), status.signal.map_or(Value::Null, Value::String));
     Value::Object(result)
 }
 
@@ -1272,8 +1195,7 @@ fn enqueue_runtime_request(
 }
 
 fn is_runtime_request_channel_closed_error(err: &anyhow::Error) -> bool {
-    err.to_string()
-        .contains("copilot runtime request channel closed")
+    err.to_string().contains("copilot runtime request channel closed")
 }
 
 fn clear_active_prompt_state(inner: &Arc<CopilotAcpClientInner>) {
@@ -1412,39 +1334,31 @@ fn extract_observed_tool_raw_output(raw_output: &Value) -> Option<String> {
 }
 
 fn extract_tool_call_content_text(content: Option<&Value>) -> Option<String> {
-    content
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .find_map(|item| {
-            item.get("content").and_then(|content| {
-                content
-                    .get("type")
-                    .and_then(Value::as_str)
-                    .filter(|value| *value == "text")
-                    .and_then(|_| content.get("text"))
-                    .and_then(Value::as_str)
-                    .map(ToString::to_string)
-            })
+    content.and_then(Value::as_array).into_iter().flatten().find_map(|item| {
+        item.get("content").and_then(|content| {
+            content
+                .get("type")
+                .and_then(Value::as_str)
+                .filter(|value| *value == "text")
+                .and_then(|_| content.get("text"))
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
         })
+    })
 }
 
 fn extract_tool_call_terminal_id(content: Option<&Value>) -> Option<String> {
-    content
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .find_map(|item| {
-            item.get("content").and_then(|content| {
-                content
-                    .get("type")
-                    .and_then(Value::as_str)
-                    .filter(|value| *value == "terminal")
-                    .and_then(|_| content.get("terminalId"))
-                    .and_then(Value::as_str)
-                    .map(ToString::to_string)
-            })
+    content.and_then(Value::as_array).into_iter().flatten().find_map(|item| {
+        item.get("content").and_then(|content| {
+            content
+                .get("type")
+                .and_then(Value::as_str)
+                .filter(|value| *value == "terminal")
+                .and_then(|_| content.get("terminalId"))
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
         })
+    })
 }
 
 fn parse_legacy_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
@@ -1455,10 +1369,7 @@ fn parse_legacy_permission_request(value: Value) -> Result<CopilotPermissionRequ
         });
     };
 
-    let tool_call_id = object
-        .get("toolCallId")
-        .and_then(Value::as_str)
-        .map(ToString::to_string);
+    let tool_call_id = object.get("toolCallId").and_then(Value::as_str).map(ToString::to_string);
     let tool_name = derived_copilot_tool_name(
         object.get("title").and_then(Value::as_str),
         object.get("kind").and_then(Value::as_str),
@@ -1572,9 +1483,7 @@ fn extract_text(content: Option<&Value>) -> Option<String> {
     match content {
         Some(Value::Object(map)) => {
             if map.get("type").and_then(Value::as_str) == Some("text") {
-                map.get("text")
-                    .and_then(Value::as_str)
-                    .map(ToString::to_string)
+                map.get("text").and_then(Value::as_str).map(ToString::to_string)
             } else {
                 None
             }
@@ -1601,20 +1510,11 @@ fn custom_tools_payload(custom_tools: &[ToolDefinition]) -> Vec<Value> {
 
 fn parse_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
     let Some(object) = value.as_object() else {
-        return Ok(CopilotPermissionRequest::Unknown {
-            kind: None,
-            raw: value,
-        });
+        return Ok(CopilotPermissionRequest::Unknown { kind: None, raw: value });
     };
 
-    let kind = object
-        .get("kind")
-        .and_then(Value::as_str)
-        .map(ToString::to_string);
-    let tool_call_id = object
-        .get("toolCallId")
-        .and_then(Value::as_str)
-        .map(ToString::to_string);
+    let kind = object.get("kind").and_then(Value::as_str).map(ToString::to_string);
+    let tool_call_id = object.get("toolCallId").and_then(Value::as_str).map(ToString::to_string);
 
     Ok(match kind.as_deref() {
         Some(tools::SHELL) => CopilotPermissionRequest::Shell {
@@ -1657,10 +1557,7 @@ fn parse_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
                 .map(|urls| {
                     urls.iter()
                         .filter_map(|entry| {
-                            entry
-                                .get("url")
-                                .and_then(Value::as_str)
-                                .map(ToString::to_string)
+                            entry.get("url").and_then(Value::as_str).map(ToString::to_string)
                         })
                         .collect::<Vec<_>>()
                 })
@@ -1673,10 +1570,7 @@ fn parse_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
                 .get("canOfferSessionApproval")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
-            warning: object
-                .get("warning")
-                .and_then(Value::as_str)
-                .map(ToString::to_string),
+            warning: object.get("warning").and_then(Value::as_str).map(ToString::to_string),
         },
         Some("write") => CopilotPermissionRequest::Write {
             tool_call_id,
@@ -1690,11 +1584,7 @@ fn parse_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
-            diff: object
-                .get("diff")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string(),
+            diff: object.get("diff").and_then(Value::as_str).unwrap_or_default().to_string(),
             new_file_contents: object
                 .get("newFileContents")
                 .and_then(Value::as_str)
@@ -1707,11 +1597,7 @@ fn parse_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
-            path: object
-                .get("path")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string(),
+            path: object.get("path").and_then(Value::as_str).unwrap_or_default().to_string(),
         },
         Some("mcp") => CopilotPermissionRequest::Mcp {
             tool_call_id,
@@ -1731,10 +1617,7 @@ fn parse_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
                 .unwrap_or_default()
                 .to_string(),
             args: object.get("args").cloned(),
-            read_only: object
-                .get("readOnly")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
+            read_only: object.get("readOnly").and_then(Value::as_bool).unwrap_or(false),
         },
         Some("url") => CopilotPermissionRequest::Url {
             tool_call_id,
@@ -1743,24 +1626,12 @@ fn parse_permission_request(value: Value) -> Result<CopilotPermissionRequest> {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
-            url: object
-                .get("url")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string(),
+            url: object.get("url").and_then(Value::as_str).unwrap_or_default().to_string(),
         },
         Some("memory") => CopilotPermissionRequest::Memory {
             tool_call_id,
-            subject: object
-                .get("subject")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string(),
-            fact: object
-                .get("fact")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string(),
+            subject: object.get("subject").and_then(Value::as_str).unwrap_or_default().to_string(),
+            fact: object.get("fact").and_then(Value::as_str).unwrap_or_default().to_string(),
             citations: object
                 .get("citations")
                 .and_then(Value::as_str)

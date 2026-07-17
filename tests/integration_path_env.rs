@@ -16,10 +16,7 @@ mod path_environment_tests {
 
         // PATH should contain at least one directory
         let paths: Vec<&str> = path.split(':').collect();
-        assert!(
-            !paths.is_empty(),
-            "PATH should contain at least one directory"
-        );
+        assert!(!paths.is_empty(), "PATH should contain at least one directory");
     }
 
     /// Test 2: Verify critical tools can be found in PATH
@@ -112,18 +109,9 @@ mod path_environment_tests {
         let shell = env::var("SHELL");
         let path = env::var("PATH");
 
-        assert!(
-            home.is_ok(),
-            "HOME environment variable should be available"
-        );
-        assert!(
-            shell.is_ok(),
-            "SHELL environment variable should be available"
-        );
-        assert!(
-            path.is_ok(),
-            "PATH environment variable should be available"
-        );
+        assert!(home.is_ok(), "HOME environment variable should be available");
+        assert!(shell.is_ok(), "SHELL environment variable should be available");
+        assert!(path.is_ok(), "PATH environment variable should be available");
 
         println!("✓ HOME={:?}", home.ok());
         println!("✓ SHELL={:?}", shell.ok());
@@ -143,10 +131,7 @@ mod path_environment_tests {
                 if output.status.success() {
                     let version = String::from_utf8_lossy(&output.stdout);
                     println!("✓ cargo is available: {}", version.trim());
-                    assert!(
-                        version.contains("cargo"),
-                        "cargo --version should output cargo info"
-                    );
+                    assert!(version.contains("cargo"), "cargo --version should output cargo info");
                 } else {
                     println!("[WARN] cargo exists but returned error status");
                 }

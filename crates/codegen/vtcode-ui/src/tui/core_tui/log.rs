@@ -106,8 +106,7 @@ impl Visit for FieldVisitor {
         if field.name() == "message" {
             self.message = Some(value.to_string());
         } else {
-            self.extras
-                .push((field.name().to_string(), value.to_string()));
+            self.extras.push((field.name().to_string(), value.to_string()));
         }
     }
 }
@@ -118,9 +117,7 @@ pub struct TuiLogLayer {
 
 impl TuiLogLayer {
     pub fn new() -> Self {
-        Self {
-            forwarder: LOG_FORWARDER.clone(),
-        }
+        Self { forwarder: LOG_FORWARDER.clone() }
     }
 }
 
@@ -183,9 +180,7 @@ where
         let mut visitor = FieldVisitor::default();
         event.record(&mut visitor);
 
-        let message = visitor
-            .message
-            .unwrap_or_else(|| "(no message)".to_string());
+        let message = visitor.message.unwrap_or_else(|| "(no message)".to_string());
         let extras = if visitor.extras.is_empty() {
             String::new()
         } else {
@@ -264,9 +259,7 @@ pub fn set_log_theme_name(theme: Option<String>) {
         tracing::warn!("failed to set TUI log theme name; theme lock poisoned");
         return;
     };
-    *slot = theme
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty());
+    *slot = theme.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
     drop(slot);
     if let Ok(mut cache) = LOG_THEME_CACHE.write() {
         *cache = None;
@@ -337,9 +330,7 @@ fn highlight_lines_to_text<'a>(
 fn log_level_style(level: &Level) -> Style {
     match *level {
         Level::ERROR => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        Level::WARN => Style::default()
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD),
+        Level::WARN => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         Level::INFO => Style::default().fg(Color::Green),
         Level::DEBUG => Style::default().fg(Color::Blue),
         Level::TRACE => Style::default().fg(Color::DarkGray),

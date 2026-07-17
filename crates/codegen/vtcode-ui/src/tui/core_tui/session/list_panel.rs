@@ -63,10 +63,7 @@ pub(crate) fn split_bottom_list_panel(
     let desired_height = fixed_rows.saturating_add(desired_list_rows.max(1));
     let panel_height = desired_height.min(max_panel_height);
     let [content_area, panel_area] = area
-        .try_layout(&Layout::vertical([
-            Constraint::Min(1),
-            Constraint::Length(panel_height),
-        ]))
+        .try_layout(&Layout::vertical([Constraint::Min(1), Constraint::Length(panel_height)]))
         .unwrap_or([area; 2]);
     (content_area, Some(panel_area))
 }
@@ -98,10 +95,7 @@ pub(crate) struct ListPanelLayout {
 
 impl ListPanelLayout {
     pub(crate) fn new(fixed_rows: u16, desired_list_rows: u16) -> Self {
-        Self {
-            fixed_rows,
-            desired_list_rows,
-        }
+        Self { fixed_rows, desired_list_rows }
     }
 
     pub(crate) fn split(&self, area: Rect) -> (Rect, Option<Rect>) {
@@ -158,29 +152,14 @@ pub(crate) struct SharedListPanelStyles {
 /// Build `InputStyles` from the app's `InlineTheme`.
 pub(crate) fn input_styles_from_theme(theme: &InlineTheme) -> InputStyles {
     let palette = Palette {
-        foreground: theme
-            .foreground
-            .map(ratatui_color_from_ansi)
-            .unwrap_or(Color::White),
-        muted: theme
-            .secondary
-            .map(ratatui_color_from_ansi)
-            .unwrap_or(Color::Gray),
+        foreground: theme.foreground.map(ratatui_color_from_ansi).unwrap_or(Color::White),
+        muted: theme.secondary.map(ratatui_color_from_ansi).unwrap_or(Color::Gray),
         faint: Color::DarkGray,
-        primary: theme
-            .primary
-            .map(ratatui_color_from_ansi)
-            .unwrap_or(Color::Cyan),
-        secondary: theme
-            .secondary
-            .map(ratatui_color_from_ansi)
-            .unwrap_or(Color::Gray),
+        primary: theme.primary.map(ratatui_color_from_ansi).unwrap_or(Color::Cyan),
+        secondary: theme.secondary.map(ratatui_color_from_ansi).unwrap_or(Color::Gray),
         surface: Color::Black,
         border: Color::DarkGray,
-        highlight: theme
-            .primary
-            .map(ratatui_color_from_ansi)
-            .unwrap_or(Color::Cyan),
+        highlight: theme.primary.map(ratatui_color_from_ansi).unwrap_or(Color::Cyan),
         on_highlight: Color::Black,
         error: Color::Red,
         success: Color::Green,
@@ -255,10 +234,7 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
 
     let mut idx = 0usize;
     if header_rows > 0 {
-        frame.render_widget(
-            Paragraph::new(sections.header).style(section_text_style),
-            chunks[idx],
-        );
+        frame.render_widget(Paragraph::new(sections.header).style(section_text_style), chunks[idx]);
         idx += 1;
     }
 
@@ -375,9 +351,6 @@ mod tests {
             .trim_end()
             .to_string();
 
-        assert_eq!(
-            divider_row,
-            ui::INLINE_BLOCK_HORIZONTAL.repeat(buffer.area.width as usize)
-        );
+        assert_eq!(divider_row, ui::INLINE_BLOCK_HORIZONTAL.repeat(buffer.area.width as usize));
     }
 }

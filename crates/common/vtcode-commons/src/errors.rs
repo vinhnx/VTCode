@@ -290,9 +290,7 @@ impl<E: fmt::Display> fmt::Display for MultiErrors<E> {
 
 impl<E: std::error::Error + 'static> std::error::Error for MultiErrors<E> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.errors
-            .first()
-            .map(|e| e as &(dyn std::error::Error + 'static))
+        self.errors.first().map(|e| e as &(dyn std::error::Error + 'static))
     }
 }
 
@@ -342,9 +340,7 @@ mod tests {
     #[test]
     fn multi_errors_collect_result_err() {
         let mut errors: MultiErrors<String> = MultiErrors::new();
-        let value: i32 = errors
-            .collect_result(Err::<i32, String>("bad".to_string()))
-            .unwrap_or(0);
+        let value: i32 = errors.collect_result(Err::<i32, String>("bad".to_string())).unwrap_or(0);
         assert_eq!(value, 0);
         assert_eq!(errors.len(), 1);
     }

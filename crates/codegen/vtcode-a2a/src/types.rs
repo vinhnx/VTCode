@@ -50,10 +50,7 @@ impl TaskState {
 
     /// Check if the task can be canceled from this state
     pub fn is_cancelable(&self) -> bool {
-        matches!(
-            self,
-            TaskState::Submitted | TaskState::Working | TaskState::InputRequired
-        )
+        matches!(self, TaskState::Submitted | TaskState::Working | TaskState::InputRequired)
     }
 }
 
@@ -72,11 +69,7 @@ pub struct TaskStatus {
 impl TaskStatus {
     /// Create a new task status
     pub fn new(state: TaskState) -> Self {
-        Self {
-            state,
-            message: None,
-            timestamp: Utc::now(),
-        }
+        Self { state, message: None, timestamp: Utc::now() }
     }
 
     /// Create a new task status with a message
@@ -213,10 +206,7 @@ impl Part {
     /// Create a file part from URI
     pub fn file_uri(uri: impl Into<String>, mime_type: Option<String>) -> Self {
         Part::File {
-            file: FileContent::Uri {
-                uri: uri.into(),
-                mime_type,
-            },
+            file: FileContent::Uri { uri: uri.into(), mime_type },
         }
     }
 
@@ -485,10 +475,7 @@ mod tests {
         task.update_status(TaskState::Working, None);
         assert_eq!(task.state(), TaskState::Working);
 
-        task.update_status(
-            TaskState::Completed,
-            Some(Message::agent_text("Task completed")),
-        );
+        task.update_status(TaskState::Completed, Some(Message::agent_text("Task completed")));
         assert!(task.is_terminal());
         assert!(!task.is_cancelable());
     }

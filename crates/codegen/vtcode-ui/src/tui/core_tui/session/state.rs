@@ -155,9 +155,7 @@ impl Session {
     }
 
     pub(crate) fn has_delegated_local_agents(&self) -> bool {
-        self.local_agents
-            .iter()
-            .any(|entry| entry.kind == LocalAgentKind::Delegated)
+        self.local_agents.iter().any(|entry| entry.kind == LocalAgentKind::Delegated)
     }
 
     pub(crate) fn set_local_agents_drawer_visible(&mut self, visible: bool) {
@@ -474,27 +472,19 @@ impl Session {
     }
 
     pub(crate) fn modal_state(&self) -> Option<&ModalState> {
-        self.active_overlay
-            .as_ref()
-            .and_then(ActiveOverlay::as_modal)
+        self.active_overlay.as_ref().and_then(ActiveOverlay::as_modal)
     }
 
     pub(crate) fn modal_state_mut(&mut self) -> Option<&mut ModalState> {
-        self.active_overlay
-            .as_mut()
-            .and_then(ActiveOverlay::as_modal_mut)
+        self.active_overlay.as_mut().and_then(ActiveOverlay::as_modal_mut)
     }
 
     pub(crate) fn wizard_overlay(&self) -> Option<&WizardModalState> {
-        self.active_overlay
-            .as_ref()
-            .and_then(ActiveOverlay::as_wizard)
+        self.active_overlay.as_ref().and_then(ActiveOverlay::as_wizard)
     }
 
     pub(crate) fn wizard_overlay_mut(&mut self) -> Option<&mut WizardModalState> {
-        self.active_overlay
-            .as_mut()
-            .and_then(ActiveOverlay::as_wizard_mut)
+        self.active_overlay.as_mut().and_then(ActiveOverlay::as_wizard_mut)
     }
 
     pub(crate) fn take_modal_state(&mut self) -> Option<ModalState> {
@@ -688,8 +678,7 @@ impl Session {
             let actual_delta = previous_offset - self.scroll_manager.offset();
             self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
-            self.mouse_selection
-                .adjust_for_scroll(-(actual_delta as i32));
+            self.mouse_selection.adjust_for_scroll(-(actual_delta as i32));
         }
     }
 
@@ -708,22 +697,18 @@ impl Session {
         if page_delta != 0 {
             let page_size = self.viewport_height().max(1);
             if page_delta > 0 {
-                self.scroll_manager
-                    .scroll_up(page_size * page_delta.unsigned_abs() as usize);
+                self.scroll_manager.scroll_up(page_size * page_delta.unsigned_abs() as usize);
             } else {
-                self.scroll_manager
-                    .scroll_down(page_size * page_delta.unsigned_abs() as usize);
+                self.scroll_manager.scroll_down(page_size * page_delta.unsigned_abs() as usize);
             }
         }
 
         // Then apply line scroll
         if line_delta != 0 {
             if line_delta > 0 {
-                self.scroll_manager
-                    .scroll_up(line_delta.unsigned_abs() as usize);
+                self.scroll_manager.scroll_up(line_delta.unsigned_abs() as usize);
             } else {
-                self.scroll_manager
-                    .scroll_down(line_delta.unsigned_abs() as usize);
+                self.scroll_manager.scroll_down(line_delta.unsigned_abs() as usize);
             }
         }
 
@@ -781,8 +766,7 @@ impl Session {
 
         let viewport_rows = self.viewport_height();
         if self.transcript_width == 0 || viewport_rows == 0 {
-            self.scroll_manager
-                .set_viewport_rows(viewport_rows.max(1) as u16);
+            self.scroll_manager.set_viewport_rows(viewport_rows.max(1) as u16);
             self.scroll_manager.set_total_rows(0);
             return;
         }
@@ -827,8 +811,7 @@ impl Session {
             use std::cmp::min;
             let current_offset = self.scroll_manager.offset();
             let delta = new_max_offset - previous_max_offset;
-            self.scroll_manager
-                .set_offset(min(current_offset + delta, new_max_offset));
+            self.scroll_manager.set_offset(min(current_offset + delta, new_max_offset));
         }
         self.enforce_scroll_bounds();
     }

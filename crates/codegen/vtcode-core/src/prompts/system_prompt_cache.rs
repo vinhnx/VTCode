@@ -41,9 +41,7 @@ impl<V: Clone> Default for SystemPromptCache<V> {
 impl<V: Clone> SystemPromptCache<V> {
     pub fn new() -> Self {
         let cache_size = NonZeroUsize::new(MAX_CACHE_SIZE).unwrap_or(NonZeroUsize::MIN);
-        Self {
-            entries: Mutex::new(LruCache::new(cache_size)),
-        }
+        Self { entries: Mutex::new(LruCache::new(cache_size)) }
     }
 
     /// Get cached prompt or build it if missing.

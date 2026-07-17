@@ -77,11 +77,7 @@ pub fn detect_mime_type_from_data(data: &[u8]) -> String {
 
 /// Detects the MIME type based on file extension
 pub fn detect_mime_type_from_extension(path: &Path) -> Result<String> {
-    let extension = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("")
-        .to_lowercase();
+    let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("").to_lowercase();
 
     let mime_type = match extension.as_str() {
         "png" => "image/png",
@@ -99,11 +95,7 @@ pub fn detect_mime_type_from_extension(path: &Path) -> Result<String> {
 
 /// Validates that the image file path has a supported extension
 pub fn has_supported_image_extension(path: &Path) -> bool {
-    let extension = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or("")
-        .to_lowercase();
+    let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("").to_lowercase();
 
     const VALID_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "svg"];
     VALID_EXTENSIONS.contains(&extension.as_str())
@@ -131,10 +123,7 @@ pub async fn read_image_file<P: AsRef<Path>>(file_path: P) -> Result<ImageData> 
     }
 
     if !has_supported_image_extension(path) {
-        return Err(anyhow::anyhow!(
-            "Unsupported image extension for path: {}",
-            path.display()
-        ));
+        return Err(anyhow::anyhow!("Unsupported image extension for path: {}", path.display()));
     }
 
     let file_contents = tokio::fs::read(path)
@@ -168,10 +157,7 @@ pub async fn read_image_file_any_path<P: AsRef<Path>>(file_path: P) -> Result<Im
     let path = file_path.as_ref();
 
     if !has_supported_image_extension(path) {
-        return Err(anyhow::anyhow!(
-            "Unsupported image extension for path: {}",
-            path.display()
-        ));
+        return Err(anyhow::anyhow!("Unsupported image extension for path: {}", path.display()));
     }
 
     let file_contents = tokio::fs::read(path)

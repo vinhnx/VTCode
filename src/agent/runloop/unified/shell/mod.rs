@@ -107,13 +107,10 @@ mod tests {
     #[test]
     fn test_detect_show_diff_normalizes_on_prefixed_file_mentions() {
         let result =
-            detect_explicit_run_command("show diff on @vtcode-core/src/tools/registry/policy.rs");
+            detect_explicit_run_command("show diff on @crates/codegen/vtcode-core/src/tools/registry/policy.rs");
         assert!(result.is_some());
         let (_, args) = result.expect("direct command expected");
-        assert_eq!(
-            args["command"],
-            "git diff -- vtcode-core/src/tools/registry/policy.rs"
-        );
+        assert_eq!(args["command"], "git diff -- crates/codegen/vtcode-core/src/tools/registry/policy.rs");
     }
 
     #[test]
@@ -154,10 +151,7 @@ mod tests {
         );
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
-        assert_eq!(
-            args["command"],
-            "cargo test --bin vtcode highlights_run_prefix_user_input"
-        );
+        assert_eq!(args["command"], "cargo test --bin vtcode highlights_run_prefix_user_input");
     }
 
     #[test]
@@ -199,10 +193,7 @@ mod tests {
         );
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
-        assert_eq!(
-            args["command"],
-            "cargo test --bin vtcode highlights_run_prefix_user_input"
-        );
+        assert_eq!(args["command"], "cargo test --bin vtcode highlights_run_prefix_user_input");
     }
 
     #[test]
@@ -235,10 +226,7 @@ mod tests {
             detect_explicit_run_command("run pytest for func test_detect_explicit_run_command");
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
-        assert_eq!(
-            args["command"],
-            "pytest -k test_detect_explicit_run_command"
-        );
+        assert_eq!(args["command"], "pytest -k test_detect_explicit_run_command");
     }
 
     #[test]

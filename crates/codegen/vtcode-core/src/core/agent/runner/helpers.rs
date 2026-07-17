@@ -45,9 +45,7 @@ pub(super) fn detect_textual_exec_tool_call(text: &str) -> Option<Value> {
         return None;
     }
 
-    let command = crate::tools::command_args::command_text(&parsed)
-        .ok()
-        .flatten()?;
+    let command = crate::tools::command_args::command_text(&parsed).ok().flatten()?;
     let mut public_args = serde_json::Map::new();
     public_args.insert("cmd".to_string(), Value::String(command));
     for key in [
@@ -106,19 +104,13 @@ mod tests {
     #[test]
     fn detects_command_session_fence() {
         let text = "```tool:command_session\n{\"command\":\"pwd\"}\n```";
-        assert_eq!(
-            detect_textual_exec_tool_call(text),
-            Some(json!({"cmd":"pwd"}))
-        );
+        assert_eq!(detect_textual_exec_tool_call(text), Some(json!({"cmd":"pwd"})));
     }
 
     #[test]
     fn detects_legacy_run_pty_cmd_fence() {
         let text = "```run_pty_cmd\n{\"command\":\"pwd\"}\n```";
-        assert_eq!(
-            detect_textual_exec_tool_call(text),
-            Some(json!({"cmd":"pwd"}))
-        );
+        assert_eq!(detect_textual_exec_tool_call(text), Some(json!({"cmd":"pwd"})));
     }
 
     #[test]

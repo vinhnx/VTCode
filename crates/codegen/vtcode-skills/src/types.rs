@@ -255,18 +255,11 @@ impl SkillManifest {
         }
 
         if self.name.len() > 64 {
-            anyhow::bail!(
-                "name exceeds maximum length: {} characters (max 64)",
-                self.name.len()
-            );
+            anyhow::bail!("name exceeds maximum length: {} characters (max 64)", self.name.len());
         }
 
         // Check for lowercase letters, numbers, and hyphens only
-        if !self
-            .name
-            .chars()
-            .all(|c| c.is_lowercase() || c.is_numeric() || c == '-')
-        {
+        if !self.name.chars().all(|c| c.is_lowercase() || c.is_numeric() || c == '-') {
             anyhow::bail!(
                 "name contains invalid characters: '{}'\nMust contain only lowercase letters, numbers, and hyphens",
                 self.name
@@ -283,18 +276,12 @@ impl SkillManifest {
 
         // Check for leading hyphen
         if self.name.starts_with('-') {
-            anyhow::bail!(
-                "name starts with hyphen: '{}'\nMust not start with a hyphen",
-                self.name
-            );
+            anyhow::bail!("name starts with hyphen: '{}'\nMust not start with a hyphen", self.name);
         }
 
         // Check for trailing hyphen
         if self.name.ends_with('-') {
-            anyhow::bail!(
-                "name ends with hyphen: '{}'\nMust not end with a hyphen",
-                self.name
-            );
+            anyhow::bail!("name ends with hyphen: '{}'\nMust not end with a hyphen", self.name);
         }
 
         // Check for reserved words
@@ -350,10 +337,7 @@ impl SkillManifest {
         if let Some(license) = &self.license
             && license.len() > 512
         {
-            anyhow::bail!(
-                "license exceeds maximum length: {} characters (max 512)",
-                license.len()
-            );
+            anyhow::bail!("license exceeds maximum length: {} characters (max 512)", license.len());
         }
 
         // Validate compatibility field
@@ -692,10 +676,7 @@ mod tests {
         assert!(m.validate().is_err());
 
         // Invalid: too many tools (> 16)
-        let tools = (0..17)
-            .map(|i| format!("Tool{i}"))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let tools = (0..17).map(|i| format!("Tool{i}")).collect::<Vec<_>>().join(" ");
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),

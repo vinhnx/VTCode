@@ -66,10 +66,7 @@ fn start_memory_loading(
 fn cleanup_fingerprint(
     status: &vtcode_core::persistent_memory::PersistentMemoryStatus,
 ) -> (usize, usize) {
-    (
-        status.cleanup_status.suspicious_facts,
-        status.cleanup_status.suspicious_summary_lines,
-    )
+    (status.cleanup_status.suspicious_facts, status.cleanup_status.suspicious_summary_lines)
 }
 
 fn should_suppress_cleanup_confirmation(
@@ -88,8 +85,7 @@ pub(crate) async fn handle_memory_prompt(
         return Ok(None);
     };
 
-    ctx.renderer
-        .line(MessageStyle::Info, memory_operation_notice(&intent))?;
+    ctx.renderer.line(MessageStyle::Info, memory_operation_notice(&intent))?;
 
     match intent {
         MemoryPromptIntent::Show => handle_show_memory_intent(ctx, state).await,
@@ -805,18 +801,14 @@ async fn prompt_missing_memory_value(
     let WizardModalOutcome::Submitted(selections) = outcome else {
         return Ok(None);
     };
-    Ok(selections
-        .into_iter()
-        .find_map(|selection| match selection {
-            InlineListSelection::RequestUserInputAnswer {
-                question_id,
-                other,
-                selected,
-            } if question_id == MEMORY_MISSING_QUESTION_ID => {
-                other.or_else(|| selected.first().cloned())
-            }
-            _ => None,
-        }))
+    Ok(selections.into_iter().find_map(|selection| match selection {
+        InlineListSelection::RequestUserInputAnswer { question_id, other, selected }
+            if question_id == MEMORY_MISSING_QUESTION_ID =>
+        {
+            other.or_else(|| selected.first().cloned())
+        }
+        _ => None,
+    }))
 }
 
 fn respond_to_memory_prompt(
@@ -825,8 +817,7 @@ fn respond_to_memory_prompt(
     reply: &str,
 ) -> Result<()> {
     display_user_message(ctx.renderer, input)?;
-    ctx.conversation_history
-        .push(uni::Message::user(input.to_string()));
+    ctx.conversation_history.push(uni::Message::user(input.to_string()));
     ctx.renderer.line(MessageStyle::Response, reply)?;
     ctx.conversation_history.push(
         uni::Message::assistant(reply.to_string())
@@ -854,15 +845,10 @@ fn detect_memory_prompt_intent(input: &str) -> Option<MemoryPromptIntent> {
         return Some(MemoryPromptIntent::Show);
     }
     if extract_memory_clause(&lowered, &normalized, remember_markers()).is_some() {
-        return Some(MemoryPromptIntent::Remember {
-            request: normalized.clone(),
-        });
+        return Some(MemoryPromptIntent::Remember { request: normalized.clone() });
     }
-    extract_memory_clause(&lowered, &normalized, forget_markers()).map(|_| {
-        MemoryPromptIntent::Forget {
-            request: normalized,
-        }
-    })
+    extract_memory_clause(&lowered, &normalized, forget_markers())
+        .map(|_| MemoryPromptIntent::Forget { request: normalized })
 }
 
 fn matches_show_memory(lowered: &str) -> bool {
@@ -937,11 +923,8 @@ fn normalize_prompt_clause(input: &str) -> Option<String> {
         "vt code ",
     ]
     .iter()
-    .find_map(|prefix| {
-        text.to_ascii_lowercase()
-            .starts_with(prefix)
-            .then(|| &text[prefix.len()..])
-    }) {
+    .find_map(|prefix| text.to_ascii_lowercase().starts_with(prefix).then(|| &text[prefix.len()..]))
+    {
         text = stripped.trim_start();
     }
 
@@ -967,9 +950,7 @@ mod tests {
     fn detects_forget_intent_from_natural_language() {
         assert_eq!(
             detect_memory_prompt_intent("forget that I prefer pnpm"),
-            Some(MemoryPromptIntent::Forget {
-                request: "forget that I prefer pnpm".to_string(),
-            })
+            Some(MemoryPromptIntent::Forget { request: "forget that I prefer pnpm".to_string() })
         );
     }
 
@@ -983,10 +964,7 @@ mod tests {
 
     #[test]
     fn ignores_non_imperative_memory_questions() {
-        assert_eq!(
-            detect_memory_prompt_intent("do you remember my name?"),
-            None
-        );
+        assert_eq!(detect_memory_prompt_intent("do you remember my name?"), None);
     }
 
     #[test]
@@ -1001,17 +979,13 @@ mod tests {
 
     #[test]
     fn normalize_prompt_clause_does_not_panic_on_short_input() {
-        assert_eq!(
-            normalize_prompt_clause("my name"),
-            Some("my name".to_string())
-        );
+        assert_eq!(normalize_prompt_clause("my name"), Some("my name".to_string()));
     }
 
     #[test]
     fn memory_operation_notice_describes_remember_flow() {
-        let intent = MemoryPromptIntent::Remember {
-            request: "remember my editor theme".to_string(),
-        };
+        let intent =
+            MemoryPromptIntent::Remember { request: "remember my editor theme".to_string() };
         assert_eq!(
             memory_operation_notice(&intent),
             "Memory save requested. VT Code is preparing a normalized note."
@@ -1020,9 +994,7 @@ mod tests {
 
     #[test]
     fn memory_operation_notice_describes_forget_flow() {
-        let intent = MemoryPromptIntent::Forget {
-            request: "forget my editor theme".to_string(),
-        };
+        let intent = MemoryPromptIntent::Forget { request: "forget my editor theme".to_string() };
         assert_eq!(
             memory_operation_notice(&intent),
             "Memory removal requested. VT Code is matching normalized notes."

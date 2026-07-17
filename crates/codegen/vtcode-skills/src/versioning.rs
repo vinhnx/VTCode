@@ -109,10 +109,7 @@ pub fn resolve_version(
 ) -> Result<String> {
     match requested {
         SkillVersion::Specific(v) => {
-            debug!(
-                "Using specifically requested version '{}' for '{}'",
-                v, manifest.name
-            );
+            debug!("Using specifically requested version '{}' for '{}'", v, manifest.name);
             Ok(v.clone())
         }
         SkillVersion::Latest => {
@@ -132,17 +129,11 @@ pub fn resolve_version(
             }
 
             if let Some(ref version) = manifest.version {
-                debug!(
-                    "Falling back to manifest version '{}' for '{}'",
-                    version, manifest.name
-                );
+                debug!("Falling back to manifest version '{}' for '{}'", version, manifest.name);
                 return Ok(version.clone());
             }
 
-            warn!(
-                "No version info available for '{}', using '0.0.0'",
-                manifest.name
-            );
+            warn!("No version info available for '{}', using '0.0.0'", manifest.name);
             Ok("0.0.0".to_string())
         }
     }
@@ -163,10 +154,7 @@ pub fn resolve_default_version(
         return default.clone();
     }
 
-    manifest
-        .version
-        .clone()
-        .unwrap_or_else(|| "0.0.0".to_string())
+    manifest.version.clone().unwrap_or_else(|| "0.0.0".to_string())
 }
 
 #[cfg(test)]
@@ -185,11 +173,7 @@ mod tests {
     #[test]
     fn test_resolve_specific() {
         let manifest = test_manifest("test");
-        let result = resolve_version(
-            &manifest,
-            &SkillVersion::Specific("2.0.0".to_string()),
-            None,
-        );
+        let result = resolve_version(&manifest, &SkillVersion::Specific("2.0.0".to_string()), None);
         assert_eq!(result.unwrap(), "2.0.0");
     }
 
@@ -229,10 +213,8 @@ mod tests {
     #[test]
     fn test_lockfile_roundtrip() {
         let mut lock = SkillLockfile::default();
-        lock.locked
-            .insert("skill-a".to_string(), "1.0.0".to_string());
-        lock.locked
-            .insert("skill-b".to_string(), "2.0.0".to_string());
+        lock.locked.insert("skill-a".to_string(), "1.0.0".to_string());
+        lock.locked.insert("skill-b".to_string(), "2.0.0".to_string());
         let json = serde_json::to_string(&lock).unwrap();
         let parsed: SkillLockfile = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.locked.len(), 2);

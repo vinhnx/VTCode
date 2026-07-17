@@ -428,10 +428,7 @@ mod tests {
         std::env::set_current_dir(&temp_dir).expect("Failed to change dir");
 
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-        registry
-            .initialize_async()
-            .await
-            .expect("Failed to init registry");
+        registry.initialize_async().await.expect("Failed to init registry");
 
         // Test that we can execute the hidden internal list-files route.
         let list_args = serde_json::json!({
@@ -450,10 +447,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace = temp_dir.path().to_path_buf();
         let registry = ToolRegistry::new(workspace.clone()).await;
-        registry
-            .initialize_async()
-            .await
-            .expect("Failed to init registry");
+        registry.initialize_async().await.expect("Failed to init registry");
 
         // Test a simple PTY command
         let args = serde_json::json!({
@@ -474,10 +468,7 @@ mod tests {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace = temp_dir.path().to_path_buf();
         let registry = ToolRegistry::new(workspace.clone()).await;
-        registry
-            .initialize_async()
-            .await
-            .expect("Failed to init registry");
+        registry.initialize_async().await.expect("Failed to init registry");
 
         // Test creating a PTY session
         let args = serde_json::json!({

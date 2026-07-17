@@ -81,19 +81,15 @@ mod tests {
 
     #[test]
     fn json_mode_serializes_raw_event_lines() {
-        let event = ThreadEvent::ThreadStarted(ThreadStartedEvent {
-            thread_id: "thread-1".to_string(),
-        });
+        let event =
+            ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread-1".to_string() });
         let mut processor = TestProcessor::new(true, false, Some(Vec::new()), None, None);
 
         processor.process_event(&event);
 
         let output = String::from_utf8(processor.stdout.take().expect("stdout buffer"))
             .expect("stdout should be utf8");
-        assert_eq!(
-            output,
-            serialize_event_line(&event).expect("event should serialize")
-        );
+        assert_eq!(output, serialize_event_line(&event).expect("event should serialize"));
         assert!(processor.stderr.is_none());
     }
 
@@ -138,9 +134,7 @@ mod tests {
         processor.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 id: "warn-1".to_string(),
-                details: ThreadItemDetails::Error(ErrorItem {
-                    message: "watch out".to_string(),
-                }),
+                details: ThreadItemDetails::Error(ErrorItem { message: "watch out".to_string() }),
             },
         }));
 
@@ -180,10 +174,9 @@ mod tests {
 
     #[test]
     fn human_event_line_formats_failures() {
-        let line = human_event_line(&ThreadEvent::Error(ThreadErrorEvent {
-            message: "boom".to_string(),
-        }))
-        .expect("error event should render");
+        let line =
+            human_event_line(&ThreadEvent::Error(ThreadErrorEvent { message: "boom".to_string() }))
+                .expect("error event should render");
         assert!(line.contains("[ERROR]"));
         assert!(line.contains("boom"));
     }
@@ -241,10 +234,7 @@ mod tests {
             resolve_exec_event_log_path(temp.path().to_str().expect("tempdir path"), "session-123");
 
         assert_eq!(resolved.parent(), Some(temp.path()));
-        let file_name = resolved
-            .file_name()
-            .and_then(|value| value.to_str())
-            .expect("file name");
+        let file_name = resolved.file_name().and_then(|value| value.to_str()).expect("file name");
         assert!(file_name.starts_with("harness-session-123-"));
         assert!(file_name.ends_with(".jsonl"));
     }
@@ -271,10 +261,7 @@ mod tests {
         if let Some(ref path) = resolved {
             let parent = path.parent().expect("parent dir");
             assert!(parent.ends_with("sessions"));
-            let file_name = path
-                .file_name()
-                .and_then(|v| v.to_str())
-                .expect("file name");
+            let file_name = path.file_name().and_then(|v| v.to_str()).expect("file name");
             assert!(file_name.starts_with("harness-session-123-"));
             assert!(file_name.ends_with(".jsonl"));
         }

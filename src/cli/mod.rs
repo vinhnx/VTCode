@@ -251,9 +251,9 @@ mod tests {
         let action = resolve_action(&args, &startup, None).expect("resume should resolve");
 
         match action {
-            ResolvedCliAction::Resume {
-                mode: SessionResumeMode::Specific(session_id),
-            } => assert_eq!(session_id, "session-123"),
+            ResolvedCliAction::Resume { mode: SessionResumeMode::Specific(session_id) } => {
+                assert_eq!(session_id, "session-123")
+            }
             other => panic!("expected specific resume action, got {other:?}"),
         }
     }
@@ -284,10 +284,8 @@ mod tests {
     #[tokio::test]
     async fn resume_session_command_is_wired_to_sessions_handler() {
         let cfg = runtime_config();
-        let unique_suffix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("unix time")
-            .as_nanos();
+        let unique_suffix =
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("unix time").as_nanos();
         let fake_id = format!("nonexistent-session-{unique_suffix}");
 
         let result = handle_resume_session_command(

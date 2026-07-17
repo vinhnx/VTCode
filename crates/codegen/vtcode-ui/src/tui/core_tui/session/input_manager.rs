@@ -32,17 +32,14 @@ fn image_attachment_placeholders(content: &str) -> Vec<(usize, String)> {
         let start = search_start + offset;
         let digits_start = start + marker.len();
         let rest = &content[digits_start..];
-        let digits_len = rest
-            .bytes()
-            .take_while(|byte| byte.is_ascii_digit())
-            .count();
+        let digits_len = rest.bytes().take_while(|byte| byte.is_ascii_digit()).count();
         let placeholder_end = digits_start + digits_len + 1;
 
         if digits_len > 0 && content.as_bytes().get(placeholder_end - 1) == Some(&b']') {
-            if let Ok(number) = content[digits_start..digits_start + digits_len].parse::<usize>() {
-                if number > 0 {
-                    placeholders.push((number, content[start..placeholder_end].to_owned()));
-                }
+            if let Ok(number) = content[digits_start..digits_start + digits_len].parse::<usize>()
+                && number > 0
+            {
+                placeholders.push((number, content[start..placeholder_end].to_owned()));
             }
             search_start = placeholder_end;
         } else {
@@ -103,11 +100,7 @@ impl InputHistoryEntry {
             elements.push(ContentPart::text(content.clone()));
         }
         elements.extend(attachments.into_iter().filter(ContentPart::is_image));
-        Self {
-            content,
-            elements,
-            created_at: Utc::now(),
-        }
+        Self { content, elements, created_at: Utc::now() }
     }
 
     /// Create an entry with an explicit timestamp (used for archived history).
@@ -117,11 +110,7 @@ impl InputHistoryEntry {
         } else {
             vec![ContentPart::text(&content)]
         };
-        Self {
-            content,
-            elements,
-            created_at,
-        }
+        Self { content, elements, created_at }
     }
 
     pub fn content(&self) -> &str {
@@ -137,11 +126,7 @@ impl InputHistoryEntry {
     }
 
     pub fn attachment_elements(&self) -> Vec<ContentPart> {
-        self.elements
-            .iter()
-            .filter(|part| part.is_image())
-            .cloned()
-            .collect()
+        self.elements.iter().filter(|part| part.is_image()).cloned().collect()
     }
 
     pub fn timestamp(&self) -> DateTime<Utc> {
@@ -499,11 +484,7 @@ impl InputManager {
 
     pub fn move_cursor_to_end(&mut self) {
         let last_row = self.textarea.lines().len().saturating_sub(1);
-        let last_col = self
-            .textarea
-            .lines()
-            .last()
-            .map_or(0, |l| l.chars().count());
+        let last_col = self.textarea.lines().last().map_or(0, |l| l.chars().count());
         self.set_textarea_cursor(last_row, last_col);
         self.clear_selection();
     }
@@ -536,10 +517,7 @@ impl InputManager {
         let cursor = self.cursor();
         if cursor > 0 {
             let content = self.content();
-            let start = content[..cursor]
-                .char_indices()
-                .next_back()
-                .map_or(0, |(idx, _)| idx);
+            let start = content[..cursor].char_indices().next_back().map_or(0, |(idx, _)| idx);
             self.track_compact_paste_replace(start, cursor, 0);
         }
         self.textarea.delete_char();
@@ -742,12 +720,8 @@ impl InputManager {
         let word: String = chars[word_start..word_end].iter().collect();
         let transformed = transform(&word);
 
-        let new_content = format!(
-            "{}{}{}",
-            &content[..word_start],
-            transformed,
-            &content[word_end..]
-        );
+        let new_content =
+            format!("{}{}{}", &content[..word_start], transformed, &content[word_end..]);
 
         self.set_content(new_content);
         self.set_cursor(cursor);
@@ -885,10 +859,7 @@ impl InputManager {
     }
 
     pub fn history_texts(&self) -> Vec<String> {
-        self.history
-            .iter()
-            .map(|entry| entry.content.clone())
-            .collect()
+        self.history.iter().map(|entry| entry.content.clone()).collect()
     }
 
     pub fn history_index(&self) -> Option<usize> {
@@ -900,10 +871,7 @@ impl InputManager {
     }
 
     pub fn set_attachments(&mut self, attachments: Vec<ContentPart>) {
-        self.attachments = attachments
-            .into_iter()
-            .filter(ContentPart::is_image)
-            .collect();
+        self.attachments = attachments.into_iter().filter(ContentPart::is_image).collect();
         let content = self.content().to_owned();
         self.attachment_placeholders =
             attachment_placeholders_for_content(&content, self.attachments.len());
@@ -935,10 +903,7 @@ impl InputManager {
             .max()
             .unwrap_or(0);
 
-        visible_max
-            .max(tracked_max)
-            .max(self.attachments.len())
-            .saturating_add(1)
+        visible_max.max(tracked_max).max(self.attachments.len()).saturating_add(1)
     }
 
     pub fn current_history_entry(&self) -> InputHistoryEntry {
@@ -1064,23 +1029,14 @@ mod tests {
         ));
 
         assert_eq!(
-            manager
-                .go_to_previous_history()
-                .map(|entry| entry.content.clone()),
+            manager.go_to_previous_history().map(|entry| entry.content.clone()),
             Some("second".to_owned())
         );
         assert_eq!(
-            manager
-                .go_to_previous_history()
-                .map(|entry| entry.content.clone()),
+            manager.go_to_previous_history().map(|entry| entry.content.clone()),
             Some("first".to_owned())
         );
-        assert_eq!(
-            manager
-                .go_to_previous_history()
-                .map(|entry| entry.content.clone()),
-            None
-        );
+        assert_eq!(manager.go_to_previous_history().map(|entry| entry.content.clone()), None);
     }
 
     #[test]
@@ -1094,9 +1050,7 @@ mod tests {
 
         manager.go_to_previous_history();
         assert_eq!(
-            manager
-                .go_to_next_history()
-                .map(|entry| entry.content.clone()),
+            manager.go_to_next_history().map(|entry| entry.content.clone()),
             Some("current".to_owned())
         );
     }

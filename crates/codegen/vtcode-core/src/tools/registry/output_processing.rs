@@ -29,18 +29,10 @@ fn should_force_spool(
     if !spooling_enabled || is_mcp || !is_pty_output_tool(tool_name) {
         return false;
     }
-    if value
-        .get("no_spool")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-    {
+    if value.get("no_spool").and_then(|v| v.as_bool()).unwrap_or(false) {
         return false;
     }
-    if value
-        .get("truncated")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-    {
+    if value.get("truncated").and_then(|v| v.as_bool()).unwrap_or(false) {
         return true;
     }
     output_field_bytes(value) >= PTY_FORCE_SPOOL_MIN_BYTES
@@ -87,10 +79,8 @@ impl ToolRegistry {
                     .map(|v| Self::clamp_value_recursive(v, entry_fuse, depth - 1))
                     .collect();
                 if overflow > 0 {
-                    let approx_tokens = trimmed
-                        .iter()
-                        .map(|v| v.to_string().len() / 4)
-                        .sum::<usize>();
+                    let approx_tokens =
+                        trimmed.iter().map(|v| v.to_string().len() / 4).sum::<usize>();
                     json!({
                         "truncated": true,
                         "note": "Array truncated to protect context budget",
@@ -110,10 +100,7 @@ impl ToolRegistry {
                 let overflow = map.len().saturating_sub(entry_fuse);
                 let mut head = serde_json::Map::new();
                 for (k, v) in map.iter().take(entry_fuse) {
-                    head.insert(
-                        k.clone(),
-                        Self::clamp_value_recursive(v, entry_fuse, depth - 1),
-                    );
+                    head.insert(k.clone(), Self::clamp_value_recursive(v, entry_fuse, depth - 1));
                 }
                 if overflow > 0 {
                     let approx_tokens = head
@@ -229,47 +216,27 @@ mod tests {
             "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1),
             "no_spool": true
         });
-        assert!(!should_force_spool(
-            "run_pty_cmd",
-            &no_spool_value,
-            false,
-            true
-        ));
+        assert!(!should_force_spool("run_pty_cmd", &no_spool_value, false, true));
 
         let non_pty_value = json!({
             "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1)
         });
-        assert!(!should_force_spool(
-            tools::GREP_FILE,
-            &non_pty_value,
-            false,
-            true
-        ));
-        assert!(!should_force_spool(
-            "run_pty_cmd",
-            &non_pty_value,
-            false,
-            false
-        ));
+        assert!(!should_force_spool(tools::GREP_FILE, &non_pty_value, false, true));
+        assert!(!should_force_spool("run_pty_cmd", &non_pty_value, false, false));
     }
 
     #[tokio::test]
     async fn process_tool_output_skips_force_spool_when_dynamic_context_is_disabled() {
         let temp = tempfile::tempdir().unwrap();
-        std::fs::write(
-            temp.path().join("vtcode.toml"),
-            "[context.dynamic]\nenabled = false\n",
-        )
-        .unwrap();
+        std::fs::write(temp.path().join("vtcode.toml"), "[context.dynamic]\nenabled = false\n")
+            .unwrap();
         let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
         let value = json!({
             "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1),
             "truncated": true
         });
 
-        let result = registry
-            .process_tool_output("run_pty_cmd", value.clone(), false)
-            .await;
+        let result = registry.process_tool_output("run_pty_cmd", value.clone(), false).await;
 
         assert!(result.get("spool_path").is_none());
         assert_eq!(result.get("output"), value.get("output"));
@@ -300,9 +267,8 @@ mod tests {
             };
             let mut value = json!({});
             value[field] = json!(big);
-            let result = registry
-                .process_tool_output(tool, value.clone(), tool.starts_with("mcp"))
-                .await;
+            let result =
+                registry.process_tool_output(tool, value.clone(), tool.starts_with("mcp")).await;
 
             assert!(
                 result.get("spool_path").is_some(),

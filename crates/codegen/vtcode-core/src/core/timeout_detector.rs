@@ -170,10 +170,7 @@ impl TimeoutDetector {
         // Build default configs outside the Arc so we don't need blocking_write.
         let mut configs_map = HashMap::new();
         configs_map.insert(OperationType::ApiCall, TimeoutConfig::api_call());
-        configs_map.insert(
-            OperationType::FileOperation,
-            TimeoutConfig::file_operation(),
-        );
+        configs_map.insert(OperationType::FileOperation, TimeoutConfig::file_operation());
         configs_map.insert(OperationType::CodeAnalysis, TimeoutConfig::analysis());
         configs_map.insert(OperationType::ToolExecution, TimeoutConfig::default());
         configs_map.insert(OperationType::NetworkRequest, TimeoutConfig::api_call());
@@ -194,12 +191,7 @@ impl TimeoutDetector {
             Self::run_cleanup_loop(cleanup_rx, cleanup_active, cleanup_stats).await;
         });
 
-        Self {
-            configs,
-            active_operations,
-            stats,
-            cleanup_tx,
-        }
+        Self { configs, active_operations, stats, cleanup_tx }
     }
 
     /// Background task that processes end-operation requests from dropped handles.
@@ -435,8 +427,7 @@ impl TimeoutDetector {
             match result {
                 Ok(value) => {
                     if attempt > 0 {
-                        self.record_successful_retry(&format!("{operation_id}_{attempt}"))
-                            .await;
+                        self.record_successful_retry(&format!("{operation_id}_{attempt}")).await;
                     }
                     return Ok(value);
                 }
@@ -445,15 +436,13 @@ impl TimeoutDetector {
 
                     if !should_retry_op {
                         if attempt > 0 {
-                            self.record_failed_retry(&format!("{operation_id}_{attempt}"))
-                                .await;
+                            self.record_failed_retry(&format!("{operation_id}_{attempt}")).await;
                         }
                         return Err(error);
                     }
 
                     attempt += 1;
-                    self.record_failed_retry(&format!("{operation_id}_{attempt}"))
-                        .await;
+                    self.record_failed_retry(&format!("{operation_id}_{attempt}")).await;
 
                     let delay = self.calculate_retry_delay(&operation_type, attempt).await;
                     tracing::warn!(
@@ -610,14 +599,10 @@ mod tests {
     async fn test_calculate_retry_delay() {
         let detector = TimeoutDetector::new();
 
-        let delay = detector
-            .calculate_retry_delay(&OperationType::ApiCall, 0)
-            .await;
+        let delay = detector.calculate_retry_delay(&OperationType::ApiCall, 0).await;
         assert!(delay >= Duration::from_millis(200)); // Initial delay for API calls
 
-        let delay2 = detector
-            .calculate_retry_delay(&OperationType::ApiCall, 1)
-            .await;
+        let delay2 = detector.calculate_retry_delay(&OperationType::ApiCall, 1).await;
         assert!(delay2 > delay); // Should increase with backoff
     }
 }

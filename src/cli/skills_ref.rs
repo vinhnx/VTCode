@@ -23,9 +23,7 @@ pub async fn handle_skills_ref_validate(path: &Path) -> Result<()> {
         parse_skill_file(path).context(format!("Failed to parse skill at {}", path.display()))?;
 
     // Run validation
-    manifest
-        .validate()
-        .context("Skill manifest validation failed")?;
+    manifest.validate().context("Skill manifest validation failed")?;
 
     // Output success in skills-ref format
     println!("✓ Skill validation passed");
@@ -99,10 +97,7 @@ pub async fn handle_skills_ref_list(path: Option<&Path>) -> Result<()> {
         .await
         .context("Failed to discover skills")?;
 
-    println!(
-        "Discovered {} skills:\n",
-        result.skills.len() + result.tools.len()
-    );
+    println!("Discovered {} skills:\n", result.skills.len() + result.tools.len());
 
     // Traditional skills
     if !result.skills.is_empty() {
@@ -124,10 +119,7 @@ pub async fn handle_skills_ref_list(path: Option<&Path>) -> Result<()> {
 
     // Stats
     println!("\nDiscovery Stats:");
-    println!(
-        "  Directories scanned: {}",
-        result.stats.directories_scanned
-    );
+    println!("  Directories scanned: {}", result.stats.directories_scanned);
     println!("  Files checked: {}", result.stats.files_checked);
     println!("  Discovery time: {}ms", result.stats.discovery_time_ms);
 

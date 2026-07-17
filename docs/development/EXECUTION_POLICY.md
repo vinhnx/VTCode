@@ -109,8 +109,8 @@ Example pivot:
 ## Configuration
 
 Policies are defined in:
-- **Core defaults**: `vtcode-config/src/core/tools.rs` (tool policies)
-- **Command validation**: `vtcode-core/src/exec_policy/mod.rs` (command whitelisting)
+- **Core defaults**: `crates/codegen/vtcode-config/src/core/tools.rs` (tool policies)
+- **Command validation**: `crates/codegen/vtcode-core/src/exec_policy/mod.rs` (command whitelisting)
 - **User overrides**: `vtcode.toml` in project root or `~/.vtcode/` directory
 
 Override examples in `vtcode.toml`:
@@ -174,9 +174,9 @@ are designed to keep the first-request overhead low and per-turn growth bounded.
 
 A first-request budget guard rail is enforced by tests:
 
-- `vtcode-core/src/tools/registry/builtins.rs::emitted_model_tool_schema_fits_within_first_request_budget`
+- `crates/codegen/vtcode-core/src/tools/registry/builtins.rs::emitted_model_tool_schema_fits_within_first_request_budget`
   asserts builtin tool schemas stay within the budget in `progressive` mode.
-- `vtcode-core/src/tools/handlers/session_tool_catalog.rs` tests assert MCP tools
+- `crates/codegen/vtcode-core/src/tools/handlers/session_tool_catalog.rs` tests assert MCP tools
   defer (small or large catalog) and that the client-local policy defers small MCP
   catalogs.
 

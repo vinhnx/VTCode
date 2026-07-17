@@ -14,11 +14,7 @@ fn mimo_reasoning(message: &Value, choice: &Value) -> Option<String> {
     message
         .get("reasoning_content")
         .and_then(extract_reasoning_trace)
-        .or_else(|| {
-            choice
-                .get("reasoning_content")
-                .and_then(extract_reasoning_trace)
-        })
+        .or_else(|| choice.get("reasoning_content").and_then(extract_reasoning_trace))
 }
 
 /// Auth method is fully derivable from the key prefix and base URL, so it is
@@ -239,10 +235,7 @@ mod tests {
         );
         assert_eq!(
             payg.supported_models(),
-            models::mimo::PAYG_MODELS
-                .iter()
-                .map(|m| m.to_string())
-                .collect::<Vec<_>>()
+            models::mimo::PAYG_MODELS.iter().map(|m| m.to_string()).collect::<Vec<_>>()
         );
 
         let token_plan = MiMoProvider::from_config(

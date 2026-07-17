@@ -257,11 +257,7 @@ fn detect_unicode_support() -> bool {
     std::env::var("LANG")
         .ok()
         .map(|lang| lang.to_lowercase().contains("utf"))
-        .or_else(|| {
-            std::env::var("LC_ALL")
-                .ok()
-                .map(|lc| lc.to_lowercase().contains("utf"))
-        })
+        .or_else(|| std::env::var("LC_ALL").ok().map(|lc| lc.to_lowercase().contains("utf")))
         .unwrap_or(true)
 }
 

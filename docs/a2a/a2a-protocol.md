@@ -18,7 +18,7 @@ The A2A Protocol enables:
 VT Code's A2A implementation spans across modules:
 
 ```
-vtcode-core/src/a2a/
+crates/codegen/vtcode-core/src/a2a/
 ├── mod.rs                  # Module organization & re-exports
 ├── types.rs                # Core data structures (Task, Message, Part, Artifact)
 ├── rpc.rs                  # JSON-RPC 2.0 protocol (requests, responses, methods)

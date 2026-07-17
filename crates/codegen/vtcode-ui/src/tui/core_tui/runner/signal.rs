@@ -39,10 +39,7 @@ impl SignalCleanupGuard {
             }
         });
 
-        Ok(Self {
-            handle,
-            thread: Some(thread),
-        })
+        Ok(Self { handle, thread: Some(thread) })
     }
 
     #[cfg(not(unix))]

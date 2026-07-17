@@ -67,9 +67,7 @@ pub(super) fn builtin_tool_registrations(
     registrations.sort_by(|a, b| {
         let a_has_aliases = !a.metadata().aliases().is_empty();
         let b_has_aliases = !b.metadata().aliases().is_empty();
-        b_has_aliases
-            .cmp(&a_has_aliases)
-            .then_with(|| a.name().cmp(b.name()))
+        b_has_aliases.cmp(&a_has_aliases).then_with(|| a.name().cmp(b.name()))
     });
 
     registrations
@@ -309,9 +307,7 @@ fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     let web_search = WebSearchTool::with_config(
-        tool_config()
-            .map(|snapshot| snapshot.web_search.clone())
-            .unwrap_or_default(),
+        tool_config().map(|snapshot| snapshot.web_search.clone()).unwrap_or_default(),
     );
     let web_search_for_factory = web_search.clone();
     let web_search_factory = native_cgp_tool_factory(move || web_search_for_factory.clone());
@@ -704,10 +700,7 @@ mod tests {
             code_search.metadata().aliases().is_empty(),
             "code_search should not rely on aliases"
         );
-        let schema = code_search
-            .metadata()
-            .parameter_schema()
-            .expect("code_search schema");
+        let schema = code_search.metadata().parameter_schema().expect("code_search schema");
         assert_eq!(schema["required"], json!(["query"]));
         let mut property_names = schema["properties"]
             .as_object()
@@ -716,10 +709,7 @@ mod tests {
             .map(String::as_str)
             .collect::<Vec<_>>();
         property_names.sort_unstable();
-        assert_eq!(
-            property_names,
-            ["file_types", "max_results", "path", "query", "result_types"]
-        );
+        assert_eq!(property_names, ["file_types", "max_results", "path", "query", "result_types"]);
 
         for tool_name in [
             tools::UNIFIED_SEARCH,
@@ -727,9 +717,7 @@ mod tests {
             tools::UNIFIED_FILE,
         ] {
             assert!(
-                registrations
-                    .iter()
-                    .all(|registration| registration.name() != tool_name),
+                registrations.iter().all(|registration| registration.name() != tool_name),
                 "{tool_name} must not have a builtin registration"
             );
         }
@@ -742,10 +730,7 @@ mod tests {
             .iter()
             .find(|registration| registration.name() == tools::WEB_SEARCH)
             .expect("web_search registration should exist");
-        let schema = web_search
-            .metadata()
-            .parameter_schema()
-            .expect("web_search schema");
+        let schema = web_search.metadata().parameter_schema().expect("web_search schema");
 
         assert_eq!(schema["required"], json!(["query"]));
         assert_eq!(schema["additionalProperties"], json!(false));
@@ -783,13 +768,7 @@ mod tests {
             tools::WAIT_AGENT,
             tools::CLOSE_AGENT,
         ] {
-            assert!(
-                agent
-                    .metadata()
-                    .aliases()
-                    .iter()
-                    .any(|candidate| candidate == alias)
-            );
+            assert!(agent.metadata().aliases().iter().any(|candidate| candidate == alias));
         }
     }
 
@@ -800,10 +779,7 @@ mod tests {
             .iter()
             .find(|registration| registration.name() == tools::WEB_FETCH)
             .expect("web_fetch registration should exist");
-        let description = web_fetch
-            .metadata()
-            .description()
-            .expect("web_fetch description");
+        let description = web_fetch.metadata().description().expect("web_fetch description");
 
         assert!(description.contains("/llms.txt"));
         assert!(description.contains("abc.com"));
@@ -961,9 +937,7 @@ mod tests {
             if rule3_allowlist.contains(&tool_name) {
                 continue;
             }
-            let has_anti = anti_pattern_cues
-                .iter()
-                .any(|cue| description.contains(cue));
+            let has_anti = anti_pattern_cues.iter().any(|cue| description.contains(cue));
             let has_constraint = constraint_cues.iter().any(|cue| description.contains(cue));
             assert!(
                 has_anti || has_constraint,
@@ -981,10 +955,8 @@ mod tests {
         // behind the deferred-loading path, or deliberately raise this cap in
         // review.
         let registrations = builtin_tool_registrations(None);
-        let exposed: usize = registrations
-            .iter()
-            .filter(|registration| registration.expose_in_llm())
-            .count();
+        let exposed: usize =
+            registrations.iter().filter(|registration| registration.expose_in_llm()).count();
         assert!(
             exposed <= 14,
             "exposed built-in tool count is {exposed}; expected <= 14. \
@@ -1070,9 +1042,7 @@ mod tests {
                     description: &entry.description,
                     parameters: &entry.parameters,
                 };
-                serde_json::to_string(&estimate)
-                    .map(|s| s.len() / 4)
-                    .unwrap_or(0)
+                serde_json::to_string(&estimate).map(|s| s.len() / 4).unwrap_or(0)
             })
             .sum();
 
@@ -1120,9 +1090,7 @@ mod tests {
                     description: &entry.description,
                     parameters: &entry.parameters,
                 };
-                serde_json::to_string(&estimate)
-                    .map(|s| s.len() / 4)
-                    .unwrap_or(0)
+                serde_json::to_string(&estimate).map(|s| s.len() / 4).unwrap_or(0)
             })
             .sum();
 

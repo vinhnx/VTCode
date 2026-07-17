@@ -120,19 +120,15 @@ where
     }
 
     pub(super) fn final_message(&self) -> Option<&str> {
-        self.last_agent_message
-            .as_deref()
-            .or(self.last_plan_message.as_deref())
+        self.last_agent_message.as_deref().or(self.last_plan_message.as_deref())
     }
 
     pub(super) fn warn_empty_last_message(&mut self, path: &Path) {
         if !self.emit_human_output {
             return;
         }
-        let warning = format!(
-            "Warning: no last agent message; wrote empty content to {}",
-            path.display()
-        );
+        let warning =
+            format!("Warning: no last agent message; wrote empty content to {}", path.display());
         if let Err(err) = self.write_stderr_line(&warning) {
             self.capture_error(err);
         }
@@ -192,9 +188,7 @@ where
 
     fn write_stdout(&mut self, text: &str) -> Result<()> {
         if let Some(writer) = self.stdout.as_mut() {
-            writer
-                .write_all(text.as_bytes())
-                .context("Failed to write exec JSON output")?;
+            writer.write_all(text.as_bytes()).context("Failed to write exec JSON output")?;
         }
         Ok(())
     }
@@ -204,9 +198,7 @@ where
             return Ok(());
         }
         if let Some(writer) = self.stderr.as_mut() {
-            writer
-                .write_all(text.as_bytes())
-                .context("Failed to write exec human output")?;
+            writer.write_all(text.as_bytes()).context("Failed to write exec human output")?;
         }
         Ok(())
     }
@@ -240,26 +232,20 @@ pub(super) fn serialize_event_line(event: &ThreadEvent) -> Result<String> {
 pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
     match event {
         ThreadEvent::ItemStarted(started) => match &started.item.details {
-            ThreadItemDetails::CommandExecution(details) => Some(format!(
-                "{} {}",
-                style("[COMMAND]").cyan().bold(),
-                details.command
-            )),
-            ThreadItemDetails::ToolInvocation(details) => Some(format!(
-                "{} {}",
-                style("[TOOL]").cyan().bold(),
-                details.tool_name
-            )),
+            ThreadItemDetails::CommandExecution(details) => {
+                Some(format!("{} {}", style("[COMMAND]").cyan().bold(), details.command))
+            }
+            ThreadItemDetails::ToolInvocation(details) => {
+                Some(format!("{} {}", style("[TOOL]").cyan().bold(), details.tool_name))
+            }
             _ => None,
         },
         ThreadEvent::ItemCompleted(completed) => match &completed.item.details {
             ThreadItemDetails::CommandExecution(details)
                 if matches!(details.status, CommandExecutionStatus::Failed) =>
             {
-                let exit_suffix = details
-                    .exit_code
-                    .map(|code| format!(" (exit {code})"))
-                    .unwrap_or_default();
+                let exit_suffix =
+                    details.exit_code.map(|code| format!(" (exit {code})")).unwrap_or_default();
                 Some(format!(
                     "{} {}{}",
                     style("[COMMAND FAILED]").red().bold(),
@@ -270,11 +256,7 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
             ThreadItemDetails::ToolInvocation(details)
                 if matches!(details.status, ToolCallStatus::Failed) =>
             {
-                Some(format!(
-                    "{} {}",
-                    style("[TOOL FAILED]").red().bold(),
-                    details.tool_name
-                ))
+                Some(format!("{} {}", style("[TOOL FAILED]").red().bold(), details.tool_name))
             }
             ThreadItemDetails::Harness(item) => {
                 let label = match item.event {
@@ -340,30 +322,23 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                     (Some(message), Some(path)) => format!("{message}: {path}"),
                     (Some(message), None) => message.to_string(),
                     (None, Some(path)) => path.to_string(),
-                    (None, None) => item
-                        .command
-                        .clone()
-                        .unwrap_or_else(|| "harness event".to_string()),
+                    (None, None) => {
+                        item.command.clone().unwrap_or_else(|| "harness event".to_string())
+                    }
                 };
                 Some(format!("{label} {detail}"))
             }
-            ThreadItemDetails::Error(item) => Some(format!(
-                "{} {}",
-                style("[WARNING]").red().bold(),
-                item.message
-            )),
+            ThreadItemDetails::Error(item) => {
+                Some(format!("{} {}", style("[WARNING]").red().bold(), item.message))
+            }
             _ => None,
         },
-        ThreadEvent::TurnFailed(failed) => Some(format!(
-            "{} {}",
-            style("[ERROR]").red().bold(),
-            failed.message
-        )),
-        ThreadEvent::Error(error) => Some(format!(
-            "{} {}",
-            style("[ERROR]").red().bold(),
-            error.message
-        )),
+        ThreadEvent::TurnFailed(failed) => {
+            Some(format!("{} {}", style("[ERROR]").red().bold(), failed.message))
+        }
+        ThreadEvent::Error(error) => {
+            Some(format!("{} {}", style("[ERROR]").red().bold(), error.message))
+        }
         _ => None,
     }
 }
@@ -373,12 +348,8 @@ pub(super) fn render_final_tail(result: &TaskResults, dry_run: bool) -> String {
     output.push('\n');
 
     if !result.summary.trim().is_empty() {
-        let _ = writeln!(
-            output,
-            "{} {}\n",
-            style("[SUMMARY]").green().bold(),
-            result.summary.trim()
-        );
+        let _ =
+            writeln!(output, "{} {}\n", style("[SUMMARY]").green().bold(), result.summary.trim());
     }
 
     let avg_display = result
@@ -394,11 +365,7 @@ pub(super) fn render_final_tail(result: &TaskResults, dry_run: bool) -> String {
     let _ = writeln!(output, "  {:16} {}", "outcome", result.outcome);
     let _ = writeln!(output, "  {:16} {}", "dry_run", dry_run);
     let _ = writeln!(output, "  {:16} {}", "turns", result.turns_executed);
-    let _ = writeln!(
-        output,
-        "  {:16} {}",
-        "duration_ms", result.total_duration_ms
-    );
+    let _ = writeln!(output, "  {:16} {}", "duration_ms", result.total_duration_ms);
     let _ = writeln!(output, "  {:16} {}", "avg_turn_ms", avg_display);
     let _ = writeln!(output, "  {:16} {}", "max_turn_ms", max_display);
     let _ = writeln!(output, "  {:16} {}\n", "warnings", result.warnings.len());

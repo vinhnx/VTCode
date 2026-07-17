@@ -344,35 +344,19 @@ fn assert_local_compaction_history_with_user_count(
 ) {
     let envelope_found = history.iter().any(|message| {
         message.role == MessageRole::System
-            && message
-                .content
-                .as_text()
-                .contains("[Session Memory Envelope]")
+            && message.content.as_text().contains("[Session Memory Envelope]")
     });
     let summary_found = history.iter().any(|message| {
         message.role == MessageRole::System
-            && message
-                .content
-                .as_text()
-                .contains("Previous conversation summary")
+            && message.content.as_text().contains("Previous conversation summary")
     });
     assert!(
         envelope_found || summary_found,
         "Expected either a memory envelope or a summary in the compacted history"
     );
-    let user_count = history
-        .iter()
-        .filter(|message| message.role == MessageRole::User)
-        .count();
-    assert!(
-        user_count >= 1,
-        "Expected at least 1 user message, got {user_count}"
-    );
-    assert!(
-        history.len() >= 2,
-        "history.len()={} should be at least 2",
-        history.len()
-    );
+    let user_count = history.iter().filter(|message| message.role == MessageRole::User).count();
+    assert!(user_count >= 1, "Expected at least 1 user message, got {user_count}");
+    assert!(history.len() >= 2, "history.len()={} should be at least 2", history.len());
 }
 
 fn read_file_tool_call(id: &str, path: &str) -> ToolCall {
@@ -440,10 +424,7 @@ async fn manual_compaction_succeeds_without_server_side_support() {
     // continuity tail (the most recent turn is always kept verbatim).
     assert_eq!(outcome.compacted_len, 7);
     assert_local_compaction_history(&history, 0);
-    assert_eq!(
-        session_stats.previous_response_id_for("stub", "stub-model"),
-        None
-    );
+    assert_eq!(session_stats.previous_response_id_for("stub", "stub-model"), None);
     assert!(context_manager.current_token_usage() <= 900);
     assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_some());
 }
@@ -476,10 +457,7 @@ async fn manual_compaction_emits_local_compaction_boundary_event() {
     .expect("compaction succeeds")
     .expect("history should compact");
 
-    assert_eq!(
-        outcome.mode,
-        vtcode_core::exec::events::CompactionMode::Local
-    );
+    assert_eq!(outcome.mode, vtcode_core::exec::events::CompactionMode::Local);
     let content = fs::read_to_string(harness_path).expect("read harness log");
     assert!(content.contains("\"type\":\"thread.compact_boundary\""));
     assert!(content.contains("\"mode\":\"local\""));
@@ -513,10 +491,7 @@ async fn provider_compaction_emits_provider_boundary_event() {
     .expect("compaction succeeds")
     .expect("history should compact");
 
-    assert_eq!(
-        outcome.mode,
-        vtcode_core::exec::events::CompactionMode::Provider
-    );
+    assert_eq!(outcome.mode, vtcode_core::exec::events::CompactionMode::Provider);
     let content = fs::read_to_string(harness_path).expect("read harness log");
     assert!(content.contains("\"type\":\"thread.compact_boundary\""));
     assert!(content.contains("\"mode\":\"provider\""));
@@ -550,14 +525,8 @@ async fn manual_compaction_clears_previous_response_chain() {
     .expect("manual OpenAI compaction succeeds")
     .expect("history should compact");
 
-    assert_eq!(
-        outcome.mode,
-        vtcode_core::exec::events::CompactionMode::Provider
-    );
-    assert_eq!(
-        session_stats.previous_response_id_for("provider-stub", "stub-model"),
-        None
-    );
+    assert_eq!(outcome.mode, vtcode_core::exec::events::CompactionMode::Provider);
+    assert_eq!(session_stats.previous_response_id_for("provider-stub", "stub-model"), None);
 }
 
 #[tokio::test]
@@ -587,10 +556,7 @@ async fn model_switch_compaction_tags_boundary_event_with_model_switch_trigger()
     .expect("model-switch compaction succeeds")
     .expect("history should compact");
 
-    assert_eq!(
-        outcome.mode,
-        vtcode_core::exec::events::CompactionMode::Provider
-    );
+    assert_eq!(outcome.mode, vtcode_core::exec::events::CompactionMode::Provider);
 
     let log = fs::read_to_string(&harness_path).expect("harness log readable");
     assert!(
@@ -629,10 +595,7 @@ async fn manual_compaction_native_only_rejects_provider_without_standalone_compa
     assert!(err.to_string().contains(
         "`--native-only` `/compact` requires a provider that exposes a native server-side compaction endpoint"
     ));
-    assert!(
-        err.to_string()
-            .contains("Run `/compact` without `--native-only`")
-    );
+    assert!(err.to_string().contains("Run `/compact` without `--native-only`"));
     assert_eq!(history, original_history);
 }
 
@@ -663,10 +626,7 @@ async fn manual_compaction_compacts_locally_for_non_native_provider() {
     .expect("local compaction succeeds")
     .expect("history should compact");
 
-    assert_eq!(
-        outcome.mode,
-        vtcode_core::exec::events::CompactionMode::Local
-    );
+    assert_eq!(outcome.mode, vtcode_core::exec::events::CompactionMode::Local);
     assert!(history.len() < test_history().len());
 }
 
@@ -735,9 +695,7 @@ async fn provider_compaction_noop_preserves_existing_history() {
 async fn provider_compaction_preserves_original_repeated_file_reads() {
     let temp = tempdir().expect("tempdir");
     let seen_history = Arc::new(RwLock::new(Vec::new()));
-    let provider = RecordingProviderCompactionProvider {
-        seen_history: Arc::clone(&seen_history),
-    };
+    let provider = RecordingProviderCompactionProvider { seen_history: Arc::clone(&seen_history) };
     let mut history = vec![
         assistant_with_tool_call(read_file_tool_call("call-1", "src/lib.rs")),
         Message::tool_response_with_origin(
@@ -827,22 +785,13 @@ fn dedup_repeated_file_reads_rewrites_only_older_exact_matches() {
 
     let older_payload: serde_json::Value =
         serde_json::from_str(deduped[1].content.as_text().as_ref()).expect("json payload");
+    assert_eq!(older_payload.get("deduped_read").and_then(serde_json::Value::as_bool), Some(true));
     assert_eq!(
-        older_payload
-            .get("deduped_read")
-            .and_then(serde_json::Value::as_bool),
-        Some(true)
-    );
-    assert_eq!(
-        older_payload
-            .get("note")
-            .and_then(serde_json::Value::as_str),
+        older_payload.get("note").and_then(serde_json::Value::as_str),
         Some(super::DEDUPED_FILE_READ_NOTE)
     );
     assert_eq!(
-        older_payload
-            .get("file_path")
-            .and_then(serde_json::Value::as_str),
+        older_payload.get("file_path").and_then(serde_json::Value::as_str),
         Some("src/lib.rs")
     );
     assert!(deduped[3].content.as_text().contains("newer contents"));
@@ -981,10 +930,7 @@ fn recovery_context_previews_extract_nested_error_guidance_and_spool_excerpt() {
     let spool_path = spool_dir.join("read_1.txt");
     fs::write(
         &spool_path,
-        (1..=40)
-            .map(|idx| format!("spooled-line-{idx}"))
-            .collect::<Vec<_>>()
-            .join("\n"),
+        (1..=40).map(|idx| format!("spooled-line-{idx}")).collect::<Vec<_>>().join("\n"),
     )
     .expect("spool file");
 
@@ -1062,9 +1008,7 @@ fn recovery_context_previews_prefer_substantive_reads_over_recent_low_signal_out
     assert!(previews[2].contains("VT Code is an open-source coding agent"));
     assert!(previews[3].contains("Repeated reads of 'docs/ARCHITECTURE.md'"));
     assert!(
-        previews
-            .iter()
-            .all(|preview| !preview.contains("Listed 20 items")),
+        previews.iter().all(|preview| !preview.contains("Listed 20 items")),
         "low-signal listing should be dropped when richer previews exist: {previews:?}"
     );
 }
@@ -1103,26 +1047,17 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
     fs::create_dir_all(&history_dir).expect("history dir");
     fs::create_dir_all(temp.path().join(".vtcode").join("tasks")).expect("tasks dir");
     fs::write(
-        temp.path()
-            .join(".vtcode")
-            .join("tasks")
-            .join("current_task.md"),
+        temp.path().join(".vtcode").join("tasks").join("current_task.md"),
         "# Ship compaction cleanup\n- [ ] Run cargo nextest\n- [x] Wire in config\n",
     )
     .expect("write task");
     fs::write(
-        temp.path()
-            .join(".vtcode")
-            .join("tasks")
-            .join("current_spec.md"),
+        temp.path().join(".vtcode").join("tasks").join("current_spec.md"),
         "# Spec\nKeep local compaction aligned with summarized forks.\n",
     )
     .expect("write spec");
     fs::write(
-        temp.path()
-            .join(".vtcode")
-            .join("tasks")
-            .join("current_evaluation.md"),
+        temp.path().join(".vtcode").join("tasks").join("current_evaluation.md"),
         "# Eval\nNeed a regression test for repeated reads.\n",
     )
     .expect("write eval");
@@ -1186,11 +1121,7 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
     .expect("envelope should be refreshed");
 
     assert_eq!(envelope.objective.as_deref(), Some("Keep continuity"));
-    assert!(
-        envelope
-            .constraints
-            .contains(&"Do not redesign the harness".to_string())
-    );
+    assert!(envelope.constraints.contains(&"Do not redesign the harness".to_string()));
     assert!(
         envelope
             .spec_summary
@@ -1209,22 +1140,9 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
             .as_deref()
             .is_some_and(|summary| summary.contains("Run cargo nextest"))
     );
-    assert!(
-        envelope
-            .open_questions
-            .contains(&"Should dedup cover batch reads?".to_string())
-    );
-    assert!(
-        envelope
-            .verification_todo
-            .iter()
-            .any(|item| item.contains("Run cargo nextest"))
-    );
-    assert!(
-        envelope
-            .verification_todo
-            .contains(&"Run cargo check".to_string())
-    );
+    assert!(envelope.open_questions.contains(&"Should dedup cover batch reads?".to_string()));
+    assert!(envelope.verification_todo.iter().any(|item| item.contains("Run cargo nextest")));
+    assert!(envelope.verification_todo.contains(&"Run cargo check".to_string()));
     assert!(
         envelope
             .delegation_notes
@@ -1232,10 +1150,7 @@ fn refresh_session_memory_envelope_merges_existing_continuity_fields() {
     );
     assert!(envelope.touched_files.contains(&"src/new.rs".to_string()));
     assert!(envelope.touched_files.contains(&"src/child.rs".to_string()));
-    assert_eq!(
-        history, original_history,
-        "ordinary refresh should not mutate live history"
-    );
+    assert_eq!(history, original_history, "ordinary refresh should not mutate live history");
 
     let persisted_path = latest_memory_envelope_path_for_session(temp.path(), "session-alpha")
         .expect("persisted envelope path");
@@ -1281,10 +1196,7 @@ fn refresh_session_memory_envelope_prefers_structured_verify_metadata() {
             "- cargo check -p vtcode\n- cargo test -p vtcode --bin vtcode agent::runloop::unified::turn::compaction::tests::refresh_session_memory_envelope_prefers_structured_verify_metadata -- --exact"
         )
     );
-    assert_eq!(
-        history, original_history,
-        "ordinary refresh should not mutate live history"
-    );
+    assert_eq!(history, original_history, "ordinary refresh should not mutate live history");
     let persisted_path = latest_memory_envelope_path_for_session(temp.path(), "session-alpha")
         .expect("persisted envelope path");
     let persisted: SessionMemoryEnvelope =
@@ -1313,10 +1225,7 @@ fn refresh_session_memory_envelope_is_throttled_when_nothing_changes() {
     fs::create_dir_all(&history_dir).expect("history dir");
     fs::create_dir_all(temp.path().join(".vtcode").join("tasks")).expect("tasks dir");
     fs::write(
-        temp.path()
-            .join(".vtcode")
-            .join("tasks")
-            .join("current_task.md"),
+        temp.path().join(".vtcode").join("tasks").join("current_task.md"),
         "# Ship compaction cleanup\n- [ ] Run cargo nextest\n",
     )
     .expect("write task");
@@ -1362,10 +1271,7 @@ fn refresh_session_memory_envelope_is_throttled_when_nothing_changes() {
     )
     .expect("refresh succeeds");
     assert!(first.is_some(), "first refresh should produce an envelope");
-    assert_eq!(
-        history, original_history,
-        "ordinary refresh should not mutate live history"
-    );
+    assert_eq!(history, original_history, "ordinary refresh should not mutate live history");
     let history_len_after_first = history.len();
 
     let second = super::refresh_session_memory_envelope(
@@ -1377,19 +1283,13 @@ fn refresh_session_memory_envelope_is_throttled_when_nothing_changes() {
         None,
     )
     .expect("refresh succeeds");
-    assert!(
-        second.is_none(),
-        "second identical refresh should be throttled"
-    );
+    assert!(second.is_none(), "second identical refresh should be throttled");
     assert_eq!(
         history.len(),
         history_len_after_first,
         "history should not grow when refresh is throttled"
     );
-    assert_eq!(
-        history, original_history,
-        "throttled refresh should leave live history unchanged"
-    );
+    assert_eq!(history, original_history, "throttled refresh should leave live history unchanged");
 }
 
 #[test]
@@ -1399,10 +1299,7 @@ fn refresh_session_memory_envelope_summary_is_concise() {
     fs::create_dir_all(&history_dir).expect("history dir");
     fs::create_dir_all(temp.path().join(".vtcode").join("tasks")).expect("tasks dir");
     fs::write(
-        temp.path()
-            .join(".vtcode")
-            .join("tasks")
-            .join("current_task.md"),
+        temp.path().join(".vtcode").join("tasks").join("current_task.md"),
         "# Audit agent loop\n- [ ] Reduce duplicated work\n",
     )
     .expect("write task");
@@ -1433,19 +1330,12 @@ fn refresh_session_memory_envelope_summary_is_concise() {
         !envelope.summary.contains("{\"error\""),
         "summary should not contain raw JSON tool output"
     );
-    assert!(
-        envelope.summary.len() < 300,
-        "summary should be concise, got: {}",
-        envelope.summary
-    );
+    assert!(envelope.summary.len() < 300, "summary should be concise, got: {}", envelope.summary);
     assert!(
         envelope.summary.contains("Audit agent loop"),
         "summary should reference the objective"
     );
-    assert_eq!(
-        history, original_history,
-        "ordinary refresh should not mutate live history"
-    );
+    assert_eq!(history, original_history, "ordinary refresh should not mutate live history");
 }
 
 #[tokio::test]
@@ -1508,10 +1398,7 @@ async fn recovery_compaction_falls_back_to_local_when_inline_request_errors() {
     .expect("recovery compaction should fall back to local")
     .expect("history should compact");
 
-    assert_eq!(
-        outcome.mode,
-        vtcode_core::exec::events::CompactionMode::Local
-    );
+    assert_eq!(outcome.mode, vtcode_core::exec::events::CompactionMode::Local);
     assert!(history.len() < original_len);
 }
 
@@ -1556,17 +1443,9 @@ async fn auto_compaction_replaces_history_and_clears_response_chain() {
     // continuity tail + the injected session memory envelope (index 4).
     assert_eq!(outcome.compacted_len, 8);
     assert_local_compaction_history(&history, 4);
-    assert!(
-        history[0]
-            .content
-            .as_text()
-            .contains("Previous conversation summary")
-    );
+    assert!(history[0].content.as_text().contains("Previous conversation summary"));
     assert_eq!(history[5].role, MessageRole::User);
-    assert_eq!(
-        session_stats.previous_response_id_for("stub", "stub-model"),
-        None
-    );
+    assert_eq!(session_stats.previous_response_id_for("stub", "stub-model"), None);
     assert!(context_manager.current_token_usage() <= 700);
     assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_some());
 }
@@ -1612,11 +1491,11 @@ async fn targeted_compaction_preserves_prefix_and_replaces_suffix() {
             .iter()
             .any(|m| m.content.as_text().contains("[Session Memory Envelope]"))
     );
-    assert!(history.iter().any(|m| {
-        m.content
-            .as_text()
-            .contains("Previous conversation summary")
-    }));
+    assert!(
+        history
+            .iter()
+            .any(|m| { m.content.as_text().contains("Previous conversation summary") })
+    );
     assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_none());
 }
 
@@ -1631,10 +1510,7 @@ async fn recovery_compaction_preserves_current_turn_suffix_and_emits_event() {
     history.push(Message::system("Model follow-up failed after tool activity. Tools are disabled on the next pass; provide a direct textual response from the current context and reuse the latest tool outputs already in history.".to_string()));
     history.push(Message::user("current-turn".to_string()));
     history.push(Message::assistant("".to_string()));
-    history.push(Message::tool_response(
-        "call-current".to_string(),
-        "{\"ok\":true}".to_string(),
-    ));
+    history.push(Message::tool_response("call-current".to_string(), "{\"ok\":true}".to_string()));
     let preserved_suffix = history[12..].to_vec();
     let mut session_stats = SessionStats::default();
     let mut context_manager = test_context_manager();
@@ -1657,10 +1533,7 @@ async fn recovery_compaction_preserves_current_turn_suffix_and_emits_event() {
     .expect("recovery compaction succeeds")
     .expect("history should compact");
 
-    assert_eq!(
-        history[history.len() - preserved_suffix.len()..],
-        preserved_suffix
-    );
+    assert_eq!(history[history.len() - preserved_suffix.len()..], preserved_suffix);
     assert!(outcome.compacted_len < outcome.original_len);
 
     let content = fs::read_to_string(harness_path).expect("read harness log");
@@ -1678,10 +1551,7 @@ async fn recovery_compaction_uses_provider_mode_when_supported() {
     let mut history = test_history();
     history.push(Message::user("current-turn".to_string()));
     history.push(Message::assistant("".to_string()));
-    history.push(Message::tool_response(
-        "call-current".to_string(),
-        "{\"ok\":true}".to_string(),
-    ));
+    history.push(Message::tool_response("call-current".to_string(), "{\"ok\":true}".to_string()));
     let preserved_suffix = history[12..].to_vec();
     let mut session_stats = SessionStats::default();
     let mut context_manager = test_context_manager();
@@ -1704,14 +1574,8 @@ async fn recovery_compaction_uses_provider_mode_when_supported() {
     .expect("provider recovery compaction succeeds")
     .expect("history should compact");
 
-    assert_eq!(
-        outcome.mode,
-        vtcode_core::exec::events::CompactionMode::Provider
-    );
-    assert_eq!(
-        history[history.len() - preserved_suffix.len()..],
-        preserved_suffix
-    );
+    assert_eq!(outcome.mode, vtcode_core::exec::events::CompactionMode::Provider);
+    assert_eq!(history[history.len() - preserved_suffix.len()..], preserved_suffix);
 
     let content = fs::read_to_string(harness_path).expect("read harness log");
     assert!(content.contains("\"trigger\":\"recovery\""));
@@ -1745,18 +1609,11 @@ fn inject_latest_memory_envelope_rehydrates_resume_history() {
         history_artifact_path: Some(".vtcode/history/resume-session_001.jsonl".to_string()),
         generated_at: "2026-03-14T00:00:00Z".to_string(),
     };
-    fs::write(
-        &envelope_path,
-        serde_json::to_string_pretty(&envelope).expect("serialize envelope"),
-    )
-    .expect("write envelope");
+    fs::write(&envelope_path, serde_json::to_string_pretty(&envelope).expect("serialize envelope"))
+        .expect("write envelope");
 
     let mut history = vec![Message::user("resume".to_string())];
-    assert!(inject_latest_memory_envelope(
-        temp.path(),
-        "resume-session",
-        &mut history
-    ));
+    assert!(inject_latest_memory_envelope(temp.path(), "resume-session", &mut history));
     assert!(history[0].content.as_text().contains("Persisted summary"));
     assert!(history[0].content.as_text().contains("Cargo.toml"));
     assert!(history[0].content.as_text().contains("Verification Status"));
@@ -1799,11 +1656,7 @@ fn inject_latest_memory_envelope_is_session_scoped() {
     }
 
     let mut history = vec![Message::user("resume".to_string())];
-    assert!(inject_latest_memory_envelope(
-        temp.path(),
-        "session-beta",
-        &mut history
-    ));
+    assert!(inject_latest_memory_envelope(temp.path(), "session-beta", &mut history));
     assert!(history[0].content.as_text().contains("Beta summary"));
     assert!(!history[0].content.as_text().contains("Alpha summary"));
 }
@@ -1844,11 +1697,7 @@ fn inject_latest_memory_envelope_requires_exact_session_prefix_match() {
     }
 
     let mut history = vec![Message::user("resume".to_string())];
-    assert!(inject_latest_memory_envelope(
-        temp.path(),
-        "session-a",
-        &mut history
-    ));
+    assert!(inject_latest_memory_envelope(temp.path(), "session-a", &mut history));
     assert!(history[0].content.as_text().contains("Exact summary"));
     assert!(!history[0].content.as_text().contains("Wrong summary"));
 }
@@ -1878,12 +1727,7 @@ async fn no_envelope_written_when_dynamic_history_is_disabled() {
     .expect("compaction succeeds");
 
     assert!(latest_memory_envelope_path_for_session(temp.path(), "session-alpha").is_none());
-    assert!(
-        history[0]
-            .content
-            .as_text()
-            .contains("Previous conversation summary")
-    );
+    assert!(history[0].content.as_text().contains("Previous conversation summary"));
 }
 
 #[tokio::test]
@@ -1917,10 +1761,7 @@ async fn persisted_envelope_uses_recorded_touched_files_only() {
         serde_json::from_str(&fs::read_to_string(envelope_path).expect("read envelope"))
             .expect("parse envelope");
 
-    assert_eq!(
-        envelope.touched_files,
-        vec!["src/main.rs".to_string(), "Cargo.toml".to_string()]
-    );
+    assert_eq!(envelope.touched_files, vec!["src/main.rs".to_string(), "Cargo.toml".to_string()]);
     assert_eq!(envelope.session_id, "session-alpha");
 }
 
@@ -1964,11 +1805,7 @@ fn inject_latest_memory_envelope_uses_exact_session_id_when_prefixes_collide() {
     }
 
     let mut history = vec![Message::user("resume".to_string())];
-    assert!(inject_latest_memory_envelope(
-        temp.path(),
-        session_alpha,
-        &mut history
-    ));
+    assert!(inject_latest_memory_envelope(temp.path(), session_alpha, &mut history));
     assert!(history[0].content.as_text().contains("Alpha summary"));
     assert!(!history[0].content.as_text().contains("Beta summary"));
 }
@@ -2006,10 +1843,7 @@ async fn compaction_strips_existing_memory_envelope_before_recompacting() {
     assert_eq!(
         history
             .iter()
-            .filter(|message| message
-                .content
-                .as_text()
-                .contains("[Session Memory Envelope]"))
+            .filter(|message| message.content.as_text().contains("[Session Memory Envelope]"))
             .count(),
         1
     );
@@ -2061,26 +1895,10 @@ async fn summarized_fork_history_reuses_compaction_pipeline_and_prior_envelope()
     .expect("summarized fork history");
 
     assert_eq!(compacted.len(), 6);
-    assert!(
-        compacted[0]
-            .content
-            .as_text()
-            .contains("[Session Memory Envelope]")
-    );
+    assert!(compacted[0].content.as_text().contains("[Session Memory Envelope]"));
     assert!(compacted[0].content.as_text().contains("src/lib.rs"));
-    assert!(
-        compacted[1]
-            .content
-            .as_text()
-            .contains("Previous conversation summary")
-    );
-    assert_eq!(
-        compacted
-            .iter()
-            .filter(|message| message.role == MessageRole::User)
-            .count(),
-        4
-    );
+    assert!(compacted[1].content.as_text().contains("Previous conversation summary"));
+    assert_eq!(compacted.iter().filter(|message| message.role == MessageRole::User).count(), 4);
     assert!(compacted.iter().all(
         |message| message.role == MessageRole::System || message.role == MessageRole::User
     ));
@@ -2129,18 +1947,8 @@ async fn budget_resume_summary_reuses_saved_envelope_without_provider_compaction
     .await
     .expect("saved summary fork history");
 
-    assert!(
-        compacted[0]
-            .content
-            .as_text()
-            .contains("[Session Memory Envelope]")
-    );
-    assert!(
-        compacted[1]
-            .content
-            .as_text()
-            .contains("Budget-limited session summary")
-    );
+    assert!(compacted[0].content.as_text().contains("[Session Memory Envelope]"));
+    assert!(compacted[1].content.as_text().contains("Budget-limited session summary"));
 }
 
 #[tokio::test]
@@ -2183,13 +1991,7 @@ async fn local_and_fork_compaction_share_retained_user_budget() {
     .await
     .expect("summarized fork history");
 
-    assert_eq!(
-        compacted
-            .iter()
-            .filter(|message| message.role == MessageRole::User)
-            .count(),
-        2
-    );
+    assert_eq!(compacted.iter().filter(|message| message.role == MessageRole::User).count(), 2);
 }
 
 #[test]
@@ -2231,10 +2033,7 @@ fn resolve_compaction_threshold_uses_context_ratio_when_unset() {
 
 #[test]
 fn resolve_compaction_threshold_clamps_to_context_size() {
-    assert_eq!(
-        resolve_compaction_threshold(Some(300_000), 200_000),
-        Some(200_000)
-    );
+    assert_eq!(resolve_compaction_threshold(Some(300_000), 200_000), Some(200_000));
 }
 
 #[test]

@@ -9,14 +9,8 @@ pub(super) fn normalized_harmony_model(model: &str) -> String {
     }
 
     let without_provider = trimmed.rsplit('/').next().unwrap_or(trimmed);
-    let without_annotation = without_provider
-        .split('@')
-        .next()
-        .unwrap_or(without_provider);
-    let without_variant = without_annotation
-        .split(':')
-        .next()
-        .unwrap_or(without_annotation);
+    let without_annotation = without_provider.split('@').next().unwrap_or(without_provider);
+    let without_variant = without_annotation.split(':').next().unwrap_or(without_annotation);
 
     without_variant.to_ascii_lowercase()
 }
@@ -27,9 +21,7 @@ pub(super) fn uses_harmony(model: &str) -> bool {
         return false;
     }
 
-    models::openai::HARMONY_MODELS
-        .iter()
-        .any(|candidate| *candidate == normalized)
+    models::openai::HARMONY_MODELS.iter().any(|candidate| *candidate == normalized)
 }
 
 pub(super) fn parse_harmony_tool_name(recipient: &str) -> String {
@@ -52,18 +44,13 @@ pub(super) fn parse_harmony_tool_name(recipient: &str) -> String {
 }
 
 pub(super) fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, Value)> {
-    let segments: Vec<&str> = text
-        .split("<|start|>")
-        .filter(|s| !s.trim().is_empty())
-        .collect();
+    let segments: Vec<&str> = text.split("<|start|>").filter(|s| !s.trim().is_empty()).collect();
 
     if segments.is_empty() {
         return parse_harmony_tool_call_segment(text);
     }
 
-    segments
-        .iter()
-        .find_map(|segment| parse_harmony_tool_call_segment(segment))
+    segments.iter().find_map(|segment| parse_harmony_tool_call_segment(segment))
 }
 
 pub(super) fn normalize_harmony_tool_arguments(raw: &str) -> Option<String> {
@@ -74,10 +61,7 @@ pub(super) fn normalize_harmony_tool_arguments(raw: &str) -> Option<String> {
 fn parse_harmony_tool_call_segment(text: &str) -> Option<(String, Value)> {
     let to_pos = text.find("to=")?;
     let after_to = &text[to_pos + 3..];
-    let tool_ref = after_to
-        .split(|c: char| c.is_whitespace() || c == '<')
-        .next()
-        .unwrap_or("");
+    let tool_ref = after_to.split(|c: char| c.is_whitespace() || c == '<').next().unwrap_or("");
     let tool_name = parse_harmony_tool_name(tool_ref);
     if tool_name.is_empty() {
         return None;

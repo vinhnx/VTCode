@@ -63,10 +63,9 @@ impl fmt::Debug for McpInitStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             McpInitStatus::Disabled => f.write_str("Disabled"),
-            McpInitStatus::Initializing { progress } => f
-                .debug_struct("Initializing")
-                .field("progress", progress)
-                .finish(),
+            McpInitStatus::Initializing { progress } => {
+                f.debug_struct("Initializing").field("progress", progress).finish()
+            }
             McpInitStatus::Ready { .. } => f.write_str("Ready { client: <redacted> }"),
             McpInitStatus::Error { message } => {
                 f.debug_struct("Error").field("message", message).finish()
@@ -112,9 +111,7 @@ impl AsyncMcpManager {
         event_callback: Arc<dyn Fn(McpEvent) + Send + Sync>,
     ) -> Self {
         let init_status = if config.enabled {
-            McpInitStatus::Initializing {
-                progress: "Initializing MCP client...".to_string(),
-            }
+            McpInitStatus::Initializing { progress: "Initializing MCP client...".to_string() }
         } else {
             McpInitStatus::Disabled
         };
@@ -195,9 +192,7 @@ impl AsyncMcpManager {
             {
                 Ok(client) => {
                     let mut status_guard = status.write().await;
-                    *status_guard = McpInitStatus::Ready {
-                        client: Arc::new(client),
-                    };
+                    *status_guard = McpInitStatus::Ready { client: Arc::new(client) };
                     info!("MCP client initialized successfully");
                 }
                 Err(e) => {
@@ -298,10 +293,7 @@ impl AsyncMcpManager {
         approval_policy: Arc<StdRwLock<AskForApproval>>,
         event_callback: Arc<dyn Fn(McpEvent) + Send + Sync>,
     ) -> Result<McpClient> {
-        info!(
-            "Initializing MCP client with {} providers",
-            config.providers.len()
-        );
+        info!("Initializing MCP client with {} providers", config.providers.len());
 
         // Validate configuration before initializing
         if let Err(e) = vtcode_core::mcp::validate_mcp_config(&config) {
@@ -384,10 +376,7 @@ impl AsyncMcpManager {
                         || error_msg.contains("Broken pipe")
                         || error_msg.contains("write EPIPE")
                     {
-                        info!(
-                            "MCP client shutdown encountered pipe errors (normal): {}",
-                            e
-                        );
+                        info!("MCP client shutdown encountered pipe errors (normal): {}", e);
                     } else {
                         warn!("Failed to shutdown MCP client cleanly: {}", e);
                     }
@@ -440,26 +429,17 @@ mod tests {
         let disabled_status = McpInitStatus::Disabled;
         assert_eq!(disabled_status.to_string(), "MCP is disabled");
 
-        let initializing_status = McpInitStatus::Initializing {
-            progress: "Connecting...".to_string(),
-        };
-        assert_eq!(
-            initializing_status.to_string(),
-            "MCP initializing: Connecting..."
-        );
+        let initializing_status =
+            McpInitStatus::Initializing { progress: "Connecting...".to_string() };
+        assert_eq!(initializing_status.to_string(), "MCP initializing: Connecting...");
 
-        let error_status = McpInitStatus::Error {
-            message: "Connection failed".to_string(),
-        };
+        let error_status = McpInitStatus::Error { message: "Connection failed".to_string() };
         assert_eq!(error_status.to_string(), "MCP error: Connection failed");
     }
 
     #[tokio::test]
     async fn test_start_initialization_skips_when_task_already_running() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..McpClientConfig::default()
-        };
+        let config = McpClientConfig { enabled: true, ..McpClientConfig::default() };
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
         let manager = AsyncMcpManager::new(config, true, AskForApproval::OnRequest, event_callback);
 
@@ -471,14 +451,10 @@ mod tests {
             *guard = Some(blocker);
         }
 
-        manager
-            .start_initialization()
-            .expect("start should succeed");
+        manager.start_initialization().expect("start should succeed");
 
         if let Ok(mut guard) = manager.init_task.lock() {
-            let task = guard
-                .as_ref()
-                .expect("running init task should still be present");
+            let task = guard.as_ref().expect("running init task should still be present");
             assert_eq!(
                 task.id(),
                 blocker_id,
@@ -498,17 +474,10 @@ mod tests {
 
     #[tokio::test]
     async fn reconfigure_active_runtime_restarts_running_initialization() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..McpClientConfig::default()
-        };
+        let config = McpClientConfig { enabled: true, ..McpClientConfig::default() };
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
-        let manager = AsyncMcpManager::new(
-            config.clone(),
-            true,
-            AskForApproval::OnRequest,
-            event_callback,
-        );
+        let manager =
+            AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
         let initialization_guard = manager.initialization_mutex.lock().await;
 
         let blocker = tokio::spawn(async {
@@ -526,9 +495,7 @@ mod tests {
 
         assert!(restarted);
         if let Ok(mut guard) = manager.init_task.lock() {
-            let task = guard
-                .as_ref()
-                .expect("active initialization should be restarted");
+            let task = guard.as_ref().expect("active initialization should be restarted");
             assert_ne!(task.id(), blocker_id);
             assert!(!task.is_finished());
             if let Some(task) = guard.take() {
@@ -542,20 +509,12 @@ mod tests {
 
     #[tokio::test]
     async fn reconfigure_active_runtime_restarts_ready_client_without_registry_attachment() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..McpClientConfig::default()
-        };
+        let config = McpClientConfig { enabled: true, ..McpClientConfig::default() };
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
-        let manager = AsyncMcpManager::new(
-            config.clone(),
-            true,
-            AskForApproval::OnRequest,
-            event_callback,
-        );
-        *manager.status.write().await = McpInitStatus::Ready {
-            client: Arc::new(McpClient::new(config.clone())),
-        };
+        let manager =
+            AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
+        *manager.status.write().await =
+            McpInitStatus::Ready { client: Arc::new(McpClient::new(config.clone())) };
         let initialization_guard = manager.initialization_mutex.lock().await;
 
         let restarted = manager
@@ -580,17 +539,10 @@ mod tests {
 
     #[tokio::test]
     async fn reconfigure_active_runtime_preserves_manual_activation_pending() {
-        let config = McpClientConfig {
-            enabled: true,
-            ..McpClientConfig::default()
-        };
+        let config = McpClientConfig { enabled: true, ..McpClientConfig::default() };
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
-        let manager = AsyncMcpManager::new(
-            config.clone(),
-            true,
-            AskForApproval::OnRequest,
-            event_callback,
-        );
+        let manager =
+            AsyncMcpManager::new(config.clone(), true, AskForApproval::OnRequest, event_callback);
 
         let restarted = manager
             .reconfigure_active_runtime(config)
@@ -609,26 +561,19 @@ mod tests {
         assert!(!disabled_status.is_error());
         assert!(disabled_status.get_error_message().is_none());
 
-        let error_status = McpInitStatus::Error {
-            message: "Test error".to_string(),
-        };
+        let error_status = McpInitStatus::Error { message: "Test error".to_string() };
         assert!(!error_status.is_ready());
         assert!(error_status.is_error());
         assert_eq!(error_status.get_error_message(), Some("Test error"));
 
-        let initializing_status = McpInitStatus::Initializing {
-            progress: "Init...".to_string(),
-        };
+        let initializing_status = McpInitStatus::Initializing { progress: "Init...".to_string() };
         assert!(initializing_status.is_initializing());
         assert!(!initializing_status.is_ready());
     }
 
     #[test]
     fn test_approval_policy_mapping_from_hitl() {
-        assert_eq!(
-            approval_policy_from_human_in_the_loop(true),
-            AskForApproval::OnRequest
-        );
+        assert_eq!(approval_policy_from_human_in_the_loop(true), AskForApproval::OnRequest);
         assert_eq!(
             approval_policy_from_human_in_the_loop(false),
             AskForApproval::Reject(RejectConfig {

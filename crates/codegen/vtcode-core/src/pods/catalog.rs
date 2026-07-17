@@ -153,10 +153,7 @@ mod tests {
             name: "pod".to_string(),
             ssh: "ssh root@example.com".to_string(),
             models_path: None,
-            gpus: vec![PodGpu {
-                id: 0,
-                name: "NVIDIA A100-SXM4-80GB".to_string(),
-            }],
+            gpus: vec![PodGpu { id: 0, name: "NVIDIA A100-SXM4-80GB".to_string() }],
             models: BTreeMap::new(),
         };
 
@@ -179,14 +176,8 @@ mod tests {
             ssh: "ssh root@example.com".to_string(),
             models_path: None,
             gpus: vec![
-                PodGpu {
-                    id: 0,
-                    name: "NVIDIA A100-SXM4-80GB".to_string(),
-                },
-                PodGpu {
-                    id: 1,
-                    name: "NVIDIA RTX 4090".to_string(),
-                },
+                PodGpu { id: 0, name: "NVIDIA A100-SXM4-80GB".to_string() },
+                PodGpu { id: 1, name: "NVIDIA RTX 4090".to_string() },
             ],
             models: BTreeMap::new(),
         };

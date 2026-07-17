@@ -21,10 +21,7 @@ pub(crate) struct ParsedReleaseHighlights {
 pub(crate) fn parse_highlights(version: &Version, body: &str) -> ParsedReleaseHighlights {
     let items = extract_highlight_items(body);
 
-    ParsedReleaseHighlights {
-        version: version.to_string(),
-        items,
-    }
+    ParsedReleaseHighlights { version: version.to_string(), items }
 }
 
 fn extract_highlight_items(body: &str) -> Vec<String> {

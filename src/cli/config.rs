@@ -50,10 +50,7 @@ fn generate_default_config() -> String {
     // Try to load existing configuration to preserve user settings
     let config = if Path::new("vtcode.toml").exists() {
         let workspace = std::env::current_dir().unwrap_or_else(|_| ".".into());
-        match ConfigService::read(ConfigReadRequest {
-            workspace,
-            runtime_overrides: Vec::new(),
-        }) {
+        match ConfigService::read(ConfigReadRequest { workspace, runtime_overrides: Vec::new() }) {
             Ok(response) => serde_json::from_value::<VTCodeConfig>(response.effective_config)
                 .unwrap_or_else(|_| VTCodeConfig::default()),
             Err(_) => VTCodeConfig::default(),

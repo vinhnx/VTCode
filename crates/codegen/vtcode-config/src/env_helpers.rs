@@ -53,11 +53,7 @@ pub(crate) mod test_env_overrides {
     }
 
     pub fn get(name: &str) -> Option<Option<String>> {
-        overrides()
-            .lock()
-            .expect("env overrides lock poisoned")
-            .get(name)
-            .cloned()
+        overrides().lock().expect("env overrides lock poisoned").get(name).cloned()
     }
 
     pub fn set(name: &str, value: Option<&str>) {

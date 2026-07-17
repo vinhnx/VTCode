@@ -40,12 +40,7 @@ fn modal_text_area_aligned_with_list(area: Rect) -> Rect {
 fn markdown_to_plain_lines(text: &str) -> Vec<String> {
     let mut lines = render_markdown(text)
         .into_iter()
-        .map(|line| {
-            line.segments
-                .into_iter()
-                .map(|segment| segment.text)
-                .collect::<String>()
-        })
+        .map(|line| line.segments.into_iter().map(|segment| segment.text).collect::<String>())
         .collect::<Vec<_>>();
 
     while lines.last().is_some_and(|line| line.trim().is_empty()) {
@@ -73,9 +68,7 @@ fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
     let mut current_width = 0usize;
 
     for ch in line.chars() {
-        let ch_width = unicode_width::UnicodeWidthChar::width(ch)
-            .unwrap_or(0)
-            .max(1);
+        let ch_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0).max(1);
         if current_width + ch_width > width && !current.is_empty() {
             rows.push(mem::take(&mut current));
             current_width = 0;
@@ -199,11 +192,7 @@ impl SharedListWidgetModel for ModalListPanelModel<'_> {
             .enumerate()
             .map(|(visible_index, &item_index)| {
                 let is_selected = selected_visible == Some(visible_index)
-                    && self
-                        .list
-                        .items
-                        .get(item_index)
-                        .is_some_and(|i| i.selection.is_some());
+                    && self.list.items.get(item_index).is_some_and(|i| i.selection.is_some());
                 let lines = modal_list_item_lines(
                     self.list,
                     visible_index,
@@ -255,11 +244,7 @@ pub fn render_modal_list(
     }
 
     let summary = modal_list_summary_line(list, styles, footer_hint);
-    let mut panel_model = ModalListPanelModel {
-        list,
-        styles,
-        inline_editor,
-    };
+    let mut panel_model = ModalListPanelModel { list, styles, inline_editor };
     let sections = SharedListPanelSections {
         header: Vec::new(),
         info: summary.into_iter().collect(),
@@ -345,18 +330,17 @@ fn inline_editor_for_step(step: &WizardStepState) -> Option<ModalInlineEditor> {
     let item = step.list.items.get(item_index)?;
 
     match item.selection.as_ref() {
-        Some(InlineListSelection::RequestUserInputAnswer {
-            selected, other, ..
-        }) if selected.is_empty() && other.is_some() => Some(ModalInlineEditor {
-            item_index,
-            label: step
-                .freeform_label
-                .clone()
-                .unwrap_or_else(|| "Custom note".to_string()),
-            text: step.notes.clone(),
-            placeholder: step.freeform_placeholder.clone(),
-            active: step.notes_active,
-        }),
+        Some(InlineListSelection::RequestUserInputAnswer { selected, other, .. })
+            if selected.is_empty() && other.is_some() =>
+        {
+            Some(ModalInlineEditor {
+                item_index,
+                label: step.freeform_label.clone().unwrap_or_else(|| "Custom note".to_string()),
+                text: step.notes.clone(),
+                placeholder: step.freeform_placeholder.clone(),
+                active: step.notes_active,
+            })
+        }
         _ => None,
     }
 }
@@ -420,15 +404,11 @@ pub(crate) fn render_wizard_modal_body(
     // Layout: [Header] [Info] [Input?] [Search?] [Divider?] [List]
     let mut constraints = Vec::new();
     if is_multistep {
-        constraints.push(Constraint::Length(
-            header_row_count.min(u16::MAX as usize) as u16
-        ));
+        constraints.push(Constraint::Length(header_row_count.min(u16::MAX as usize) as u16));
     } else {
         constraints.push(Constraint::Length(1));
     }
-    constraints.push(Constraint::Length(
-        info_row_count.min(u16::MAX as usize) as u16
-    ));
+    constraints.push(Constraint::Length(info_row_count.min(u16::MAX as usize) as u16));
     if has_notes {
         constraints.push(Constraint::Length(1));
     }
@@ -481,11 +461,7 @@ pub(crate) fn render_wizard_modal_body(
     {
         let label_text = step.freeform_label.as_deref().unwrap_or("Custom note");
         let input_widget = Input::new(label_text)
-            .placeholder(
-                step.freeform_placeholder
-                    .as_deref()
-                    .unwrap_or("Type here..."),
-            )
+            .placeholder(step.freeform_placeholder.as_deref().unwrap_or("Type here..."))
             .palette(&ratatui_cheese::theme::Palette::dark());
         let mut input_state = InputState::new();
         input_state.set_value(step.notes.clone());
@@ -551,10 +527,7 @@ fn modal_list_summary_line(
     let matches = list.visible_selectable_count();
     let total = list.total_selectable();
     if matches == 0 {
-        spans.push(Span::styled(
-            ui::MODAL_LIST_SUMMARY_NO_MATCHES.to_owned(),
-            styles.search_match,
-        ));
+        spans.push(Span::styled(ui::MODAL_LIST_SUMMARY_NO_MATCHES.to_owned(), styles.search_match));
         if !ui::MODAL_LIST_SUMMARY_RESET_HINT.is_empty() {
             spans.push(Span::styled(
                 format!(
@@ -600,10 +573,7 @@ pub(crate) fn render_modal_body(
     }
 
     let mut sections = Vec::new();
-    let has_instructions = context
-        .instructions
-        .iter()
-        .any(|line| !line.trim().is_empty());
+    let has_instructions = context.instructions.iter().any(|line| !line.trim().is_empty());
     let has_secure_prompt = context.secure_prompt.is_some();
     let has_search = context.search.is_some();
     let has_list = context.list.is_some();
@@ -981,10 +951,7 @@ pub(super) fn highlight_segments(
             let byte_end = byte_start + needle.len();
             let start_index = char_offsets.partition_point(|offset| *offset < byte_start);
             let end_index = char_offsets.partition_point(|offset| *offset < byte_end);
-            for flag in highlight_flags
-                .iter_mut()
-                .take(end_index.min(char_count))
-                .skip(start_index)
+            for flag in highlight_flags.iter_mut().take(end_index.min(char_count)).skip(start_index)
             {
                 *flag = true;
             }
@@ -1083,10 +1050,7 @@ pub fn modal_list_item_lines(
 
     if let Some(badge) = &item.badge {
         let badge_label = format!("[{badge}]");
-        primary_spans.push(Span::styled(
-            badge_label,
-            modal_badge_style(badge.as_str(), styles),
-        ));
+        primary_spans.push(Span::styled(badge_label, modal_badge_style(badge.as_str(), styles)));
         primary_spans.push(Span::raw(" "));
     }
 

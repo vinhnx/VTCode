@@ -55,9 +55,7 @@ pub static CLIPBOARD_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::ne
 pub static TERMINAL_ENV_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 pub fn with_terminal_env<R>(tmux: Option<&str>, term: Option<&str>, f: impl FnOnce() -> R) -> R {
-    let _guard = TERMINAL_ENV_TEST_LOCK
-        .lock()
-        .expect("terminal env test lock");
+    let _guard = TERMINAL_ENV_TEST_LOCK.lock().expect("terminal env test lock");
     let original_tmux = std::env::var("TMUX").ok();
     let original_term = std::env::var("TERM").ok();
 
@@ -210,16 +208,13 @@ pub fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, works
                 if parent.display().to_string() != dir_str {
                     continue;
                 }
-                let is_dir = files
-                    .iter()
-                    .any(|other| other != f && other.starts_with(&format!("{f}/")));
+                let is_dir =
+                    files.iter().any(|other| other != f && other.starts_with(&format!("{f}/")));
                 out.push((PathBuf::from(f), is_dir));
             }
             out.sort_by(|a, b| {
                 b.1.cmp(&a.1).then_with(|| {
-                    a.0.to_string_lossy()
-                        .to_lowercase()
-                        .cmp(&b.0.to_string_lossy().to_lowercase())
+                    a.0.to_string_lossy().to_lowercase().cmp(&b.0.to_string_lossy().to_lowercase())
                 })
             });
             out
@@ -228,11 +223,7 @@ pub fn load_app_file_palette(session: &mut AppSession, files: Vec<String>, works
 
     session.handle_command(app_types::InlineCommand::ShowTransient {
         request: Box::new(app_types::TransientRequest::FilePalette(
-            app_types::FilePaletteTransientRequest {
-                dir_lister,
-                workspace,
-                visible: None,
-            },
+            app_types::FilePaletteTransientRequest { dir_lister, workspace, visible: None },
         )),
     });
     // Mirror the runtime: the recursive index is delivered after configuration.
@@ -264,11 +255,7 @@ pub fn enable_vim_normal_mode(session: &mut Session) {
 
 pub fn enable_vim_normal_mode_app(session: &mut AppSession) {
     session.core.vim_state.set_enabled(true);
-    assert!(
-        session
-            .core
-            .handle_vim_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-    );
+    assert!(session.core.handle_vim_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
 }
 
 pub fn show_basic_list_overlay(session: &mut Session) {
@@ -340,10 +327,7 @@ pub fn current_visible_transcript(session: &mut Session) -> Vec<String> {
         .into_iter()
         .skip(start)
         .take(viewport)
-        .map(|line| TranscriptLine {
-            line,
-            explicit_links: Vec::new(),
-        })
+        .map(|line| TranscriptLine { line, explicit_links: Vec::new() })
         .collect();
     let filler = viewport.saturating_sub(visible.len());
     if filler > 0 {
@@ -370,9 +354,7 @@ pub fn rendered_session_lines(session: &mut Session, rows: u16) -> Vec<String> {
     session.apply_view_rows(rows);
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
-    let completed = terminal
-        .draw(|frame| session.render(frame))
-        .expect("failed to render session");
+    let completed = terminal.draw(|frame| session.render(frame)).expect("failed to render session");
 
     let buffer = completed.buffer;
     (0..buffer.area.height)
@@ -410,9 +392,7 @@ pub fn rendered_transcript_lines(session: &mut Session, rows: u16) -> (Rect, Vec
     session.apply_view_rows(rows);
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
-    let _ = terminal
-        .draw(|frame| session.render(frame))
-        .expect("failed to render session");
+    let _ = terminal.draw(|frame| session.render(frame)).expect("failed to render session");
 
     let area = session.transcript_area().expect("expected transcript area");
     (area, current_visible_transcript(session))
@@ -422,9 +402,7 @@ pub fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<St
     session.core.apply_view_rows(rows);
     let backend = TestBackend::new(VIEW_WIDTH, rows);
     let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
-    let completed = terminal
-        .draw(|frame| session.render(frame))
-        .expect("failed to render session");
+    let completed = terminal.draw(|frame| session.render(frame)).expect("failed to render session");
 
     let buffer = completed.buffer;
     (0..buffer.area.height)
@@ -439,18 +417,12 @@ pub fn rendered_app_session_lines(session: &mut AppSession, rows: u16) -> Vec<St
 }
 
 pub fn is_horizontal_rule(line: &str) -> bool {
-    let glyph = ui::INLINE_BLOCK_HORIZONTAL
-        .chars()
-        .next()
-        .expect("horizontal rule glyph");
+    let glyph = ui::INLINE_BLOCK_HORIZONTAL.chars().next().expect("horizontal rule glyph");
     !line.is_empty() && line.chars().all(|ch| ch == glyph)
 }
 
 pub fn line_text(line: &Line<'_>) -> String {
-    line.spans
-        .iter()
-        .map(|span| span.content.clone().into_owned())
-        .collect()
+    line.spans.iter().map(|span| span.content.clone().into_owned()).collect()
 }
 
 pub fn transcript_line(text: impl Into<String>) -> TranscriptLine {
@@ -461,11 +433,7 @@ pub fn transcript_line(text: impl Into<String>) -> TranscriptLine {
 }
 
 pub fn text_content(text: &Text<'static>) -> String {
-    text.lines
-        .iter()
-        .map(line_text)
-        .collect::<Vec<_>>()
-        .join("\n")
+    text.lines.iter().map(line_text).collect::<Vec<_>>().join("\n")
 }
 
 pub fn vtcode_tui_workspace_root() -> PathBuf {
@@ -485,10 +453,8 @@ pub fn transcript_file_fixture_absolute_path() -> String {
 
 pub fn quoted_transcript_temp_file_path() -> PathBuf {
     let unique = TRANSCRIPT_TEST_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "vtcode transcript quoted path {} {unique}.txt",
-        std::process::id()
-    ))
+    std::env::temp_dir()
+        .join(format!("vtcode transcript quoted path {} {unique}.txt", std::process::id()))
 }
 
 #[cfg(target_os = "macos")]
@@ -579,18 +545,11 @@ pub fn request_user_input_custom_step(question_id: &str, label: &str, default: &
 }
 
 pub fn show_plan_confirmation_overlay(session: &mut Session, plan: app_types::PlanContent) {
-    let mut lines: Vec<String> = plan
-        .raw_content
-        .lines()
-        .map(|line| line.to_string())
-        .collect();
+    let mut lines: Vec<String> = plan.raw_content.lines().map(|line| line.to_string()).collect();
     if lines.is_empty() && !plan.summary.is_empty() {
         lines.push(plan.summary.clone());
     }
-    lines.insert(
-        0,
-        "A plan is ready to execute. Would you like to proceed?".to_string(),
-    );
+    lines.insert(0, "A plan is ready to execute. Would you like to proceed?".to_string());
 
     session.handle_command(InlineCommand::ShowOverlay {
         request: Box::new(OverlayRequest::List(ListOverlayRequest {
@@ -649,10 +608,7 @@ impl SessionWithFileLink {
     pub fn new() -> Self {
         let path = transcript_file_fixture_absolute_path();
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-        session.push_line(
-            InlineMessageKind::Agent,
-            vec![make_segment(&format!("Open {path}"))],
-        );
+        session.push_line(InlineMessageKind::Agent, vec![make_segment(&format!("Open {path}"))]);
         let _ = visible_transcript(&mut session);
         Self { session, path }
     }
@@ -675,10 +631,7 @@ impl AppSessionWithFileLink {
     pub fn new() -> Self {
         let path = transcript_file_fixture_absolute_path();
         let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
-        session.push_line(
-            InlineMessageKind::Agent,
-            vec![make_segment(&format!("Open {path}"))],
-        );
+        session.push_line(InlineMessageKind::Agent, vec![make_segment(&format!("Open {path}"))]);
         let _ = rendered_app_session_lines(&mut session, VIEW_ROWS);
         Self { session, path }
     }
@@ -765,12 +718,7 @@ pub fn set_app_session_queued_inputs(session: &mut AppSession, entries: Vec<Stri
 
 pub fn assert_footer_contains(session: &mut Session, take_from_bottom: u16, needle: &str) {
     let view = visible_transcript(session);
-    let footer: Vec<String> = view
-        .iter()
-        .rev()
-        .take(take_from_bottom as usize)
-        .cloned()
-        .collect();
+    let footer: Vec<String> = view.iter().rev().take(take_from_bottom as usize).cloned().collect();
     assert!(
         footer.iter().any(|line| line.contains(needle)),
         "expected footer to contain: {needle}"

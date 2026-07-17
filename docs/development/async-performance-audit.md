@@ -23,26 +23,26 @@ Each module was reviewed for:
 ### Critical
 
 1. Awaiting observer hooks while cache write locks are held
-- File: `vtcode-core/src/tools/registry/cache.rs`
+- File: `crates/codegen/vtcode-core/src/tools/registry/cache.rs`
 - Impact: lock contention amplification, potential stall chains under load
 - Status: fixed in this batch
 
 ### High
 
 1. Async-facing notification manager used std sync locks in hot path
-- File: `vtcode-core/src/notifications/mod.rs`
+- File: `crates/codegen/vtcode-core/src/notifications/mod.rs`
 - Impact: unnecessary poisoning/recovery branches and slower lock path
 - Status: improved in this batch (`parking_lot::{RwLock, Mutex}`)
 
 ### Medium (Deferred)
 
 1. Graceful process-group termination uses polling sleeps in synchronous loop
-- File: `vtcode-bash-runner/src/process_group.rs`
+- File: `crates/codegen/vtcode-bash-runner/src/process_group.rs`
 - Note: currently called from synchronous PTY cleanup paths and `spawn_blocking` paths, so runtime risk is lower than the above critical/high items
 - Deferred action: evaluate async-aware termination path only where call sites are async-sensitive
 
 2. Deprecated synchronous retry middleware uses blocking sleep
-- File: `vtcode-core/src/tools/middleware.rs`
+- File: `crates/codegen/vtcode-core/src/tools/middleware.rs`
 - Note: type is marked deprecated in favor of `AsyncRetryMiddleware`
 - Deferred action: keep behavior stable; avoid churn unless deprecated path is removed or reactivated in runtime-critical paths
 
@@ -50,7 +50,7 @@ Each module was reviewed for:
 
 ### 1) Cache lock/await safety remediation
 
-Updated `vtcode-core/src/tools/registry/cache.rs`:
+Updated `crates/codegen/vtcode-core/src/tools/registry/cache.rs`:
 
 - `insert_arc`:
   - removed `await` while `entries/access_order` locks are held
@@ -66,7 +66,7 @@ Outcome: no external async callback is awaited while cache write locks are held.
 
 ### 2) Notification lock path optimization
 
-Updated `vtcode-core/src/notifications/mod.rs`:
+Updated `crates/codegen/vtcode-core/src/notifications/mod.rs`:
 
 - switched lock types from `std::sync::{RwLock, Mutex}` to `parking_lot::{RwLock, Mutex}`
 - removed poisoning recovery branches (not applicable to parking_lot)
@@ -76,19 +76,19 @@ Outcome: lower-overhead lock path and simpler critical sections in notification 
 
 ### 3) KISS/DRY follow-up pass
 
-Updated `vtcode-core/src/tools/registry/cache.rs`:
+Updated `crates/codegen/vtcode-core/src/tools/registry/cache.rs`:
 
 - simplified `insert_arc` lock scope using a single inner block (removed explicit `drop(...)`)
 - emit manual-eviction observer events only when an entry was actually removed
 - added early-return in `prune_expired` for empty expired set
 
-Updated `vtcode-core/src/notifications/mod.rs`:
+Updated `crates/codegen/vtcode-core/src/notifications/mod.rs`:
 
 - async config methods now delegate to sync methods (`update_config` -> `update_config_sync`, `get_config` -> `get_config_sync`) to remove duplicated lock logic
 
 ### 4) Async-safe process termination helper + cache lock scope tightening
 
-Updated `vtcode-bash-runner/src/process_group.rs` and `vtcode-bash-runner/src/lib.rs`:
+Updated `crates/codegen/vtcode-bash-runner/src/process_group.rs` and `crates/codegen/vtcode-bash-runner/src/lib.rs`:
 
 - added `graceful_kill_process_group_default_async(pid)` that runs graceful kill in `spawn_blocking`
 - exported the async helper from crate root
@@ -101,7 +101,7 @@ Updated `src/agent/runloop/unified/tool_pipeline/execution_runtime.rs`:
 
 ### 5) Async runtime safety for PTY session close path
 
-Updated `vtcode-core/src/tools/registry/executors.rs`:
+Updated `crates/codegen/vtcode-core/src/tools/registry/executors.rs`:
 
 - `execute_close_pty_session` now executes `PtyManager::close_session` in `tokio::task::spawn_blocking`
 - prevents synchronous PTY shutdown/wait logic from running on async runtime worker threads
@@ -109,7 +109,7 @@ Updated `vtcode-core/src/tools/registry/executors.rs`:
 
 ### 6) Final KISS/DRY + hot-path cleanup pass
 
-Updated `vtcode-core/src/tools/registry/cache.rs`:
+Updated `crates/codegen/vtcode-core/src/tools/registry/cache.rs`:
 
 - `insert_arc` now removes prior key occurrence from LRU order before re-inserting
   - avoids duplicate key entries in access queue and keeps eviction order tight
@@ -118,14 +118,14 @@ Updated `vtcode-core/src/tools/registry/cache.rs`:
   - prunes access-order with a single `retain(...)` using a set of expired keys
   - reduces repeated `retain` scans and simplifies flow
 
-Updated `vtcode-bash-runner/src/process_group.rs`:
+Updated `crates/codegen/vtcode-bash-runner/src/process_group.rs`:
 
 - removed duplicate cfg-specific `graceful_kill_process_group_default` wrappers
 - kept one unified default wrapper calling cfg-specific `graceful_kill_process_group`
 
 ### 7) Async-safe PTY bulk termination in runloop timeout/guard paths
 
-Updated `vtcode-core/src/tools/registry/pty.rs` and `vtcode-core/src/tools/registry/pty_facade.rs`:
+Updated `crates/codegen/vtcode-core/src/tools/registry/pty.rs` and `crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs`:
 
 - added `PtySessionManager::terminate_all_async()` using `tokio::task::spawn_blocking`
 - added `ToolRegistry::terminate_all_pty_sessions_async()` facade method
@@ -251,18 +251,18 @@ The article's measured wins (2-5% binary size on embedded; ~3% perf on x86 with 
 
 A scoped scan (`async fn` whose body contains no `.await`, excluding `#[test]`/`#[tokio::test]`/`async_trait` macros) found 214 candidates. The vast majority are trait method implementations whose `async` keyword is mandated by the trait signature and cannot be removed. Genuine pure-delegation candidates (single inner `.await`, free or inherent fn, not a trait impl) cluster in:
 
-- [vtcode-core/src/tools/registry/builder.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/builder.rs) — five `ToolRegistry::new*` constructors all delegate to `Self::build_with_policy(...).await`.
-- [vtcode-core/src/tools/registry/pty_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/pty_facade.rs#L43-L49) — `terminate_all_pty_sessions_async`, `terminate_all_exec_sessions_async`.
-- [vtcode-core/src/tools/registry/harness_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/harness_facade.rs#L82-L88) — `harness_exec_session_completed`, `terminate_harness_exec_session`.
-- [vtcode-core/src/tools/registry/file_helpers.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/file_helpers.rs) — `read_file`, `write_file`, `create_file`, `delete_file` thin wrappers around `execute_tool`.
-- [vtcode-core/src/tools/registry/execution_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/registry/execution_facade.rs#L266) — `execute_public_tool_request`, `execute_tool`.
-- [vtcode-core/src/tools/cache.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/cache.rs) — `put_file`, `put_directory` arc wrappers.
-- [vtcode-core/src/llm/providers/openai/provider/provider_impl.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm/providers/openai/provider/provider_impl.rs#L101-L115) — `stream`, `stream_normalized`, `generate` delegations.
-- [vtcode-core/src/project_doc.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/project_doc.rs#L112-L125) — `get_user_instructions`, `build_instruction_appendix`.
-- [vtcode-core/src/tools/file_ops/path_policy.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/file_ops/path_policy.rs#L267) — `normalize_user_path`.
-- [vtcode-core/src/tools/file_ops/write.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/file_ops/write.rs#L48) — `write_file` wrapper around `write_file_internal`.
+- [crates/codegen/vtcode-core/src/tools/registry/builder.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/builder.rs) — five `ToolRegistry::new*` constructors all delegate to `Self::build_with_policy(...).await`.
+- [crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs#L43-L49) — `terminate_all_pty_sessions_async`, `terminate_all_exec_sessions_async`.
+- [crates/codegen/vtcode-core/src/tools/registry/harness_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/harness_facade.rs#L82-L88) — `harness_exec_session_completed`, `terminate_harness_exec_session`.
+- [crates/codegen/vtcode-core/src/tools/registry/file_helpers.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/file_helpers.rs) — `read_file`, `write_file`, `create_file`, `delete_file` thin wrappers around `execute_tool`.
+- [crates/codegen/vtcode-core/src/tools/registry/execution_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/execution_facade.rs#L266) — `execute_public_tool_request`, `execute_tool`.
+- [crates/codegen/vtcode-core/src/tools/cache.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/cache.rs) — `put_file`, `put_directory` arc wrappers.
+- [crates/codegen/vtcode-core/src/llm/providers/openai/provider/provider_impl.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/llm/providers/openai/provider/provider_impl.rs#L101-L115) — `stream`, `stream_normalized`, `generate` delegations.
+- [crates/codegen/vtcode-core/src/project_doc.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/project_doc.rs#L112-L125) — `get_user_instructions`, `build_instruction_appendix`.
+- [crates/codegen/vtcode-core/src/tools/file_ops/path_policy.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/file_ops/path_policy.rs#L267) — `normalize_user_path`.
+- [crates/codegen/vtcode-core/src/tools/file_ops/write.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/file_ops/write.rs#L48) — `write_file` wrapper around `write_file_internal`.
 
-Pattern 4 ("Collapsing states") yielded one match in `vtcode-core/src/mcp/cli.rs:164`, but each arm calls a *different* function (`run_list`, `run_get`, `run_add`, …) so the saved suspend types differ and there is nothing to collapse. No source change is warranted.
+Pattern 4 ("Collapsing states") yielded one match in `crates/codegen/vtcode-core/src/mcp/cli.rs:164`, but each arm calls a *different* function (`run_list`, `run_get`, `run_add`, …) so the saved suspend types differ and there is nothing to collapse. No source change is warranted.
 
 #### Status
 
@@ -296,7 +296,7 @@ Executed:
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode tool_pipeline -- --nocapture`
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode tool_pipeline::execution_runtime -- --nocapture`
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode tool_pipeline::pty_stream -- --nocapture`
-- `rustfmt --check vtcode-core/src/tools/registry/pty.rs vtcode-core/src/tools/registry/pty_facade.rs src/agent/runloop/unified/turn/session_loop_runner.rs src/agent/runloop/unified/turn/tool_outcomes/handlers.rs`
+- `rustfmt --check crates/codegen/vtcode-core/src/tools/registry/pty.rs crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs src/agent/runloop/unified/turn/session_loop_runner.rs src/agent/runloop/unified/turn/tool_outcomes/handlers.rs`
 - `rustfmt --check src/agent/runloop/unified/turn/utils.rs`
 - `rustfmt --check src/agent/runloop/unified/session_setup/signal.rs src/agent/runloop/unified/progress.rs`
 - `rustfmt --check src/agent/runloop/unified/session_setup/types.rs src/agent/runloop/unified/session_setup/ui.rs src/agent/runloop/unified/async_mcp_manager.rs`

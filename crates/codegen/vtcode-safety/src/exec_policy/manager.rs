@@ -121,10 +121,7 @@ impl ExecPolicyManager {
     /// Load policy from a file.
     pub async fn load_policy(&self, path: &Path) -> Result<()> {
         let parser = super::parser::PolicyParser::new();
-        let loaded_policy = parser
-            .load_file(path)
-            .await
-            .context("Failed to load policy file")?;
+        let loaded_policy = parser.load_file(path).await.context("Failed to load policy file")?;
 
         let mut policy = self.policy.write().await;
         *policy = loaded_policy;
@@ -190,10 +187,7 @@ impl ExecPolicyManager {
             Decision::Prompt => {
                 let prompt_is_rule = matches!(
                     rule_match,
-                    RuleMatch::PrefixRuleMatch {
-                        decision: Decision::Prompt,
-                        ..
-                    }
+                    RuleMatch::PrefixRuleMatch { decision: Decision::Prompt, .. }
                 );
 
                 match prompt_is_rejected_by_policy(self.config.default_approval, prompt_is_rule) {
@@ -221,10 +215,7 @@ impl ExecPolicyManager {
             }
             if approval.requires_approval() {
                 needs_approval_flag = true;
-                if let ExecApprovalRequirement::NeedsApproval {
-                    reason: Some(r), ..
-                } = &approval
-                {
+                if let ExecApprovalRequirement::NeedsApproval { reason: Some(r), .. } = &approval {
                     reasons.push(r.clone());
                 }
             }
@@ -325,10 +316,7 @@ impl ExecPolicyManager {
                 )
             }
             RuleMatch::HeuristicsRuleMatch { .. } => {
-                format!(
-                    "Command '{}' is forbidden by safety heuristics",
-                    command.join(" ")
-                )
+                format!("Command '{}' is forbidden by safety heuristics", command.join(" "))
             }
         }
     }
@@ -354,15 +342,11 @@ mod tests {
             .unwrap();
 
         // Check approval
-        let result = manager
-            .check_approval(&["cargo".to_string(), "build".to_string()])
-            .await;
+        let result = manager.check_approval(&["cargo".to_string(), "build".to_string()]).await;
         assert!(result.can_proceed());
 
         // Unknown command should need approval
-        let result = manager
-            .check_approval(&["unknown".to_string(), "command".to_string()])
-            .await;
+        let result = manager.check_approval(&["unknown".to_string(), "command".to_string()]).await;
         assert!(result.requires_approval());
     }
 
@@ -377,13 +361,8 @@ mod tests {
             },
         );
 
-        let result = manager
-            .check_approval(&["unknown".to_string(), "command".to_string()])
-            .await;
-        assert_eq!(
-            result,
-            ExecApprovalRequirement::forbidden(PROMPT_CONFLICT_REASON)
-        );
+        let result = manager.check_approval(&["unknown".to_string(), "command".to_string()]).await;
+        assert_eq!(result, ExecApprovalRequirement::forbidden(PROMPT_CONFLICT_REASON));
     }
 
     #[tokio::test]
@@ -407,10 +386,7 @@ mod tests {
             .expect("add prompt rule");
 
         let result = manager.check_approval(&["git".to_string()]).await;
-        assert_eq!(
-            result,
-            ExecApprovalRequirement::forbidden(REJECT_RULES_APPROVAL_REASON)
-        );
+        assert_eq!(result, ExecApprovalRequirement::forbidden(REJECT_RULES_APPROVAL_REASON));
     }
 
     #[tokio::test]
@@ -429,13 +405,8 @@ mod tests {
             },
         );
 
-        let result = manager
-            .check_approval(&["unknown".to_string(), "command".to_string()])
-            .await;
-        assert_eq!(
-            result,
-            ExecApprovalRequirement::forbidden(REJECT_SANDBOX_APPROVAL_REASON)
-        );
+        let result = manager.check_approval(&["unknown".to_string(), "command".to_string()]).await;
+        assert_eq!(result, ExecApprovalRequirement::forbidden(REJECT_SANDBOX_APPROVAL_REASON));
     }
 
     #[tokio::test]
@@ -448,9 +419,7 @@ mod tests {
         manager.add_trusted_pattern(amendment).await;
 
         // Check any cargo command
-        let result = manager
-            .check_approval(&["cargo".to_string(), "test".to_string()])
-            .await;
+        let result = manager.check_approval(&["cargo".to_string(), "test".to_string()]).await;
         assert!(result.can_proceed());
     }
 
@@ -490,9 +459,7 @@ mod tests {
         assert!(result.can_proceed());
 
         // Dangerous command (rm)
-        let result = manager
-            .check_approval(&["rm".to_string(), "-rf".to_string()])
-            .await;
+        let result = manager.check_approval(&["rm".to_string(), "-rf".to_string()]).await;
         assert!(result.is_forbidden());
     }
 }

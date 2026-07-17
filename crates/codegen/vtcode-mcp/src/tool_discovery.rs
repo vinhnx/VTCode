@@ -90,9 +90,8 @@ fn group_results_by_provider_preserving_order(
 
     for tool in tools {
         let provider = tool.provider.clone();
-        if let Some((_, provider_tools)) = grouped
-            .iter_mut()
-            .find(|(existing_provider, _)| *existing_provider == provider)
+        if let Some((_, provider_tools)) =
+            grouped.iter_mut().find(|(existing_provider, _)| *existing_provider == provider)
         {
             provider_tools.push(tool);
         } else {
@@ -123,11 +122,7 @@ impl ToolDiscovery {
     ) -> Result<Vec<ToolDiscoveryResult>> {
         let tools = self.mcp_client.list_mcp_tools().await?;
 
-        debug!(
-            keyword = keyword,
-            count = tools.len(),
-            "Searching tools for keyword"
-        );
+        debug!(keyword = keyword, count = tools.len(), "Searching tools for keyword");
 
         // Pre-allocate with estimated capacity
         let mut results = Vec::with_capacity(tools.len() / 4);
@@ -157,9 +152,7 @@ impl ToolDiscovery {
 
         // Sort by relevance score (highest first)
         results.sort_by(|a, b| {
-            b.relevance_score
-                .partial_cmp(&a.relevance_score)
-                .unwrap_or(Ordering::Equal)
+            b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(Ordering::Equal)
         });
 
         // Apply AGENTS.md compliance: limit to 5 results with overflow indication
@@ -209,15 +202,15 @@ impl ToolDiscovery {
     pub async fn list_tools_by_provider(&self) -> Result<Vec<(String, Vec<ToolDiscoveryResult>)>> {
         let tools = self.mcp_client.list_mcp_tools().await?;
 
-        Ok(group_results_by_provider_preserving_order(
-            tools.into_iter().map(|tool| ToolDiscoveryResult {
+        Ok(group_results_by_provider_preserving_order(tools.into_iter().map(|tool| {
+            ToolDiscoveryResult {
                 name: tool.name,
                 provider: tool.provider,
                 description: tool.description,
                 relevance_score: 1.0,
                 input_schema: None,
-            }),
-        ))
+            }
+        })))
     }
 
     /// Calculate relevance score for a tool based on keyword match.
@@ -318,15 +311,9 @@ mod tests {
             ],
         }));
 
-        let grouped = discovery
-            .list_tools_by_provider()
-            .await
-            .expect("grouped tools");
+        let grouped = discovery.list_tools_by_provider().await.expect("grouped tools");
 
-        let providers = grouped
-            .iter()
-            .map(|(provider, _)| provider.as_str())
-            .collect::<Vec<_>>();
+        let providers = grouped.iter().map(|(provider, _)| provider.as_str()).collect::<Vec<_>>();
         assert_eq!(providers, vec!["gmail", "calendar", "docs"]);
 
         let tool_names = grouped

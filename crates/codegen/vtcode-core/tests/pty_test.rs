@@ -10,11 +10,8 @@ async fn temp_registry() -> (TempDir, ToolRegistry) {
 
 async fn temp_registry_with_config(vtcode_toml: Option<&str>) -> (TempDir, ToolRegistry) {
     let temp = TempDir::new().expect("temp workspace");
-    fs::write(
-        temp.path().join("Cargo.toml"),
-        "[package]\nname = \"pty-test\"\n",
-    )
-    .expect("write fixture Cargo.toml");
+    fs::write(temp.path().join("Cargo.toml"), "[package]\nname = \"pty-test\"\n")
+        .expect("write fixture Cargo.toml");
     if let Some(config) = vtcode_toml {
         fs::write(temp.path().join("vtcode.toml"), config).expect("write fixture vtcode.toml");
     }
@@ -85,12 +82,7 @@ async fn test_pty_functionality() {
     let output = response["output"].as_str().unwrap_or_default();
     assert!(output.contains("Cargo.toml"));
     assert!(response["session_id"].as_str().is_some());
-    assert!(
-        response["command"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("ls")
-    );
+    assert!(response["command"].as_str().unwrap_or_default().contains("ls"));
     assert!(
         response["working_directory"].is_string() || response.get("working_directory").is_none()
     );
@@ -123,9 +115,7 @@ async fn test_pty_functionality_with_exit_code() {
     // use different codes for a missing operand/path.
     assert_eq!(response["success"], true);
     // Check for exit_code field (may be "code" or "exit_code" depending on implementation)
-    let exit_code = response["exit_code"]
-        .as_i64()
-        .or_else(|| response["code"].as_i64());
+    let exit_code = response["exit_code"].as_i64().or_else(|| response["code"].as_i64());
     assert!(
         exit_code.is_some_and(|code| code != 0),
         "expected present non-zero exit code, got {exit_code:?}; response={response:?}"
@@ -152,12 +142,7 @@ async fn test_pty_run_returns_live_session_after_yield_window() {
 
     assert_eq!(start["success"], true);
     assert_eq!(start["is_exited"].as_bool(), Some(false));
-    assert!(
-        start
-            .get("session_id")
-            .and_then(|value| value.as_str())
-            .is_some()
-    );
+    assert!(start.get("session_id").and_then(|value| value.as_str()).is_some());
     assert!(start.get("exit_code").is_none());
 
     let (output, read) = read_session_until_exit(&registry, sid.as_str(), 20, 250).await;
@@ -208,10 +193,7 @@ async fn test_create_pty_session_uses_requested_shell() {
         .expect("create session result");
 
     assert_eq!(create_result["success"], true);
-    let output = create_result["output"]
-        .as_str()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+    let output = create_result["output"].as_str().unwrap_or_default().to_ascii_lowercase();
     assert!(output.contains("sh"));
 }
 
@@ -235,14 +217,8 @@ async fn test_pty_output_has_no_ansi_codes() {
     let output = result["output"].as_str().unwrap_or_default();
 
     // Check that output doesn't contain ANSI escape sequences
-    assert!(
-        !output.contains("\x1b["),
-        "Output should not contain ANSI escape codes"
-    );
-    assert!(
-        !output.contains("\u{001b}["),
-        "Output should not contain ANSI escape codes"
-    );
+    assert!(!output.contains("\x1b["), "Output should not contain ANSI escape codes");
+    assert!(!output.contains("\u{001b}["), "Output should not contain ANSI escape codes");
 
     // Verify we got actual file names
     assert!(
@@ -274,9 +250,7 @@ async fn test_pty_command_not_found_handling() {
 
     assert_eq!(response["success"], true);
     // Check for exit_code field (may be "code" or "exit_code" depending on implementation)
-    let exit_code = response["exit_code"]
-        .as_i64()
-        .or_else(|| response["code"].as_i64());
+    let exit_code = response["exit_code"].as_i64().or_else(|| response["code"].as_i64());
     assert_eq!(exit_code, Some(127));
 
     // Check that we have error information in message or output
@@ -327,12 +301,7 @@ async fn test_read_pty_session_includes_command_context_fields() {
 
     assert_eq!(read["success"], true);
     assert_eq!(read["session_id"].as_str(), Some(sid.as_str()));
-    assert!(
-        read["command"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("sleep 1")
-    );
+    assert!(read["command"].as_str().unwrap_or_default().contains("sleep 1"));
     assert!(read["working_directory"].is_string() || read.get("working_directory").is_none());
     assert!(read["rows"].is_number());
     assert!(read["cols"].is_number());
@@ -379,22 +348,13 @@ async fn test_inspect_does_not_drain_session_output() {
             )
             .await
             .expect("poll session output");
-        if read["output"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("<alpha>")
-        {
+        if read["output"].as_str().unwrap_or_default().contains("<alpha>") {
             break;
         }
     }
 
     assert_eq!(read["success"], true);
-    assert!(
-        read["output"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("<alpha>")
-    );
+    assert!(read["output"].as_str().unwrap_or_default().contains("<alpha>"));
 
     let _ = registry
         .execute_tool(
@@ -428,10 +388,7 @@ async fn test_exited_sessions_are_pruned_after_final_poll() {
     let (_, read) = read_session_until_exit(&registry, sid.as_str(), 20, 200).await;
 
     assert_eq!(read["success"], true);
-    assert_eq!(
-        read["exit_code"].as_i64().or_else(|| read["code"].as_i64()),
-        Some(0)
-    );
+    assert_eq!(read["exit_code"].as_i64().or_else(|| read["code"].as_i64()), Some(0));
     assert_eq!(read["is_exited"].as_bool(), Some(true));
 
     let sessions = registry
@@ -439,9 +396,8 @@ async fn test_exited_sessions_are_pruned_after_final_poll() {
         .await
         .expect("list sessions");
 
-    let active_sessions = sessions["sessions"]
-        .as_array()
-        .expect("sessions list should be an array");
+    let active_sessions =
+        sessions["sessions"].as_array().expect("sessions list should be an array");
     assert!(!active_sessions.iter().any(|session| {
         session.get("id").and_then(|value| value.as_str()) == Some(sid.as_str())
     }));
@@ -506,15 +462,9 @@ async fn test_exec_command_write_preserves_whitespace() {
         read_session_until_exit(&registry, sid.as_str(), 8, 100).await
     };
     assert_eq!(final_read["success"], true);
-    let combined_output = format!(
-        "{}{}",
-        write["output"].as_str().unwrap_or_default(),
-        tail_output
-    );
-    assert!(
-        combined_output.contains("<  keep  >"),
-        "combined output was: {combined_output:?}"
-    );
+    let combined_output =
+        format!("{}{}", write["output"].as_str().unwrap_or_default(), tail_output);
+    assert!(combined_output.contains("<  keep  >"), "combined output was: {combined_output:?}");
 }
 
 #[cfg(unix)]
@@ -550,10 +500,7 @@ async fn test_exec_command_write_stdin_continues_session() {
     assert_eq!(write["session_id"].as_str(), Some(sid.as_str()));
     assert_eq!(write["is_exited"].as_bool(), Some(false));
     assert!(
-        write["output"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("  keep  "),
+        write["output"].as_str().unwrap_or_default().contains("  keep  "),
         "write_stdin output was: {write:?}"
     );
 
@@ -617,10 +564,7 @@ async fn test_write_stdin_empty_chars_polls_without_sending_input() {
     assert_eq!(write["success"], true);
     assert_eq!(write["session_id"].as_str(), Some(sid.as_str()));
     assert!(
-        write["output"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("<  keep  >"),
+        write["output"].as_str().unwrap_or_default().contains("<  keep  >"),
         "write_stdin output was: {write:?}"
     );
 }
@@ -667,9 +611,7 @@ spool_max_age_secs = 12
     assert_eq!(poll["session_id"].as_str(), Some(sid.as_str()));
     assert_eq!(poll["is_exited"].as_bool(), Some(false));
     assert_eq!(poll["truncated"].as_bool(), Some(true));
-    let spool_path = poll["spool_path"]
-        .as_str()
-        .expect("capped poll output should be spooled");
+    let spool_path = poll["spool_path"].as_str().expect("capped poll output should be spooled");
     assert!(
         spool_path.contains("write_stdin_"),
         "spool path should use the public tool name: {spool_path}"
@@ -722,10 +664,7 @@ async fn test_repeated_write_stdin_empty_polls_observe_fresh_output_and_exit() {
     assert_eq!(first["session_id"].as_str(), Some(sid.as_str()));
     assert_eq!(first["is_exited"].as_bool(), Some(false));
     assert!(
-        first["output"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("delayed-output"),
+        first["output"].as_str().unwrap_or_default().contains("delayed-output"),
         "first poll output was: {first:?}"
     );
     assert!(first.get("reused_recent_result").is_none());

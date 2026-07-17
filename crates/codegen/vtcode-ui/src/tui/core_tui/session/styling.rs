@@ -19,11 +19,7 @@ fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
             as u8
     };
 
-    RgbColor(
-        blend(color.0, target.0),
-        blend(color.1, target.1),
-        blend(color.2, target.2),
-    )
+    RgbColor(blend(color.0, target.0), blend(color.1, target.1), blend(color.2, target.2))
 }
 
 pub fn normalize_tool_name(tool_name: &str) -> &'static str {
@@ -77,11 +73,7 @@ impl SessionStyles {
 
     /// Get the modal list highlight style (Select-style: primary fg, no bg change)
     pub fn modal_list_highlight_style(&self) -> Style {
-        let accent = self
-            .theme
-            .primary
-            .or(self.theme.tool_accent)
-            .or(self.theme.foreground);
+        let accent = self.theme.primary.or(self.theme.tool_accent).or(self.theme.foreground);
         let mut style = self.default_style().add_modifier(Modifier::BOLD);
         if let Some(accent) = accent {
             style = style.fg(ratatui_color_from_ansi(accent));
@@ -138,11 +130,7 @@ impl SessionStyles {
 
     pub fn transcript_link_style(&self) -> Style {
         let style = InlineTextStyle {
-            color: self
-                .theme
-                .tool_accent
-                .or(self.theme.primary)
-                .or(self.theme.foreground),
+            color: self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground),
             ..InlineTextStyle::default()
         };
         ratatui_style_from_inline(&style, self.theme.foreground)
@@ -195,16 +183,9 @@ impl SessionStyles {
     pub fn prefix_style(&self, line: &MessageLine) -> InlineTextStyle {
         let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
 
-        let color = line
-            .segments
-            .iter()
-            .find_map(|segment| segment.style.color)
-            .or(fallback);
+        let color = line.segments.iter().find_map(|segment| segment.style.color).or(fallback);
 
-        InlineTextStyle {
-            color,
-            ..InlineTextStyle::default()
-        }
+        InlineTextStyle { color, ..InlineTextStyle::default() }
     }
 
     /// Get the fallback text color for a message kind
@@ -217,11 +198,9 @@ impl SessionStyles {
             InlineMessageKind::Tool | InlineMessageKind::Error => {
                 self.theme.primary.or(self.theme.foreground)
             }
-            InlineMessageKind::Pty => self
-                .theme
-                .pty_body
-                .or(self.theme.tool_body)
-                .or(self.theme.foreground),
+            InlineMessageKind::Pty => {
+                self.theme.pty_body.or(self.theme.tool_body).or(self.theme.foreground)
+            }
             InlineMessageKind::Info => self.theme.foreground,
             InlineMessageKind::Warning => Some(AnsiColor::Red.into()),
         }

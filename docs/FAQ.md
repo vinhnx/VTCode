@@ -8,7 +8,7 @@ Based on best practices from Ratatui and terminal UI development, this FAQ addre
 
 VT Code correctly filters key events to only process `KeyEventKind::Press`, avoiding duplicate events from both press and release.
 
-See `vtcode-ui/src/tui/core_tui/runner/`:
+See `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`:
 ```rust
 if key.kind == KeyEventKind::Press {
     let _ = _event_tx.send(Event::Key(key));
@@ -46,7 +46,7 @@ VT Code renders to `stderr` (via `CrosstermBackend::new(std::io::stderr())` in t
 
 ### Can I run multiple terminal.draw() calls in the same loop?
 
-No. VT Code uses a single `terminal.draw()` call per frame that renders all widgets together. See `vtcode-core/src/ui/tui/session.rs:render()` method, which orchestrates all UI components in one closure.
+No. VT Code uses a single `terminal.draw()` call per frame that renders all widgets together. See `crates/codegen/vtcode-core/src/ui/tui/session.rs:render()` method, which orchestrates all UI components in one closure.
 
 ### How do I pipe output to other tools?
 
@@ -108,7 +108,7 @@ VT Code is an **AI coding agent** with:
 
 ### How does VT Code manage terminal state?
 
-The fullscreen TUI uses the shared runner in `vtcode-ui/src/tui/core_tui/runner/` and writes terminal control sequences through `stderr`.
+The fullscreen TUI uses the shared runner in `crates/codegen/vtcode-ui/src/tui/core_tui/runner/` and writes terminal control sequences through `stderr`.
 
 1. **Enter:** Save cursor position, enable terminal modes (raw mode, bracketed paste, focus events, keyboard enhancements, optional mouse capture), then enter alternate screen.
 2. **Running:** Process events, update state, and render only the current viewport.

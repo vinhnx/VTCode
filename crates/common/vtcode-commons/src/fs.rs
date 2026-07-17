@@ -80,20 +80,15 @@ fn atomic_temp_path(path: &Path) -> PathBuf {
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("vtcode-atomic-write");
+    let file_name =
+        path.file_name().and_then(|name| name.to_str()).unwrap_or("vtcode-atomic-write");
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or(0);
     let counter = ATOMIC_WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
 
-    dir.join(format!(
-        ".{file_name}.tmp-{}-{nanos:x}-{counter:x}",
-        std::process::id()
-    ))
+    dir.join(format!(".{file_name}.tmp-{}-{nanos:x}-{counter:x}", std::process::id()))
 }
 
 /// Write a JSON file
@@ -169,24 +164,15 @@ pub fn parse_json_or_default<T: for<'de> Deserialize<'de> + Default>(
 
 /// Canonicalize path with context
 pub fn canonicalize_with_context(path: &Path, context: &str) -> Result<PathBuf> {
-    path.canonicalize().with_context(|| {
-        format!(
-            "Failed to canonicalize {} path: {}",
-            context,
-            path.display()
-        )
-    })
+    path.canonicalize()
+        .with_context(|| format!("Failed to canonicalize {} path: {}", context, path.display()))
 }
 
 /// Canonicalize path with context (async)
 pub async fn canonicalize_with_context_async(path: &Path, context: &str) -> Result<PathBuf> {
-    fs::canonicalize(path).await.with_context(|| {
-        format!(
-            "Failed to canonicalize {} path: {}",
-            context,
-            path.display()
-        )
-    })
+    fs::canonicalize(path)
+        .await
+        .with_context(|| format!("Failed to canonicalize {} path: {}", context, path.display()))
 }
 
 /// Read a file to string with contextual error (async)

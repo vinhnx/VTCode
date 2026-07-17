@@ -983,7 +983,7 @@ main() {
     else
         python3 scripts/generate_docs_map.py
         python3 scripts/sync_embedded_assets.py
-        git add docs/modules/vtcode_docs_map.md vtcode-core/embedded_assets_source/docs/modules/vtcode_docs_map.md
+        git add docs/modules/vtcode_docs_map.md crates/codegen/vtcode-core/embedded_assets_source/docs/modules/vtcode_docs_map.md
         if ! git diff --cached --quiet; then
             GIT_AUTHOR_NAME="vtcode-release-bot" \
             GIT_AUTHOR_EMAIL="noreply@vtcode.com" \

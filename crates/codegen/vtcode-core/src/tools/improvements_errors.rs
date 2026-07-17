@@ -125,10 +125,7 @@ impl ImprovementError {
                 ErrorKind::ConfigurationInvalid => "config_invalid",
                 _ => "unknown",
             },
-            self.source_message
-                .as_ref()
-                .map(|s| format!(": {s}"))
-                .unwrap_or_default()
+            self.source_message.as_ref().map(|s| format!(": {s}")).unwrap_or_default()
         )
     }
 }
@@ -262,16 +259,12 @@ pub struct ObservabilityContext {
 impl ObservabilityContext {
     /// Create with no-op sink
     pub fn noop() -> Self {
-        Self {
-            sink: Box::new(NoOpSink),
-        }
+        Self { sink: Box::new(NoOpSink) }
     }
 
     /// Create with logging sink
     pub fn logging() -> Self {
-        Self {
-            sink: Box::new(LoggingSink),
-        }
+        Self { sink: Box::new(LoggingSink) }
     }
 
     /// Record event
@@ -318,11 +311,8 @@ mod tests {
 
     #[test]
     fn test_error_creation() {
-        let err = ImprovementError::new(
-            ErrorKind::ScoringFailed,
-            "result score too low",
-            "score_result",
-        );
+        let err =
+            ImprovementError::new(ErrorKind::ScoringFailed, "result score too low", "score_result");
 
         assert_eq!(err.kind, ErrorKind::ScoringFailed);
         assert_eq!(err.severity, ImprovementSeverity::Error);
@@ -331,12 +321,9 @@ mod tests {
 
     #[test]
     fn test_error_severity() {
-        let err = ImprovementError::new(
-            ErrorKind::CacheCorrupted,
-            "cache state invalid",
-            "cache_read",
-        )
-        .with_severity(ImprovementSeverity::Critical);
+        let err =
+            ImprovementError::new(ErrorKind::CacheCorrupted, "cache state invalid", "cache_read")
+                .with_severity(ImprovementSeverity::Critical);
 
         assert_eq!(err.severity, ImprovementSeverity::Critical);
         assert!(!err.is_recoverable());

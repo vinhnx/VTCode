@@ -72,9 +72,7 @@ pub async fn validate_command(
         "python" | "python3" => validate_python(args, workspace_root, working_dir).await,
         "npm" => validate_npm(args, workspace_root, working_dir).await,
         "node" => validate_node(args, workspace_root, working_dir).await,
-        other => Err(anyhow!(
-            "command '{other}' is not permitted by the execution policy"
-        )),
+        other => Err(anyhow!("command '{other}' is not permitted by the execution policy")),
     }
 }
 
@@ -90,9 +88,7 @@ pub async fn sanitize_working_dir(
         }
         let candidate = normalize_path(&normalized_root.join(dir));
         if !candidate.starts_with(&normalized_root) {
-            return Err(anyhow!(
-                "working directory '{dir}' escapes the workspace root"
-            ));
+            return Err(anyhow!("working directory '{dir}' escapes the workspace root"));
         }
         ensure_within_workspace(&normalized_root, &candidate).await?;
         Ok(candidate)
@@ -174,9 +170,7 @@ async fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path)
             .await
             .with_context(|| format!("failed to inspect source '{source}'"))?;
         if metadata.is_dir() && !allow_recursive {
-            return Err(anyhow!(
-                "copying directories requires the recursive flag for '{source}'"
-            ));
+            return Err(anyhow!("copying directories requires the recursive flag for '{source}'"));
         }
         if !metadata.is_file() && !metadata.is_dir() {
             return Err(anyhow!("unsupported source type for '{source}'"));
@@ -187,10 +181,7 @@ async fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path)
     if let Some(parent) = dest_path.parent()
         && !fs::try_exists(parent).await.unwrap_or(false)
     {
-        return Err(anyhow!(
-            "destination parent '{}' must exist",
-            parent.display()
-        ));
+        return Err(anyhow!("destination parent '{}' must exist", parent.display()));
     }
 
     Ok(())
@@ -238,11 +229,7 @@ fn validate_printenv(args: &[String]) -> Result<()> {
         0 => Ok(()),
         1 => {
             let name = &args[0];
-            if name.is_empty()
-                || !name
-                    .chars()
-                    .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
-            {
+            if name.is_empty() || !name.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_') {
                 return Err(anyhow!("invalid environment variable name '{name}'"));
             }
             Ok(())
@@ -309,9 +296,7 @@ async fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path)
 
     let remaining = &args[index..];
     if remaining.is_empty() && !allow_no_pattern {
-        return Err(anyhow!(
-            "ripgrep requires a pattern unless file listing flags are used"
-        ));
+        return Err(anyhow!("ripgrep requires a pattern unless file listing flags are used"));
     }
 
     let mut rem_index = 0;
@@ -349,9 +334,8 @@ async fn validate_sed(args: &[String], workspace_root: &Path, working_dir: &Path
                 index += 1;
             }
             "-e" => {
-                let value = args
-                    .get(index + 1)
-                    .ok_or_else(|| anyhow!("-e requires a sed command"))?;
+                let value =
+                    args.get(index + 1).ok_or_else(|| anyhow!("-e requires a sed command"))?;
                 ensure_safe_sed_command(value)?;
                 commands.push(value.clone());
                 index += 2;
@@ -401,9 +385,7 @@ fn validate_which(args: &[String]) -> Result<()> {
                     || value.contains('/')
                     || value.chars().any(|ch| ch.is_whitespace())
                 {
-                    return Err(anyhow!(
-                        "program name '{value}' contains unsupported characters"
-                    ));
+                    return Err(anyhow!("program name '{value}' contains unsupported characters"));
                 }
             }
         }
@@ -475,10 +457,7 @@ async fn validate_git(
         // Tier 3: Dangerous operations (always blocked)
         "push" => {
             // Check for force flags
-            if subargs
-                .iter()
-                .any(|a| a.contains("force") || a == "-f" || a == "--no-verify")
-            {
+            if subargs.iter().any(|a| a.contains("force") || a == "-f" || a == "--no-verify") {
                 Err(anyhow!(
                     "git push with force flags is not permitted. Use safe push operations only."
                 ))
@@ -487,9 +466,7 @@ async fn validate_git(
             }
         }
 
-        "force-push" => Err(anyhow!(
-            "git force-push is not permitted by the execution policy"
-        )),
+        "force-push" => Err(anyhow!("git force-push is not permitted by the execution policy")),
 
         "clean" => Err(anyhow!(
             "git clean is not permitted by the execution policy. Use explicit rm commands instead."
@@ -503,9 +480,7 @@ async fn validate_git(
             "git {subcommand} is not permitted - complex history operations require confirmation"
         )),
 
-        other => Err(anyhow!(
-            "git subcommand '{other}' is not permitted by the execution policy"
-        )),
+        other => Err(anyhow!("git subcommand '{other}' is not permitted by the execution policy")),
     }
 }
 
@@ -584,9 +559,7 @@ fn validate_git_read_only(subcommand: &str, subargs: &[String]) -> Result<()> {
 
         // Block any suspicious patterns
         if arg.contains(';') || arg.contains('|') || arg.contains('&') {
-            return Err(anyhow!(
-                "git argument contains suspicious shell metacharacters"
-            ));
+            return Err(anyhow!("git argument contains suspicious shell metacharacters"));
         }
     }
 
@@ -600,9 +573,7 @@ async fn validate_git_add(
 ) -> Result<()> {
     // Block dangerous flags
     if args.iter().any(|a| a == "-f" || a == "--force") {
-        return Err(anyhow!(
-            "git add --force is not permitted. Use regular add operations only."
-        ));
+        return Err(anyhow!("git add --force is not permitted. Use regular add operations only."));
     }
 
     // Validate file paths if provided
@@ -671,9 +642,7 @@ fn validate_git_commit(args: &[String]) -> Result<()> {
 
 fn validate_git_reset(args: &[String], confirm: bool) -> Result<()> {
     // Block destructive reset modes
-    let is_destructive = args
-        .iter()
-        .any(|a| a == "--hard" || a == "--merge" || a == "--keep");
+    let is_destructive = args.iter().any(|a| a == "--hard" || a == "--merge" || a == "--keep");
 
     if is_destructive && !confirm {
         return Err(anyhow!(
@@ -795,9 +764,7 @@ fn validate_git_merge(args: &[String]) -> Result<()> {
     let dangerous_flags = ["--no-ff", "--squash"];
     for arg in args {
         if dangerous_flags.contains(&arg.as_str()) {
-            return Err(anyhow!(
-                "git merge with {arg} flag is not permitted; use simpler merge"
-            ));
+            return Err(anyhow!("git merge with {arg} flag is not permitted; use simpler merge"));
         }
     }
 
@@ -901,18 +868,15 @@ fn ensure_safe_sed_command(value: &str) -> Result<()> {
         return Err(anyhow!("sed command cannot be empty"));
     }
     if value.contains([';', '|', '&', '`']) {
-        return Err(anyhow!(
-            "sed command contains unsupported control characters"
-        ));
+        return Err(anyhow!("sed command contains unsupported control characters"));
     }
 
     let mut chars = value.chars();
     if chars.next() != Some('s') {
         return Err(anyhow!("only sed substitution commands are supported"));
     }
-    let delimiter = chars
-        .next()
-        .ok_or_else(|| anyhow!("sed substitution is missing a delimiter"))?;
+    let delimiter =
+        chars.next().ok_or_else(|| anyhow!("sed substitution is missing a delimiter"))?;
     if delimiter.is_ascii_alphanumeric() || delimiter.is_ascii_whitespace() {
         return Err(anyhow!("invalid sed delimiter"));
     }
@@ -926,9 +890,7 @@ fn ensure_safe_sed_command(value: &str) -> Result<()> {
     collect_sed_flags(chars, &mut flags)?;
 
     if flags.chars().any(|ch| matches!(ch, 'e' | 'E' | 'F' | 'f')) {
-        return Err(anyhow!(
-            "sed execution flags are not permitted in substitution"
-        ));
+        return Err(anyhow!("sed execution flags are not permitted in substitution"));
     }
 
     Ok(())
@@ -1078,9 +1040,9 @@ async fn validate_cargo(
                 ))
             }
         }
-        other => Err(anyhow!(
-            "cargo subcommand '{other}' is not permitted by the execution policy"
-        )),
+        other => {
+            Err(anyhow!("cargo subcommand '{other}' is not permitted by the execution policy"))
+        }
     }
 }
 
@@ -1132,9 +1094,9 @@ async fn validate_npm(args: &[String], workspace_root: &Path, working_dir: &Path
     let subcommand = args[0].as_str();
     match subcommand {
         // Dangerous operations
-        "publish" | "unpublish" => Err(anyhow!(
-            "npm {subcommand} is not permitted by the execution policy"
-        )),
+        "publish" | "unpublish" => {
+            Err(anyhow!("npm {subcommand} is not permitted by the execution policy"))
+        }
         // Allow safe and other commands by default, as npm is generally safe in workspace
         _ => Ok(()),
     }
@@ -1255,28 +1217,14 @@ mod tests {
         let working = PathBuf::from("/tmp");
 
         // Safe read-only operations should be allowed
-        validate_git(&["status".to_owned()], &workspace, &working, false)
+        validate_git(&["status".to_owned()], &workspace, &working, false).await.unwrap();
+        validate_git(&["log".to_owned(), "--oneline".to_owned()], &workspace, &working, false)
             .await
             .unwrap();
-        validate_git(
-            &["log".to_owned(), "--oneline".to_owned()],
-            &workspace,
-            &working,
-            false,
-        )
-        .await
-        .unwrap();
-        validate_git(&["diff".to_owned()], &workspace, &working, false)
+        validate_git(&["diff".to_owned()], &workspace, &working, false).await.unwrap();
+        validate_git(&["show".to_owned(), "HEAD".to_owned()], &workspace, &working, false)
             .await
             .unwrap();
-        validate_git(
-            &["show".to_owned(), "HEAD".to_owned()],
-            &workspace,
-            &working,
-            false,
-        )
-        .await
-        .unwrap();
     }
 
     #[tokio::test]
@@ -1286,40 +1234,22 @@ mod tests {
 
         // Dangerous operations should be blocked
         assert!(
-            validate_git(
-                &["push".to_owned(), "--force".to_owned()],
-                &workspace,
-                &working,
-                false
-            )
-            .await
-            .is_err()
-        );
-        assert!(
-            validate_git(
-                &["push".to_owned(), "-f".to_owned()],
-                &workspace,
-                &working,
-                false
-            )
-            .await
-            .is_err()
-        );
-        assert!(
-            validate_git(&["clean".to_owned()], &workspace, &working, false)
+            validate_git(&["push".to_owned(), "--force".to_owned()], &workspace, &working, false)
                 .await
                 .is_err()
         );
+        assert!(
+            validate_git(&["push".to_owned(), "-f".to_owned()], &workspace, &working, false)
+                .await
+                .is_err()
+        );
+        assert!(validate_git(&["clean".to_owned()], &workspace, &working, false).await.is_err());
         assert!(
             validate_git(&["filter-branch".to_owned()], &workspace, &working, false)
                 .await
                 .is_err()
         );
-        assert!(
-            validate_git(&["rebase".to_owned()], &workspace, &working, false)
-                .await
-                .is_err()
-        );
+        assert!(validate_git(&["rebase".to_owned()], &workspace, &working, false).await.is_err());
         assert!(
             validate_git(&["cherry-pick".to_owned()], &workspace, &working, false)
                 .await

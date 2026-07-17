@@ -45,9 +45,9 @@ pub(crate) fn prune_old_harness_logs(log_dir: &Path, max_age_days: u64) {
         return;
     }
 
-    let cutoff = match SystemTime::now().checked_sub(Duration::from_secs(
-        max_age_days.saturating_mul(SECONDS_PER_DAY),
-    )) {
+    let cutoff = match SystemTime::now()
+        .checked_sub(Duration::from_secs(max_age_days.saturating_mul(SECONDS_PER_DAY)))
+    {
         Some(t) => t,
         None => return,
     };
@@ -163,11 +163,7 @@ impl HarnessEventEmitter {
             .open_responses
             .lock()
             .map_err(|e| anyhow::anyhow!("Open Responses lock poisoned: {e}"))?;
-        *guard = Some(OpenResponsesState {
-            integration,
-            writer,
-            sequence_counter: 0,
-        });
+        *guard = Some(OpenResponsesState { integration, writer, sequence_counter: 0 });
 
         Ok(())
     }
@@ -180,15 +176,9 @@ impl HarnessEventEmitter {
         let agent = AtifAgent::vtcode().with_model(model);
         let builder = AtifTrajectoryBuilder::new(agent);
 
-        let mut guard = self
-            .inner
-            .atif
-            .lock()
-            .map_err(|e| anyhow::anyhow!("ATIF lock poisoned: {e}"))?;
-        *guard = Some(AtifState {
-            builder,
-            output_path,
-        });
+        let mut guard =
+            self.inner.atif.lock().map_err(|e| anyhow::anyhow!("ATIF lock poisoned: {e}"))?;
+        *guard = Some(AtifState { builder, output_path });
         Ok(())
     }
 
@@ -248,9 +238,7 @@ impl HarnessEventEmitter {
             writer
                 .write_all(serialized.as_bytes())
                 .context("Failed to write harness event")?;
-            writer
-                .write_all(b"\n")
-                .context("Failed to write harness event newline")?;
+            writer.write_all(b"\n").context("Failed to write harness event newline")?;
             writer.flush().context("Failed to flush harness log")?;
         }
 
@@ -398,10 +386,7 @@ pub(crate) fn turn_completed_event(usage: Usage) -> ThreadEvent {
 }
 
 pub(crate) fn turn_failed_event(message: impl Into<String>, usage: Option<Usage>) -> ThreadEvent {
-    ThreadEvent::TurnFailed(TurnFailedEvent {
-        message: message.into(),
-        usage,
-    })
+    ThreadEvent::TurnFailed(TurnFailedEvent { message: message.into(), usage })
 }
 
 pub(crate) fn thread_completed_event(
@@ -483,10 +468,7 @@ mod tests {
         let run_id = TurnRunId("run-123".to_string());
         let resolved = resolve_event_log_path(tmp.path().to_str().expect("path"), &run_id);
 
-        let file_name = resolved
-            .file_name()
-            .and_then(|name| name.to_str())
-            .expect("file name");
+        let file_name = resolved.file_name().and_then(|name| name.to_str()).expect("file name");
         assert!(file_name.starts_with("harness-run-123-"));
         assert!(file_name.ends_with(".jsonl"));
     }
@@ -511,10 +493,7 @@ mod tests {
             Some(vtcode_core::exec::events::EVENT_SCHEMA_VERSION)
         );
         assert_eq!(
-            value
-                .get("event")
-                .and_then(|v| v.get("type"))
-                .and_then(|v| v.as_str()),
+            value.get("event").and_then(|v| v.get("type")).and_then(|v| v.as_str()),
             Some("turn.started")
         );
     }
@@ -590,12 +569,8 @@ mod tests {
     #[test]
     fn tool_started_event_captures_arguments() {
         let args = json!({ "path": "README.md" });
-        let event = tool_started_event(
-            "tool-1".to_string(),
-            "read_file",
-            Some(&args),
-            Some("tool_call_0"),
-        );
+        let event =
+            tool_started_event("tool-1".to_string(), "read_file", Some(&args), Some("tool_call_0"));
 
         let ThreadEvent::ItemStarted(ItemStartedEvent { item }) = event else {
             panic!("expected item.started");

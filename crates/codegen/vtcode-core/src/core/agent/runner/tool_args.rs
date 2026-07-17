@@ -32,10 +32,7 @@ impl AgentRunner {
             session_state.warnings.push(warning.clone());
             session_state.conversation.push(Content {
                 role: ROLE_USER.to_owned(),
-                parts: vec![Part::Text {
-                    text: warning.clone(),
-                    thought_signature: None,
-                }],
+                parts: vec![Part::Text { text: warning.clone(), thought_signature: None }],
             });
             session_state.is_completed = true;
             session_state.outcome = TaskOutcome::LoopDetected;
@@ -46,10 +43,7 @@ impl AgentRunner {
             // and can self-correct (re-plan, use alternatives, synthesize).
             session_state.conversation.push(Content {
                 role: ROLE_USER.to_owned(),
-                parts: vec![Part::Text {
-                    text: warning,
-                    thought_signature: None,
-                }],
+                parts: vec![Part::Text { text: warning, thought_signature: None }],
             });
             false
         }
@@ -67,10 +61,8 @@ impl AgentRunner {
         };
 
         let workspace_path = self._workspace.to_string_lossy().into_owned();
-        let fallback_dir = session_state
-            .last_dir_path
-            .clone()
-            .unwrap_or_else(|| workspace_path.clone());
+        let fallback_dir =
+            session_state.last_dir_path.clone().unwrap_or_else(|| workspace_path.clone());
 
         if name == tools::LIST_FILES {
             normalized
@@ -84,9 +76,7 @@ impl AgentRunner {
         ) && !(name == tools::READ_FILE && normalized.contains_key("file_path"))
             && let Some(last_file) = session_state.last_file_path.clone()
         {
-            normalized
-                .entry("path".to_string())
-                .or_insert_with(|| Value::String(last_file));
+            normalized.entry("path".to_string()).or_insert_with(|| Value::String(last_file));
         }
 
         let normalized = Value::Object(normalized);

@@ -404,12 +404,7 @@ impl ModalState {
         let Some(&item_index) = list.visible_indices.get(visible_index) else {
             return ModalListKeyResult::HandledNoRedraw;
         };
-        if list
-            .items
-            .get(item_index)
-            .and_then(|item| item.selection.as_ref())
-            .is_none()
-        {
+        if list.items.get(item_index).and_then(|item| item.selection.as_ref()).is_none() {
             return ModalListKeyResult::HandledNoRedraw;
         }
 
@@ -463,9 +458,9 @@ fn selection_change_event(
         return None;
     }
     current.map(|selection| {
-        InlineEvent::Overlay(OverlayEvent::SelectionChanged(
-            OverlaySelectionChange::List(selection),
-        ))
+        InlineEvent::Overlay(OverlayEvent::SelectionChanged(OverlaySelectionChange::List(
+            selection,
+        )))
     })
 }
 
@@ -491,9 +486,7 @@ fn map_config_selection_for_arrow(
     if action.ends_with(":cycle") {
         if is_left {
             let key = action.trim_end_matches(":cycle");
-            return Some(InlineListSelection::ConfigAction(format!(
-                "{key}:cycle_prev"
-            )));
+            return Some(InlineListSelection::ConfigAction(format!("{key}:cycle_prev")));
         }
         return Some(selection.clone());
     }
@@ -553,9 +546,7 @@ pub fn is_divider_title(item: &InlineListItem) -> bool {
     if symbol.is_empty() {
         return false;
     }
-    item.title
-        .chars()
-        .all(|ch| symbol.chars().any(|needle| needle == ch))
+    item.title.chars().all(|ch| symbol.chars().any(|needle| needle == ch))
 }
 
 impl ModalListState {
@@ -564,10 +555,8 @@ impl ModalListState {
             .into_iter()
             .map(|item| {
                 let is_divider = is_divider_title(&item);
-                let search_value = item
-                    .search_value
-                    .as_ref()
-                    .map(|value| value.to_ascii_lowercase());
+                let search_value =
+                    item.search_value.as_ref().map(|value| value.to_ascii_lowercase());
                 ModalListItem {
                     title: item.title,
                     subtitle: item.subtitle,
@@ -579,15 +568,10 @@ impl ModalListState {
                 }
             })
             .collect();
-        let total_selectable = converted
+        let total_selectable = converted.iter().filter(|item| item.selection.is_some()).count();
+        let has_two_line_items = converted
             .iter()
-            .filter(|item| item.selection.is_some())
-            .count();
-        let has_two_line_items = converted.iter().any(|item| {
-            item.subtitle
-                .as_ref()
-                .is_some_and(|subtitle| !subtitle.trim().is_empty())
-        });
+            .any(|item| item.subtitle.as_ref().is_some_and(|subtitle| !subtitle.trim().is_empty()));
         let density_behavior = Self::density_behavior_for_items(&converted);
         let is_model_picker_list = Self::is_model_picker_list(&converted);
         let compact_rows =
@@ -759,8 +743,7 @@ impl ModalListState {
         let Some(selected) = self.list_state.selected() else {
             return false;
         };
-        self.last_selectable_index()
-            .is_some_and(|last| selected == last)
+        self.last_selectable_index().is_some_and(|last| selected == last)
     }
 
     pub fn select_nth_selectable(&mut self, target_index: usize) -> bool {
@@ -934,9 +917,7 @@ impl ModalListState {
     }
 
     fn first_selectable_index(&self) -> Option<usize> {
-        self.visible_indices
-            .iter()
-            .position(|&idx| self.items[idx].selection.is_some())
+        self.visible_indices.iter().position(|&idx| self.items[idx].selection.is_some())
     }
 
     fn last_selectable_index(&self) -> Option<usize> {
@@ -946,9 +927,7 @@ impl ModalListState {
     }
 
     pub(super) fn filter_active(&self) -> bool {
-        self.filter_query
-            .as_ref()
-            .is_some_and(|value| !value.is_empty())
+        self.filter_query.as_ref().is_some_and(|value| !value.is_empty())
     }
 
     #[cfg(test)]
@@ -987,9 +966,9 @@ impl ModalListState {
             ModalListDensityBehavior::FixedComfortable => {
                 Some(CONFIG_LIST_NAVIGATION_HINT.to_owned())
             }
-            ModalListDensityBehavior::Adjustable => footer_hint
-                .filter(|hint| !hint.is_empty())
-                .map(ToOwned::to_owned),
+            ModalListDensityBehavior::Adjustable => {
+                footer_hint.filter(|hint| !hint.is_empty()).map(ToOwned::to_owned)
+            }
         }
     }
 
@@ -1033,16 +1012,15 @@ impl WizardModalState {
         let step_states: Vec<WizardStepState> = steps
             .into_iter()
             .map(|step| {
-                let notes_active = step
-                    .items
-                    .first()
-                    .and_then(|item| item.selection.as_ref())
-                    .is_some_and(|selection| match selection {
-                        InlineListSelection::RequestUserInputAnswer {
-                            selected, other, ..
-                        } => selected.is_empty() && other.is_some(),
-                        _ => false,
-                    });
+                let notes_active =
+                    step.items.first().and_then(|item| item.selection.as_ref()).is_some_and(
+                        |selection| match selection {
+                            InlineListSelection::RequestUserInputAnswer {
+                                selected, other, ..
+                            } => selected.is_empty() && other.is_some(),
+                            _ => false,
+                        },
+                    );
                 WizardStepState {
                     title: step.title,
                     question: step.question,
@@ -1363,17 +1341,9 @@ impl WizardModalState {
     fn current_selection(&self) -> Option<InlineListSelection> {
         self.steps
             .get(self.current_step)
-            .and_then(|step| {
-                step.list
-                    .current_selection()
-                    .map(|selection| (selection, step))
-            })
+            .and_then(|step| step.list.current_selection().map(|selection| (selection, step)))
             .map(|(selection, step)| match selection {
-                InlineListSelection::RequestUserInputAnswer {
-                    question_id,
-                    selected,
-                    other,
-                } => {
+                InlineListSelection::RequestUserInputAnswer { question_id, selected, other } => {
                     let next_other = if other.is_some() {
                         step.submitted_freeform_value()
                     } else if step.notes.trim().is_empty() {
@@ -1387,20 +1357,14 @@ impl WizardModalState {
                         other: next_other,
                     }
                 }
-                InlineListSelection::AskUserChoice {
-                    tab_id, choice_id, ..
-                } => {
+                InlineListSelection::AskUserChoice { tab_id, choice_id, .. } => {
                     let notes = step.notes.trim();
                     let text = if notes.is_empty() {
                         None
                     } else {
                         Some(notes.to_string())
                     };
-                    InlineListSelection::AskUserChoice {
-                        tab_id,
-                        choice_id,
-                        text,
-                    }
+                    InlineListSelection::AskUserChoice { tab_id, choice_id, text }
                 }
                 _ => selection,
             })
@@ -1408,9 +1372,7 @@ impl WizardModalState {
 
     /// Check if current step is completed
     fn current_step_completed(&self) -> bool {
-        self.steps
-            .get(self.current_step)
-            .is_some_and(|step| step.completed)
+        self.steps.get(self.current_step).is_some_and(|step| step.completed)
     }
 
     fn step_selected_custom_note_item_index(step: &WizardStepState) -> Option<usize> {
@@ -1430,8 +1392,7 @@ impl WizardModalState {
     }
 
     fn current_step_requires_custom_note_input(&self) -> bool {
-        self.current_step_selected_custom_note_item_index()
-            .is_some()
+        self.current_step_selected_custom_note_item_index().is_some()
     }
 
     fn current_step_supports_notes(&self) -> bool {
@@ -1482,9 +1443,7 @@ impl WizardModalState {
     }
 
     pub fn notes_active(&self) -> bool {
-        self.steps
-            .get(self.current_step)
-            .is_some_and(|step| step.notes_active)
+        self.steps.get(self.current_step).is_some_and(|step| step.notes_active)
     }
 
     pub fn instruction_lines(&self) -> Vec<String> {
@@ -1533,10 +1492,7 @@ impl WizardModalState {
 
     /// Collect all answers from completed steps
     fn collect_answers(&self) -> Vec<InlineListSelection> {
-        self.steps
-            .iter()
-            .filter_map(|step| step.answer.clone())
-            .collect()
+        self.steps.iter().filter_map(|step| step.answer.clone()).collect()
     }
 
     fn submit_current_selection(&mut self) -> ModalListKeyResult {

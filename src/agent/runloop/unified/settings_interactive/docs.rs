@@ -62,15 +62,7 @@ fn parse_field_reference_markdown() -> FieldDocIndex {
         let description = columns[5].trim().to_string();
 
         let options = extract_options(&description);
-        by_path.insert(
-            field,
-            FieldDoc {
-                type_name,
-                default_value,
-                description,
-                options,
-            },
-        );
+        by_path.insert(field, FieldDoc { type_name, default_value, description, options });
     }
 
     FieldDocIndex { by_path }

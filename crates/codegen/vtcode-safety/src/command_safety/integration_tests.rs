@@ -40,11 +40,7 @@ mod tests {
         for cmd in forbidden_commands {
             let cmd_vec: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
             let result = evaluator.evaluate(&cmd_vec).await.unwrap();
-            assert!(
-                !result.allowed,
-                "Expected {} to be forbidden",
-                cmd.join(" ")
-            );
+            assert!(!result.allowed, "Expected {} to be forbidden", cmd.join(" "));
         }
     }
 
@@ -124,11 +120,7 @@ mod tests {
         for cmd in forbidden_commands {
             let cmd_vec: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
             let result = evaluator.evaluate(&cmd_vec).await.unwrap();
-            assert!(
-                !result.allowed,
-                "Expected {} to be forbidden",
-                cmd.join(" ")
-            );
+            assert!(!result.allowed, "Expected {} to be forbidden", cmd.join(" "));
         }
     }
 
@@ -161,10 +153,7 @@ mod tests {
             "git status && cargo check".to_string(),
         ];
         let result = evaluator.evaluate(&cmd).await.unwrap();
-        assert!(
-            result.allowed,
-            "bash -lc with safe commands should be allowed"
-        );
+        assert!(result.allowed, "bash -lc with safe commands should be allowed");
     }
 
     #[tokio::test]
@@ -176,10 +165,7 @@ mod tests {
             "git status && rm -rf /".to_string(),
         ];
         let result = evaluator.evaluate(&cmd).await.unwrap();
-        assert!(
-            !result.allowed,
-            "bash -lc with dangerous command should be blocked"
-        );
+        assert!(!result.allowed, "bash -lc with dangerous command should be blocked");
     }
 
     #[tokio::test]
@@ -191,10 +177,7 @@ mod tests {
             "git --git-dir=.evil-git diff HEAD~1..HEAD".to_string(),
         ];
         let result = evaluator.evaluate(&cmd).await.unwrap();
-        assert!(
-            !result.allowed,
-            "bash -lc with unsafe git global options should be blocked"
-        );
+        assert!(!result.allowed, "bash -lc with unsafe git global options should be blocked");
     }
 
     // ========== Policy Layer Tests ==========
@@ -203,10 +186,7 @@ mod tests {
     async fn test_policy_deny_blocks_safe_command() {
         let evaluator = UnifiedCommandEvaluator::new();
         let cmd = vec!["git".to_string(), "status".to_string()];
-        let result = evaluator
-            .evaluate_with_policy(&cmd, false, "policy blocked")
-            .await
-            .unwrap();
+        let result = evaluator.evaluate_with_policy(&cmd, false, "policy blocked").await.unwrap();
         assert!(!result.allowed);
         matches!(result.primary_reason, EvaluationReason::PolicyDeny(_));
     }
@@ -215,10 +195,7 @@ mod tests {
     async fn test_policy_allow_with_safety_deny() {
         let evaluator = UnifiedCommandEvaluator::new();
         let cmd = vec!["rm".to_string(), "-rf".to_string(), "/".to_string()];
-        let result = evaluator
-            .evaluate_with_policy(&cmd, true, "policy allowed")
-            .await
-            .unwrap();
+        let result = evaluator.evaluate_with_policy(&cmd, true, "policy allowed").await.unwrap();
         // Policy allows but safety rules should deny
         assert!(!result.allowed);
         matches!(result.primary_reason, EvaluationReason::DangerousCommand(_));
@@ -228,10 +205,7 @@ mod tests {
     async fn test_policy_allow_with_safety_allow() {
         let evaluator = UnifiedCommandEvaluator::new();
         let cmd = vec!["git".to_string(), "status".to_string()];
-        let result = evaluator
-            .evaluate_with_policy(&cmd, true, "policy allowed")
-            .await
-            .unwrap();
+        let result = evaluator.evaluate_with_policy(&cmd, true, "policy allowed").await.unwrap();
         assert!(result.allowed);
     }
 
@@ -426,17 +400,11 @@ mod tests {
         ];
 
         // Simulate policy that allows (safe commands should pass)
-        let result = evaluator
-            .evaluate_with_policy(&cmd, true, "policy allowed")
-            .await
-            .unwrap();
+        let result = evaluator.evaluate_with_policy(&cmd, true, "policy allowed").await.unwrap();
         assert!(result.allowed);
 
         // Simulate policy that denies (policy should block)
-        let result = evaluator
-            .evaluate_with_policy(&cmd, false, "policy blocked")
-            .await
-            .unwrap();
+        let result = evaluator.evaluate_with_policy(&cmd, false, "policy blocked").await.unwrap();
         assert!(!result.allowed);
     }
 
@@ -450,10 +418,7 @@ mod tests {
         ];
 
         // Even if policy allows, safety should deny
-        let result = evaluator
-            .evaluate_with_policy(&cmd, true, "policy allowed")
-            .await
-            .unwrap();
+        let result = evaluator.evaluate_with_policy(&cmd, true, "policy allowed").await.unwrap();
         assert!(!result.allowed);
     }
 

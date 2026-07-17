@@ -89,15 +89,13 @@ impl ToolRegistryImprovement {
             let entry = if let Some(m) = metrics.get_mut(tool_name) {
                 m
             } else {
-                metrics
-                    .entry(tool_name.to_string())
-                    .or_insert_with(|| ToolMetrics {
-                        name: tool_name.to_string(),
-                        total_calls: 0,
-                        successful_calls: 0,
-                        total_duration_ms: 0,
-                        avg_quality: 0.0,
-                    })
+                metrics.entry(tool_name.to_string()).or_insert_with(|| ToolMetrics {
+                    name: tool_name.to_string(),
+                    total_calls: 0,
+                    successful_calls: 0,
+                    total_duration_ms: 0,
+                    avg_quality: 0.0,
+                })
             };
 
             entry.total_calls += 1;
@@ -129,10 +127,7 @@ impl ToolRegistryImprovement {
         let metric_key = format!("{tool_name}_success_rate");
         self.obs_context.metric("tool_effectiveness", &metric_key, {
             let metrics = self.tool_metrics.read();
-            metrics
-                .get(tool_name)
-                .map(|m| m.success_rate())
-                .unwrap_or(0.0)
+            metrics.get(tool_name).map(|m| m.success_rate()).unwrap_or(0.0)
         });
     }
 
@@ -160,9 +155,7 @@ impl ToolRegistryImprovement {
     pub fn cache_result(&self, tool: &str, args: &str, result: &str) {
         let key = ToolResultKey(format!("{tool}::{args}"));
         let size = result.len() as u64;
-        self.result_cache
-            .write()
-            .insert(key, result.to_string(), size);
+        self.result_cache.write().insert(key, result.to_string(), size);
     }
 
     /// Try to get cached result (migrated to UnifiedCache)
@@ -221,10 +214,7 @@ mod tests {
         let ext = ToolRegistryImprovement::new(obs);
 
         ext.cache_result(tools::CODE_SEARCH, "query", "result");
-        assert_eq!(
-            ext.get_cached_result(tools::CODE_SEARCH, "query"),
-            Some("result".to_owned())
-        );
+        assert_eq!(ext.get_cached_result(tools::CODE_SEARCH, "query"), Some("result".to_owned()));
     }
 
     #[test]

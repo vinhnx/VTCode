@@ -64,11 +64,7 @@ impl TaskChecklist {
     fn to_markdown(&self) -> String {
         let mut md = format!("# {}\n\n", self.title);
         for item in &self.items {
-            md.push_str(&format!(
-                "- {} {}\n",
-                item.status.flat_checkbox(),
-                item.description
-            ));
+            md.push_str(&format!("- {} {}\n", item.status.flat_checkbox(), item.description));
             append_task_step_metadata(&mut md, "", &item.metadata);
         }
         append_notes_section(&mut md, self.notes.as_deref());
@@ -80,12 +76,7 @@ impl TaskChecklist {
         for item in &self.items {
             let trimmed = item.description.trim_start();
             let indent = &item.description[..item.description.len() - trimmed.len()];
-            md.push_str(&format!(
-                "{}- {} {}\n",
-                indent,
-                item.status.plan_checkbox(),
-                trimmed
-            ));
+            md.push_str(&format!("{}- {} {}\n", indent, item.status.plan_checkbox(), trimmed));
             append_task_step_metadata(&mut md, indent, &item.metadata);
         }
         append_notes_section(&mut md, self.notes.as_deref());
@@ -205,12 +196,7 @@ fn parse_input_items(items: &[TaskItemInput]) -> Result<Vec<TaskItem>> {
         .enumerate()
         .map(|(idx, item)| {
             let (status, description, metadata) = item?;
-            Ok(TaskItem {
-                index: idx + 1,
-                description,
-                status,
-                metadata,
-            })
+            Ok(TaskItem { index: idx + 1, description, status, metadata })
         })
         .collect()
 }
@@ -356,11 +342,7 @@ fn parse_plan_mirror_markdown(content: &str) -> Option<TaskChecklist> {
         Some(notes_lines.join("\n").trim().to_string())
     };
 
-    Some(TaskChecklist {
-        title,
-        items,
-        notes,
-    })
+    Some(TaskChecklist { title, items, notes })
 }
 
 fn newer_source(
@@ -507,10 +489,7 @@ impl TaskTrackerTool {
     ) -> Result<()> {
         if let Some(parent) = tracker_file.parent() {
             ensure_dir_exists(parent).await.with_context(|| {
-                format!(
-                    "Failed to create plan tracker directory: {}",
-                    parent.display()
-                )
+                format!("Failed to create plan tracker directory: {}", parent.display())
             })?;
         }
         write_file_with_context(
@@ -520,10 +499,7 @@ impl TaskTrackerTool {
         )
         .await
         .with_context(|| {
-            format!(
-                "Failed to write plan task tracker file: {}",
-                tracker_file.display()
-            )
+            format!("Failed to write plan task tracker file: {}", tracker_file.display())
         })?;
         if let Some(plan_file) = plan_file_for_tracker_file(tracker_file)
             && plan_file.exists()
@@ -537,8 +513,7 @@ impl TaskTrackerTool {
         let Some(tracker_file) = self.plan_task_file().await else {
             return Ok(());
         };
-        self.save_plan_mirror_to_file(&tracker_file, checklist)
-            .await?;
+        self.save_plan_mirror_to_file(&tracker_file, checklist).await?;
         Ok(())
     }
 
@@ -601,11 +576,7 @@ impl TaskTrackerTool {
             Some(notes_lines.join("\n").trim().to_string())
         };
 
-        Ok(Some(TaskChecklist {
-            title,
-            items,
-            notes,
-        }))
+        Ok(Some(TaskChecklist { title, items, notes }))
     }
 
     async fn load_plan_checklist_from(&self, tracker_file: &Path) -> Result<Option<TaskChecklist>> {
@@ -628,22 +599,15 @@ impl TaskTrackerTool {
         }
 
         let selected = if global_exists && plan_exists {
-            let global_modified = tokio::fs::metadata(&task_file)
-                .await
-                .ok()
-                .and_then(|meta| meta.modified().ok());
+            let global_modified =
+                tokio::fs::metadata(&task_file).await.ok().and_then(|meta| meta.modified().ok());
             let plan_modified = match &plan_file {
-                Some(path) => tokio::fs::metadata(path)
-                    .await
-                    .ok()
-                    .and_then(|meta| meta.modified().ok()),
+                Some(path) => {
+                    tokio::fs::metadata(path).await.ok().and_then(|meta| meta.modified().ok())
+                }
                 None => None,
             };
-            newer_source(
-                global_modified,
-                plan_modified,
-                self.planning_workflow_state.is_active(),
-            )
+            newer_source(global_modified, plan_modified, self.planning_workflow_state.is_active())
         } else if plan_exists {
             TrackerSource::Plan
         } else {
@@ -773,11 +737,7 @@ impl TaskTrackerTool {
     }
 
     async fn handle_create(&self, args: &TaskTrackerArgs) -> Result<Value> {
-        let title = args
-            .title
-            .as_deref()
-            .unwrap_or("Task Checklist")
-            .to_string();
+        let title = args.title.as_deref().unwrap_or("Task Checklist").to_string();
         let item_descs = args.items.as_deref().unwrap_or(&[]);
         if item_descs.is_empty() {
             anyhow::bail!(
@@ -806,11 +766,7 @@ impl TaskTrackerTool {
             }
         }
 
-        let checklist = TaskChecklist {
-            title,
-            items,
-            notes,
-        };
+        let checklist = TaskChecklist { title, items, notes };
 
         drop(guard);
         let (summary, view) = self.persist_and_build_view(&checklist).await?;
@@ -825,10 +781,7 @@ impl TaskTrackerTool {
                 ),
             )
         } else {
-            (
-                "created",
-                "Task checklist created successfully.".to_string(),
-            )
+            ("created", "Task checklist created successfully.".to_string())
         };
 
         Ok(json!({
@@ -881,9 +834,8 @@ impl TaskTrackerTool {
             }));
         }
 
-        let checklist = guard
-            .as_mut()
-            .context("No active checklist. Use action='create' first.")?;
+        let checklist =
+            guard.as_mut().context("No active checklist. Use action='create' first.")?;
 
         let index = match (args.index, args.index_path.as_deref()) {
             (Some(idx), _) => idx,
@@ -929,11 +881,10 @@ impl TaskTrackerTool {
         }
 
         let item_count = checklist.items.len();
-        let pos = checklist
-            .items
-            .iter()
-            .position(|i| i.index == index)
-            .with_context(|| format!("No item at index {index}. Valid range: 1-{item_count}"))?;
+        let pos =
+            checklist.items.iter().position(|i| i.index == index).with_context(|| {
+                format!("No item at index {index}. Valid range: 1-{item_count}")
+            })?;
 
         let old_status = checklist.items[pos].status.to_string();
         checklist.items[pos].status = new_status;
@@ -990,14 +941,10 @@ impl TaskTrackerTool {
 
         self.ensure_checklist_loaded().await?;
         let mut guard = self.checklist.write().await;
-        let checklist = guard
-            .as_mut()
-            .context("No active checklist. Use action='create' first.")?;
+        let checklist =
+            guard.as_mut().context("No active checklist. Use action='create' first.")?;
 
-        let desc = args
-            .description
-            .as_deref()
-            .context("'description' is required for 'add'")?;
+        let desc = args.description.as_deref().context("'description' is required for 'add'")?;
         let (status, parsed_description) = parse_status_prefix(desc);
         let description = parsed_description.trim().to_string();
         if description.is_empty() {
@@ -1253,18 +1200,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            result["checklist"]["items"][0]["files"],
-            json!(["docs/ARCHITECTURE.md"])
-        );
-        assert_eq!(
-            result["checklist"]["items"][0]["outcome"],
-            "Document the harness map"
-        );
-        assert_eq!(
-            result["checklist"]["items"][0]["verify"],
-            json!(["cargo check"])
-        );
+        assert_eq!(result["checklist"]["items"][0]["files"], json!(["docs/ARCHITECTURE.md"]));
+        assert_eq!(result["checklist"]["items"][0]["outcome"], "Document the harness map");
+        assert_eq!(result["checklist"]["items"][0]["verify"], json!(["cargo check"]));
         assert_eq!(
             result["checklist"]["items"][1]["verify"],
             json!([
@@ -1332,10 +1270,7 @@ mod tests {
 
         assert_eq!(result["status"], "updated");
         assert_eq!(result["checklist"]["completed"], 0);
-        assert_eq!(
-            result["checklist"]["notes"],
-            "Checklist outcome: Reported summary to user"
-        );
+        assert_eq!(result["checklist"]["notes"], "Checklist outcome: Reported summary to user");
     }
 
     #[tokio::test]
@@ -1538,11 +1473,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(15));
 
         let sidecar = plans_dir.join("freshness.tasks.md");
-        std::fs::write(
-            &sidecar,
-            "# Freshness\n\n## Plan of Work\n\n- [x] newer plan\n",
-        )
-        .unwrap();
+        std::fs::write(&sidecar, "# Freshness\n\n## Plan of Work\n\n- [x] newer plan\n").unwrap();
 
         let listed = tool.execute(json!({"action": "list"})).await.unwrap();
         assert_eq!(listed["status"], "ok");
@@ -1571,11 +1502,8 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(15));
 
         let sidecar = plans_dir.join("plan-primary.tasks.md");
-        std::fs::write(
-            &sidecar,
-            "# Plan Primary\n\n## Plan of Work\n\n- [ ] plan source\n",
-        )
-        .unwrap();
+        std::fs::write(&sidecar, "# Plan Primary\n\n## Plan of Work\n\n- [ ] plan source\n")
+            .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(15));
         std::fs::write(&global_file, "# Plan Primary\n\n- [x] global newest\n").unwrap();
 

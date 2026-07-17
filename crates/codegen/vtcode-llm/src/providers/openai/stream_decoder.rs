@@ -39,22 +39,10 @@ fn strip_reasoning_for_model(
 }
 
 fn streamed_response_is_usable(response: &provider::LLMResponse) -> bool {
-    response
-        .content
-        .as_deref()
-        .is_some_and(|content| !content.is_empty())
-        || response
-            .tool_calls
-            .as_ref()
-            .is_some_and(|tool_calls| !tool_calls.is_empty())
-        || response
-            .reasoning
-            .as_deref()
-            .is_some_and(|reasoning| !reasoning.is_empty())
-        || response
-            .reasoning_details
-            .as_ref()
-            .is_some_and(|details| !details.is_empty())
+    response.content.as_deref().is_some_and(|content| !content.is_empty())
+        || response.tool_calls.as_ref().is_some_and(|tool_calls| !tool_calls.is_empty())
+        || response.reasoning.as_deref().is_some_and(|reasoning| !reasoning.is_empty())
+        || response.reasoning_details.as_ref().is_some_and(|details| !details.is_empty())
 }
 
 fn final_response_output_is_empty(final_response: &Value) -> bool {
@@ -127,14 +115,9 @@ impl ResponsesToolCallState {
             return;
         }
 
-        let item_id = item
-            .get("id")
-            .and_then(Value::as_str)
-            .filter(|value| !value.is_empty());
-        let provider_call_id = item
-            .get("call_id")
-            .and_then(Value::as_str)
-            .filter(|value| !value.is_empty());
+        let item_id = item.get("id").and_then(Value::as_str).filter(|value| !value.is_empty());
+        let provider_call_id =
+            item.get("call_id").and_then(Value::as_str).filter(|value| !value.is_empty());
         let Some(call_id) = provider_call_id.or(item_id) else {
             return;
         };
@@ -172,10 +155,8 @@ impl ResponsesToolCallState {
         let item_id = payload.get("item_id").and_then(Value::as_str);
         let payload_call_id = payload.get("call_id").and_then(Value::as_str);
         self.capture_item_call_id_mapping(item_id, payload_call_id);
-        let output_index = payload
-            .get("output_index")
-            .and_then(Value::as_u64)
-            .map(|value| value as usize);
+        let output_index =
+            payload.get("output_index").and_then(Value::as_u64).map(|value| value as usize);
         let call_id = match self.resolve_provider_call_id(item_id, payload_call_id) {
             Some(call_id) => call_id,
             None => self.fabricated_call_id(output_index),
@@ -202,8 +183,7 @@ impl ResponsesToolCallState {
         let Some(call_id) = call_id.filter(|value| !value.is_empty()) else {
             return;
         };
-        self.item_id_to_call_id
-            .insert(item_id.to_string(), call_id.to_string());
+        self.item_id_to_call_id.insert(item_id.to_string(), call_id.to_string());
     }
 
     fn resolve_provider_call_id(
@@ -609,15 +589,12 @@ fn optional_string_field(
     field: &'static str,
 ) -> Result<Option<String>, provider::LLMError> {
     match payload.get(field) {
-        Some(value) => value
-            .as_str()
-            .map(|value| Some(value.to_string()))
-            .ok_or_else(|| {
-                StreamAssemblyError::InvalidPayload(format!(
-                    "field `{field}` in stream payload must be a string"
-                ))
-                .into_llm_error("OpenAI")
-            }),
+        Some(value) => value.as_str().map(|value| Some(value.to_string())).ok_or_else(|| {
+            StreamAssemblyError::InvalidPayload(format!(
+                "field `{field}` in stream payload must be a string"
+            ))
+            .into_llm_error("OpenAI")
+        }),
         None => Ok(None),
     }
 }
@@ -737,10 +714,7 @@ mod tests {
             "function": {"name": "search_workspace"}
         })]);
 
-        let calls = aggregator
-            .finalize()
-            .tool_calls
-            .expect("tool call expected");
+        let calls = aggregator.finalize().tool_calls.expect("tool call expected");
         assert_eq!(calls.len(), 1, "both deltas must land on one builder");
         assert!(calls[0].id.starts_with("call_"));
         assert_ne!(calls[0].id, "call_0");
@@ -768,15 +742,9 @@ mod tests {
                 "index": 0,
                 "function": {"name": "search_workspace"}
             })]);
-            let calls = aggregator
-                .finalize()
-                .tool_calls
-                .expect("tool call expected");
+            let calls = aggregator.finalize().tool_calls.expect("tool call expected");
             ids.push(calls[0].id.clone());
         }
-        assert_ne!(
-            ids[0], ids[1],
-            "fabricated ids must differ across responses"
-        );
+        assert_ne!(ids[0], ids[1], "fabricated ids must differ across responses");
     }
 }

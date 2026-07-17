@@ -107,17 +107,12 @@ impl Default for EntityIndex {
 impl EntityIndex {
     /// Record an entity mention for recency tracking
     pub fn record_mention(&mut self, entity: &str) {
-        self.last_mentioned
-            .insert(entity.to_lowercase(), current_timestamp());
+        self.last_mentioned.insert(entity.to_lowercase(), current_timestamp());
     }
 
     /// Record a recent edit
     pub fn record_edit(&mut self, entity: String, file: PathBuf) {
-        let reference = EntityReference {
-            entity,
-            file,
-            timestamp: current_timestamp(),
-        };
+        let reference = EntityReference { entity, file, timestamp: current_timestamp() };
 
         self.recent_edits.push_back(reference);
 
@@ -130,9 +125,7 @@ impl EntityIndex {
     /// Check if file was recently edited
     pub fn was_recently_edited(&self, file: &Path, within_seconds: u64) -> bool {
         let cutoff = current_timestamp().saturating_sub(within_seconds);
-        self.recent_edits
-            .iter()
-            .any(|r| r.file == file && r.timestamp >= cutoff)
+        self.recent_edits.iter().any(|r| r.file == file && r.timestamp >= cutoff)
     }
 }
 
@@ -154,10 +147,7 @@ impl Default for EntityResolver {
 impl EntityResolver {
     /// Create a new entity resolver
     pub fn new() -> Self {
-        Self {
-            index: EntityIndex::default(),
-            cache_path: None,
-        }
+        Self { index: EntityIndex::default(), cache_path: None }
     }
 
     /// Create with cache file path
@@ -298,12 +288,8 @@ impl EntityResolver {
         let now = current_timestamp();
 
         // Check if entity was recently edited (within 5 minutes)
-        if let Some(edit) = self
-            .index
-            .recent_edits
-            .iter()
-            .rev()
-            .find(|e| e.entity.to_lowercase() == entity)
+        if let Some(edit) =
+            self.index.recent_edits.iter().rev().find(|e| e.entity.to_lowercase() == entity)
         {
             let age_seconds = now.saturating_sub(edit.timestamp);
             if age_seconds < 300 {

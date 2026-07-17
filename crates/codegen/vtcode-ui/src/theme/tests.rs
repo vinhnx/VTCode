@@ -59,9 +59,7 @@ fn test_all_themes_have_readable_foreground_and_accents() {
     let accessibility = ColorAccessibilityConfig::default();
     let min_contrast = accessibility.minimum_contrast;
     for definition in all_theme_definitions().values() {
-        let styles = definition
-            .palette
-            .build_styles_with_accessibility(&accessibility);
+        let styles = definition.palette.build_styles_with_accessibility(&accessibility);
         let bg = definition.palette.background;
 
         for (name, color) in [
@@ -108,10 +106,7 @@ fn test_all_themes_have_readable_foreground_and_accents() {
 #[test]
 fn test_syntax_theme_mapping_dark_themes() {
     assert_eq!(get_syntax_theme_for_ui_theme("dracula"), "Dracula");
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("monokai-classic"),
-        "monokai-classic"
-    );
+    assert_eq!(get_syntax_theme_for_ui_theme("monokai-classic"), "monokai-classic");
     assert_eq!(get_syntax_theme_for_ui_theme("github-dark"), "GitHub Dark");
     assert_eq!(get_syntax_theme_for_ui_theme("atom-one-dark"), "OneDark");
     assert_eq!(get_syntax_theme_for_ui_theme("ayu"), "ayu-dark");
@@ -120,50 +115,23 @@ fn test_syntax_theme_mapping_dark_themes() {
 
 #[test]
 fn test_syntax_theme_mapping_light_themes() {
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("solarized-light"),
-        "Solarized (light)"
-    );
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("vitesse-light"),
-        "base16-ocean.light"
-    );
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("apple-system-colors-light"),
-        "base16-ocean.light"
-    );
+    assert_eq!(get_syntax_theme_for_ui_theme("solarized-light"), "Solarized (light)");
+    assert_eq!(get_syntax_theme_for_ui_theme("vitesse-light"), "base16-ocean.light");
+    assert_eq!(get_syntax_theme_for_ui_theme("apple-system-colors-light"), "base16-ocean.light");
 }
 
 #[test]
 fn test_syntax_theme_mapping_solarized() {
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("solarized-dark"),
-        "Solarized (dark)"
-    );
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("solarized-dark-hc"),
-        "Solarized (dark)"
-    );
+    assert_eq!(get_syntax_theme_for_ui_theme("solarized-dark"), "Solarized (dark)");
+    assert_eq!(get_syntax_theme_for_ui_theme("solarized-dark-hc"), "Solarized (dark)");
 }
 
 #[test]
 fn test_syntax_theme_mapping_gruvbox() {
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("gruvbox-dark"),
-        "gruvbox-dark"
-    );
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("gruvbox-light"),
-        "gruvbox-light"
-    );
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("gruvbox-material"),
-        "gruvbox-dark"
-    );
-    assert_eq!(
-        get_syntax_theme_for_ui_theme("gruvbox-material-light"),
-        "gruvbox-light"
-    );
+    assert_eq!(get_syntax_theme_for_ui_theme("gruvbox-dark"), "gruvbox-dark");
+    assert_eq!(get_syntax_theme_for_ui_theme("gruvbox-light"), "gruvbox-light");
+    assert_eq!(get_syntax_theme_for_ui_theme("gruvbox-material"), "gruvbox-dark");
+    assert_eq!(get_syntax_theme_for_ui_theme("gruvbox-material-light"), "gruvbox-light");
 }
 
 fn style_rgb(style: Style) -> Option<RgbColor> {

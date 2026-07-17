@@ -138,11 +138,8 @@ impl ConfidenceEstimator {
         let mut confidence = 1.0_f64;
 
         // --- Penalty from recent errors for this tool ---
-        let recent_count = error_state
-            .recent_errors
-            .iter()
-            .filter(|e| e.tool_name == tool_name)
-            .count();
+        let recent_count =
+            error_state.recent_errors.iter().filter(|e| e.tool_name == tool_name).count();
         if recent_count > 0 {
             // Each recent error reduces confidence by 15%, min 0.1
             let penalty = 0.15_f64.mul_add(recent_count as f64, 0.0);
@@ -150,11 +147,8 @@ impl ConfidenceEstimator {
         }
 
         // --- Penalty from open circuits for this tool ---
-        let circuit_count = error_state
-            .circuit_events
-            .iter()
-            .filter(|e| e.tool_name == tool_name)
-            .count();
+        let circuit_count =
+            error_state.circuit_events.iter().filter(|e| e.tool_name == tool_name).count();
         if circuit_count > 0 {
             let penalty = 0.25_f64.mul_add(circuit_count as f64, 0.0);
             confidence = (confidence - penalty).max(0.05);
@@ -216,10 +210,7 @@ impl EscalationGate {
         // Plan-mode-only gate: skip if not in PBE mode and plan_mode_only is set
         if config.plan_mode_only && orchestration_mode != "plan_build_evaluate" {
             return EscalationGateResult {
-                decisions: tool_calls
-                    .iter()
-                    .map(|_| EscalationDecision::Proceed)
-                    .collect(),
+                decisions: tool_calls.iter().map(|_| EscalationDecision::Proceed).collect(),
                 any_escalated: false,
             };
         }
@@ -236,10 +227,7 @@ impl EscalationGate {
             })
             .collect();
 
-        EscalationGateResult {
-            decisions,
-            any_escalated,
-        }
+        EscalationGateResult { decisions, any_escalated }
     }
 
     /// Evaluate a single tool call.
@@ -449,10 +437,7 @@ mod tests {
 
         let result = EscalationGate::decide(&[tc], &config, &state, None, "single");
         assert!(result.any_escalated);
-        assert!(matches!(
-            result.decisions[0],
-            EscalationDecision::Escalate { .. }
-        ));
+        assert!(matches!(result.decisions[0], EscalationDecision::Escalate { .. }));
     }
 
     #[test]
@@ -536,10 +521,7 @@ mod tests {
         let result = EscalationGate::decide(&[tc_safe, tc_irrev], &config, &state, None, "single");
         assert!(result.any_escalated);
         assert!(matches!(result.decisions[0], EscalationDecision::Proceed));
-        assert!(matches!(
-            result.decisions[1],
-            EscalationDecision::Escalate { .. }
-        ));
+        assert!(matches!(result.decisions[1], EscalationDecision::Escalate { .. }));
     }
 
     // -- Helper constructor for ToolCall --

@@ -23,10 +23,7 @@ pub fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
         }
 
         if grapheme == "/" {
-            active_range = Some(SlashCommandRange {
-                start: index,
-                end: input.len(),
-            });
+            active_range = Some(SlashCommandRange { start: index, end: input.len() });
         } else if grapheme.chars().all(char::is_whitespace) {
             // Space terminates the current command token
             active_range = None;
@@ -59,18 +56,12 @@ pub struct SlashPaletteHighlightSegment {
 impl SlashPaletteHighlightSegment {
     #[cfg(test)]
     pub fn highlighted(content: impl Into<String>) -> Self {
-        Self {
-            content: content.into(),
-            highlighted: true,
-        }
+        Self { content: content.into(), highlighted: true }
     }
 
     #[cfg(test)]
     pub fn plain(content: impl Into<String>) -> Self {
-        Self {
-            content: content.into(),
-            highlighted: false,
-        }
+        Self { content: content.into(), highlighted: false }
     }
 }
 
@@ -178,11 +169,7 @@ impl SlashPalette {
 
         // Handle regular slash commands
         let static_suggestions = self.suggestions_for(prefix);
-        new_suggestions.extend(
-            static_suggestions
-                .into_iter()
-                .map(SlashPaletteSuggestion::Static),
-        );
+        new_suggestions.extend(static_suggestions.into_iter().map(SlashPaletteSuggestion::Static));
 
         let filter_query = {
             let normalized = normalize_query(prefix);
@@ -206,10 +193,7 @@ impl SlashPalette {
         let selection_changed = self.ensure_selection();
 
         if suggestions_changed || selection_changed {
-            SlashPaletteUpdate::Changed {
-                suggestions_changed,
-                selection_changed,
-            }
+            SlashPaletteUpdate::Changed { suggestions_changed, selection_changed }
         } else {
             SlashPaletteUpdate::NoChange
         }
@@ -333,9 +317,7 @@ impl SlashPalette {
                     command: info,
                     name_match: name_score.is_some(),
                     name_prefix: name_lower.starts_with(normalized_query.as_str()),
-                    name_pos: name_lower
-                        .find(normalized_query.as_str())
-                        .unwrap_or(usize::MAX),
+                    name_pos: name_lower.find(normalized_query.as_str()).unwrap_or(usize::MAX),
                     description_pos: description_lower
                         .find(normalized_query.as_str())
                         .unwrap_or(usize::MAX),
@@ -376,10 +358,7 @@ impl SlashPalette {
                 ))
         });
 
-        scored
-            .into_iter()
-            .map(|info| info.command.clone())
-            .collect()
+        scored.into_iter().map(|info| info.command.clone()).collect()
     }
 
     fn ensure_selection(&mut self) -> bool {
@@ -469,21 +448,14 @@ mod tests {
         let update = palette.update(Some("co"));
         assert!(matches!(
             update,
-            SlashPaletteUpdate::Changed {
-                suggestions_changed: true,
-                selection_changed: true
-            }
+            SlashPaletteUpdate::Changed { suggestions_changed: true, selection_changed: true }
         ));
 
         let items = palette.items();
         assert!(!items.is_empty());
         let command = items
             .into_iter()
-            .find(|item| {
-                item.command
-                    .as_ref()
-                    .is_some_and(|cmd| cmd.name == "command")
-            })
+            .find(|item| item.command.as_ref().is_some_and(|cmd| cmd.name == "command"))
             .expect("command suggestion available");
 
         assert_eq!(command.name_segments.len(), 2);
@@ -535,11 +507,7 @@ mod tests {
         assert!(palette.items().is_empty());
 
         for item in palette.items() {
-            assert!(
-                item.name_segments
-                    .iter()
-                    .all(|segment| !segment.highlighted)
-            );
+            assert!(item.name_segments.iter().all(|segment| !segment.highlighted));
         }
     }
 
@@ -558,10 +526,7 @@ mod tests {
         assert_eq!(palette.selected_index(), Some(0));
 
         assert!(palette.move_up());
-        assert_eq!(
-            palette.selected_index(),
-            Some(palette.suggestions.len() - 1)
-        );
+        assert_eq!(palette.selected_index(), Some(palette.suggestions.len() - 1));
     }
 
     #[test]
@@ -569,10 +534,7 @@ mod tests {
         let mut palette = palette_with_commands();
 
         assert!(palette.select_last());
-        assert_eq!(
-            palette.selected_index(),
-            Some(palette.suggestions.len() - 1)
-        );
+        assert_eq!(palette.selected_index(), Some(palette.suggestions.len() - 1));
 
         assert!(palette.select_first());
         assert_eq!(palette.selected_index(), Some(0));
@@ -631,9 +593,7 @@ mod tests {
 
         assert_eq!(palette.selected_index(), Some(50));
         assert_eq!(
-            palette
-                .selected_command()
-                .map(|command| command.name.as_str()),
+            palette.selected_command().map(|command| command.name.as_str()),
             Some("command-50")
         );
     }

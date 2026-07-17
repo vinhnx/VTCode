@@ -192,20 +192,14 @@ pub(crate) async fn initialize_session_ui(
     let focus_callback: FocusChangeCallback = Arc::new(set_global_terminal_focused);
 
     let pty_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    session_state
-        .tool_registry
-        .set_active_pty_sessions(pty_counter.clone());
+    session_state.tool_registry.set_active_pty_sessions(pty_counter.clone());
 
     let visible_slash_commands: Vec<_> = visible_commands().into_iter().copied().collect();
     let mut slash_command_items = to_tui_slash_commands(visible_slash_commands.as_slice());
     let template_slash_commands = discover_prompt_templates(&config.workspace)
         .await
         .into_iter()
-        .filter(|template| {
-            !visible_slash_commands
-                .iter()
-                .any(|cmd| cmd.name == template.name)
-        })
+        .filter(|template| !visible_slash_commands.iter().any(|cmd| cmd.name == template.name))
         .map(|template| SlashCommandItem::new(template.name, template.description))
         .collect::<Vec<_>>();
     slash_command_items.extend(template_slash_commands);
@@ -276,10 +270,8 @@ pub(crate) async fn initialize_session_ui(
     }
 
     let handle = session.clone_inline_handle();
-    let highlight_config = vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.syntax_highlighting.clone())
-        .unwrap_or_default();
+    let highlight_config =
+        vt_cfg.as_ref().map(|cfg| cfg.syntax_highlighting.clone()).unwrap_or_default();
 
     transcript::set_inline_handle(Arc::new(handle.clone()));
     let mut ide_context_bridge = Some(IdeContextBridge::new(config.workspace.clone()));
@@ -402,9 +394,7 @@ pub(crate) async fn initialize_session_ui(
         };
 
     if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
-        hooks
-            .update_transcript_path(Some(archive.path().to_path_buf()))
-            .await;
+        hooks.update_transcript_path(Some(archive.path().to_path_buf())).await;
     }
 
     if let Some(hooks) = &lifecycle_hooks {
@@ -458,11 +448,7 @@ pub(crate) async fn initialize_session_ui(
         },
     )
     .await?;
-    let primary_agent_name = session_state
-        .active_primary_agent
-        .active()
-        .display_name
-        .clone();
+    let primary_agent_name = session_state.active_primary_agent.active().display_name.clone();
     let primary_agent_color = session_state
         .active_primary_agent
         .active()

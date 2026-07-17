@@ -22,8 +22,8 @@ downstream projects.
 
 Implementation source location:
 
-- `vtcode-ui/src/tui/core_tui/` (full TUI modules)
-- `vtcode-core/src/ui/tui.rs` (compatibility shim)
+- `crates/codegen/vtcode-ui/src/tui/core_tui/` (full TUI modules)
+- `crates/codegen/vtcode-core/src/ui/tui.rs` (compatibility shim)
 
 ## Usage
 

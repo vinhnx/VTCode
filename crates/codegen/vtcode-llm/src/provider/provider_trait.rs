@@ -89,10 +89,7 @@ impl ProviderCapabilities {
             features.join(", ")
         };
 
-        format!(
-            "{} ({} tokens): {}",
-            self.model, self.context_size, features_str
-        )
+        format!("{} ({} tokens): {}", self.model, self.context_size, features_str)
     }
 }
 

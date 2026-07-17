@@ -30,8 +30,7 @@ impl ContextResetManifest {
         fn field_value(line: &str, key: &str) -> Option<String> {
             let line = line.trim();
             let prefix = format!("- **{key}:**");
-            line.strip_prefix(&prefix)
-                .map(|rest| rest.trim().to_string())
+            line.strip_prefix(&prefix).map(|rest| rest.trim().to_string())
         }
 
         let mut a = String::new();
@@ -49,11 +48,7 @@ impl ContextResetManifest {
         if a.is_empty() || b.is_empty() {
             return None;
         }
-        Some(Self {
-            triggered_at: a,
-            trigger: b,
-            stall_count: c,
-        })
+        Some(Self { triggered_at: a, trigger: b, stall_count: c })
     }
 }
 
@@ -97,9 +92,7 @@ pub fn write_manifest(workspace_root: &Path, manifest: &ContextResetManifest) ->
 }
 
 pub fn read_manifest(workspace_root: &Path) -> Option<ContextResetManifest> {
-    let p = workspace_root
-        .join(CONTEXT_RESET_DIR)
-        .join(CONTEXT_RESET_FILE);
+    let p = workspace_root.join(CONTEXT_RESET_DIR).join(CONTEXT_RESET_FILE);
     let c = std::fs::read_to_string(&p).ok()?;
     if c.trim().is_empty() {
         None
@@ -109,11 +102,7 @@ pub fn read_manifest(workspace_root: &Path) -> Option<ContextResetManifest> {
 }
 
 pub fn consume_manifest(workspace_root: &Path) {
-    let _ = std::fs::remove_file(
-        workspace_root
-            .join(CONTEXT_RESET_DIR)
-            .join(CONTEXT_RESET_FILE),
-    );
+    let _ = std::fs::remove_file(workspace_root.join(CONTEXT_RESET_DIR).join(CONTEXT_RESET_FILE));
 }
 
 /// The `stall_count` is 0 because compaction-triggered resets are not stall-driven;
@@ -136,9 +125,8 @@ pub fn maybe_write_reset_on_stall(
     mode: &str,
     threshold: u32,
 ) {
-    if let ContextResetDecision::Reset {
-        stall_count: sc, ..
-    } = should_reset(mode, false, stall_count, threshold)
+    if let ContextResetDecision::Reset { stall_count: sc, .. } =
+        should_reset(mode, false, stall_count, threshold)
     {
         let m = ContextResetManifest {
             triggered_at: chrono::Utc::now().to_rfc3339(),
@@ -154,10 +142,7 @@ mod tests {
     use super::*;
     #[test]
     fn off_always_continues() {
-        assert!(matches!(
-            should_reset("off", true, 10, 2),
-            ContextResetDecision::Continue
-        ));
+        assert!(matches!(should_reset("off", true, 10, 2), ContextResetDecision::Continue));
     }
     #[test]
     fn compaction_triggers() {

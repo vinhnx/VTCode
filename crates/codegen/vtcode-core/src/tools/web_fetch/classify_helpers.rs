@@ -43,9 +43,7 @@ pub fn extract_http_status(message: &str) -> Option<u16> {
     let caps = re.captures(message)?;
     // The matched number is in either capture group 1 or 2 depending
     // on which alternation fired.
-    caps.get(1)
-        .or_else(|| caps.get(2))
-        .and_then(|m| m.as_str().parse().ok())
+    caps.get(1).or_else(|| caps.get(2)).and_then(|m| m.as_str().parse().ok())
 }
 
 #[cfg(test)]
@@ -60,10 +58,7 @@ mod tests {
             ),
             Some(503)
         );
-        assert_eq!(
-            extract_http_status("error sending request: status: 403 Forbidden"),
-            Some(403)
-        );
+        assert_eq!(extract_http_status("error sending request: status: 403 Forbidden"), Some(403));
         // Bare `<num>` without an `http` / `status:` prefix is not a
         // status code; the parser should not match. (Real reqwest error
         // chains always include a sentinel word before the code.)
@@ -84,9 +79,6 @@ mod tests {
     #[test]
     fn extract_status_handles_status_with_spaces() {
         // `status:` followed by whitespace and a 3-digit code.
-        assert_eq!(
-            extract_http_status("error: status:    429 Too Many Requests"),
-            Some(429)
-        );
+        assert_eq!(extract_http_status("error: status:    429 Too Many Requests"), Some(429));
     }
 }

@@ -203,10 +203,7 @@ impl CompactionConfig {
             .map(|instructions| instructions.trim().to_string())
             .filter(|instructions| !instructions.is_empty())
             .unwrap_or(self.summary_prompt);
-        Self {
-            summary_prompt,
-            ..self
-        }
+        Self { summary_prompt, ..self }
     }
 }
 
@@ -422,11 +419,7 @@ async fn summarize_locally_hierarchical(
         .generate(abstract_request)
         .await
         .context("Failed to generate abstract summary")?;
-    let abstract_summary = abstract_response
-        .content
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let abstract_summary = abstract_response.content.unwrap_or_default().trim().to_string();
 
     // Band 2 (middle): paragraph-level summary using the full summary prompt.
     let detail_band = &history[abstract_end..detail_end];
@@ -443,11 +436,7 @@ async fn summarize_locally_hierarchical(
         .generate(detail_request)
         .await
         .context("Failed to generate detail summary")?;
-    let detail_summary = detail_response
-        .content
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let detail_summary = detail_response.content.unwrap_or_default().trim().to_string();
 
     // Band 3 (newest): retain verbatim via importance-weighted selection.
     let recent_band = &history[detail_end..];
@@ -459,9 +448,7 @@ async fn summarize_locally_hierarchical(
 
     // Assemble: [abstract, detail, ...retained_recent, ...continuity_tail]
     let mut new_history = Vec::with_capacity(2 + retained.len());
-    new_history.push(Message::system(format!(
-        "{ABSTRACT_PREFIX}{abstract_summary}"
-    )));
+    new_history.push(Message::system(format!("{ABSTRACT_PREFIX}{abstract_summary}")));
     new_history.push(Message::system(format!("{DETAIL_PREFIX}{detail_summary}")));
     new_history.extend(retained);
     // Live compaction: retain the most recent turn verbatim for continuity.
@@ -479,19 +466,12 @@ fn build_summary_prompt(history: &[Message], instructions: &str) -> String {
     // Pre-size for the header plus every (non-empty) message body, avoiding
     // repeated reallocations while the summary prompt is assembled.
     let estimated_len = instructions.len()
-        + history
-            .iter()
-            .map(|m| m.content.as_text().len())
-            .sum::<usize>()
+        + history.iter().map(|m| m.content.as_text().len()).sum::<usize>()
         + history.len() * 16;
     let mut formatted = String::with_capacity(estimated_len);
     let now: DateTime<Utc> = Utc::now();
-    let _ = writeln!(
-        &mut formatted,
-        "Summary requested at {}.\n{}",
-        now.to_rfc3339(),
-        instructions
-    );
+    let _ =
+        writeln!(&mut formatted, "Summary requested at {}.\n{}", now.to_rfc3339(), instructions);
 
     for message in history {
         let role = match message.role {
@@ -523,10 +503,7 @@ fn build_local_compacted_history(
         retained_user_messages,
     );
     let mut new_history = Vec::with_capacity(retained_users.len().saturating_add(1));
-    new_history.push(Message::system(format!(
-        "{SUMMARY_PREFIX}{}",
-        summary.trim()
-    )));
+    new_history.push(Message::system(format!("{SUMMARY_PREFIX}{}", summary.trim())));
     new_history.extend(retained_users);
 
     // Continuity anchor: always retain the most recent turn verbatim so the
@@ -565,10 +542,7 @@ fn continuity_tail(history: &[Message]) -> &[Message] {
     // ends with a `Tool` message, which is *not* trimmed here.
     while let Some(last) = tail.last() {
         if last.role == MessageRole::Assistant
-            && last
-                .tool_calls
-                .as_ref()
-                .is_some_and(|calls| !calls.is_empty())
+            && last.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
         {
             tail = &tail[..tail.len() - 1];
         } else {
@@ -684,10 +658,7 @@ fn coherence_tool_call_pairs(
 
     for (idx, msg) in selected {
         if msg.role == MessageRole::Assistant
-            && msg
-                .tool_calls
-                .as_ref()
-                .is_some_and(|calls| !calls.is_empty())
+            && msg.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
         {
             let mut j = *idx + 1;
             while let Some(next) = history.get(j) {
@@ -967,10 +938,9 @@ mod tests {
             _history: &[Message],
             options: &ResponsesCompactionOptions,
         ) -> Result<Vec<Message>, LLMError> {
-            *self.last_options.lock().unwrap() = Some(options.clone());
-            Ok(vec![Message::system(
-                "provider standalone compacted".to_string(),
-            )])
+            *self.last_options.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some(options.clone());
+            Ok(vec![Message::system("provider standalone compacted".to_string())])
         }
     }
 
@@ -981,7 +951,8 @@ mod tests {
         }
 
         async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            *self.last_request.lock().unwrap() = Some(request);
+            *self.last_request.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some(request);
             let mut response = LLMResponse::new("stub-model", "compacted by provider");
             response.finish_reason = FinishReason::Pause;
             response.compaction = Some("provider compaction summary".to_string());
@@ -1012,7 +983,8 @@ mod tests {
         }
 
         async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-            *self.last_request.lock().unwrap() = Some(request);
+            *self.last_request.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some(request);
             Ok(LLMResponse::new("stub-model", "summary"))
         }
 
@@ -1158,9 +1130,7 @@ mod tests {
 
     #[tokio::test]
     async fn manual_compaction_strategy_picks_native_standalone_for_manual_provider() {
-        let provider = ManualStandaloneProvider {
-            last_options: Mutex::new(None),
-        };
+        let provider = ManualStandaloneProvider { last_options: Mutex::new(None) };
         assert_eq!(
             manual_compaction_strategy(&provider, "stub-model"),
             super::CompactionStrategy::NativeStandalone
@@ -1169,9 +1139,7 @@ mod tests {
 
     #[tokio::test]
     async fn manual_compaction_strategy_picks_native_inline_for_responses_capable_provider() {
-        let provider = InlinePauseProvider {
-            last_request: Mutex::new(None),
-        };
+        let provider = InlinePauseProvider { last_request: Mutex::new(None) };
         assert_eq!(
             manual_compaction_strategy(&provider, "stub-model"),
             super::CompactionStrategy::NativeInline
@@ -1209,10 +1177,7 @@ mod tests {
 
         assert_eq!(mode, CompactionMode::Local);
         assert_eq!(compacted.len(), 3);
-        assert_eq!(
-            compacted[0].content.as_text(),
-            "Previous conversation summary:\nsummary"
-        );
+        assert_eq!(compacted[0].content.as_text(), "Previous conversation summary:\nsummary");
         assert_eq!(compacted[1].content.as_text(), "first request");
         assert_eq!(compacted[2].content.as_text(), "second request");
     }
@@ -1221,9 +1186,7 @@ mod tests {
     async fn compact_history_manual_uses_native_standalone_for_manual_provider() {
         let history = sample_history();
         let config = CompactionConfig::default();
-        let provider = ManualStandaloneProvider {
-            last_options: Mutex::new(None),
-        };
+        let provider = ManualStandaloneProvider { last_options: Mutex::new(None) };
 
         let (compacted, mode) = compact_history_manual(
             &provider,
@@ -1237,19 +1200,14 @@ mod tests {
 
         assert_eq!(mode, CompactionMode::Provider);
         assert_eq!(compacted.len(), 1);
-        assert_eq!(
-            compacted[0].content.as_text(),
-            "provider standalone compacted"
-        );
+        assert_eq!(compacted[0].content.as_text(), "provider standalone compacted");
     }
 
     #[tokio::test]
     async fn compact_history_manual_passes_options_to_native_standalone() {
         let history = sample_history();
         let config = CompactionConfig::default();
-        let provider = ManualStandaloneProvider {
-            last_options: Mutex::new(None),
-        };
+        let provider = ManualStandaloneProvider { last_options: Mutex::new(None) };
         let options = ManualCompactionOptions {
             instructions: Some("keep only decisions".to_string()),
             max_output_tokens: Some(256),
@@ -1263,21 +1221,10 @@ mod tests {
                 .expect("manual compaction");
 
         assert_eq!(mode, CompactionMode::Provider);
-        let captured = provider
-            .last_options
-            .lock()
-            .unwrap()
-            .clone()
-            .expect("captured options");
-        assert_eq!(
-            captured.instructions.as_deref(),
-            Some("keep only decisions")
-        );
+        let captured = provider.last_options.lock().unwrap().clone().expect("captured options");
+        assert_eq!(captured.instructions.as_deref(), Some("keep only decisions"));
         assert_eq!(captured.max_output_tokens, Some(256));
-        assert_eq!(
-            captured.reasoning_effort,
-            Some(ReasoningEffortLevel::Minimal)
-        );
+        assert_eq!(captured.reasoning_effort, Some(ReasoningEffortLevel::Minimal));
         assert_eq!(captured.verbosity, Some(VerbosityLevel::High));
     }
 
@@ -1285,9 +1232,7 @@ mod tests {
     async fn compact_history_manual_uses_native_inline_when_pause_and_compaction_present() {
         let history = sample_history();
         let config = CompactionConfig::default();
-        let provider = InlinePauseProvider {
-            last_request: Mutex::new(None),
-        };
+        let provider = InlinePauseProvider { last_request: Mutex::new(None) };
 
         let (compacted, mode) = compact_history_manual(
             &provider,
@@ -1310,12 +1255,8 @@ mod tests {
 
         // The inline request must carry the `compact_20260112` edit with a forced
         // pause so the provider actually performs compaction on demand.
-        let captured = provider
-            .last_request
-            .lock()
-            .unwrap()
-            .clone()
-            .expect("captured inline request");
+        let captured =
+            provider.last_request.lock().unwrap().clone().expect("captured inline request");
         let context_management = captured
             .context_management
             .as_ref()
@@ -1330,9 +1271,7 @@ mod tests {
     async fn compact_history_manual_inline_request_carries_instructions_when_provided() {
         let history = sample_history();
         let config = CompactionConfig::default();
-        let provider = InlinePauseProvider {
-            last_request: Mutex::new(None),
-        };
+        let provider = InlinePauseProvider { last_request: Mutex::new(None) };
         let options = ManualCompactionOptions {
             instructions: Some("  keep only decisions  ".to_string()),
             ..ManualCompactionOptions::default()
@@ -1343,16 +1282,9 @@ mod tests {
                 .await
                 .expect("manual compaction");
 
-        let captured = provider
-            .last_request
-            .lock()
-            .unwrap()
-            .clone()
-            .expect("captured inline request");
-        let edit = &captured
-            .context_management
-            .as_ref()
-            .expect("context_management")["edits"][0];
+        let captured =
+            provider.last_request.lock().unwrap().clone().expect("captured inline request");
+        let edit = &captured.context_management.as_ref().expect("context_management")["edits"][0];
         assert_eq!(edit["instructions"].as_str(), Some("keep only decisions"));
     }
 
@@ -1376,10 +1308,7 @@ mod tests {
 
         assert_eq!(mode, CompactionMode::Local);
         assert_eq!(compacted.len(), 3);
-        assert_eq!(
-            compacted[0].content.as_text(),
-            "Previous conversation summary:\nsummary"
-        );
+        assert_eq!(compacted[0].content.as_text(), "Previous conversation summary:\nsummary");
     }
 
     #[tokio::test]
@@ -1403,10 +1332,7 @@ mod tests {
 
         assert_eq!(mode, CompactionMode::Local);
         assert_eq!(compacted.len(), 3);
-        assert_eq!(
-            compacted[0].content.as_text(),
-            "Previous conversation summary:\nsummary"
-        );
+        assert_eq!(compacted[0].content.as_text(), "Previous conversation summary:\nsummary");
     }
 
     #[tokio::test]
@@ -1416,9 +1342,7 @@ mod tests {
             always_summarize: true,
             ..CompactionConfig::default()
         };
-        let provider = CapturingProvider {
-            last_request: Mutex::new(None),
-        };
+        let provider = CapturingProvider { last_request: Mutex::new(None) };
         let options = ManualCompactionOptions {
             instructions: Some("KEEP DECISIONS ONLY".to_string()),
             max_output_tokens: Some(128),
@@ -1432,26 +1356,16 @@ mod tests {
                 .expect("manual compaction");
 
         assert_eq!(mode, CompactionMode::Local);
-        let captured = provider
-            .last_request
-            .lock()
-            .unwrap()
-            .clone()
-            .expect("captured summary request");
+        let captured =
+            provider.last_request.lock().unwrap().clone().expect("captured summary request");
         assert_eq!(captured.max_tokens, Some(128));
-        assert_eq!(
-            captured.reasoning_effort,
-            Some(ReasoningEffortLevel::Minimal)
-        );
+        assert_eq!(captured.reasoning_effort, Some(ReasoningEffortLevel::Minimal));
         assert_eq!(captured.verbosity, Some(VerbosityLevel::High));
         // The custom instructions override the default summary prompt.
         let prompt = captured.messages[0].content.as_text();
         assert!(prompt.contains("KEEP DECISIONS ONLY"));
         assert!(!prompt.contains("acceptance criteria"));
-        assert_eq!(
-            compacted[0].content.as_text(),
-            "Previous conversation summary:\nsummary"
-        );
+        assert_eq!(compacted[0].content.as_text(), "Previous conversation summary:\nsummary");
     }
 
     #[tokio::test]
@@ -1493,10 +1407,7 @@ mod tests {
         // response). The public `compact_history` entry is the fork/branch
         // builder, which intentionally omits the live continuity tail.
         assert_eq!(compacted.len(), 4);
-        assert_eq!(
-            compacted[0].content.as_text(),
-            "Previous conversation summary:\nsummary"
-        );
+        assert_eq!(compacted[0].content.as_text(), "Previous conversation summary:\nsummary");
         // Messages are in original conversation order.
         assert_eq!(compacted[1].content.as_text(), "first request");
         assert_eq!(compacted[2].content.as_text(), "done");
@@ -1580,10 +1491,7 @@ mod tests {
             .expect("compacted history");
 
         assert_eq!(compacted.len(), 3);
-        assert_eq!(
-            compacted[0].content.as_text(),
-            "Previous conversation summary:\nsummary"
-        );
+        assert_eq!(compacted[0].content.as_text(), "Previous conversation summary:\nsummary");
         assert_eq!(compacted[1].content.as_text(), "first request");
         assert_eq!(compacted[2].content.as_text(), "second request");
     }
@@ -1607,11 +1515,8 @@ mod tests {
             Message::user("do the thing".into()),
             {
                 let mut m = Message::assistant("calling".into());
-                m.tool_calls = Some(vec![ToolCall::function(
-                    "c1".into(),
-                    "run".into(),
-                    "{}".into(),
-                )]);
+                m.tool_calls =
+                    Some(vec![ToolCall::function("c1".into(), "run".into(), "{}".into())]);
                 m
             },
             Message::tool_response("c1".into(), "ran".into()),
@@ -1623,11 +1528,7 @@ mod tests {
         // invalid, so the tail must drop it and keep only the user message.
         let interrupted = vec![Message::user("do the thing".into()), {
             let mut m = Message::assistant("calling".into());
-            m.tool_calls = Some(vec![ToolCall::function(
-                "c1".into(),
-                "run".into(),
-                "{}".into(),
-            )]);
+            m.tool_calls = Some(vec![ToolCall::function("c1".into(), "run".into(), "{}".into())]);
             m
         }];
         let tail = continuity_tail(&interrupted);

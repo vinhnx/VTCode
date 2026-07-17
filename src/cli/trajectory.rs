@@ -98,12 +98,7 @@ fn summarize_trajectory<R: BufRead>(reader: R) -> Result<TrajectorySummary> {
         }
         if let Ok(rec) = serde_json::from_str::<Rec>(raw) {
             match rec {
-                Rec::Route {
-                    selected_model,
-                    class,
-                    ts,
-                    ..
-                } => {
+                Rec::Route { selected_model, class, ts, .. } => {
                     *summary.class_counts.entry(class).or_insert(0) += 1;
                     *summary.model_counts.entry(selected_model).or_insert(0) += 1;
                     summary.total_routes += 1;
@@ -136,12 +131,7 @@ fn summarize_trajectory<R: BufRead>(reader: R) -> Result<TrajectorySummary> {
                     summary.total_prompt_cache_records += 1;
                     summary.recent_timestamps.push(ts);
                 }
-                Rec::ToolCatalogCacheMetrics {
-                    model,
-                    prefix_change_reason,
-                    ts,
-                    ..
-                } => {
+                Rec::ToolCatalogCacheMetrics { model, prefix_change_reason, ts, .. } => {
                     let stats = summary.prompt_cache_churn.entry(model).or_default();
                     match prefix_change_reason.as_str() {
                         "model" => stats.model_changes += 1,
@@ -173,11 +163,7 @@ pub async fn handle_trajectory_command(
     let reader = BufReader::new(f);
     let mut summary = summarize_trajectory(reader)?;
 
-    println!(
-        "{} {}",
-        style("Trajectory Report").magenta().bold(),
-        style(log_path.display()).dim()
-    );
+    println!("{} {}", style("Trajectory Report").magenta().bold(), style(log_path.display()).dim());
     println!(
         "{} routes, {} tools, {} cache metrics",
         style(summary.total_routes).cyan(),
@@ -188,17 +174,12 @@ pub async fn handle_trajectory_command(
     // Show time range if we have timestamps
     if !summary.recent_timestamps.is_empty() {
         summary.recent_timestamps.sort();
-        if let (Some(oldest), Some(newest)) = (
-            summary.recent_timestamps.first(),
-            summary.recent_timestamps.last(),
-        ) {
+        if let (Some(oldest), Some(newest)) =
+            (summary.recent_timestamps.first(), summary.recent_timestamps.last())
+        {
             let oldest_time = format_timestamp(*oldest);
             let newest_time = format_timestamp(*newest);
-            println!(
-                "Time range: {} to {}",
-                style(oldest_time).dim(),
-                style(newest_time).dim()
-            );
+            println!("Time range: {} to {}", style(oldest_time).dim(), style(newest_time).dim());
         }
     }
 

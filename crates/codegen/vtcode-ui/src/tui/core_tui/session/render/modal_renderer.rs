@@ -23,18 +23,14 @@ fn modal_base_style(session: &Session) -> Style {
 
 fn modal_heading_style(session: &Session) -> Style {
     modal_base_style(session)
-        .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(
-            session,
-        )))
+        .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(session)))
         .add_modifier(Modifier::BOLD)
 }
 
 fn list_has_two_line_items(list: &ModalListState) -> bool {
     list.visible_indices.iter().any(|&index| {
         list.items.get(index).is_some_and(|item| {
-            item.subtitle
-                .as_ref()
-                .is_some_and(|subtitle| !subtitle.trim().is_empty())
+            item.subtitle.as_ref().is_some_and(|subtitle| !subtitle.trim().is_empty())
         })
     })
 }
@@ -69,9 +65,7 @@ fn resolve_modal_chrome_ansi_color(session: &Session) -> AnsiColorEnum {
         .tool_accent
         .or(session.theme.primary)
         .or(session.theme.secondary)
-        .unwrap_or(AnsiColorEnum::Ansi256(Ansi256Color(
-            ui::SAFE_ANSI_BRIGHT_CYAN,
-        )))
+        .unwrap_or(AnsiColorEnum::Ansi256(Ansi256Color(ui::SAFE_ANSI_BRIGHT_CYAN)))
 }
 
 fn modal_chrome_style(session: &Session) -> Style {
@@ -154,12 +148,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         let (list_rows, summary_rows) = wizard
             .steps
             .get(wizard.current_step)
-            .map(|step| {
-                (
-                    list_desired_rows(&step.list),
-                    step.list.summary_line_rows(None),
-                )
-            })
+            .map(|step| (list_desired_rows(&step.list), step.list.summary_line_rows(None)))
             .unwrap_or((1, 0));
         lines = lines.saturating_add(list_rows);
         lines = lines.saturating_add(summary_rows);
@@ -171,12 +160,8 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         {
             lines = lines.saturating_add(1);
         }
-        lines = lines.saturating_add(
-            wizard
-                .instruction_lines()
-                .len()
-                .min(MAX_INLINE_INSTRUCTION_ROWS),
-        );
+        lines =
+            lines.saturating_add(wizard.instruction_lines().len().min(MAX_INLINE_INSTRUCTION_ROWS));
         if title_chrome_rows > 0 {
             lines = lines.saturating_add(1 + usize::from(title_chrome_rows)); // title row + dividers
         }
@@ -219,15 +204,11 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
     }
     .saturating_add(title_chrome_rows);
     let capped_max = modal_height_cap.min(max_panel_height).max(min_height);
-    let desired_height = (desired_lines.min(u16::MAX as usize) as u16)
-        .max(min_height)
-        .min(capped_max);
+    let desired_height =
+        (desired_lines.min(u16::MAX as usize) as u16).max(min_height).min(capped_max);
 
     let [transcript_area, modal_area] = area
-        .try_layout(&Layout::vertical([
-            Constraint::Min(1),
-            Constraint::Length(desired_height),
-        ]))
+        .try_layout(&Layout::vertical([Constraint::Min(1), Constraint::Length(desired_height)]))
         .unwrap_or([area; 2]);
     (transcript_area, Some(modal_area))
 }
@@ -275,10 +256,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     let styles = modal_render_styles(session);
     let input_styles = input_styles_from_theme(&session.theme);
     render_modal_background(frame, area, styles.selectable);
-    let link_style = session
-        .styles
-        .transcript_link_style()
-        .add_modifier(Modifier::UNDERLINED);
+    let link_style = session.styles.transcript_link_style().add_modifier(Modifier::UNDERLINED);
     let hovered_link_style = link_style.add_modifier(Modifier::BOLD);
     let workspace_root = session.workspace_root.clone();
     let last_mouse_position = session.last_mouse_position;
@@ -307,9 +285,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         title_link_targets = link_targets;
         render_modal_background(frame, title_area, styles.selectable);
         frame.render_widget(
-            Paragraph::new(decorated_title)
-                .style(styles.title)
-                .wrap(Wrap { trim: true }),
+            Paragraph::new(decorated_title).style(styles.title).wrap(Wrap { trim: true }),
             title_area,
         );
         render_modal_divider(frame, top_divider_area, styles.border);
@@ -367,9 +343,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         use ratatui_cheese::help::{Binding, Help, HelpStyles};
         let help = Help::default()
             .show_all(true)
-            .styles(HelpStyles::from_palette(
-                &ratatui_cheese::theme::Palette::dark(),
-            ))
+            .styles(HelpStyles::from_palette(&ratatui_cheese::theme::Palette::dark()))
             .bindings(vec![
                 Binding::new("?", "help"),
                 Binding::new("Enter", "submit"),
@@ -460,9 +434,7 @@ pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
     let chrome_border_style = session
         .styles
         .border_style()
-        .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(
-            session,
-        )))
+        .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(session)))
         .remove_modifier(Modifier::DIM)
         .add_modifier(Modifier::BOLD);
     ModalRenderStyles {
@@ -486,9 +458,7 @@ pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
 #[expect(dead_code)]
 pub(super) fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -> bool {
     let trimmed = text.trim();
-    let stripped = trimmed
-        .strip_prefix("```")
-        .or_else(|| trimmed.strip_prefix("~~~"));
+    let stripped = trimmed.strip_prefix("```").or_else(|| trimmed.strip_prefix("~~~"));
 
     let Some(rest) = stripped else {
         return false;
@@ -541,15 +511,9 @@ mod tests {
         let session = Session::new(InlineTheme::default(), None, 20);
         let styles = modal_render_styles(&session);
 
-        assert_eq!(
-            styles.title.fg,
-            Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
-        );
+        assert_eq!(styles.title.fg, Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN)));
         assert!(styles.title.bg.is_none());
-        assert_eq!(
-            styles.border.fg,
-            Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN))
-        );
+        assert_eq!(styles.border.fg, Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN)));
         assert!(styles.title.add_modifier.contains(Modifier::BOLD));
     }
 

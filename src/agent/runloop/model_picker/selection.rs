@@ -92,9 +92,7 @@ pub(super) fn parse_model_selection(
     };
     let model_token = parts.collect::<Vec<&str>>().join(" ");
     if model_token.trim().is_empty() {
-        return Err(anyhow!(
-            "Provide both provider and model. Example: 'openai gpt-5'"
-        ));
+        return Err(anyhow!("Provide both provider and model. Example: 'openai gpt-5'"));
     }
 
     let provider_lower = provider_token.to_ascii_lowercase();
@@ -394,10 +392,7 @@ pub(super) fn service_tier_label(service_tier: Option<OpenAIServiceTier>) -> &'s
 }
 
 pub(super) fn is_cancel_command(input: &str) -> bool {
-    matches!(
-        input.to_ascii_lowercase().as_str(),
-        "cancel" | "/cancel" | "abort" | "quit"
-    )
+    matches!(input.to_ascii_lowercase().as_str(), "cancel" | "/cancel" | "abort" | "quit")
 }
 
 pub(super) fn derive_env_key(provider: &str) -> String {

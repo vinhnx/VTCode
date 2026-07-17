@@ -11,10 +11,7 @@ async fn full_auto_allowlist_retains_explicit_internal_tool_without_advertising_
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-allowlist".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -23,27 +20,14 @@ async fn full_auto_allowlist_retains_explicit_internal_tool_without_advertising_
     .await
     .expect("runner");
 
-    runner
-        .enable_full_auto(&[tools::UNIFIED_FILE.to_string()])
-        .await;
+    runner.enable_full_auto(&[tools::UNIFIED_FILE.to_string()]).await;
 
     assert!(runner.is_tool_exposed(tools::UNIFIED_FILE).await);
     assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("full-auto snapshot");
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::UNIFIED_FILE.to_string())
-    );
-    assert!(
-        !snapshot
-            .active_tool_names
-            .contains(&tools::UNIFIED_EXEC.to_string())
-    );
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("full-auto snapshot");
+    assert!(!snapshot.active_tool_names.contains(&tools::UNIFIED_FILE.to_string()));
+    assert!(!snapshot.active_tool_names.contains(&tools::UNIFIED_EXEC.to_string()));
 }
 
 #[tokio::test]
@@ -55,10 +39,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-tool-validation".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -80,11 +61,7 @@ async fn runner_uses_public_tool_resolution_for_validation() {
     let mut session_state =
         AgentSessionState::new("thread-tool-validation".to_string(), 1, 1, 8_000);
     let exec_call = runner
-        .admit_tool_call(
-            tools::EXEC_COMMAND,
-            json!({ "cmd": "echo hi" }),
-            &mut session_state,
-        )
+        .admit_tool_call(tools::EXEC_COMMAND, json!({ "cmd": "echo hi" }), &mut session_state)
         .expect("exec_command should be admitted by public name");
     assert_eq!(exec_call.canonical_name, tools::EXEC_COMMAND);
     assert_eq!(exec_call.effective_args["cmd"], "echo hi");
@@ -109,10 +86,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-tool-snapshot".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -136,9 +110,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
                     Some(&runner.config().agent.provider),
                     &runner.model,
                 ),
-                runner
-                    .provider_client
-                    .supports_responses_compaction(&runner.model),
+                runner.provider_client.supports_responses_compaction(&runner.model),
                 Some(runner.config()),
             ),
             anthropic_native_memory_enabled:
@@ -167,10 +139,7 @@ async fn build_universal_tools_matches_registry_agent_runner_snapshot() {
             expected.push(tool.function_name().to_string());
         }
     }
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("universal tool snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("universal tool snapshot");
     assert_provider_catalogues_inactive_tool(&snapshot, tools::CODE_SEARCH);
     let actual = runner
         .build_universal_tools()
@@ -197,10 +166,7 @@ async fn advanced_tool_profile_reaches_agent_runner_catalogue_and_validation() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-advanced-tool-profile".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(config),
@@ -209,10 +175,7 @@ async fn advanced_tool_profile_reaches_agent_runner_catalogue_and_validation() {
     .await
     .expect("runner");
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("advanced snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("advanced snapshot");
 
     assert_provider_exposes_tool(&snapshot, tools::CODE_SEARCH);
     assert!(runner.is_valid_tool(tools::CODE_SEARCH).await);
@@ -227,10 +190,7 @@ async fn build_universal_tools_uses_override_when_present() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-tool-override".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -260,10 +220,7 @@ async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-primary-agent-policy".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -290,18 +247,10 @@ async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
     let mut session_state =
         AgentSessionState::new("thread-primary-agent-policy".to_string(), 1, 1, 8_000);
     let denied = runner
-        .admit_tool_call(
-            tools::EXEC_COMMAND,
-            json!({ "cmd": "echo denied" }),
-            &mut session_state,
-        )
+        .admit_tool_call(tools::EXEC_COMMAND, json!({ "cmd": "echo denied" }), &mut session_state)
         .expect_err("primary-agent deny should block execution");
 
-    assert!(
-        denied
-            .to_string()
-            .contains("denied by active primary agent 'auto'")
-    );
+    assert!(denied.to_string().contains("denied by active primary agent 'auto'"));
 }
 
 #[tokio::test]
@@ -313,10 +262,7 @@ async fn explicit_tool_policy_deny_filters_runtime_state_and_allowed_tools() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-explicit-policy-deny".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -331,10 +277,7 @@ async fn explicit_tool_policy_deny_filters_runtime_state_and_allowed_tools() {
         .await
         .expect("set policy");
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("snapshot");
     assert_provider_hides_tool(&snapshot, tools::EXEC_COMMAND);
     assert_provider_exposes_tool(&snapshot, tools::WRITE_STDIN);
 
@@ -359,10 +302,7 @@ async fn category_read_deny_filters_advertised_active_tools() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-read-category-deny".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(config),
@@ -371,10 +311,7 @@ async fn category_read_deny_filters_advertised_active_tools() {
     .await
     .expect("runner");
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("snapshot");
     assert_provider_hides_tool(&snapshot, tools::READ_FILE);
     assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
@@ -390,10 +327,7 @@ async fn category_bash_deny_filters_advertised_active_tools_and_allowed_tools() 
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-bash-category-deny".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(config),
@@ -402,10 +336,7 @@ async fn category_bash_deny_filters_advertised_active_tools_and_allowed_tools() 
     .await
     .expect("runner");
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("snapshot");
     assert_provider_hides_tool(&snapshot, tools::EXEC_COMMAND);
     assert_provider_exposes_tool(&snapshot, tools::APPLY_PATCH);
 
@@ -427,10 +358,7 @@ async fn category_edit_deny_filters_advertised_file_tool_conservatively() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-edit-category-deny".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(config),
@@ -439,10 +367,7 @@ async fn category_edit_deny_filters_advertised_file_tool_conservatively() {
     .await
     .expect("runner");
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("snapshot");
     assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
     assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
@@ -458,10 +383,7 @@ async fn category_write_deny_keeps_edit_only_apply_patch_exposed() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-write-category-deny".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(config),
@@ -470,10 +392,7 @@ async fn category_write_deny_keeps_edit_only_apply_patch_exposed() {
     .await
     .expect("runner");
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("snapshot");
     assert_provider_exposes_tool(&snapshot, tools::APPLY_PATCH);
     assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
@@ -490,10 +409,7 @@ async fn webfetch_domain_deny_does_not_filter_code_search() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-webfetch-domain-deny".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(config),
@@ -502,10 +418,7 @@ async fn webfetch_domain_deny_does_not_filter_code_search() {
     .await
     .expect("runner");
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("snapshot");
     assert_provider_exposes_tool(&snapshot, tools::CODE_SEARCH);
     assert_provider_exposes_tool(&snapshot, tools::EXEC_COMMAND);
 }
@@ -519,10 +432,7 @@ async fn planning_mode_filters_provider_facing_mutating_tools() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-planning-mode-tools".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -532,18 +442,13 @@ async fn planning_mode_filters_provider_facing_mutating_tools() {
     .expect("runner");
     runner.provider_client = Box::new(RecordingQueuedProvider::new(Vec::new()));
 
-    let before_planning = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("snapshot before planning");
+    let before_planning =
+        runner.build_universal_tool_snapshot().await.expect("snapshot before planning");
     assert_provider_catalogues_inactive_tool(&before_planning, tools::CODE_SEARCH);
 
     runner.tool_registry.enable_planning();
 
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("snapshot");
     assert_provider_catalogues_inactive_tool(&snapshot, tools::APPLY_PATCH);
     assert_provider_hides_tool(&snapshot, tools::READ_FILE);
     assert_provider_exposes_tool(&snapshot, tools::CODE_SEARCH);
@@ -562,10 +467,7 @@ async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools(
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-primary-agent-stable-catalogue".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -574,10 +476,7 @@ async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools(
     .await
     .expect("runner");
 
-    let baseline = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("baseline snapshot");
+    let baseline = runner.build_universal_tool_snapshot().await.expect("baseline snapshot");
     assert_provider_exposes_tool(&baseline, tools::EXEC_COMMAND);
     assert_provider_exposes_tool(&baseline, tools::WRITE_STDIN);
     assert_provider_exposes_tool(&baseline, tools::APPLY_PATCH);
@@ -586,10 +485,7 @@ async fn active_primary_agent_policy_filters_provider_snapshot_to_allowed_tools(
     spec.tools = Some(vec![tools::EXEC_COMMAND.to_string()]);
     runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(&spec));
 
-    let restricted = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("restricted snapshot");
+    let restricted = runner.build_universal_tool_snapshot().await.expect("restricted snapshot");
     let baseline_names = provider_tool_names(&baseline);
     let restricted_names = provider_tool_names(&restricted);
     assert_ne!(restricted_names, baseline_names);
@@ -607,10 +503,7 @@ async fn normalize_tool_args_applies_transform_after_defaults() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-tool-transform".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -641,10 +534,7 @@ async fn review_tool_allowlist_excludes_mutating_and_plan_only_tools() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-review".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -675,10 +565,7 @@ async fn review_tool_allowlist_expands_wildcard_read_only() {
         "test-key".to_string(),
         temp.path().to_path_buf(),
         "thread-review-wildcard".to_string(),
-        RunnerSettings {
-            reasoning_effort: None,
-            verbosity: None,
-        },
+        RunnerSettings { reasoning_effort: None, verbosity: None },
         None,
         ThreadBootstrap::new(None),
         Some(VTCodeConfig::default()),
@@ -687,19 +574,14 @@ async fn review_tool_allowlist_expands_wildcard_read_only() {
     .await
     .expect("runner");
 
-    let allowlist = runner
-        .review_tool_allowlist(&[tools::WILDCARD_ALL.to_string()])
-        .await;
+    let allowlist = runner.review_tool_allowlist(&[tools::WILDCARD_ALL.to_string()]).await;
     assert!(allowlist.contains(&tools::CODE_SEARCH.to_string()));
 
     runner.enable_full_auto(&allowlist).await;
 
     assert!(!runner.is_tool_exposed(tools::UNIFIED_FILE).await);
     assert!(!runner.is_tool_exposed(tools::UNIFIED_EXEC).await);
-    let snapshot = runner
-        .build_universal_tool_snapshot()
-        .await
-        .expect("review snapshot");
+    let snapshot = runner.build_universal_tool_snapshot().await.expect("review snapshot");
     assert_provider_exposes_tool(&snapshot, tools::CODE_SEARCH);
     assert_provider_hides_tool(&snapshot, tools::APPLY_PATCH);
 }

@@ -37,10 +37,7 @@ impl OpenAiCompatSpec for MistralSpec {
         payload: &mut Map<String, Value>,
     ) {
         if let Some(choice) = &request.tool_choice {
-            payload.insert(
-                "tool_choice".to_owned(),
-                choice.to_provider_format(Self::KEY),
-            );
+            payload.insert("tool_choice".to_owned(), choice.to_provider_format(Self::KEY));
         } else if request.tools.as_ref().is_some_and(|t| !t.is_empty()) {
             // Mistral's default "auto" tool_choice sometimes causes the model
             // to emit tool call arguments as plain text content. Setting it
@@ -58,10 +55,7 @@ impl OpenAiCompatSpec for MistralSpec {
         if let Some(effort) = request.reasoning_effort
             && effort != vtcode_config::types::ReasoningEffortLevel::None
         {
-            payload.insert(
-                "reasoning_effort".to_owned(),
-                Value::String("high".to_owned()),
-            );
+            payload.insert("reasoning_effort".to_owned(), Value::String("high".to_owned()));
         }
         Ok(())
     }
@@ -195,10 +189,7 @@ mod tests {
         request.tools = Some(sample_tools());
         request.tool_choice = Some(ToolChoice::Any);
         let payload = provider().core.convert_request(&request).unwrap();
-        assert_eq!(
-            payload["tool_choice"],
-            ToolChoice::Any.to_provider_format("mistral")
-        );
+        assert_eq!(payload["tool_choice"], ToolChoice::Any.to_provider_format("mistral"));
     }
 
     #[test]

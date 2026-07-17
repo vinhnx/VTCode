@@ -68,8 +68,5 @@ pub async fn ensure_workspace_trust_level_silent(
         .await
         .context("Failed to persist workspace trust sync")?;
 
-    Ok(WorkspaceTrustSyncOutcome::Upgraded {
-        previous: current_level,
-        new: desired_level,
-    })
+    Ok(WorkspaceTrustSyncOutcome::Upgraded { previous: current_level, new: desired_level })
 }

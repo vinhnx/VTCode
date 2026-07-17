@@ -181,10 +181,12 @@ mod tests {
             tools::UNIFIED_FILE,
             &json!({"action": "read", "path": "README.md"})
         ));
-        assert!(registry.is_retry_safe_call(
-            tools::UNIFIED_EXEC,
-            &json!({"action": "poll", "session_id": 42})
-        ));
+        assert!(
+            registry.is_retry_safe_call(
+                tools::UNIFIED_EXEC,
+                &json!({"action": "poll", "session_id": 42})
+            )
+        );
         assert!(registry.is_retry_safe_call(
             tools::UNIFIED_EXEC,
             &json!({"action": "inspect", "spool_path": ".vtcode/context/tool_outputs/run-1.txt"})
@@ -207,10 +209,10 @@ mod tests {
             tools::UNIFIED_EXEC,
             &json!({"action": "run", "command": "echo hi"})
         ));
-        assert!(!registry.is_retry_safe_call(
-            tools::WRITE_FILE,
-            &json!({"path": "foo.txt", "content": "x"})
-        ));
+        assert!(
+            !registry
+                .is_retry_safe_call(tools::WRITE_FILE, &json!({"path": "foo.txt", "content": "x"}))
+        );
 
         Ok(())
     }

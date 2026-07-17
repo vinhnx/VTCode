@@ -255,14 +255,11 @@ impl AppSession {
 
     pub(crate) fn history_picker_visible(&self) -> bool {
         self.history_picker_state.active
-            && self
-                .transient_host
-                .is_visible(TransientSurface::HistoryPicker)
+            && self.transient_host.is_visible(TransientSurface::HistoryPicker)
     }
 
     pub(crate) fn local_agents_visible(&self) -> bool {
-        self.transient_host
-            .is_visible(TransientSurface::LocalAgents)
+        self.transient_host.is_visible(TransientSurface::LocalAgents)
     }
 
     pub(super) fn local_agents_loading_active(&self) -> bool {
@@ -275,37 +272,25 @@ impl AppSession {
     }
 
     pub(crate) fn file_palette_visible(&self) -> bool {
-        self.file_palette_active
-            && self
-                .transient_host
-                .is_visible(TransientSurface::FilePalette)
+        self.file_palette_active && self.transient_host.is_visible(TransientSurface::FilePalette)
     }
 
     pub(crate) fn agent_palette_visible(&self) -> bool {
-        self.agent_palette_active
-            && self
-                .transient_host
-                .is_visible(TransientSurface::AgentPalette)
+        self.agent_palette_active && self.transient_host.is_visible(TransientSurface::AgentPalette)
     }
 
     pub(crate) fn slash_palette_visible(&self) -> bool {
         !self.slash_palette.is_empty()
-            && self
-                .transient_host
-                .is_visible(TransientSurface::SlashPalette)
+            && self.transient_host.is_visible(TransientSurface::SlashPalette)
     }
 
     pub(crate) fn has_active_overlay(&self) -> bool {
         self.core.has_active_overlay()
-            && self
-                .transient_host
-                .is_visible(TransientSurface::FloatingOverlay)
+            && self.transient_host.is_visible(TransientSurface::FloatingOverlay)
     }
 
     pub(crate) fn modal_state(&self) -> Option<&crate::tui::core_tui::session::modal::ModalState> {
-        self.has_active_overlay()
-            .then(|| self.core.modal_state())
-            .flatten()
+        self.has_active_overlay().then(|| self.core.modal_state()).flatten()
     }
 
     pub(crate) fn modal_state_mut(
@@ -320,9 +305,7 @@ impl AppSession {
     pub(crate) fn wizard_overlay(
         &self,
     ) -> Option<&crate::tui::core_tui::session::modal::WizardModalState> {
-        self.has_active_overlay()
-            .then(|| self.core.wizard_overlay())
-            .flatten()
+        self.has_active_overlay().then(|| self.core.wizard_overlay()).flatten()
     }
 
     pub(crate) fn wizard_overlay_mut(
@@ -353,10 +336,7 @@ impl AppSession {
     }
 
     pub(crate) fn diff_preview_state_mut(&mut self) -> Option<&mut DiffPreviewState> {
-        if !self
-            .transient_host
-            .is_visible(TransientSurface::DiffPreview)
-        {
+        if !self.transient_host.is_visible(TransientSurface::DiffPreview) {
             return None;
         }
         self.diff_preview_state.as_mut()
@@ -370,10 +350,7 @@ impl AppSession {
     }
 
     pub(crate) fn transcript_review_state_mut(&mut self) -> Option<&mut TranscriptReviewState> {
-        if !self
-            .transient_host
-            .is_visible(TransientSurface::TranscriptReview)
-        {
+        if !self.transient_host.is_visible(TransientSurface::TranscriptReview) {
             return None;
         }
         self.transcript_review_state.as_mut()
@@ -415,8 +392,7 @@ impl AppSession {
         if !self.history_picker_state.active {
             return;
         }
-        self.history_picker_state
-            .cancel(&mut self.core.input_manager);
+        self.history_picker_state.cancel(&mut self.core.input_manager);
         self.close_transient_surface(TransientSurface::HistoryPicker);
         self.update_input_triggers();
         self.mark_dirty();
@@ -441,24 +417,21 @@ impl AppSession {
         self.core.clear_inline_prompt_suggestion();
         match request {
             TransientRequest::Modal(request) => {
-                self.core
-                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::Modal(
-                        request.into(),
-                    ));
+                self.core.show_overlay(crate::tui::core_tui::types::OverlayRequest::Modal(
+                    request.into(),
+                ));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::List(request) => {
-                self.core
-                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::List(
-                        request.into(),
-                    ));
+                self.core.show_overlay(crate::tui::core_tui::types::OverlayRequest::List(
+                    request.into(),
+                ));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::Wizard(request) => {
-                self.core
-                    .show_overlay(crate::tui::core_tui::types::OverlayRequest::Wizard(
-                        request.into(),
-                    ));
+                self.core.show_overlay(crate::tui::core_tui::types::OverlayRequest::Wizard(
+                    request.into(),
+                ));
                 self.show_transient_surface(TransientSurface::FloatingOverlay);
             }
             TransientRequest::Diff(request) => {
@@ -649,9 +622,7 @@ impl AppSession {
                     })
                     .collect();
                 self.history_picker_state.set_archived_prompts(archived);
-                self.core
-                    .input_manager
-                    .prepend_archived_history(input_entries);
+                self.core.input_manager.prepend_archived_history(input_entries);
                 self.core.mark_dirty();
             }
             InlineCommand::SetInput(value) => {
@@ -671,10 +642,7 @@ impl AppSession {
                 );
                 self.update_input_triggers();
             }
-            InlineCommand::SetInlinePromptSuggestion {
-                suggestion,
-                llm_generated,
-            } => {
+            InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated } => {
                 self.core.handle_command(
                     crate::tui::core_tui::types::InlineCommand::SetInlinePromptSuggestion {
                         suggestion,
@@ -690,8 +658,7 @@ impl AppSession {
                 self.update_input_triggers();
             }
             InlineCommand::ClearInput => {
-                self.core
-                    .handle_command(crate::tui::core_tui::types::InlineCommand::ClearInput);
+                self.core.handle_command(crate::tui::core_tui::types::InlineCommand::ClearInput);
                 self.update_input_triggers();
             }
             InlineCommand::CloseTransient => self.close_transient(),
@@ -728,89 +695,71 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
     use crate::tui::core_tui::types::InlineCommand as CoreCommand;
 
     Some(match command {
-        InlineCommand::AppendLine { kind, segments } => CoreCommand::AppendLine {
-            kind: *kind,
-            segments: segments.clone(),
-        },
-        InlineCommand::AppendPastedMessage {
-            kind,
-            text,
-            line_count,
-        } => CoreCommand::AppendPastedMessage {
-            kind: *kind,
-            text: text.clone(),
-            line_count: *line_count,
-        },
-        InlineCommand::Inline { kind, segment } => CoreCommand::Inline {
-            kind: *kind,
-            segment: segment.clone(),
-        },
-        InlineCommand::ReplaceLast {
-            count,
-            kind,
-            lines,
-            link_ranges,
-        } => CoreCommand::ReplaceLast {
-            count: *count,
-            kind: *kind,
-            lines: lines.clone(),
-            link_ranges: link_ranges.clone(),
-        },
-        InlineCommand::SetPrompt { prefix, style } => CoreCommand::SetPrompt {
-            prefix: prefix.clone(),
-            style: style.clone(),
-        },
-        InlineCommand::SetPlaceholder { hint, style } => CoreCommand::SetPlaceholder {
-            hint: hint.clone(),
-            style: style.clone(),
-        },
-        InlineCommand::SetMessageLabels { agent, user } => CoreCommand::SetMessageLabels {
-            agent: agent.clone(),
-            user: user.clone(),
-        },
-        InlineCommand::SetHeaderContext { context } => CoreCommand::SetHeaderContext {
-            context: context.clone(),
-        },
-        InlineCommand::SetInputStatus { left, right } => CoreCommand::SetInputStatus {
-            left: left.clone(),
-            right: right.clone(),
-        },
-        InlineCommand::SetTerminalTitleItems { items } => CoreCommand::SetTerminalTitleItems {
-            items: items.clone(),
-        },
-        InlineCommand::SetTerminalTitleThreadLabel { label } => {
-            CoreCommand::SetTerminalTitleThreadLabel {
-                label: label.clone(),
+        InlineCommand::AppendLine { kind, segments } => {
+            CoreCommand::AppendLine { kind: *kind, segments: segments.clone() }
+        }
+        InlineCommand::AppendPastedMessage { kind, text, line_count } => {
+            CoreCommand::AppendPastedMessage {
+                kind: *kind,
+                text: text.clone(),
+                line_count: *line_count,
             }
+        }
+        InlineCommand::Inline { kind, segment } => {
+            CoreCommand::Inline { kind: *kind, segment: segment.clone() }
+        }
+        InlineCommand::ReplaceLast { count, kind, lines, link_ranges } => {
+            CoreCommand::ReplaceLast {
+                count: *count,
+                kind: *kind,
+                lines: lines.clone(),
+                link_ranges: link_ranges.clone(),
+            }
+        }
+        InlineCommand::SetPrompt { prefix, style } => {
+            CoreCommand::SetPrompt { prefix: prefix.clone(), style: style.clone() }
+        }
+        InlineCommand::SetPlaceholder { hint, style } => {
+            CoreCommand::SetPlaceholder { hint: hint.clone(), style: style.clone() }
+        }
+        InlineCommand::SetMessageLabels { agent, user } => {
+            CoreCommand::SetMessageLabels { agent: agent.clone(), user: user.clone() }
+        }
+        InlineCommand::SetHeaderContext { context } => {
+            CoreCommand::SetHeaderContext { context: context.clone() }
+        }
+        InlineCommand::SetInputStatus { left, right } => {
+            CoreCommand::SetInputStatus { left: left.clone(), right: right.clone() }
+        }
+        InlineCommand::SetTerminalTitleItems { items } => {
+            CoreCommand::SetTerminalTitleItems { items: items.clone() }
+        }
+        InlineCommand::SetTerminalTitleThreadLabel { label } => {
+            CoreCommand::SetTerminalTitleThreadLabel { label: label.clone() }
         }
         InlineCommand::SetTerminalTitleGitBranch { branch } => {
-            CoreCommand::SetTerminalTitleGitBranch {
-                branch: branch.clone(),
-            }
+            CoreCommand::SetTerminalTitleGitBranch { branch: branch.clone() }
         }
-        InlineCommand::SetTheme { theme } => CoreCommand::SetTheme {
-            theme: theme.clone(),
-        },
-        InlineCommand::SetAppearance { appearance } => CoreCommand::SetAppearance {
-            appearance: appearance.clone(),
-        },
+        InlineCommand::SetTheme { theme } => CoreCommand::SetTheme { theme: theme.clone() },
+        InlineCommand::SetAppearance { appearance } => {
+            CoreCommand::SetAppearance { appearance: appearance.clone() }
+        }
         InlineCommand::SetVimModeEnabled(enabled) => CoreCommand::SetVimModeEnabled(*enabled),
-        InlineCommand::SetQueuedInputs { entries } => CoreCommand::SetQueuedInputs {
-            entries: entries.clone(),
-        },
-        InlineCommand::SetSubprocessEntries { entries } => CoreCommand::SetSubprocessEntries {
-            entries: entries.clone(),
-        },
+        InlineCommand::SetQueuedInputs { entries } => {
+            CoreCommand::SetQueuedInputs { entries: entries.clone() }
+        }
+        InlineCommand::SetSubprocessEntries { entries } => {
+            CoreCommand::SetSubprocessEntries { entries: entries.clone() }
+        }
         InlineCommand::SetSubagentPreview { text } => {
             CoreCommand::SetSubagentPreview { text: text.clone() }
         }
         InlineCommand::SetLocalAgents { .. } => return None,
         InlineCommand::SetArchivedHistory { .. } => return None,
         InlineCommand::UpdateFilePaletteSearch { .. } => return None,
-        InlineCommand::SetPrimaryAgent { name, color } => CoreCommand::SetPrimaryAgent {
-            name: name.clone(),
-            color: color.clone(),
-        },
+        InlineCommand::SetPrimaryAgent { name, color } => {
+            CoreCommand::SetPrimaryAgent { name: name.clone(), color: color.clone() }
+        }
         InlineCommand::SetCursorVisible(value) => CoreCommand::SetCursorVisible(*value),
         InlineCommand::SetInputEnabled(value) => CoreCommand::SetInputEnabled(*value),
         InlineCommand::SetImageInputEnabled(value) => CoreCommand::SetImageInputEnabled(*value),
@@ -819,13 +768,12 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::ApplySuggestedPrompt(value) => {
             CoreCommand::ApplySuggestedPrompt(value.clone())
         }
-        InlineCommand::SetInlinePromptSuggestion {
-            suggestion,
-            llm_generated,
-        } => CoreCommand::SetInlinePromptSuggestion {
-            suggestion: suggestion.clone(),
-            llm_generated: *llm_generated,
-        },
+        InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated } => {
+            CoreCommand::SetInlinePromptSuggestion {
+                suggestion: suggestion.clone(),
+                llm_generated: *llm_generated,
+            }
+        }
         InlineCommand::ClearInlinePromptSuggestion => CoreCommand::ClearInlinePromptSuggestion,
         InlineCommand::ClearInput => CoreCommand::ClearInput,
         InlineCommand::ForceRedraw => CoreCommand::ForceRedraw,

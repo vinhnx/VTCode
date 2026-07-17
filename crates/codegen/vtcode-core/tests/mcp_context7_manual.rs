@@ -32,8 +32,5 @@ async fn context7_list_tools_smoke() {
     client.initialize().await.unwrap();
 
     let tools = client.list_tools().await.unwrap();
-    assert!(
-        !tools.is_empty(),
-        "context7 should expose at least one tool"
-    );
+    assert!(!tools.is_empty(), "context7 should expose at least one tool");
 }

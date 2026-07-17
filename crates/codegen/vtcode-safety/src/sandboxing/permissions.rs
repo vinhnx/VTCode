@@ -127,10 +127,7 @@ mod tests {
         use SandboxPermissions::*;
 
         assert_eq!(UseDefault.merge(&UseDefault), UseDefault);
-        assert_eq!(
-            UseDefault.merge(&WithAdditionalPermissions),
-            WithAdditionalPermissions
-        );
+        assert_eq!(UseDefault.merge(&WithAdditionalPermissions), WithAdditionalPermissions);
         assert_eq!(UseDefault.merge(&RequireEscalated), RequireEscalated);
         assert_eq!(RequireEscalated.merge(&BypassSandbox), BypassSandbox);
     }

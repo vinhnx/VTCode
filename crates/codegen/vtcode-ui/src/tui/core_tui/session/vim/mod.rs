@@ -56,9 +56,7 @@ impl Session {
         }
 
         let outcome = {
-            let mut editor = SessionVimEditor {
-                input_manager: &mut self.input_manager,
-            };
+            let mut editor = SessionVimEditor { input_manager: &mut self.input_manager };
             handle_key(&mut self.vim_state, &mut editor, &mut self.clipboard, key)
         };
 

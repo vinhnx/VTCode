@@ -14,19 +14,13 @@ use crate::providers::extract_reasoning_trace;
 use serde_json::{Value, json};
 
 pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse, LLMError> {
-    let content = response_json
-        .get("content")
-        .and_then(|c| c.as_array())
-        .ok_or_else(|| {
-            let formatted = error_display::format_llm_error(
-                "Anthropic",
-                "Invalid response format: missing content",
-            );
-            LLMError::Provider {
-                message: formatted,
-                metadata: None,
-            }
-        })?;
+    let content = response_json.get("content").and_then(|c| c.as_array()).ok_or_else(|| {
+        let formatted = error_display::format_llm_error(
+            "Anthropic",
+            "Invalid response format: missing content",
+        );
+        LLMError::Provider { message: formatted, metadata: None }
+    })?;
 
     let block_count = content.len();
     let mut text_parts = Vec::with_capacity(block_count);
@@ -56,10 +50,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                     if let Some(signature) = block.get("signature").and_then(|value| value.as_str())
                         && let Some(obj) = detail.as_object_mut()
                     {
-                        obj.insert(
-                            "signature".to_string(),
-                            Value::String(signature.to_string()),
-                        );
+                        obj.insert("signature".to_string(), Value::String(signature.to_string()));
                     }
                     reasoning_details_vec.push(detail.to_string());
                     reasoning_parts.push(thinking);
@@ -78,16 +69,8 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                 );
             }
             Some("tool_use") => {
-                let id = block
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let name = block
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let id = block.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
                 if name == "structured_output" {
                     let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
@@ -106,10 +89,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
             Some("server_tool_use") => {
                 // The advisor tool is the only supported server-side tool. Preserve
                 // the block verbatim so it can be round-tripped on the next turn.
-                if block
-                    .get("name")
-                    .and_then(|n| n.as_str())
-                    .is_some_and(|name| name == "advisor")
+                if block.get("name").and_then(|n| n.as_str()).is_some_and(|name| name == "advisor")
                 {
                     advisor_blocks.push(block.clone());
                 }
@@ -123,9 +103,8 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                 if let Some(content_block) = block.get("content")
                     && content_block.get("type").and_then(|t| t.as_str())
                         == Some("tool_search_tool_search_result")
-                    && let Some(refs) = content_block
-                        .get("tool_references")
-                        .and_then(|r| r.as_array())
+                    && let Some(refs) =
+                        content_block.get("tool_references").and_then(|r| r.as_array())
                 {
                     for tool_ref in refs {
                         if let Some(tool_name) = tool_ref.get("tool_name").and_then(|n| n.as_str())
@@ -136,19 +115,14 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                 }
             }
             Some("compaction") => {
-                compaction = block
-                    .get("content")
-                    .and_then(|t| t.as_str())
-                    .map(|s| s.to_string());
+                compaction = block.get("content").and_then(|t| t.as_str()).map(|s| s.to_string());
             }
             Some("fallback") => {
                 // Fallback content block marks model boundary - preserve for conversation continuity
-                if let Some(from) = block
-                    .get("from")
-                    .and_then(|v| v.get("model").and_then(|m| m.as_str()))
-                    && let Some(to) = block
-                        .get("to")
-                        .and_then(|v| v.get("model").and_then(|m| m.as_str()))
+                if let Some(from) =
+                    block.get("from").and_then(|v| v.get("model").and_then(|m| m.as_str()))
+                    && let Some(to) =
+                        block.get("to").and_then(|v| v.get("model").and_then(|m| m.as_str()))
                 {
                     let detail = json!({
                         "type": "fallback",
@@ -163,9 +137,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
     }
 
     let reasoning = if reasoning_parts.is_empty() {
-        response_json
-            .get("reasoning")
-            .and_then(extract_reasoning_trace)
+        response_json.get("reasoning").and_then(extract_reasoning_trace)
     } else {
         let joined = reasoning_parts.join("\n");
         let trimmed = joined.trim();
@@ -186,13 +158,8 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
     if let Some(sd) = response_json.get("stop_details") {
         let category = sd.get("category").and_then(|c| c.as_str()).unwrap_or("");
         let explanation = sd.get("explanation").and_then(|e| e.as_str()).unwrap_or("");
-        let credit_token = sd
-            .get("fallback_credit_token")
-            .and_then(|t| t.as_str())
-            .unwrap_or("");
-        let has_prefill = sd
-            .get("fallback_has_prefill_claim")
-            .and_then(|v| v.as_bool());
+        let credit_token = sd.get("fallback_credit_token").and_then(|t| t.as_str()).unwrap_or("");
+        let has_prefill = sd.get("fallback_has_prefill_claim").and_then(|v| v.as_bool());
         let mut detail = json!({
             "type": "stop_details",
             "category": category,
@@ -272,60 +239,42 @@ pub fn parse_usage(usage_value: &Value) -> Usage {
         .map(|value| value as u32);
 
     // Parse iterations for fallback tracking
-    let iterations = usage_value
-        .get("iterations")
-        .and_then(|iters| iters.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|iter| {
-                    let iter_type = iter.get("type").and_then(|t| t.as_str());
-                    let input_tokens = iter
-                        .get("input_tokens")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as u32;
-                    let output_tokens = iter
-                        .get("output_tokens")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as u32;
-                    let cache_creation = iter
-                        .get("cache_creation_input_tokens")
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as u32);
-                    let cache_read = iter
-                        .get("cache_read_input_tokens")
-                        .and_then(|v| v.as_u64())
-                        .map(|v| v as u32);
-                    let model = iter.get("model").and_then(|v| v.as_str()).unwrap_or("");
+    let iterations = usage_value.get("iterations").and_then(|iters| iters.as_array()).map(|arr| {
+        arr.iter()
+            .filter_map(|iter| {
+                let iter_type = iter.get("type").and_then(|t| t.as_str());
+                let input_tokens =
+                    iter.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let output_tokens =
+                    iter.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                let cache_creation = iter
+                    .get("cache_creation_input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32);
+                let cache_read =
+                    iter.get("cache_read_input_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
+                let model = iter.get("model").and_then(|v| v.as_str()).unwrap_or("");
 
-                    Some(json!({
-                        "type": iter_type,
-                        "model": model,
-                        "input_tokens": input_tokens,
-                        "output_tokens": output_tokens,
-                        "cache_creation_input_tokens": cache_creation,
-                        "cache_read_input_tokens": cache_read,
-                    }))
-                })
-                .collect::<Vec<_>>()
-        });
+                Some(json!({
+                    "type": iter_type,
+                    "model": model,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cache_creation_input_tokens": cache_creation,
+                    "cache_read_input_tokens": cache_read,
+                }))
+            })
+            .collect::<Vec<_>>()
+    });
 
     Usage {
-        prompt_tokens: usage_value
-            .get("input_tokens")
-            .and_then(|it| it.as_u64())
-            .unwrap_or(0) as u32,
-        completion_tokens: usage_value
-            .get("output_tokens")
-            .and_then(|ot| ot.as_u64())
-            .unwrap_or(0) as u32,
-        total_tokens: (usage_value
-            .get("input_tokens")
-            .and_then(|it| it.as_u64())
-            .unwrap_or(0)
-            + usage_value
-                .get("output_tokens")
-                .and_then(|ot| ot.as_u64())
-                .unwrap_or(0)) as u32,
+        prompt_tokens: usage_value.get("input_tokens").and_then(|it| it.as_u64()).unwrap_or(0)
+            as u32,
+        completion_tokens: usage_value.get("output_tokens").and_then(|ot| ot.as_u64()).unwrap_or(0)
+            as u32,
+        total_tokens: (usage_value.get("input_tokens").and_then(|it| it.as_u64()).unwrap_or(0)
+            + usage_value.get("output_tokens").and_then(|ot| ot.as_u64()).unwrap_or(0))
+            as u32,
         cached_prompt_tokens: cache_read_tokens,
         cache_creation_tokens,
         cache_read_tokens,

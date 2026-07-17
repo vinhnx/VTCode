@@ -22,10 +22,8 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
 
     print_list_header();
 
-    let discovery_result = loader
-        .discover_all_skills()
-        .await
-        .context("Failed to discover skills")?;
+    let discovery_result =
+        loader.discover_all_skills().await.context("Failed to discover skills")?;
 
     if discovery_result.skills.is_empty() && discovery_result.tools.is_empty() {
         print_empty_list();
@@ -229,10 +227,7 @@ async fn prepare_loader(options: &SkillsCommandOptions) -> Result<EnhancedSkillL
     refresh_skill_index(options).await;
 
     let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
-    loader
-        .discover_all_skills()
-        .await
-        .context("Failed to discover skills")?;
+    loader.discover_all_skills().await.context("Failed to discover skills")?;
     Ok(loader)
 }
 
@@ -270,9 +265,7 @@ async fn resolve_skill_load(
             messages::error(&format!(
                 "Skill '{requested_name}' is a built-in command skill and cannot be loaded."
             )),
-            messages::hint(&format!(
-                "Use `/skills use {requested_name}` in chat mode instead."
-            ))
+            messages::hint(&format!("Use `/skills use {requested_name}` in chat mode instead."))
         );
     }
 
@@ -299,10 +292,7 @@ fn validate_skill_path(path: &Path) -> Result<()> {
     if !path.is_dir() {
         bail!(
             "{}\n{}",
-            messages::error(&format!(
-                "Skill path is not a directory: {}",
-                path.display()
-            )),
+            messages::error(&format!("Skill path is not a directory: {}", path.display())),
             messages::hint("Skills must be directories containing a manifest file.")
         );
     }
@@ -373,9 +363,7 @@ mod tests {
     #[tokio::test]
     async fn lists_empty_skills_directory() {
         let temp_dir = TempDir::new().expect("temp dir");
-        let options = SkillsCommandOptions {
-            workspace: temp_dir.path().to_path_buf(),
-        };
+        let options = SkillsCommandOptions { workspace: temp_dir.path().to_path_buf() };
 
         let result = handle_skills_list(&options).await;
 
@@ -400,9 +388,7 @@ Use this skill.
         )
         .expect("write skill");
 
-        let options = SkillsCommandOptions {
-            workspace: temp_dir.path().to_path_buf(),
-        };
+        let options = SkillsCommandOptions { workspace: temp_dir.path().to_path_buf() };
         let result = handle_skills_load(&options, "test-skill", None).await;
 
         assert!(result.is_ok(), "{result:#?}");
@@ -426,9 +412,7 @@ Use this skill.
         )
         .expect("write skill");
 
-        let options = SkillsCommandOptions {
-            workspace: temp_dir.path().to_path_buf(),
-        };
+        let options = SkillsCommandOptions { workspace: temp_dir.path().to_path_buf() };
         let result =
             handle_skills_load(&options, "standalone-skill", Some(skill_path.clone())).await;
 
@@ -438,9 +422,7 @@ Use this skill.
     #[tokio::test]
     async fn rejects_missing_direct_skill_path() {
         let temp_dir = TempDir::new().expect("temp dir");
-        let options = SkillsCommandOptions {
-            workspace: temp_dir.path().to_path_buf(),
-        };
+        let options = SkillsCommandOptions { workspace: temp_dir.path().to_path_buf() };
 
         let result = handle_skills_load(
             &options,

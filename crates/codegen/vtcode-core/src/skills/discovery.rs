@@ -99,10 +99,7 @@ impl SkillDiscovery {
 
     /// Create new discovery engine with custom configuration
     pub fn with_config(config: DiscoveryConfig) -> Self {
-        Self {
-            config,
-            cache: HashMap::new(),
-        }
+        Self { config, cache: HashMap::new() }
     }
 }
 
@@ -121,9 +118,7 @@ impl SkillDiscovery {
         info!("Starting skill discovery in: {}", workspace_root.display());
 
         // Discover traditional skills
-        let skills = self
-            .discover_traditional_skills(workspace_root, &mut stats)
-            .await?;
+        let skills = self.discover_traditional_skills(workspace_root, &mut stats).await?;
 
         // Discover CLI tools
         let tools = self.discover_cli_tools(workspace_root, &mut stats).await?;
@@ -136,19 +131,11 @@ impl SkillDiscovery {
 
             stats.discovery_time_ms = start_time.elapsed().as_millis() as u64;
 
-            Ok(DiscoveryResult {
-                skills,
-                tools: all_tools,
-                stats,
-            })
+            Ok(DiscoveryResult { skills, tools: all_tools, stats })
         } else {
             stats.discovery_time_ms = start_time.elapsed().as_millis() as u64;
 
-            Ok(DiscoveryResult {
-                skills,
-                tools,
-                stats,
-            })
+            Ok(DiscoveryResult { skills, tools, stats })
         }
     }
 
@@ -178,11 +165,7 @@ impl SkillDiscovery {
             // Scan for skill directories
             match self.scan_for_skills(&full_path, stats) {
                 Ok(found_skills) => {
-                    info!(
-                        "Found {} skills in {}",
-                        found_skills.len(),
-                        full_path.display()
-                    );
+                    info!("Found {} skills in {}", found_skills.len(), full_path.display());
                     skills.extend(found_skills);
                 }
                 Err(e) => {
@@ -270,11 +253,7 @@ impl SkillDiscovery {
 
             match self.scan_for_tools(&full_path, stats).await {
                 Ok(found_tools) => {
-                    info!(
-                        "Found {} tools in {}",
-                        found_tools.len(),
-                        full_path.display()
-                    );
+                    info!("Found {} tools in {}", found_tools.len(), full_path.display());
                     tools.extend(found_tools);
                 }
                 Err(e) => {
@@ -308,11 +287,8 @@ impl SkillDiscovery {
                     let readme_path = self.find_tool_readme(&path);
                     let schema_path = self.find_tool_schema(&path);
 
-                    let tool_name = path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("unknown")
-                        .to_string();
+                    let tool_name =
+                        path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
 
                     let config = CliToolConfig {
                         name: tool_name.clone(),
@@ -480,9 +456,7 @@ fn default_skill_paths(workspace_root: &Path) -> Vec<PathBuf> {
     }
     #[cfg(unix)]
     paths.push(PathBuf::from("/etc/codex/skills"));
-    paths.push(crate::skills::system::system_cache_root_dir(
-        &default_codex_home(),
-    ));
+    paths.push(crate::skills::system::system_cache_root_dir(&default_codex_home()));
     paths
 }
 
@@ -508,10 +482,7 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         ..Default::default()
     };
 
-    Ok(SkillContext::MetadataOnly(
-        manifest,
-        config.executable_path.clone(),
-    ))
+    Ok(SkillContext::MetadataOnly(manifest, config.executable_path.clone()))
 }
 
 /// Progressive skill loader that can load full skill details on demand

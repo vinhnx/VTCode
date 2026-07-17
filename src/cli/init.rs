@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::path::Path;
@@ -117,13 +117,8 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
 
 fn prompt_overwrite_confirmation(path: &Path) -> Result<bool> {
     loop {
-        print!(
-            "AGENTS.md already exists at {}. Overwrite it? [y/N]: ",
-            path.display()
-        );
-        io::stdout()
-            .flush()
-            .context("failed to flush overwrite prompt")?;
+        print!("AGENTS.md already exists at {}. Overwrite it? [y/N]: ", path.display());
+        io::stdout().flush().context("failed to flush overwrite prompt")?;
 
         let mut input = String::new();
         io::stdin()
@@ -143,11 +138,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
 
     for question in questions {
         println!();
-        println!(
-            "{} {}",
-            style(question.header.as_str()).cyan(),
-            question.prompt
-        );
+        println!("{} {}", style(question.header.as_str()).cyan(), question.prompt);
 
         for (index, option) in question.options.iter().enumerate() {
             println!(
@@ -174,13 +165,9 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
         loop {
             print!(
                 "Select an option{}: ",
-                recommended_index
-                    .map(|index| format!(" [{index}]"))
-                    .unwrap_or_default()
+                recommended_index.map(|index| format!(" [{index}]")).unwrap_or_default()
             );
-            io::stdout()
-                .flush()
-                .context("failed to flush guided /init prompt")?;
+            io::stdout().flush().context("failed to flush guided /init prompt")?;
 
             let mut input = String::new();
             io::stdin()
@@ -194,7 +181,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
             {
                 answers.insert(
                     GuidedInitAnswer::from_input(question.key, Some(&option.value), None)
-                        .expect("recommended option produces an answer"),
+                        .ok_or_else(|| anyhow!("recommended option produced empty answer"))?,
                 );
                 break;
             }
@@ -203,7 +190,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
                 if let Some(option) = question.options.get(index.saturating_sub(1)) {
                     answers.insert(
                         GuidedInitAnswer::from_input(question.key, Some(&option.value), None)
-                            .expect("selected option produces an answer"),
+                            .ok_or_else(|| anyhow!("selected option produced empty answer"))?,
                     );
                     break;
                 }
@@ -211,7 +198,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
                     let custom = prompt_custom_answer(question.key)?;
                     answers.insert(
                         GuidedInitAnswer::from_input(question.key, None, Some(&custom))
-                            .expect("custom prompt always yields an answer"),
+                            .ok_or_else(|| anyhow!("custom prompt produced empty answer"))?,
                     );
                     break;
                 }
@@ -220,7 +207,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
             if question.allow_custom && !trimmed.is_empty() {
                 answers.insert(
                     GuidedInitAnswer::from_input(question.key, None, Some(trimmed))
-                        .expect("typed custom input produces an answer"),
+                        .ok_or_else(|| anyhow!("typed custom input is empty"))?,
                 );
                 break;
             }
@@ -234,9 +221,7 @@ fn prompt_guided_answers(questions: &[GuidedInitQuestion]) -> Result<GuidedInitA
 
 fn prompt_custom_answer(key: GuidedInitQuestionKey) -> Result<String> {
     print!("{} [{}]: ", key.custom_label(), key.custom_placeholder());
-    io::stdout()
-        .flush()
-        .context("failed to flush custom guided /init prompt")?;
+    io::stdout().flush().context("failed to flush custom guided /init prompt")?;
 
     let mut input = String::new();
     io::stdin()

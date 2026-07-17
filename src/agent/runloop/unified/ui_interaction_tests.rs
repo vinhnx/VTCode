@@ -74,9 +74,7 @@ impl uni::LLMProvider for CompletedOnlyProvider {
     async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
         let response = self.generate(request).await?;
         Ok(Box::pin(stream::once(async {
-            Ok(uni::LLMStreamEvent::Completed {
-                response: Box::new(response),
-            })
+            Ok(uni::LLMStreamEvent::Completed { response: Box::new(response) })
         })))
     }
 
@@ -118,15 +116,9 @@ impl uni::LLMProvider for ReasoningThenContentProvider {
     async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
         let response = self.generate(request).await?;
         Ok(Box::pin(stream::iter(vec![
-            Ok(uni::LLMStreamEvent::Reasoning {
-                delta: self.reasoning.clone(),
-            }),
-            Ok(uni::LLMStreamEvent::Token {
-                delta: self.content.clone(),
-            }),
-            Ok(uni::LLMStreamEvent::Completed {
-                response: Box::new(response),
-            }),
+            Ok(uni::LLMStreamEvent::Reasoning { delta: self.reasoning.clone() }),
+            Ok(uni::LLMStreamEvent::Token { delta: self.content.clone() }),
+            Ok(uni::LLMStreamEvent::Completed { response: Box::new(response) }),
         ])))
     }
 
@@ -168,18 +160,10 @@ impl uni::LLMProvider for StagedReasoningProvider {
     async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
         let response = self.generate(request).await?;
         Ok(Box::pin(stream::iter(vec![
-            Ok(uni::LLMStreamEvent::ReasoningStage {
-                stage: self.stage.clone(),
-            }),
-            Ok(uni::LLMStreamEvent::Reasoning {
-                delta: self.reasoning.clone(),
-            }),
-            Ok(uni::LLMStreamEvent::Token {
-                delta: self.content.clone(),
-            }),
-            Ok(uni::LLMStreamEvent::Completed {
-                response: Box::new(response),
-            }),
+            Ok(uni::LLMStreamEvent::ReasoningStage { stage: self.stage.clone() }),
+            Ok(uni::LLMStreamEvent::Reasoning { delta: self.reasoning.clone() }),
+            Ok(uni::LLMStreamEvent::Token { delta: self.content.clone() }),
+            Ok(uni::LLMStreamEvent::Completed { response: Box::new(response) }),
         ])))
     }
 
@@ -222,18 +206,12 @@ impl uni::LLMProvider for ReasoningThenChunkedContentProvider {
         let response = self.generate(request).await?;
         let mut events = Vec::with_capacity(self.reasoning_chunks.len() + self.chunks.len() + 1);
         for chunk in &self.reasoning_chunks {
-            events.push(Ok(uni::LLMStreamEvent::Reasoning {
-                delta: chunk.clone(),
-            }));
+            events.push(Ok(uni::LLMStreamEvent::Reasoning { delta: chunk.clone() }));
         }
         for chunk in &self.chunks {
-            events.push(Ok(uni::LLMStreamEvent::Token {
-                delta: chunk.clone(),
-            }));
+            events.push(Ok(uni::LLMStreamEvent::Token { delta: chunk.clone() }));
         }
-        events.push(Ok(uni::LLMStreamEvent::Completed {
-            response: Box::new(response),
-        }));
+        events.push(Ok(uni::LLMStreamEvent::Completed { response: Box::new(response) }));
         Ok(Box::pin(stream::iter(events)))
     }
 
@@ -295,12 +273,8 @@ impl uni::LLMProvider for NormalizedToolCallProvider {
                 delta: chunk.clone(),
             }));
         }
-        events.push(Ok(uni::NormalizedStreamEvent::TextDelta {
-            delta: self.content.clone(),
-        }));
-        events.push(Ok(uni::NormalizedStreamEvent::Done {
-            response: Box::new(response),
-        }));
+        events.push(Ok(uni::NormalizedStreamEvent::TextDelta { delta: self.content.clone() }));
+        events.push(Ok(uni::NormalizedStreamEvent::Done { response: Box::new(response) }));
         Ok(Box::pin(stream::iter(events)))
     }
 
@@ -351,10 +325,7 @@ async fn placeholder_spinner_restores_previous_input_status() {
         }
     }
 
-    assert_eq!(
-        last_status,
-        Some((Some("provider".to_string()), Some("model".to_string())))
-    );
+    assert_eq!(last_status, Some((Some("provider".to_string()), Some("model".to_string()))));
 }
 
 #[tokio::test]
@@ -376,11 +347,7 @@ async fn start_loading_status_uses_current_input_status_for_restore() {
     let mut last_status: Option<(Option<String>, Option<String>)> = None;
     while let Ok(command) = rx.try_recv() {
         if let InlineCommand::SetInputStatus { left, right } = command {
-            if left
-                .as_deref()
-                .map(|text| text.contains("Saving memory note"))
-                .unwrap_or(false)
-            {
+            if left.as_deref().map(|text| text.contains("Saving memory note")).unwrap_or(false) {
                 saw_loading = true;
             }
             last_status = Some((left, right));
@@ -388,10 +355,7 @@ async fn start_loading_status_uses_current_input_status_for_restore() {
     }
 
     assert!(saw_loading);
-    assert_eq!(
-        last_status,
-        Some((Some("provider".to_string()), Some("model".to_string())))
-    );
+    assert_eq!(last_status, Some((Some("provider".to_string()), Some("model".to_string()))));
 }
 
 #[tokio::test]
@@ -494,10 +458,7 @@ async fn renders_completed_only_content() {
     .await
     .expect("stream should succeed");
 
-    assert!(
-        emitted,
-        "should mark emitted tokens when content is rendered"
-    );
+    assert!(emitted, "should mark emitted tokens when content is rendered");
     assert_eq!(resp.content.as_deref(), Some("hello world"));
 }
 
@@ -524,10 +485,7 @@ async fn renders_reasoning_when_no_content() {
     .await
     .expect("stream should succeed");
 
-    assert!(
-        emitted,
-        "should mark emitted tokens when reasoning is rendered"
-    );
+    assert!(emitted, "should mark emitted tokens when reasoning is rendered");
     assert!(resp.content.is_none(), "content should remain none");
 }
 
@@ -554,10 +512,7 @@ async fn keeps_proposed_plan_tags_visible_outside_planning_workflow() {
     .await
     .expect("stream should succeed");
 
-    assert!(
-        emitted,
-        "outside planning workflow, proposed_plan blocks should remain visible"
-    );
+    assert!(emitted, "outside planning workflow, proposed_plan blocks should remain visible");
 }
 
 #[tokio::test]
@@ -587,10 +542,7 @@ async fn strips_proposed_plan_tags_when_option_enabled() {
     .await
     .expect("stream should succeed");
 
-    assert!(
-        !emitted,
-        "when stripping is enabled, pure proposed_plan content should be hidden"
-    );
+    assert!(!emitted, "when stripping is enabled, pure proposed_plan content should be hidden");
 }
 
 #[tokio::test]
@@ -616,10 +568,7 @@ async fn does_not_suppress_large_content_after_reasoning_stream() {
     .await
     .expect("stream should succeed");
 
-    assert!(
-        emitted,
-        "large token content should still be rendered after reasoning events"
-    );
+    assert!(emitted, "large token content should still be rendered after reasoning events");
 }
 
 #[tokio::test]
@@ -647,10 +596,7 @@ async fn marks_reasoning_only_streams_as_rendered() {
     .await
     .expect("stream should succeed");
 
-    assert!(
-        emitted,
-        "reasoning-only streams should count as rendered to avoid duplicate replay"
-    );
+    assert!(emitted, "reasoning-only streams should count as rendered to avoid duplicate replay");
 }
 
 #[tokio::test]
@@ -914,10 +860,7 @@ async fn inline_streams_reasoning_deltas_live() {
         }
     }
 
-    assert!(
-        saw_reasoning_inline,
-        "expected inline reasoning delta to be streamed to TUI"
-    );
+    assert!(saw_reasoning_inline, "expected inline reasoning delta to be streamed to TUI");
 }
 
 #[tokio::test]
@@ -995,10 +938,9 @@ async fn inline_streaming_does_not_replay_reasoning_on_completion() {
     let mut reasoning_occurrences = 0usize;
     while let Ok(command) = rx.try_recv() {
         let text = match command {
-            InlineCommand::AppendLine { segments, .. } => segments
-                .into_iter()
-                .map(|segment| segment.text)
-                .collect::<String>(),
+            InlineCommand::AppendLine { segments, .. } => {
+                segments.into_iter().map(|segment| segment.text).collect::<String>()
+            }
             InlineCommand::AppendPastedMessage { text, .. } => text,
             InlineCommand::Inline { segment, .. } => segment.text,
             InlineCommand::ReplaceLast { lines, .. } => lines

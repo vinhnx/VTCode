@@ -112,11 +112,7 @@ async fn run_eval_task(
     let session_id = format!("eval-{}-attempt", eval_task.id);
 
     if let Err(e) = validate_agent_safe_text("eval_task.prompt", &eval_task.prompt) {
-        return eval_error(
-            &eval_task.id,
-            start,
-            format!("Prompt validation failed: {e}"),
-        );
+        return eval_error(&eval_task.id, start, format!("Prompt validation failed: {e}"));
     }
 
     let model_id = match ModelId::from_str(&config.model) {
@@ -163,9 +159,7 @@ async fn run_eval_task(
         instructions: Some(ts.instructions.to_string()),
     };
 
-    let exec_result = runner
-        .execute_task_with_retry(&task, &[] as &[ContextItem], 1)
-        .await;
+    let exec_result = runner.execute_task_with_retry(&task, &[] as &[ContextItem], 1).await;
     let duration_secs = start.elapsed().as_secs_f64();
 
     // M4: timeout_secs is not enforced here; runner max_turns / session budget
@@ -173,10 +167,7 @@ async fn run_eval_task(
 
     let exec_outcome = match &exec_result {
         Ok(result)
-            if matches!(
-                result.outcome,
-                TaskOutcome::Success | TaskOutcome::StoppedNoAction
-            ) =>
+            if matches!(result.outcome, TaskOutcome::Success | TaskOutcome::StoppedNoAction) =>
         {
             RunOutcome::Pass
         }

@@ -121,10 +121,7 @@ mod tests {
     fn set_and_remove_roundtrip() {
         let env = lock();
         env.set_var("VTCODE_ENV_LOCK_TEST", "value-a");
-        assert_eq!(
-            std::env::var("VTCODE_ENV_LOCK_TEST").as_deref(),
-            Ok("value-a")
-        );
+        assert_eq!(std::env::var("VTCODE_ENV_LOCK_TEST").as_deref(), Ok("value-a"));
         env.remove_var("VTCODE_ENV_LOCK_TEST");
         assert!(std::env::var("VTCODE_ENV_LOCK_TEST").is_err());
     }
@@ -136,10 +133,7 @@ mod tests {
         let previous = std::env::var_os("VTCODE_ENV_LOCK_RESTORE");
         env.set_var("VTCODE_ENV_LOCK_RESTORE", "temporary");
         env.restore_var("VTCODE_ENV_LOCK_RESTORE", previous);
-        assert_eq!(
-            std::env::var("VTCODE_ENV_LOCK_RESTORE").as_deref(),
-            Ok("original")
-        );
+        assert_eq!(std::env::var("VTCODE_ENV_LOCK_RESTORE").as_deref(), Ok("original"));
         env.remove_var("VTCODE_ENV_LOCK_RESTORE");
     }
 

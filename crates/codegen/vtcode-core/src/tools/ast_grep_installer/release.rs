@@ -93,9 +93,7 @@ pub(super) fn select_release_asset(
 pub(super) fn asset_matches_target(asset_name: &str, triple: &str, archive_exts: &[&str]) -> bool {
     let name = asset_name.to_ascii_lowercase();
     name.contains(triple)
-        && archive_exts
-            .iter()
-            .any(|archive_ext| name.ends_with(archive_ext))
+        && archive_exts.iter().any(|archive_ext| name.ends_with(archive_ext))
         && !name.ends_with(".sha256")
         && !name.contains("checksum")
         && !name.ends_with(".sig")
@@ -131,11 +129,7 @@ pub(super) async fn verify_checksum_if_available(
         )));
     };
 
-    let checksum_response = match client
-        .get(&checksum_asset.browser_download_url)
-        .send()
-        .await
-    {
+    let checksum_response = match client.get(&checksum_asset.browser_download_url).send().await {
         Ok(response) => response,
         Err(err) => {
             return Ok(Some(format!(
@@ -207,10 +201,7 @@ pub(super) fn parse_expected_checksum(
     archive_name: &str,
 ) -> Option<String> {
     if checksum_asset_name.ends_with(".sha256") {
-        return checksum_text
-            .split_whitespace()
-            .next()
-            .map(|value| value.to_string());
+        return checksum_text.split_whitespace().next().map(|value| value.to_string());
     }
 
     checksum_text
@@ -252,10 +243,7 @@ mod tests {
         };
 
         let selected = select_release_asset(&release, &platform).expect("selected asset");
-        assert_eq!(
-            selected.asset.browser_download_url,
-            "https://example.com/musl"
-        );
+        assert_eq!(selected.asset.browser_download_url, "https://example.com/musl");
     }
 
     #[test]
@@ -273,10 +261,7 @@ mod tests {
         };
 
         let selected = select_release_asset(&release, &platform).expect("selected asset");
-        assert_eq!(
-            selected.asset.browser_download_url,
-            "https://example.com/macos"
-        );
+        assert_eq!(selected.asset.browser_download_url, "https://example.com/macos");
     }
 
     #[test]

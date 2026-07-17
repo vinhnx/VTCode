@@ -263,18 +263,12 @@ const LEGACY_EXTERNAL_SANDBOX_DESCRIPTION: &str = "legacy handler external sandb
 impl SandboxConfig {
     #[must_use]
     pub fn requires_approval_prompt(&self) -> bool {
-        !matches!(
-            self.policy,
-            SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox
-        )
+        !matches!(self.policy, SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox)
     }
 
     #[must_use]
     pub fn uses_runtime_sandbox(&self) -> bool {
-        matches!(
-            self.policy,
-            SandboxPolicy::ReadOnly | SandboxPolicy::WorkspaceWrite
-        )
+        matches!(self.policy, SandboxPolicy::ReadOnly | SandboxPolicy::WorkspaceWrite)
     }
 
     #[must_use]
@@ -815,9 +809,7 @@ mod tests {
 
         assert!(!store.contains("test").await);
 
-        store
-            .set("test".to_string(), ReviewDecision::Approved)
-            .await;
+        store.set("test".to_string(), ReviewDecision::Approved).await;
         assert!(store.contains("test").await);
         assert_eq!(store.get("test").await, Some(ReviewDecision::Approved));
     }

@@ -176,10 +176,7 @@ impl ContainerSkillsValidator {
         } else {
             (
                 ContainerSkillsRequirement::NotRequired,
-                format!(
-                    "Skill '{}' does not require container skills.",
-                    skill.name()
-                ),
+                format!("Skill '{}' does not require container skills.", skill.name()),
                 false,
             )
         };
@@ -262,10 +259,7 @@ impl ContainerSkillsValidator {
 
     /// Batch analyze multiple skills
     pub fn analyze_skills(&self, skills: &[Skill]) -> Vec<ContainerValidationResult> {
-        skills
-            .iter()
-            .map(|skill| self.analyze_skill(skill))
-            .collect()
+        skills.iter().map(|skill| self.analyze_skill(skill)).collect()
     }
 
     /// Filter skills that require container skills without fallback
@@ -419,19 +413,10 @@ impl ContainerValidationReport {
         let mut output = String::new();
         output.push_str(" Container Skills Validation Report\n");
         output.push_str("=====================================\n\n");
-        output.push_str(&format!(
-            "Total Skills Analyzed: {}\n",
-            self.total_skills_analyzed
-        ));
+        output.push_str(&format!("Total Skills Analyzed: {}\n", self.total_skills_analyzed));
         output.push_str(&format!("Compatible: {}\n", self.summary.total_compatible));
-        output.push_str(&format!(
-            "With Fallbacks: {}\n",
-            self.summary.total_with_fallbacks
-        ));
-        output.push_str(&format!(
-            "Incompatible: {}\n\n",
-            self.summary.total_incompatible
-        ));
+        output.push_str(&format!("With Fallbacks: {}\n", self.summary.total_with_fallbacks));
+        output.push_str(&format!("Incompatible: {}\n\n", self.summary.total_incompatible));
         output.push_str(&self.summary.recommendation);
 
         if !self.incompatible_skills.is_empty() {

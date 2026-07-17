@@ -25,10 +25,7 @@ pub struct WorkspaceGuardPolicy {
 
 impl WorkspaceGuardPolicy {
     pub fn new(workspace: Arc<dyn WorkspacePaths>) -> Self {
-        Self {
-            workspace,
-            allowed_commands: None,
-        }
+        Self { workspace, allowed_commands: None }
     }
 
     pub fn with_allowed_commands(
@@ -57,10 +54,7 @@ impl CommandPolicy for WorkspaceGuardPolicy {
         if let Some(allowed) = &self.allowed_commands
             && !allowed.contains(&invocation.category)
         {
-            bail!(
-                "command category {:?} is not permitted",
-                invocation.category
-            );
+            bail!("command category {:?} is not permitted", invocation.category);
         }
 
         self.ensure_within_workspace(&invocation.working_dir)?;

@@ -65,11 +65,7 @@ pub fn managed_ast_grep_candidates() -> Vec<PathBuf> {
 }
 
 pub fn resolve_ast_grep_binary_from_env_and_fs() -> Option<PathBuf> {
-    match AST_GREP_OVERRIDE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone()
-    {
+    match AST_GREP_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()).clone() {
         AstGrepBinaryOverride::System => {}
         AstGrepBinaryOverride::Missing => return None,
         AstGrepBinaryOverride::Path(path) => return Some(path),
@@ -127,10 +123,7 @@ pub fn missing_ast_grep_message(suffix: &str) -> String {
 /// skipped.
 pub(crate) fn is_binary_override_missing() -> bool {
     matches!(
-        AST_GREP_OVERRIDE
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone(),
+        AST_GREP_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()).clone(),
         AstGrepBinaryOverride::Missing
     )
 }
@@ -150,11 +143,7 @@ fn resolve_ast_grep_binary_with_sources(
 ) -> Option<PathBuf> {
     env_override
         .filter(|path| path.exists())
-        .or_else(|| {
-            managed_candidates
-                .into_iter()
-                .find(|candidate| candidate.exists())
-        })
+        .or_else(|| managed_candidates.into_iter().find(|candidate| candidate.exists()))
         .or(path_candidate)
 }
 

@@ -29,11 +29,7 @@ impl BloomFilter {
         let size = Self::optimal_size(expected_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(size, expected_items);
 
-        Self {
-            bits: vec![false; size],
-            num_hashes,
-            size,
-        }
+        Self { bits: vec![false; size], num_hashes, size }
     }
 
     /// Add an item to the bloom filter
@@ -287,12 +283,8 @@ impl ToolDiscoveryCache {
             }
         };
 
-        inner
-            .all_tools_cache
-            .insert(provider_name.to_owned(), tools.clone());
-        inner
-            .last_refresh
-            .insert(provider_name.to_owned(), Instant::now());
+        inner.all_tools_cache.insert(provider_name.to_owned(), tools.clone());
+        inner.last_refresh.insert(provider_name.to_owned(), Instant::now());
 
         // Update bloom filter with all tool names
         inner.bloom_filter.clear(); // Clear and rebuild for accuracy
@@ -387,9 +379,7 @@ impl CachedToolDiscovery {
         }
 
         // Check detailed cache
-        if let Some(cached) = self
-            .cache
-            .get_cached_discovery(provider_name, keyword, detail_level)
+        if let Some(cached) = self.cache.get_cached_discovery(provider_name, keyword, detail_level)
         {
             return cached;
         }
@@ -439,11 +429,8 @@ impl CachedToolDiscovery {
             let relevance_score = self.calculate_relevance(tool, &keyword_lower);
 
             if relevance_score > 0.0 {
-                let result = ToolDiscoveryResult {
-                    tool: tool.clone(),
-                    relevance_score,
-                    detail_level,
-                };
+                let result =
+                    ToolDiscoveryResult { tool: tool.clone(), relevance_score, detail_level };
                 results.push(result);
             }
         }
@@ -484,9 +471,8 @@ impl CachedToolDiscovery {
         }
 
         // Input schema contains keyword
-        let schema_str = serde_json::to_string(&tool.input_schema)
-            .unwrap_or_default()
-            .to_lowercase();
+        let schema_str =
+            serde_json::to_string(&tool.input_schema).unwrap_or_default().to_lowercase();
         if schema_str.contains(keyword) {
             score += 0.2;
         }
@@ -554,11 +540,7 @@ mod tests {
         let detail_level = DetailLevel::Full;
 
         // Cache miss
-        assert!(
-            cache
-                .get_cached_discovery(provider_name, keyword, detail_level)
-                .is_none()
-        );
+        assert!(cache.get_cached_discovery(provider_name, keyword, detail_level).is_none());
 
         // Cache some results
         let results = vec![ToolDiscoveryResult {

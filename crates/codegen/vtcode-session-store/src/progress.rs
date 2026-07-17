@@ -112,11 +112,7 @@ impl ProgressLedger {
         if self.milestones.is_empty() {
             return 1.0;
         }
-        let done = self
-            .milestones
-            .iter()
-            .filter(|m| m.status.is_terminal())
-            .count() as f32;
+        let done = self.milestones.iter().filter(|m| m.status.is_terminal()).count() as f32;
         done / self.milestones.len() as f32
     }
 
@@ -267,10 +263,8 @@ pub fn save_progress(
 ) -> Result<(), SessionStoreError> {
     let path = progress_path(workspace, session_id);
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| SessionStoreError::CreateDir {
-            path: parent.to_path_buf(),
-            source: e,
-        })?;
+        std::fs::create_dir_all(parent)
+            .map_err(|e| SessionStoreError::CreateDir { path: parent.to_path_buf(), source: e })?;
     }
     let bytes = serde_json::to_string_pretty(ledger)?;
     std::fs::write(&path, bytes).map_err(|e| SessionStoreError::io(path, e))?;

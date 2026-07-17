@@ -67,10 +67,7 @@ fn build_anthropic_context_management(
     let clearing = &vt_cfg.agent.harness.tool_result_clearing;
     if clearing.enabled {
         let mut edit = serde_json::Map::from_iter([
-            (
-                "type".to_string(),
-                serde_json::Value::String("clear_tool_uses_20250919".to_string()),
-            ),
+            ("type".to_string(), serde_json::Value::String("clear_tool_uses_20250919".to_string())),
             (
                 "trigger".to_string(),
                 serde_json::json!({
@@ -92,10 +89,7 @@ fn build_anthropic_context_management(
                     "value": clearing.clear_at_least_tokens,
                 }),
             ),
-            (
-                "clear_tool_inputs".to_string(),
-                serde_json::Value::Bool(clearing.clear_tool_inputs),
-            ),
+            ("clear_tool_inputs".to_string(), serde_json::Value::Bool(clearing.clear_tool_inputs)),
         ]);
 
         if anthropic_native_memory_enabled_for_runtime(
@@ -119,10 +113,8 @@ fn build_anthropic_context_management(
         )
     {
         let mut compact_edit = serde_json::Map::new();
-        compact_edit.insert(
-            "type".to_string(),
-            serde_json::Value::String("compact_20260112".to_string()),
-        );
+        compact_edit
+            .insert("type".to_string(), serde_json::Value::String("compact_20260112".to_string()));
         compact_edit.insert(
             "trigger".to_string(),
             serde_json::json!({
@@ -139,10 +131,8 @@ fn build_anthropic_context_management(
         }
 
         if vt_cfg.agent.harness.auto_compaction_pause_after {
-            compact_edit.insert(
-                "pause_after_compaction".to_string(),
-                serde_json::Value::Bool(true),
-            );
+            compact_edit
+                .insert("pause_after_compaction".to_string(), serde_json::Value::Bool(true));
         }
 
         edits.push(serde_json::Value::Object(compact_edit));
