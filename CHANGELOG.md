@@ -2,6 +2,33 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.135.12 - 2026-07-17
+
+### Highlights
+#### Bug Fixes
+
+- Resolve clippy and compilation issues for publishing (d8129022) 
+#### Documentation
+
+- Add config fields for system prompt token budget and trimming (a10a65ac) 
+- Update TODO.md with Phase 5 verification and remove diagnosis section (92144b5b) 
+- Add battery-packs blog post and register in index (977dd194) 
+- Update extension docs for MIT OR Apache-2.0 license (522be78d) 
+#### Features
+
+- Add vtcode-battery-pack crate (121f4bde) 
+- Add startup config warnings and measure_system_prompt_size (3e64fe14) 
+- Add Apache-2.0 dual license and Codex attribution (876e4f63) 
+- Generate THIRD-PARTY-NOTICES and fix attribution refs (0515114d) 
+- Restructure to crates/{common,codegen}/ layout and upgrade toolchain (c217c68c) 
+### Other Changes
+#### Other
+
+- Revert "docs: add battery-packs blog post and register in index" (6a0eafb9) 
+- Revert "feat: add vtcode-battery-pack crate" (7b2fdabd) 
+#### Performance
+
+- Bounded channels, async offload, and runtime backpressure (5271831b) 
 ## 0.135.11 - 2026-07-17
 
 ### Highlights
