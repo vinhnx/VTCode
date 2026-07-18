@@ -5,8 +5,10 @@ use std::sync::Arc;
 use crate::tui::ui::FileColorizer;
 
 mod filtering;
+mod listing;
 mod navigation;
 mod references;
+mod search;
 
 pub use references::extract_file_reference;
 
@@ -56,6 +58,7 @@ pub(crate) enum PickerMode {
     Search,
 }
 
+#[derive(Debug)]
 pub struct FilePalette {
     /// Every file in the workspace, populated lazily once the full recursive
     /// discovery finishes (Search mode). Empty until then — Browse mode never
@@ -74,7 +77,7 @@ pub struct FilePalette {
     mode: PickerMode,
     /// Name of the directory most recently entered, used to reselect it after
     /// ascending with `go_up`.
-    last_entered: Option<String>,
+    last_entered: Option<PathBuf>,
     workspace_root: PathBuf,
     file_colorizer: FileColorizer,
     /// Supplies immediate directory contents on demand (see [`DirLister`]).
@@ -120,15 +123,14 @@ impl FilePalette {
     /// runloop after its background discovery task finishes; Browse mode does not
     /// require it. Rebuilds the search view if the user is already searching.
     pub fn set_search_index(&mut self, files: Vec<String>) {
-        // Search mode scans `all_files` directly and never touches `dir_index`;
-        // the lazy flow builds `dir_index` on demand via `ensure_dir_listing`
-        // when the user browses, so skip the O(n) `dir_index` construction.
-        // `discover_files` already returns regular files only, so `detect_dirs`
-        // is false and no per-file `is_dir()` stat is performed.
-        self.build_entries(files, false);
+        listing::build_entries(self, files, false);
         if self.mode == PickerMode::Search {
             self.rebuild_search();
         }
+    }
+
+    pub(super) fn rebuild_dir_listing(&mut self) {
+        listing::rebuild_dir_listing(self);
     }
 
     pub fn reset(&mut self) {

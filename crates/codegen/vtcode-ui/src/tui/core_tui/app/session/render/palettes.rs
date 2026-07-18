@@ -103,7 +103,11 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             } else {
                 row.style.add_modifier(Modifier::DIM)
             };
-            let mut spans = vec![Span::styled(cursor, cursor_style), Span::styled(row.text, name_style)];
+            let mut spans = vec![
+                Span::styled(cursor, cursor_style),
+                Span::styled(" ", cursor_style),
+                Span::styled(row.text, name_style),
+            ];
             if let Some(subtitle) = row.subtitle {
                 let sub_style = if is_selected { highlight_style } else { dim_style };
                 spans.push(Span::styled(format!("  {subtitle}"), sub_style));
@@ -228,8 +232,14 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
                 blank_gutter.clone()
             };
             let cursor_style = if is_selected { highlight_style } else { dim_style };
-            let name_style = if entry.is_dir {
-                if is_selected { highlight_style } else { accent }
+            let name_style = if entry.is_parent {
+                cursor_style.add_modifier(Modifier::ITALIC)
+            } else if entry.is_dir {
+                if is_selected {
+                    highlight_style.add_modifier(Modifier::BOLD)
+                } else {
+                    accent.add_modifier(Modifier::BOLD)
+                }
             } else if is_selected {
                 highlight_style
             } else {
@@ -239,8 +249,26 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
                     .unwrap_or(dim_style)
             };
 
+            let tree_prefix = if entry.is_parent {
+                ui::INLINE_FILE_PICKER_PARENT_PREFIX.to_owned()
+            } else if entry.is_dir {
+                ui::INLINE_FILE_PICKER_TREE_PREFIX.to_owned()
+            } else {
+                ui::INLINE_FILE_PICKER_TREE_INDENT.to_owned()
+            };
+
+            let depth_indent = if palette.is_search_mode() && !entry.is_parent {
+                let depth = entry.relative_path.chars().filter(|&c| c == '/').count();
+                ui::INLINE_FILE_PICKER_TREE_INDENT.repeat(depth)
+            } else {
+                String::new()
+            };
+
             let spans = vec![
                 Span::styled(cursor, cursor_style),
+                Span::styled(" ", cursor_style),
+                Span::styled(tree_prefix, cursor_style),
+                Span::styled(depth_indent, cursor_style),
                 Span::styled(entry.display_name.clone(), name_style),
             ];
             (InlineListRow::single(Line::from(spans), dim_style), 1_u16)
@@ -382,16 +410,20 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
         )));
     } else {
         let total = palette.total_items();
+        let _dir_count = palette.list_entries().iter().filter(|e| e.is_dir).count();
         let count_text = if total == 1 {
-            "1 file".to_owned()
+            "1 item".to_owned()
         } else {
-            format!("{total} files")
+            format!("{total} items")
         };
 
-        lines.push(Line::from(vec![Span::styled(
-            "↑↓ Navigate · →/Enter Open · ← Up · Type to filter · Esc Close".to_owned(),
-            default_style(session),
-        )]));
+        let nav_hint = if palette.is_search_mode() {
+            "↑↓ Navigate · →/Enter Open · ← Up · Type to refine · Esc Close"
+        } else {
+            "↑↓ Navigate · →/Enter Open · ← Up · Type to filter · Esc Close"
+        };
+
+        lines.push(Line::from(vec![Span::styled(nav_hint, default_style(session))]));
 
         lines.push(Line::from(vec![
             Span::styled(format!("Showing {count_text}"), default_style(session).add_modifier(Modifier::DIM)),

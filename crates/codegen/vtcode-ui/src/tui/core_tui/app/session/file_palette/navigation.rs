@@ -79,7 +79,7 @@ impl FilePalette {
             self.go_up();
             return;
         }
-        self.last_entered = Some(entry.display_name.trim_end_matches('/').to_string());
+        self.last_entered = Some(PathBuf::from(entry.path.trim_end_matches('/')));
         self.current_dir = PathBuf::from(entry.path);
         self.rebuild_dir_listing();
     }
@@ -95,10 +95,11 @@ impl FilePalette {
         }
         self.rebuild_dir_listing();
         if let Some(name) = child
+            && let Some(name_str) = name.to_str()
             && let Some(pos) = self
                 .filtered_files
                 .iter()
-                .position(|e| e.is_dir && !e.is_parent && e.display_name == format!("{name}/"))
+                .position(|e| e.is_dir && !e.is_parent && name_str == e.path.trim_end_matches('/'))
         {
             self.selected = Some(pos);
         }
